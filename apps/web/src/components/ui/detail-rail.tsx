@@ -80,11 +80,13 @@ export function DetailRail({
         )}
       </div>
       <div className={cn("min-h-0 flex-1 overflow-y-auto pb-2 pt-4", mode === "rail" ? "px-4" : "px-6")}>
-        {children}
+        {/* Expanding buys reading room, not stretched rows: the body keeps a
+            measure so a property grid never floats in whitespace. */}
+        <div className={cn(mode === "modal" && "mx-auto w-full max-w-[52rem]")}>{children}</div>
       </div>
       {footer && (
         <div className={cn("flex shrink-0 items-center gap-2 border-t border-line py-3", mode === "rail" ? "px-4" : "px-6")}>
-          {footer}
+          <div className={cn("flex w-full items-center gap-2", mode === "modal" && "mx-auto max-w-[52rem]")}>{footer}</div>
         </div>
       )}
     </>

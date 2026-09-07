@@ -1034,7 +1034,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
       aria-label={capability.name}
       header={
         <>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{capability.name}</span>
+          <span className="min-w-0 truncate text-sm font-medium text-fg">{capability.name}</span>
           <CapabilityTypeBadge type={capability.type} />
           <Badge variant="neutral" dot>
             {t(deprecated ? "capabilities.status.deprecated" : "capabilities.status.active")}

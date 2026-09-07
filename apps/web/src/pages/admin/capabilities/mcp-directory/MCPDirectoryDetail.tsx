@@ -47,7 +47,7 @@ export function DirectoryDetail({
   const header: ReactNode = item ? (
     <>
       <ConnectorIcon item={item} />
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{item.name}</span>
+      <span className="min-w-0 truncate text-sm font-medium text-fg">{item.name}</span>
       {item.verified ? <VerifiedBadge /> : null}
       {item.installed ? (
         <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.actions.installed")}</Badge>
