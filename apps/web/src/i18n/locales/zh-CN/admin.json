@@ -1945,8 +1945,8 @@
       "agentCount": "Agent 数",
       "status": "状态",
       "type": "类型",
-      "agents": "使用此 connector 的 Agent",
-      "noAgents": "暂无 Agent 使用此 connector。",
+      "agents": "使用此连接器的 Agent",
+      "noAgents": "暂无 Agent 使用此连接器。",
       "notFound": {
         "title": "连接器类型未找到",
         "description": "可能已被移除或当前工作区没有 Agent 在用。"

@@ -13,7 +13,7 @@ import { ModelsPage } from "./ModelsPage"
 import { ConversationsPage } from "./ConversationsPage"
 import { RunsPage } from "./RunsPage"
 import { AgentsPage } from "./AgentsPage"
-import { ConnectorsPage, ConnectorDetailPage } from "./ConnectorsPage"
+import { ConnectorsPage } from "./ConnectorsPage"
 import { SettingsPage } from "./SettingsPage"
 import { AuditPage } from "./AuditPage"
 import { UsagePage } from "./UsagePage"
@@ -66,7 +66,7 @@ export function AdminRouter() {
   }
   if (v === "scheduled") return <ScheduledTasksPage />
   if (v === "connectors") {
-    return entityId ? <ConnectorDetailPage id={entityId} /> : <ConnectorsPage />
+    return <ConnectorsPage />
   }
 
   switch (v) {

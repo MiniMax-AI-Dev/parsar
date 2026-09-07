@@ -1,10 +1,10 @@
 import { useMemo, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, ArrowUpRight, Cable, Search } from "lucide-react"
+import { ArrowUpRight, Cable, Search } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
-import { DetailHeading } from "../../components/ui/section"
+import { DetailRail, RailLayout, RailSection } from "../../components/ui/detail-rail"
 import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { Badge } from "../../components/ui/badge"
@@ -16,7 +16,6 @@ import { InitialTile, Ledger, LedgerHeader, LedgerNum, LedgerRow, col } from "..
 import { PropertyList, Property } from "../../components/ui/property-list"
 import { Skeleton } from "../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useWorkspaceConnectors } from "../../lib/api-registry"
@@ -68,7 +67,7 @@ const LEDGER_COLUMNS = [col.title(), col.meta(140), col.num(72)]
 
 export function ConnectorsPage() {
   const { t } = useTranslation("admin")
-  const { navigate } = useAdminView()
+  const { navigate, entityId } = useAdminView()
   const wsId = useWorkspaceId()
   const [keyword, setKeyword] = useState("")
 
@@ -84,10 +83,28 @@ export function ConnectorsPage() {
   })
 
   const pageTitle = t("connectors.page.title")
+  // Hold the type through the rail's exit so closing animates instead of
+  // vanishing — the same pattern every ledger uses.
+  const [railID, setRailID] = useState<string | null>(entityId)
+  if (entityId && entityId !== railID) setRailID(entityId)
+  const railConnector = connectors.find((c) => c.connector_type === railID) ?? null
 
   return (
     <AdminLayout activeMenu="settings" fullBleed>
-      <div className="flex min-h-0 flex-1 flex-col">
+      <RailLayout
+        rail={
+          railID ? (
+            <ConnectorRail
+              connector={railConnector}
+              loading={query.isLoading}
+              open={!!entityId}
+              onClose={() => navigate("connectors")}
+              onClosed={() => setRailID(null)}
+              onViewAgents={() => navigate("agents")}
+            />
+          ) : null
+        }
+      >
       <PageHeader
         className="static mx-0 mb-0"
         title={pageTitle}
@@ -148,18 +165,23 @@ export function ConnectorsPage() {
           </LedgerHeader>
           <ul className="m-0 list-none p-0">
             {filtered.map((c) => (
-              <ConnectorRow key={c.connector_type} connector={c} onSelect={() => navigate("connectors", { id: c.connector_type })} />
+              <ConnectorRow
+                key={c.connector_type}
+                connector={c}
+                selected={c.connector_type === entityId}
+                onSelect={() => navigate("connectors", { id: c.connector_type === entityId ? null : c.connector_type })}
+              />
             ))}
           </ul>
         </Ledger>
       )}
       </div>
-      </div>
+      </RailLayout>
     </AdminLayout>
   )
 }
 
-function ConnectorRow({ connector, onSelect }: { connector: ConnectorSummary; onSelect: () => void }) {
+function ConnectorRow({ connector, selected, onSelect }: { connector: ConnectorSummary; selected: boolean; onSelect: () => void }) {
   const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault()
@@ -167,7 +189,7 @@ function ConnectorRow({ connector, onSelect }: { connector: ConnectorSummary; on
     }
   }
   return (
-    <LedgerRow onClick={onSelect} onKeyDown={onKeyDown} className="cursor-pointer">
+    <LedgerRow selected={selected} onClick={onSelect} onKeyDown={onKeyDown} className="cursor-pointer">
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate font-medium">{connector.label}</span>
         <Badge className="font-mono">{connector.connector_type}</Badge>
@@ -197,102 +219,89 @@ function ConnectorsSkeleton() {
 /*  Detail page (per-type summary)                                    */
 /* ------------------------------------------------------------------ */
 
-export function ConnectorDetailPage({ id }: { id: string }) {
+/**
+ * A connector type read in the rail beside the list. It is a summary, not a
+ * workplace: what it is, whether it is ready, and who is on it.
+ */
+function ConnectorRail({ connector, loading, open, onClose, onClosed, onViewAgents }: {
+  connector: ConnectorSummary | null
+  loading: boolean
+  open: boolean
+  onClose: () => void
+  onClosed: () => void
+  onViewAgents: () => void
+}) {
   const { t } = useTranslation("admin")
-  const { navigate } = useAdminView()
-  const wsId = useWorkspaceId()
-
-  const query = useWorkspaceConnectors(wsId)
-  const connector = (query.data?.connectors ?? []).find((c) => c.connector_type === id)
-
-  const back = (
-    <button
-      type="button"
-      onClick={() => navigate("connectors")}
-      className="inline-flex items-center gap-1 rounded text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-    >
-      <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
-      {t("connectors.page.title")}
-    </button>
-  )
-
-  if (query.isLoading) {
-    return (
-      <AdminLayout activeMenu="settings">
-        <PageHeader backLink={back} action={<SettingsTabs active="connectors" />} />
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-3 w-64" />
-          ))}
-        </div>
-      </AdminLayout>
-    )
-  }
 
   if (!connector) {
     return (
-      <AdminLayout activeMenu="settings">
-        <PageHeader backLink={back} action={<SettingsTabs active="connectors" />} />
-        <EmptyState
-          icon={Cable}
-          title={t("connectors.detail.notFound.title")}
-          description={t("connectors.detail.notFound.description")}
-        />
-      </AdminLayout>
+      <DetailRail
+        open={open}
+        onClose={onClose}
+        onClosed={onClosed}
+        aria-label={t("connectors.page.title")}
+        header={<Skeleton className="h-3 w-40" />}
+      >
+        {loading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-3 w-full" />)}
+          </div>
+        ) : (
+          <EmptyState
+            icon={Cable}
+            title={t("connectors.detail.notFound.title")}
+            description={t("connectors.detail.notFound.description")}
+          />
+        )}
+      </DetailRail>
     )
   }
 
   return (
-    <AdminLayout activeMenu="settings">
-      <PageHeader backLink={back} action={<SettingsTabs active="connectors" />} />
+    <DetailRail
+      open={open}
+      onClose={onClose}
+      onClosed={onClosed}
+      aria-label={connector.label}
+      header={
+        <>
+          <span className="min-w-0 truncate text-sm font-medium text-fg">{connector.label}</span>
+          <Badge className="font-mono">{connector.connector_type}</Badge>
+        </>
+      }
+      footer={
+        connector.agent_count > 0 ? (
+          <Button variant="link" className="ml-auto" onClick={onViewAgents}>
+            {t("connectors.detail.agentSummary", { count: connector.agent_count })}
+            <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
+          </Button>
+        ) : undefined
+      }
+    >
+      <RailSection title={t("connectors.detail.tabs.overview")}>
+        <PropertyList>
+          <Property label={t("connectors.detail.status")}>
+            <ConnectorStatus status={connector.status} />
+          </Property>
+          <Property label={t("connectors.detail.type")} mono>{connector.connector_type}</Property>
+          <Property label={t("connectors.detail.agentCount")} mono>{connector.agent_count}</Property>
+        </PropertyList>
+      </RailSection>
 
-      <DetailHeading
-        title={connector.label}
-        badges={<span className="font-mono text-xs text-fg-muted">{connector.connector_type}</span>}
-      />
-
-      <Tabs defaultValue="overview" className="max-w-2xl">
-        <TabsList>
-          <TabsTrigger value="overview">{t("connectors.detail.tabs.overview")}</TabsTrigger>
-          <TabsTrigger value="agents">
-            {t("connectors.detail.agents")}
-            <span className="tabular-nums text-fg-muted">{connector.agent_count}</span>
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview">
-          <PropertyList>
-            <Property label={t("connectors.detail.status")}>
-              <ConnectorStatus status={connector.status} />
-            </Property>
-            <Property label={t("connectors.detail.type")} mono>{connector.connector_type}</Property>
-            <Property label={t("connectors.detail.agentCount")} mono>{connector.agent_count}</Property>
-          </PropertyList>
-        </TabsContent>
-
-        <TabsContent value="agents">
-          {connector.agent_count === 0 ? (
-            <p className="text-sm text-fg-muted">{t("connectors.detail.noAgents")}</p>
-          ) : (
-            <>
-              <ul className="m-0 list-none p-0">
-                {connector.agent_slugs.map((slug) => (
-                  <li key={slug} className="flex h-8 items-center gap-1.5 border-b border-line text-sm text-fg">
-                    <InitialTile name={slug} />
-                    <span className="truncate font-medium">{slug}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex justify-end pt-3">
-                <Button variant="link" onClick={() => navigate("agents")}>
-                  {t("connectors.detail.agentSummary", { count: connector.agent_count })}
-                  <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
-                </Button>
-              </div>
-            </>
-          )}
-        </TabsContent>
-      </Tabs>
-    </AdminLayout>
+      <RailSection title={t("connectors.detail.agents")} meta={connector.agent_count || undefined} className="mt-6">
+        {connector.agent_count === 0 ? (
+          <p className="pt-1 text-sm text-fg-muted">{t("connectors.detail.noAgents")}</p>
+        ) : (
+          <ul className="m-0 list-none p-0">
+            {connector.agent_slugs.map((slug) => (
+              <li key={slug} className="flex h-8 items-center gap-1.5 border-b border-line text-sm text-fg">
+                <InitialTile name={slug} />
+                <span className="truncate font-medium">{slug}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </RailSection>
+    </DetailRail>
   )
 }

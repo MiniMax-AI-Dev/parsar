@@ -564,7 +564,7 @@
       },
       {
         "name": "The Two Levels of Arrival Rule",
-        "body": "Opening a level-one view (anything reached from the sidebar) rises in with `page-in`. Opening a level-two view (a detail page carrying an entity id on a non-rail view) is pushed in from the right with `detail-in`. Views whose `?id=` selects a rail instead of a page (runs, approvals, conversations, connections, capabilities, agents) stay level one — a view listed in `RAIL_VIEWS` must never key its page transition on the entity id, or selecting a second row replays the entrance instead of swapping the rail's content. Two arrivals, no third.",
+        "body": "Opening a level-one view (anything reached from the sidebar) rises in with `page-in`. Opening a level-two view (a detail page carrying an entity id on a non-rail view) is pushed in from the right with `detail-in`. Views whose `?id=` selects a rail instead of a page (runs, approvals, conversations, connections, capabilities, agents, connectors) stay level one — a view listed in `RAIL_VIEWS` must never key its page transition on the entity id, or selecting a second row replays the entrance instead of swapping the rail's content. Two arrivals, no third.",
         "section": "layout"
       },
       {
