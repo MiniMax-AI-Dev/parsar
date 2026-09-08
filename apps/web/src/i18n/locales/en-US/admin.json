@@ -1364,6 +1364,10 @@
         "modelSearch": "Search models in this Workspace",
         "capabilitySearch": "Search capabilities"
       },
+      "instructions": {
+        "label": "Instructions",
+        "hint": "Describe what this Agent should do, how it should respond, and when it should ask for clarification."
+      },
       "defaults": {
         "workspaceName": "My Workspace",
         "name": "{{workspace}}'s agent",

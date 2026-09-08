@@ -17,6 +17,7 @@ import {
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Select } from "../../components/ui/select"
+import { AgentInstructionsField } from "./agents/AgentInstructionsField"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
 import { cn } from "../../lib/utils"
@@ -895,6 +896,7 @@ export function CreateAgentDialog({
     const body = {
       name: name.trim(),
       description: description.trim() || undefined,
+      system_prompt: systemPrompt.trim(),
       connector_type: connector,
       ...(requiresModel ? { default_model_id: selectedModelID } : {}),
       capabilities: capabilityNames,
@@ -1068,6 +1070,7 @@ export function CreateAgentDialog({
                 <Field label={t("agents.form.fields.description")}>
                   <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("agents.form.placeholders.description")} />
                 </Field>
+                <AgentInstructionsField value={systemPrompt} onChange={setSystemPrompt} disabled={pending} />
               </section>
               <section className="flex flex-col gap-3">
               {showExecutionChoices ? (
