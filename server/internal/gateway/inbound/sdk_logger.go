@@ -10,7 +10,8 @@ import (
 
 // Connection query strings contain short-lived credentials. Redact only the
 // log copy, retaining the host and path for connection diagnostics.
-var feishuLogURLQuery = regexp.MustCompile(`(?i)(\b(?:https?|wss?)://[^\s?<>"']+\?)[^\s<>"']+`)
+// RawQuery may contain quotes; they must not terminate redaction early.
+var feishuLogURLQuery = regexp.MustCompile(`(?i)(\b(?:https?|wss?)://[^\s?]+\?)[^\s]+`)
 
 func redactFeishuConnectionLog(message string) string {
 	return feishuLogURLQuery.ReplaceAllString(message, "${1}[REDACTED]")

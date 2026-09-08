@@ -21,6 +21,8 @@ func TestFeishuConnectionLogsOmitAuthenticationQuery(t *testing.T) {
 		{&url.Error{Op: "dial", URL: address, Err: errors.New("connection refused")}},
 		{"connect failed: https://frontier.example/ws/v2?access%2Dkey=synthetic-access&ticket=synthetic-ticket"},
 		{"retry " + address + " then " + address},
+		{"connected to wss://frontier.example/ws/v2?extra='value'&access-key=synthetic-access&ticket=synthetic-ticket"},
+		{&url.Error{Op: "dial", URL: `wss://frontier.example/ws/v2?extra="value"&access-key=synthetic-access&ticket=synthetic-ticket`, Err: errors.New("connection refused")}},
 	} {
 		sink := &sdkLogRecorder{}
 		logger := feishuSDKLogger{logger: sink}
