@@ -4834,6 +4834,7 @@ paths:
       - application/json
       description: Toggles a runtime-injected built-in on/off for one agent. Workspace
         owners, admins, and members may change it. The key must be a known built-in.
+        Successful requests appear in Agent audit.
       operationId: setDevAgentBuiltinCapability
       parameters:
       - description: Workspace UUID
@@ -4950,7 +4951,7 @@ paths:
       - application/json
       description: Swaps the agent's binding to a new version of the same capability,
         optionally flipping the pinning mode at the same time. Workspace owner, admin,
-        or member only.
+        or member only. Successful requests appear in Agent audit.
       operationId: upgradeDevAgentCapability
       parameters:
       - description: Workspace UUID
@@ -5018,7 +5019,7 @@ paths:
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}:
     delete:
       description: Removes the given capability version from the agent. Workspace
-        owner, admin, or member only.
+        owner, admin, or member only. Successful requests appear in Agent audit.
       operationId: deleteDevAgentCapability
       parameters:
       - description: Workspace UUID
@@ -5074,7 +5075,7 @@ paths:
       - application/json
       description: Enables (installs) a capability version on the agent. Cross-workspace
         enable requires the source capability to be public and non-deprecated. Workspace
-        owner, admin, or member only.
+        owner, admin, or member only. Successful requests appear in Agent audit.
       operationId: enableDevAgentCapability
       parameters:
       - description: Workspace UUID
