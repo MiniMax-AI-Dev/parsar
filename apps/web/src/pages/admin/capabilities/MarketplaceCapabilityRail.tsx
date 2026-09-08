@@ -126,7 +126,7 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
                 {agents.map((agent) => {
                   const agentID = agent.agent_id ?? agent.id
                   const name = agent.name ?? agent.agent_name ?? "—"
-                  const openAgent = () => agentID && navigateAdmin("agents", { id: agentID, tab: "capabilities" })
+                  const openAgent = () => agentID && navigateAdmin("agents", { id: agentID, tab: "config" })
                   const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault()

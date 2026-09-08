@@ -1071,7 +1071,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
                   name={item.agentName}
                   version={item.version}
                   oldLabel={item.latest ? undefined : t("capabilities.detail.enabledAgents.old")}
-                  onOpen={() => navigateAdmin("agents", { id: item.agentID, tab: "capabilities" })}
+                  onOpen={() => navigateAdmin("agents", { id: item.agentID, tab: "config" })}
                 />
               ))}
             </ul>
