@@ -1832,8 +1832,8 @@
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
-        "hintLocal": "Directory the agent runs in on your local device. Leave blank to use a per-conversation scratch dir. Created if it does not exist.",
-        "hintSandbox": "Directory inside the sandbox container (e.g. /workspace/my-app). Leave blank to use a per-conversation scratch dir. Created if it does not exist."
+        "hintLocal": "Directory the agent runs in on your local device. Leave blank to use a per-conversation scratch dir. Created if it does not exist. Absolute paths only, or a path starting with ~/.",
+        "hintSandbox": "Directory inside the sandbox container (e.g. /workspace/my-app). Leave blank to use a per-conversation scratch dir. Created if it does not exist. Absolute paths only, or a path starting with ~/."
       }
     },
     "pendingCapability": {
@@ -2223,44 +2223,6 @@
         "issuer": "Issuer",
         "clientId": "Client ID",
         "note": "OIDC is optional; without it, members log in via local accounts."
-      }
-    },
-    "runtime": {
-      "capability": {
-        "title": "Capability management",
-        "description": "Workspace runtime capability management has moved to Agent Management → Capabilities.",
-        "migratedHint": "Capability management has moved to Agent Management → Capabilities.",
-        "requireApprovalHigh": "Require approval for high-risk actions",
-        "requireApprovalHighHint": "filesystem.write, secret.read, external_api.call etc. cannot be self-approved by Agents."
-      },
-      "workingDir": {
-        "title": "Working directory policy",
-        "description": "Boundaries the Agent runtime is allowed to touch.",
-        "allowedRoots": "Allowed roots",
-        "absolutePathsOnly": "Absolute paths only",
-        "absolutePathsOnlyHint": "Reject relative paths to avoid cwd drift writing to the wrong place."
-      },
-      "policy": {
-        "title": "Current runtime policy",
-        "description": "These are the rules that currently take effect or have a clear product boundary. Backend-less controls are no longer shown as editable settings.",
-        "workdirs": {
-          "title": "Working directory input",
-          "body": "User-provided working directories must be absolute paths or start with ~/. Relative paths are rejected."
-        },
-        "runtimeState": {
-          "title": "Runtime state location",
-          "body": "Config, logs, state, and cache must be written under the Parsar runtime root, not the current repository."
-        },
-        "agentRuntime": {
-          "title": "Agent execution mode",
-          "body": "Runtime is selected explicitly when an Agent is created and is immutable afterward; workspace settings no longer store a default execution mode.",
-          "value": "Agent config"
-        },
-        "capabilities": {
-          "title": "Capability boundary",
-          "body": "Tool permissions, capability toggles, and credentials belong in Capabilities and Connectors instead of fake Settings controls.",
-          "value": "Capabilities / Connectors"
-        }
       }
     },
     "advanced": {

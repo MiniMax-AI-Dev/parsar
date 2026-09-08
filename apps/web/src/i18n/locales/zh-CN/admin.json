@@ -1832,8 +1832,8 @@
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
-        "hintLocal": "Agent 在你这台本地设备上运行时的目录。留空则每个会话各用一个临时目录。路径不存在时自动创建。",
-        "hintSandbox": "Agent 在沙盒容器内运行时的目录（如 /workspace/my-app）。留空则每个会话各用一个临时目录。路径不存在时自动创建。"
+        "hintLocal": "Agent 在你这台本地设备上运行时的目录。留空则每个会话各用一个临时目录。路径不存在时自动创建。只接受绝对路径或以 ~/ 开头的路径。",
+        "hintSandbox": "Agent 在沙盒容器内运行时的目录（如 /workspace/my-app）。留空则每个会话各用一个临时目录。路径不存在时自动创建。只接受绝对路径或以 ~/ 开头的路径。"
       }
     },
     "pendingCapability": {
@@ -2223,44 +2223,6 @@
         "issuer": "Issuer",
         "clientId": "Client ID",
         "note": "OIDC 是可选项；不配置则用本地账号登录。"
-      }
-    },
-    "runtime": {
-      "capability": {
-        "title": "能力管理",
-        "description": "本工作区运行时治理已迁移到 Agent 管理 → Capabilities 页面。",
-        "migratedHint": "能力管理已迁移到 Agent 管理 → Capabilities 页面。",
-        "requireApprovalHigh": "高风险动作必须人审",
-        "requireApprovalHighHint": "filesystem.write、secret.read、external_api.call 等高风险动作不允许 Agent 自决。"
-      },
-      "workingDir": {
-        "title": "Working directory 策略",
-        "description": "Agent runtime 允许访问的目录边界。",
-        "allowedRoots": "允许的根目录",
-        "absolutePathsOnly": "只接受绝对路径",
-        "absolutePathsOnlyHint": "拒绝相对路径输入，避免 cwd 漂移导致 Agent 写到错误目录。"
-      },
-      "policy": {
-        "title": "当前运行策略",
-        "description": "这些是当前版本真正生效或已有明确产品边界的规则。暂未接入后端的策略不再放成可编辑控件。",
-        "workdirs": {
-          "title": "工作目录输入",
-          "body": "用户提供的工作目录必须是绝对路径或以 ~/ 开头；相对路径会被拒绝。"
-        },
-        "runtimeState": {
-          "title": "运行状态位置",
-          "body": "配置、日志、状态和缓存必须写入 Parsar runtime root，不能污染当前仓库。"
-        },
-        "agentRuntime": {
-          "title": "Agent 执行方式",
-          "body": "runtime 在创建 Agent 时显式选择，创建后不可变；workspace 不再保存默认执行方式。",
-          "value": "Agent 配置"
-        },
-        "capabilities": {
-          "title": "能力边界",
-          "body": "工具权限、能力开关和凭证会在能力与连接器页面承接，不在设置页做假控件。",
-          "value": "能力 / 连接器页面"
-        }
       }
     },
     "advanced": {
