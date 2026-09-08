@@ -3952,7 +3952,9 @@ where ac.agent_id = @agent_id::uuid
   and cv.id = @new_version_id::uuid
   and cv.capability_id = ac.capability_id
   and c.id = ac.capability_id
-  and c.visibility = 'public'
+  and (c.visibility = 'public' or exists (
+    select 1 from agents a where a.id = ac.agent_id and a.workspace_id = c.workspace_id
+  ))
   and c.status = 'active'
   and c.deleted_at is null
   and c.deprecated_at is null
