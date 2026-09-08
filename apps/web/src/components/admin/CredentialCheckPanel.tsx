@@ -357,7 +357,9 @@ export function CredentialCheckPanel({
                       )}
                       {"new_secret" in choice && expandedNewSecretFor !== rc.kind && (
                         <div className="flex items-center gap-1.5 text-xs text-fg">
-                          <StatusIcon status="completed" />
+                          {/* Queued, not completed: this secret has not been
+                              created yet, and a green tick said it had. */}
+                          <StatusIcon status="queued" />
                           <span className="min-w-0 flex-1 truncate">
                             {t("credentialCheck.sharedNewQueued", { name: choice.new_secret.display_name || rc.kind })}
                           </span>

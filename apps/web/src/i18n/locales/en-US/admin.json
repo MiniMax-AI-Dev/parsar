@@ -404,7 +404,7 @@
       "caretHint": "Generating…",
       "thinking": "Thinking…",
       "ready": "Ready",
-      "error": "Streaming interrupted: {{error}}",
+      "error": "Streaming interrupted",
       "contextRejected": "The upstream model rejected the current conversation context. The task has stopped and is not still running. Try again later; if it happens again, start a new conversation and restate the task.",
       "retry": "Retry",
       "queued": "Queued",
@@ -2559,7 +2559,7 @@
     "sourceSharedNew": "Create a new shared secret (paste once)",
     "createNewShared": "+ Create a new shared secret",
     "personalDisabledHint": "Public agents cannot use personal credentials (callers may not be platform users)",
-    "personalYouHaveIt": "You have configured this ✓ (other callers must configure their own)",
+    "personalYouHaveIt": "You have configured this (other callers must configure their own)",
     "personalYouMissing": "You haven't configured this yet — calls will be disabled",
     "sharedNoneAvailable": "No shared secrets available in this workspace",
     "sharedPlaceholder": "Pick a shared secret…",
@@ -2655,14 +2655,19 @@
       "table": {
         "selectAll": "Select all runtime instances",
         "selectOne": "Select runtime instance {{id}}",
-        "rowLabel": "Open runtime detail for agent {{agent}}",
+        "rowLabel": "Instance {{id}}",
         "instance": "Instance",
         "agent": "Agent",
         "image": "Image",
         "status": "Status",
         "lastActive": "Last active",
         "createdAt": "Created",
-        "actions": "Actions"
+        "actions": "Actions",
+        "state": {
+          "live": "Running",
+          "transient": "Starting",
+          "terminal": "Ended"
+        }
       },
       "actions": {
         "refresh": "Refresh",

@@ -483,7 +483,10 @@ function CloudInstancesPanel({
               const isTesting = testingId === b.binding_id
               const canTest = isAdmin && b.status_kind !== "terminal" && Boolean(b.agent_id)
               const showResult = testResult?.bindingId === b.binding_id
-              const rowLabel = t("runtime.list.table.rowLabel", { agent: b.agent_id ?? b.sandbox_id })
+              // Names the row. It used to say "open runtime detail", which a
+              // screen reader announced as an action on a row that has no
+              // click handler and no detail view behind it.
+              const rowLabel = t("runtime.list.table.rowLabel", { id: b.sandbox_id })
               return (
                 <React.Fragment key={b.binding_id}>
                   <LedgerRow
@@ -493,7 +496,6 @@ function CloudInstancesPanel({
                   >
                     <SelectableStatus
                       status={SANDBOX_STATUS[b.status_kind]}
-                      title={b.status}
                       selected={selected.has(b.binding_id)}
                       selecting={selected.size > 0}
                       onSelectedChange={() => onToggleOne(b.binding_id)}
@@ -501,7 +503,12 @@ function CloudInstancesPanel({
                     />
                     <span className="truncate font-mono text-xs text-fg" title={b.sandbox_id}>{b.sandbox_id}</span>
                     <LedgerId>{b.agent_id ?? "—"}</LedgerId>
-                    <span className="truncate">{b.status}</span>
+                    {/* The state in the reader's language. This column used to
+                        print `b.status` — the server's own granular string
+                        (`killed_by_user`) — untranslated, next to fully
+                        translated neighbours, and the glyph repeated it as a
+                        tooltip. The exact server word is on the row now. */}
+                    <span className="truncate" title={b.status}>{t(`runtime.list.table.state.${b.status_kind}`)}</span>
                     <span className="truncate text-xs text-fg-muted" title={b.template_id}>{b.template_id}</span>
                     <span className="truncate text-right text-xs text-fg-muted" title={b.last_active_at}>{fmtAgo(b.last_active_at)}</span>
                     <span className="truncate text-right text-xs text-fg-muted" title={b.created_at}>{fmtAgo(b.created_at)}</span>

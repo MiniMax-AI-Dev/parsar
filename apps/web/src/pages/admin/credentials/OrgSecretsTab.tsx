@@ -210,7 +210,7 @@ function SecretGroup({ label, items, empty, fmtAgo, onDisable, readOnlyLabel, on
   return (
     <LedgerGroup label={label} count={items.length}>
       {items.length === 0 && empty ? (
-        <li className="flex h-9 items-center border-b border-line px-4 text-sm text-fg-muted">{empty}</li>
+        <li className="flex h-9 items-center border-b border-line px-6 text-sm text-fg-muted">{empty}</li>
       ) : (
         items.map((secret) => {
           const active = secret.status === "active"

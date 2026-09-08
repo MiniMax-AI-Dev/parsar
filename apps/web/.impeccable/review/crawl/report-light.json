@@ -1,7 +1,7 @@
 [
   {
     "view": "conversations",
-    "rows": 24,
+    "rows": 0,
     "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
@@ -39,11 +39,9 @@
   },
   {
     "view": "agents",
-    "rows": 2,
-    "rowsAfterClicks": 25,
-    "dialogsOpened": [
-      "新建 Agent"
-    ],
+    "rows": 0,
+    "rowsAfterClicks": 0,
+    "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []

@@ -181,7 +181,7 @@ export function MembersPage() {
             </LedgerHeader>
 
             {mutationError && (
-              <p className="flex h-9 items-center gap-1.5 border-b border-line px-4 text-sm text-fg">
+              <p className="flex h-9 items-center gap-1.5 border-b border-line px-6 text-sm text-fg">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
                 <span className="truncate">{mutationError}</span>
               </p>

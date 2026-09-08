@@ -226,7 +226,7 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
 
           <LedgerGroup label={t("credentialsPage.personal.configured.title")} count={credentials.length}>
             {credentials.length === 0 ? (
-              <li className="flex h-9 items-center border-b border-line px-4 text-sm text-fg-muted">
+              <li className="flex h-9 items-center border-b border-line px-6 text-sm text-fg-muted">
                 {t("credentialsPage.personal.configured.empty.title")}
               </li>
             ) : filtered.length === 0 ? (

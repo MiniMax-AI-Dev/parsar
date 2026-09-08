@@ -404,7 +404,7 @@
       "caretHint": "正在生成…",
       "thinking": "思考中…",
       "ready": "就绪",
-      "error": "流式输出中断：{{error}}",
+      "error": "流式输出中断",
       "contextRejected": "上游模型拒绝了当前会话上下文，任务已经停止，并非仍在运行。请稍后重试；如果再次出现，请新建会话并重新描述任务。",
       "retry": "重试",
       "queued": "排队中",
@@ -543,12 +543,12 @@
       "errorTitle": "运行失败",
       "errorHint": "具体错误请查看下方 Steps 标签。",
       "tabs": {
-        "overview": "Overview",
-        "events": "Events",
-        "steps": "Steps",
-        "artifacts": "Artifacts",
-        "permissions": "Permissions",
-        "audit": "Audit"
+        "overview": "概览",
+        "events": "事件",
+        "steps": "步骤",
+        "artifacts": "产物",
+        "permissions": "审批",
+        "audit": "审计"
       },
       "overview": {
         "runtime": "运行环境",
@@ -2549,7 +2549,7 @@
     }
   },
   "credentialCheck": {
-    "present": "✓「{{kind}}」已就绪（{{name}}）",
+    "present": "「{{kind}}」已就绪（{{name}}）",
     "missing": "需要「{{kind}}」— 你还没设置",
     "addAction": "添加凭证",
     "requiredBadge": "必需",
@@ -2559,7 +2559,7 @@
     "sourceSharedNew": "新建共享密钥（粘贴一次）",
     "createNewShared": "+ 新建共享密钥",
     "personalDisabledHint": "公开 Agent 不支持个人凭据（调用者可能不是平台用户）",
-    "personalYouHaveIt": "你已配置 ✓（其他调用者需各自配置）",
+    "personalYouHaveIt": "你已配置（其他调用者需各自配置）",
     "personalYouMissing": "你还未配置 — 调用时会被禁用",
     "sharedNoneAvailable": "工作区暂无可用的共享密钥",
     "sharedPlaceholder": "选择一个共享密钥…",
@@ -2655,14 +2655,19 @@
       "table": {
         "selectAll": "全选",
         "selectOne": "选择运行实例 {{id}}",
-        "rowLabel": "查看 Agent {{agent}} 的运行实例详情",
+        "rowLabel": "运行实例 {{id}}",
         "instance": "运行实例",
         "agent": "Agent",
         "image": "镜像",
         "status": "状态",
         "lastActive": "最近活跃",
         "createdAt": "创建于",
-        "actions": "操作"
+        "actions": "操作",
+        "state": {
+          "live": "运行中",
+          "transient": "准备中",
+          "terminal": "已结束"
+        }
       },
       "actions": {
         "refresh": "刷新",

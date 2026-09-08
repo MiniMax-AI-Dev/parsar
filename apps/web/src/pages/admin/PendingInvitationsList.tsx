@@ -113,7 +113,7 @@ export function PendingInvitationsList({
     <>
       <LedgerGroup label={t("members.invite.pendingLabel")} count={invitations.length}>
         {inlineError && (
-          <li className="flex h-9 items-center gap-1.5 border-b border-line px-4 text-sm text-fg">
+          <li className="flex h-9 items-center gap-1.5 border-b border-line px-6 text-sm text-fg">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
             <span className="truncate">{inlineError}</span>
           </li>

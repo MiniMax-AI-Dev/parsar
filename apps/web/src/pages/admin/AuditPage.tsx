@@ -291,7 +291,7 @@ export function AuditPage() {
                     onToggle={() => setOpenRow((cur) => (cur === r.id ? null : r.id))}
                   />
                   {openRow === r.id && (
-                    <li className="border-b border-line px-4 py-2">
+                    <li className="border-b border-line px-6 py-2">
                       <VerbatimBlock>
                         {`#${r.id} ${r.event_type}\n${JSON.stringify(r.payload ?? {}, null, 2)}`}
                       </VerbatimBlock>
