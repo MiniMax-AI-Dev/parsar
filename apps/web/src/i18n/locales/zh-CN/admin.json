@@ -39,9 +39,7 @@
       "personal": "个人 Key"
     },
     "ownershipFilter": {
-      "all": "全部 ({{count}})",
-      "mine": "我的 ({{count}})",
-      "others": "他人的 ({{count}})"
+      "label": "筛选"
     },
     "table": {
       "model": "模型",
@@ -267,7 +265,6 @@
       "payload": "Payload 摘要",
       "createdAt": "创建于",
       "expiresIn": "剩余时间",
-      "decision": "决定",
       "allow": "已允许",
       "deny": "已拒绝",
       "alreadyDecided": "这条审批已经处理过，不能再操作。",
@@ -276,7 +273,8 @@
       "openRun": "打开 Run Detail",
       "openConversation": "打开 Conversation",
       "openIM": "跳回 IM thread",
-      "empty": "选一条审批查看详情"
+      "empty": "选一条审批查看详情",
+      "decidedBy": "决定人"
     },
     "empty": {
       "title": "暂时没有审批",
@@ -720,7 +718,7 @@
     "tabs": {
       "workspace": "本工作区",
       "marketplace": "能力市场",
-      "skills": "Skills"
+      "skills": "技能"
     },
     "actions": {
       "create": "新建能力",
@@ -739,12 +737,10 @@
       "adminOnly": "仅 owner / admin 可添加"
     },
     "status": {
-      "active": "可用",
       "deprecated": "已下架"
     },
     "table": {
       "name": "能力名",
-      "type": "Type",
       "latestVersion": "最新版本",
       "enabledAgents": "已启用 Agent 数",
       "credentials": "凭据需求",
@@ -954,7 +950,6 @@
         "added": "{{count}} 个工作区已添加",
         "credential": "凭据需求：{{kind}}",
         "install": "+ 装到我的 Agent",
-        "installed": "已装在 {{count}} 个 Agent",
         "installedBadge": "已添加",
         "selfPublished": "你已发布"
       },
@@ -997,7 +992,7 @@
         "description": "请更换搜索词。"
       },
       "install": {
-        "action": "Install",
+        "action": "安装",
         "installing": "安装中...",
         "installed": "已安装",
         "success": "已将 {{name}} 导入为工作区 Skill Capability。",
@@ -1062,7 +1057,6 @@
       }
     },
     "marketplaceDetail": {
-      "badge": "来自市场",
       "notFound": {
         "title": "此市场能力不在当前工作区列表中",
         "description": "只有已经装到至少一个 Agent 的市场能力会出现在这里。"
@@ -1127,7 +1121,8 @@
           "description": "解除后，此能力重新出现在能力市场，已添加工作区的迁移提示会消失，并可以再次升级。",
           "confirm": "解除废弃"
         }
-      }
+      },
+      "state": "发布状态"
     },
     "uninstall": {
       "sectionTitle": "从我的工作区移除",
@@ -1593,7 +1588,8 @@
         "state": {
           "ready": "可用",
           "attention": "有更新",
-          "blocked": "不可用"
+          "blocked": "不可用",
+          "deprecated": "已废弃"
         }
       },
       "runs": {
@@ -2003,6 +1999,9 @@
         "description": "前端访问不到后端 API。",
         "hint": "检查后端是否在 18080 端口运行。"
       }
+    },
+    "table": {
+      "status": "状态"
     }
   },
   "members": {
@@ -2448,7 +2447,8 @@
       "lastUsed": "最近使用",
       "actions": "操作",
       "unnamed": "（未命名）",
-      "createdAt": "添加于 {{date}}"
+      "kindCode": "类型标识",
+      "addedAt": "添加于"
     },
     "kind": {
       "unknown": "未知凭据"
@@ -3034,7 +3034,8 @@
           "configured": "已配置",
           "incomplete": "未完整",
           "notConfigured": "未配置"
-        }
+        },
+        "updatedAt": "更新于"
       },
       "platformSelect": {
         "label": "平台",
@@ -3254,7 +3255,6 @@
       "weekly": "每周{{day}} {{time}}",
       "monthly": "每月 {{dom}} 日 {{time}}",
       "weekday": "工作日 {{time}}",
-      "custom": "cron：{{cron}}",
       "withTz": "{{desc}}（{{tz}}）"
     },
     "weekdays": [

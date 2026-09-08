@@ -198,15 +198,18 @@ export function RailSection({
 }) {
   return (
     <section className={cn("mt-5 first:mt-0", className)}>
-      <h3 className="mb-1 flex min-h-5 items-center justify-between gap-2 text-base font-medium text-fg">
-        <span className="flex items-center gap-1.5">
+      {/* The action sits beside the heading, not inside it. A button within an
+          `h3` joins the heading's accessible name — "能力 3 添加能力" — and gets
+          read out by heading navigation. */}
+      <div className="mb-1 flex min-h-5 items-center justify-between gap-2">
+        <h3 className="flex items-center gap-1.5 text-base font-medium text-fg">
           <span>{title}</span>
           {meta !== undefined && meta !== null && (
             <span className="font-normal tabular-nums text-fg-muted">{meta}</span>
           )}
-        </span>
+        </h3>
         {action}
-      </h3>
+      </div>
       {children}
     </section>
   )

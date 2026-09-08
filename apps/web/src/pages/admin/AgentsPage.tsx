@@ -480,7 +480,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
       header={
         <>
           <InitialTile name={agent.name} />
-          <span className="min-w-0 truncate text-sm font-medium text-fg">{agent.name}</span>
+          <span className="min-w-0 truncate text-base font-medium text-fg">{agent.name}</span>
           <AgentStatusBadge status={agent.status} />
         </>
       }

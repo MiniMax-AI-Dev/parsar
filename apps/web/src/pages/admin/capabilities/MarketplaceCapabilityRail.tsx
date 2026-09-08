@@ -91,13 +91,13 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
       aria-label={capability.name}
       header={
         <>
-          <span className="min-w-0 truncate text-sm font-medium text-fg">{capability.name}</span>
+          <span className="min-w-0 truncate text-base font-medium text-fg">{capability.name}</span>
           <CapabilityTypeBadge type={capability.type} />
-          {deprecated ? (
-            <Badge variant="neutral" dot>{t("capabilities.deprecated.badgeTarget")}</Badge>
-          ) : (
-            <Badge variant="neutral" dot>{t("capabilities.marketplaceDetail.badge")}</Badge>
-          )}
+          {/* No "from market" badge: this rail only ever shows capabilities
+              that came from the market, so it never varied. And the
+              deprecation is one word here — the banner below it already gives
+              the advice the longer badge was repeating. */}
+          {deprecated && <Badge variant="neutral" dot>{t("capabilities.deprecated.badgeSource")}</Badge>}
         </>
       }
       footer={<Button variant="outline" onClick={() => setUninstallOpen(true)}>{t("capabilities.uninstall.action")}</Button>}

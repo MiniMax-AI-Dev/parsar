@@ -142,7 +142,7 @@ export function ConnectionsPage() {
                 <span>{t("connections.connector.platformSelect.label")}</span>
                 <span>App ID</span>
                 <span>{t("connectors.table.status")}</span>
-                <span className="text-right" />
+                <span className="text-right">{t("connections.connector.platformList.updatedAt")}</span>
               </LedgerHeader>
               <ul className="m-0 list-none p-0">
                 {rows.map((row) => {
@@ -160,7 +160,7 @@ export function ConnectionsPage() {
                       onClick={() => setSelected((cur) => (cur === row.platform ? null : row.platform))}
                       onKeyDown={onKeyDown}
                     >
-                      <StatusIcon status={STATUS_ICON[row.status]} title={statusLabel} />
+                      <StatusIcon status={STATUS_ICON[row.status]} />
                       <span className="truncate font-medium">{platformName(row.platform)}</span>
                       <LedgerId>{row.appID || "—"}</LedgerId>
                       <span className="truncate">{statusLabel}</span>
@@ -185,7 +185,7 @@ export function ConnectionsPage() {
             header={
               <>
                 <StatusIcon status={STATUS_ICON[railRow.status]} />
-                <span className="shrink-0 text-sm font-medium text-fg">{platformName(railPlatform)}</span>
+                <span className="shrink-0 text-base font-medium text-fg">{platformName(railPlatform)}</span>
                 <LedgerId className="min-w-0 flex-1">{railRow.appID || "—"}</LedgerId>
               </>
             }

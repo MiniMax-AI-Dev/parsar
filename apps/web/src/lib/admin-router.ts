@@ -12,7 +12,7 @@ export type AdminView =
   | "models"
   | "members"
   | "settings"
-  // Settings sub-pages — reachable via the settings tab strip
+  // Their own sidebar entries; 设置 no longer holds them behind a tab strip
   | "secrets"
   | "runtime"
   | "usage"

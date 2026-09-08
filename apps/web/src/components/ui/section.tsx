@@ -40,10 +40,9 @@ export function SectionHead({
  * Section of a full-page detail or settings page: a `SectionHead` with the
  * content below it. Sections are separated by spacing only; there is no card.
  *
- * (Inside a `DetailRail` use `RailSection`, whose head stays 12px. That is a
- * deliberate exception, not an oversight: in a 384px panel the head is an
- * eyebrow over a dense property list, a different device from a heading on a
- * page, and 16px there would weigh more than the values it introduces.)
+ * (Inside a `DetailRail` use `RailSection`, whose head is 14px. The rail runs
+ * its own compressed ladder — 14 over 13px values over 12px labels — because
+ * 16px in a 384px panel would weigh more than the values it introduces.)
  */
 export function PageSection({
   title,

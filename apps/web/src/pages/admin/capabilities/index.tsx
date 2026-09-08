@@ -303,7 +303,10 @@ export function CapabilitiesPage() {
         key={`${fromMarketplace ? "market" : "own"}-${cap.id}`}
         capability={cap}
         version={version}
-        source={fromMarketplace ? marketplaceSourceName(marketCap) : t("capabilities.tabs.workspace")}
+        // Own capabilities show nothing rather than an em dash: the value is
+        // not missing, it is redundant with the group header — and a dash in
+        // this ledger means "unknown".
+        source={fromMarketplace ? marketplaceSourceName(marketCap) : ""}
         deprecatedLabel={fromMarketplace ? t("capabilities.deprecated.badgeTarget") : t("capabilities.deprecated.badgeSource")}
         enabledCount={enabledCount}
         credentials={requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.credentials.none"))}
@@ -994,11 +997,11 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
       aria-label={capability.name}
       header={
         <>
-          <span className="min-w-0 truncate text-sm font-medium text-fg">{capability.name}</span>
+          <span className="min-w-0 truncate text-base font-medium text-fg">{capability.name}</span>
           <CapabilityTypeBadge type={capability.type} />
-          <Badge variant="neutral" dot>
-            {t(deprecated ? "capabilities.status.deprecated" : "capabilities.status.active")}
-          </Badge>
+          {/* Only when it is off the shelf. "可用" was on every capability
+              that was not deprecated, which is a badge that never varies. */}
+          {deprecated && <Badge variant="neutral" dot>{t("capabilities.status.deprecated")}</Badge>}
         </>
       }
       footer={
@@ -1019,7 +1022,6 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
 
       <RailSection title={t("capabilities.detail.basic.title")}>
         <PropertyList>
-          <Property label={t("capabilities.table.type")}><CapabilityTypeBadge type={capability.type} /></Property>
           <Property label={t("capabilities.table.credentials")}>
             {requiredCredentialsLabel(capability.required_credentials, i18n.language, t("capabilities.credentials.none"))}
           </Property>
@@ -1080,11 +1082,11 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
       {isAdmin && (
         <RailSection title={t("capabilities.marketStatus.title")} className="mt-6">
           <PropertyList>
-            <Property label={t("capabilities.marketStatus.title")}>
-              <Badge variant="neutral" dot>
-                {published ? t("capabilities.marketStatus.published") : t("capabilities.marketStatus.unpublished")}
-              </Badge>
-              {deprecated && <span className="text-xs text-fg-muted">{t("capabilities.deprecated.badgeSource")}</span>}
+            {/* Labelled "上架状态", not "市场状态" again — it used to repeat the
+                section head two lines above it. The deprecation is said once,
+                by the header badge, in one word. */}
+            <Property label={t("capabilities.marketStatus.state")}>
+              {published ? t("capabilities.marketStatus.published") : t("capabilities.marketStatus.unpublished")}
             </Property>
             <Property label={t("capabilities.marketplace.detail.addedCount")} mono>{installCountQ.data ?? 0}</Property>
           </PropertyList>

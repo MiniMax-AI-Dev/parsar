@@ -162,6 +162,7 @@ function CapabilityLine({
   version,
   notes,
   actions,
+  actionsAlways,
 }: {
   status: StatusKind
   statusLabel: string
@@ -172,28 +173,39 @@ function CapabilityLine({
   /** At most one line each, and each with at most one thing to press. */
   notes?: { key: string; text: ReactNode; action?: ReactNode }[]
   actions?: ReactNode
+  /** For a row whose action is its whole point — a toggle, or an "add" list. */
+  actionsAlways?: boolean
 }) {
   return (
-    <li className="group border-b border-line last:border-b-0">
-      <div className="flex items-start gap-2 py-2.5">
-        <StatusIcon status={status} title={statusLabel} className="mt-1 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-baseline gap-2">
-            <span className="min-w-0 truncate text-sm font-medium text-fg">{name}</span>
-            {kind && <span className="shrink-0 text-xs text-fg-muted">{kind}</span>}
-          </div>
-          {description && <p className="mt-0.5 truncate text-xs text-fg-muted">{description}</p>}
-          {notes?.map((note) => (
-            <p key={note.key} className="mt-1 flex min-w-0 items-center gap-2 text-xs text-fg">
-              <span className="min-w-0 truncate">{note.text}</span>
-              {note.action}
-            </p>
-          ))}
-        </div>
-        {version && (
-          <span className="mt-0.5 shrink-0 font-mono text-xs tabular-nums text-fg-muted">{version}</span>
+    <li className="group border-b border-line py-2.5 last:border-b-0">
+      {/* The identifying line: glyph, name, kind, then a fixed version track so
+          versions line up down the list whatever the row's verbs are — the
+          cluster is one icon wide on one row and a text button on another. */}
+      <div className="flex items-center gap-2">
+        <StatusIcon status={status} title={statusLabel} className="shrink-0" />
+        <span className="min-w-0 truncate text-sm font-medium text-fg">{name}</span>
+        {kind && <span className="min-w-0 shrink truncate text-xs text-fg-muted">{kind}</span>}
+        <span className="ml-auto w-14 shrink-0 text-right font-mono text-xs tabular-nums text-fg-muted">
+          {version}
+        </span>
+        {actions && <RowActions always={actionsAlways}>{actions}</RowActions>}
+      </div>
+      {/* Everything below runs the full width under the glyph: the version
+          track belongs to the line above, not to the sentences. */}
+      <div className="pl-5">
+        {description && (
+          <p className="mt-0.5 truncate text-xs text-fg-muted" title={typeof description === "string" ? description : undefined}>
+            {description}
+          </p>
         )}
-        {actions && <RowActions>{actions}</RowActions>}
+        {/* A div, not a p: a note's action may itself render a block (the
+            upgrade button's failure notice), which a paragraph cannot hold. */}
+        {notes?.map((note) => (
+          <div key={note.key} className="mt-1 flex min-w-0 items-center gap-2 text-xs text-fg">
+            <span className="min-w-0 truncate">{note.text}</span>
+            {note.action}
+          </div>
+        ))}
       </div>
     </li>
   )
@@ -243,12 +255,14 @@ function BuiltinCapabilityCard({
         </>
       }
       description={capability?.description}
+      actionsAlways
       actions={
         <ActionIconButton
           icon={Power}
           label={enabled ? t("agents.detail.capabilities.builtin.disable") : t("agents.detail.capabilities.builtin.enable")}
           busy={mut.isPending}
           disabled={!isAdmin || mut.isPending}
+          aria-pressed={enabled}
           onClick={() => onToggle(!enabled)}
         />
       }
@@ -426,11 +440,14 @@ function CapabilityCard({
       }),
     })
   }
-  if (mode === "enabled" && versionDeleted && versions.length > 0 && binding) {
+  if (mode === "enabled" && versionDeleted && binding) {
     notes.push({
       key: "version-deleted",
       text: t("agents.detail.capabilities.bindings.versionDeleted.warning"),
-      action: (
+      // Only the remedy is conditional. The warning used to be gated on it
+      // too, so a binding whose every version was gone showed a red glyph and
+      // not one word.
+      action: versions.length > 0 && (
         <CapabilityVersionDialog
           mode="switch"
           agent={agent}
@@ -444,7 +461,7 @@ function CapabilityCard({
             </Button>
           )}
         />
-      ),
+      ) || undefined,
     })
   }
   if (mode === "enabled" && deprecated) {
@@ -455,12 +472,12 @@ function CapabilityCard({
       }),
     })
   }
-  if (upgradable) {
+  // Not when deprecated: the note above already says the source was retired
+  // and that this binding cannot move off its pinned version.
+  if (upgradable && !deprecated) {
     notes.push({
       key: "upgrade",
-      text: deprecated
-        ? t("agents.detail.capabilities.marketplace.upgradeBlocked")
-        : t("agents.detail.capabilities.marketplace.upgradeShort", { version: latest?.version ?? "—" }),
+      text: t("agents.detail.capabilities.marketplace.upgradeShort", { version: latest?.version ?? "—" }),
       action: (
         <UpgradeCapabilityDialog
           agent={agent}
@@ -476,19 +493,33 @@ function CapabilityCard({
   }
 
   const blocked = versionDeleted || incompatible || missingKinds.length > 0
-  const status: StatusKind = blocked ? "failed" : deprecated || upgradable ? "running" : "completed"
+  // `interrupted`, not `running`: the spinning arc is reserved for work in
+  // flight, and a capability with a newer version is doing nothing at all —
+  // it would have spun forever inside the rail.
+  const needsAttention = deprecated || upgradable
+  const status: StatusKind = blocked ? "failed" : needsAttention ? "interrupted" : "completed"
   const statusLabel = blocked
     ? t("agents.detail.capabilities.state.blocked")
-    : deprecated || upgradable
-      ? t("agents.detail.capabilities.state.attention")
-      : t("agents.detail.capabilities.state.ready")
+    : deprecated
+      ? t("agents.detail.capabilities.state.deprecated")
+      : upgradable
+        ? t("agents.detail.capabilities.state.attention")
+        : t("agents.detail.capabilities.state.ready")
 
   return (
     <CapabilityLine
       status={status}
       statusLabel={statusLabel}
       name={capability.name}
-      kind={<CapabilityTypeBadge type={capability.type} />}
+      // The source workspace rides in the kind slot rather than a line of its
+      // own — it is what the deprecation note points at, and it is why this
+      // row has no "switch version" verb.
+      kind={
+        <>
+          <CapabilityTypeBadge type={capability.type} className="inline" />
+          {fromMarketplace && capability.source_workspace_name ? ` · ${capability.source_workspace_name}` : ""}
+        </>
+      }
       description={capability.description}
       // The version the agent is actually pinned to. It used to be told three
       // times over — a mono `v—`, a "current v2.0.0" in prose, a "published
@@ -496,6 +527,9 @@ function CapabilityCard({
       // rather than an em dash when there is nothing to say.
       version={versionOf(boundVersion?.version ?? binding?.version ?? capability.pinned_version) ?? (mode === "available" ? versionOf(latest?.version) : undefined)}
       notes={notes}
+      // In the add dialog the verb is the reason the list exists, so it does
+      // not wait for a hover to appear.
+      actionsAlways={mode === "available"}
       actions={
         mode === "available" ? (
           <CapabilityVersionDialog

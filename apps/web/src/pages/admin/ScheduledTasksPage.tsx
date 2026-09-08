@@ -158,7 +158,9 @@ function parseCron(cron: string): CronForm {
 
 function describeCron(cron: string, t: TFunction<"admin">, weekdays: string[]): string {
   const f = cron.trim().split(/\s+/)
-  if (f.length !== 5) return t("scheduledTasks.desc.custom", { cron })
+  // Nothing, not "cron: */15 * * * *". The next column *is* the expression, so
+  // an unrecognised schedule used to print it twice, side by side.
+  if (f.length !== 5) return ""
   const [min, hour, dom, mon, dow] = f
   const hh = Number(hour)
   const mm = Number(min)
@@ -168,7 +170,7 @@ function describeCron(cron: string, t: TFunction<"admin">, weekdays: string[]): 
   if (mon === "*" && dom === "*" && dow === "*" && timeOK) return t("scheduledTasks.desc.daily", { time: fmtTime(hh, mm) })
   if (mon === "*" && dom === "*" && /^[0-6]$/.test(dow) && timeOK) return t("scheduledTasks.desc.weekly", { day: weekdays[Number(dow)] ?? dow, time: fmtTime(hh, mm) })
   if (mon === "*" && /^\d{1,2}$/.test(dom) && dow === "*" && timeOK) return t("scheduledTasks.desc.monthly", { dom: Number(dom), time: fmtTime(hh, mm) })
-  return t("scheduledTasks.desc.custom", { cron })
+  return ""
 }
 
 /** The last run's outcome as the ledger's status icon; a task that never ran is "queued". */
@@ -373,7 +375,9 @@ export function ScheduledTasksPage() {
                     </span>
                     <span className="truncate" title={task.timezone}>
                       {describeCron(task.cron_expr, t, weekdays)}
-                      <span className="text-xs text-fg-muted"> · {task.timezone}</span>
+                      <span className="text-xs text-fg-muted">
+                        {describeCron(task.cron_expr, t, weekdays) ? " · " : ""}{task.timezone}
+                      </span>
                     </span>
                     <LedgerId className="text-fg">{task.cron_expr}</LedgerId>
                     <span className="flex min-w-0 items-center gap-1.5" title={agent}>
@@ -557,7 +561,12 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
   const [localErr, setLocalErr] = useState<string | null>(null)
 
   const cronExpr = buildCron(freq, timeStr, dow, dom, minute, custom)
-  const preview = t("scheduledTasks.desc.withTz", { desc: describeCron(cronExpr, t, weekdays), tz })
+  // With no description to wrap, the preview is the expression and its zone —
+  // not an orphaned " (UTC)".
+  const cronDesc = describeCron(cronExpr, t, weekdays)
+  const preview = cronDesc
+    ? t("scheduledTasks.desc.withTz", { desc: cronDesc, tz })
+    : t("scheduledTasks.desc.withTz", { desc: cronExpr, tz })
   const errMsg = localErr ?? (error instanceof ApiError ? error.envelope.message : error instanceof Error ? error.message : null)
 
   async function handleSave() {

@@ -857,8 +857,10 @@ const MessageRow = memo(function MessageRow({
         <div className="flex items-start gap-1.5 text-base text-fg">
           <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
           <div className="min-w-0">
-            <p className="m-0 font-medium">{t("conversations.runtime_error.badge")}</p>
-            <p className="m-0 mt-1 break-words">{runtimeError.message}</p>
+            {/* No "Run failed" heading over it: the red triangle says failure
+                and the sentence beneath says it again in words — three
+                statements of one fact in four lines. */}
+            <p className="m-0 break-words font-medium">{runtimeError.message}</p>
             {runtimeError.href && runtimeError.action && (
               <Button asChild variant="outline" size="sm" className="mt-2">
                 <a href={runtimeError.href}>{runtimeError.action}</a>
