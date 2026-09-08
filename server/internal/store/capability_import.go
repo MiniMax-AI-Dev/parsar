@@ -472,17 +472,18 @@ func commitCapabilityVersionInTx(ctx context.Context, q *sqlc.Queries, p commitV
 			keyVersion = "v1"
 		}
 		secretRow, err := q.CreateSecret(ctx, sqlc.CreateSecretParams{
-			ID:               mustUUID(newID()),
-			Slug:             generateAutoSlug("secret"),
-			Name:             secretName,
-			Kind:             "capability_inline",
-			Provider:         "inline",
-			AuthType:         "literal",
-			EncryptedPayload: secret.EncryptedPayload,
-			KeyVersion:       keyVersion,
-			Metadata:         metaJSON,
-			CreatedBy:        p.CreatorID,
-			Now:              timestamptz(p.Now),
+			ID:                    mustUUID(newID()),
+			Slug:                  generateAutoSlug("secret"),
+			Name:                  secretName,
+			Kind:                  "capability_inline",
+			Provider:              "inline",
+			AuthType:              "literal",
+			EncryptedPayload:      secret.EncryptedPayload,
+			KeyVersion:            keyVersion,
+			Metadata:              metaJSON,
+			CreatedBy:             p.CreatorID,
+			ManagementWorkspaceID: p.WorkspaceID,
+			Now:                   timestamptz(p.Now),
 		})
 		if err != nil {
 			if isUniqueViolation(err) {

@@ -16,13 +16,16 @@ import (
 
 type CreateSecretInput struct {
 	WorkspaceID string
-	Name        string
-	Kind        string
-	Provider    string
-	AuthType    string
-	Payload     map[string]any
-	Masked      string
-	CreatedBy   string
+	// ManagementWorkspaceID preserves global sharing when WorkspaceID is unset.
+	// When omitted, the creation workspace is also the management workspace.
+	ManagementWorkspaceID string
+	Name                  string
+	Kind                  string
+	Provider              string
+	AuthType              string
+	Payload               map[string]any
+	Masked                string
+	CreatedBy             string
 	// CredentialKindCode is optional metadata that pins a capability_inline
 	// secret to a single credential_kinds.code. Used by the agent-creation
 	// shared-binding picker to filter secrets by the kind they hold.
@@ -53,6 +56,10 @@ type SecretPayload struct {
 func (s *Store) CreateSecret(ctx context.Context, input CreateSecretInput, encryptedPayload []byte) (SecretRead, error) {
 	now := time.Now().UTC()
 	createdBy := nullableUUID(input.CreatedBy)
+	managementWorkspaceID := input.ManagementWorkspaceID
+	if managementWorkspaceID == "" {
+		managementWorkspaceID = input.WorkspaceID
+	}
 	metaPayload := map[string]any{"masked": strings.TrimSpace(input.Masked)}
 	if code := strings.TrimSpace(input.CredentialKindCode); code != "" {
 		metaPayload["credential_kind_code"] = code
@@ -75,7 +82,7 @@ func (s *Store) CreateSecret(ctx context.Context, input CreateSecretInput, encry
 		KeyVersion:            "v1",
 		Metadata:              metadata,
 		CreatedBy:             createdBy,
-		ManagementWorkspaceID: nullableUUID(input.WorkspaceID),
+		ManagementWorkspaceID: nullableUUID(managementWorkspaceID),
 		Now:                   timestamptz(now),
 	})
 	if err != nil {

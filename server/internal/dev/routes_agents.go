@@ -326,7 +326,7 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 		// fully-resolved binding map. Failure here is fatal — the agent
 		// is not created, the secrets that did succeed are left as
 		// orphans (we explicitly chose not to clean them up).
-		if cfg, ok := materialiseInlineSecrets(r.Context(), runtimeStore, req.Config, req.InlineNewSecrets, actorIDFromRequest(r)); ok {
+		if cfg, ok := materialiseInlineSecrets(r.Context(), runtimeStore, req.Config, req.InlineNewSecrets, actorIDFromRequest(r), workspaceID); ok {
 			req.Config = cfg
 		} else if len(req.InlineNewSecrets) > 0 {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to materialise inline_new_secrets"})
@@ -527,7 +527,7 @@ func updateAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 		// pass could wrap the chain in a tx + rollback.
 		configChanged := fields["config"] || len(req.InlineNewSecrets) > 0
 		if configChanged {
-			if cfg, ok := materialiseInlineSecrets(r.Context(), runtimeStore, req.Config, req.InlineNewSecrets, actorIDFromRequest(r)); ok {
+			if cfg, ok := materialiseInlineSecrets(r.Context(), runtimeStore, req.Config, req.InlineNewSecrets, actorIDFromRequest(r), agent.WorkspaceID); ok {
 				req.Config = cfg
 			} else if len(req.InlineNewSecrets) > 0 {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to materialise inline_new_secrets"})

@@ -11,6 +11,27 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+type secretManagementCaptureStore struct {
+	stubRuntimeStore
+	input store.CreateSecretInput
+}
+
+func (s *secretManagementCaptureStore) CreateSecret(_ context.Context, input store.CreateSecretInput, _ []byte) (store.SecretRead, error) {
+	s.input = input
+	return store.SecretRead{ID: "00000000-0000-0000-0000-000000000099"}, nil
+}
+
+func TestAgentInlineSecretRecordsManagementWithoutChangingSharing(t *testing.T) {
+	t.Setenv("PARSAR_MASTER_KEY", "test-secret-management-key")
+	s := &secretManagementCaptureStore{}
+	ids := store.DefaultDevFixtureIDs()
+	_, ok := materialiseInlineSecrets(context.Background(), s, map[string]any{},
+		[]createAgentInlineSecretBody{{Kind: "github_pat", Plaintext: "synthetic"}}, ids.UserID, ids.WorkspaceID)
+	if !ok || s.input.ManagementWorkspaceID != ids.WorkspaceID || s.input.WorkspaceID != "" {
+		t.Fatal("inline credential must retain its sharing scope and record its management workspace")
+	}
+}
+
 func TestSecretDisableRequiresItsManagementWorkspace(t *testing.T) {
 	t.Setenv("PARSAR_MASTER_KEY", "test-secret-management-key")
 	db := openDevRouteTestDB(t)

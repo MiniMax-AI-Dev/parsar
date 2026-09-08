@@ -1127,17 +1127,18 @@ func (s *Store) RegisterWorkspaceRuntimeCredential(ctx context.Context, in Regis
 
 	// Step 2 — insert the new credential secret.
 	row, err := q.CreateSecret(ctx, sqlc.CreateSecretParams{
-		ID:               mustUUID(newID()),
-		Slug:             generateAutoSlug("secret"),
-		Name:             strings.TrimSpace(in.Name),
-		Kind:             secretKind(in.Kind),
-		Provider:         strings.TrimSpace(in.Provider),
-		AuthType:         strings.TrimSpace(in.AuthType),
-		EncryptedPayload: in.EncryptedPayload,
-		KeyVersion:       "v1",
-		Metadata:         metadataJSON,
-		CreatedBy:        createdBy,
-		Now:              timestamptz(in.Now),
+		ID:                    mustUUID(newID()),
+		Slug:                  generateAutoSlug("secret"),
+		Name:                  strings.TrimSpace(in.Name),
+		Kind:                  secretKind(in.Kind),
+		Provider:              strings.TrimSpace(in.Provider),
+		AuthType:              strings.TrimSpace(in.AuthType),
+		EncryptedPayload:      in.EncryptedPayload,
+		KeyVersion:            "v1",
+		Metadata:              metadataJSON,
+		CreatedBy:             createdBy,
+		ManagementWorkspaceID: wsUUID,
+		Now:                   timestamptz(in.Now),
 	})
 	if err != nil {
 		return SecretRead{}, fmt.Errorf("insert runtime credential secret: %w", err)

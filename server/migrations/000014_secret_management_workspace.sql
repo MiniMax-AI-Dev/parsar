@@ -9,7 +9,7 @@ ALTER TABLE secrets
 UPDATE secrets s
 SET management_workspace_id = w.id
 FROM workspaces w
-WHERE s.metadata->>'workspace_id' = w.id::text;
+WHERE lower(s.metadata->>'workspace_id') = w.id::text;
 
 COMMENT ON COLUMN secrets.management_workspace_id IS
   'Workspace whose owner/admin may disable this secret; does not restrict shared use';

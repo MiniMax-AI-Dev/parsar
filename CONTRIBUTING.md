@@ -384,6 +384,8 @@ description and keep ownership on the side listed here.
   rows without it remain usable but cannot be disabled through the API until
   an operator assigns a verified management workspace in the database.
   Never infer ownership from the workspace supplied in a disable request.
+  The database smoke gate also runs the cross-workspace secret-disable HTTP
+  regression so it cannot silently skip in CI without a test database.
 - Accepting an invitation may set a password only for a newly created user.
   Existing users must authenticate as the invited account; acceptance must
   preserve their identities and passwords, and rejected attempts must leave
