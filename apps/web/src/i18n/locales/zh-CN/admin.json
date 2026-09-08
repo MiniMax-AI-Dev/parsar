@@ -1531,6 +1531,7 @@
         "refreshCredentials": "刷新凭证",
         "credentialsFailed": "无法加载凭证。"
       },
+      "editCapabilitiesHint": "Skill、MCP 和版本请在此 Agent 的 Config 页中管理。",
       "title": {
         "create": "新建 Agent",
         "edit": "编辑 Agent"

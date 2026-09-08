@@ -1531,6 +1531,7 @@
         "refreshCredentials": "Refresh credentials",
         "credentialsFailed": "Credentials could not be loaded."
       },
+      "editCapabilitiesHint": "Manage skills, MCP tools, and their versions in this Agent's Config tab.",
       "title": {
         "create": "New Agent",
         "edit": "Edit Agent"
