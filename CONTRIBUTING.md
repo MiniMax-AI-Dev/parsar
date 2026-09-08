@@ -614,6 +614,9 @@ integration tests, `make check-web` for web typecheck plus design lint, and
 Docker-free installer lifecycle checks. Keep the subtargets aligned with
 the full gate whenever the required checks change.
 
+Pin the CI vulnerability scanner to a version compatible with the workflow's
+Go toolchain; do not use `@latest` for that build-time tool.
+
 - Any DB change must ship with a migration. Migrations are immutable
   the moment they land on `main` — prod has already applied them, so
   editing an existing file only mutates fresh installs. To change
