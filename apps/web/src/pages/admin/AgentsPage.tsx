@@ -174,7 +174,7 @@ export function AgentsPage() {
       <RailLayout rail={agentRail}>
         <PageHeader
           className="static mx-0 mb-0 h-auto min-h-16 flex-wrap py-3"
-          actionClassName="min-w-0 max-w-full flex-wrap"
+          actionClassName="min-w-0 max-w-full flex-wrap [&>button]:h-auto [&>button]:min-h-7 [&>button]:max-w-full [&>button]:flex-wrap [&>button]:whitespace-normal [&>button]:py-1"
           title={pageTitle}
           subtitleFor="agents.page.title"
           action={
