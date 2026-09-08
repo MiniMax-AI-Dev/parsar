@@ -162,11 +162,8 @@ export function MembersPage() {
           <div className="px-6 pt-6">
             <ErrorState
               title={loadError.envelope?.unreachable ? t("members.error.unreachable.title") : t("members.error.load.title")}
-              description={
-                loadError.envelope?.unreachable
-                  ? t("members.error.unreachable.description")
-                  : loadError.message ?? t("members.error.load.description")
-              }
+              description={loadError.envelope?.unreachable ? t("members.error.unreachable.description") : t("members.error.load.description")}
+              detail={loadError.envelope?.unreachable ? undefined : loadError.message}
               hint={loadError.envelope?.unreachable ? t("members.error.unreachable.hint") : t("members.error.load.hint")}
               onRetry={() => void wsQ.refetch()}
             />

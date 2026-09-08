@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { AlertTriangle, CalendarClock, Check, Loader2, Pencil, Play, Plus, Power, Trash2 } from "lucide-react"
+import { AlertTriangle, CalendarClock, Loader2, Pencil, Play, Plus, Power, Trash2 } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
@@ -27,9 +27,10 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog"
 import { EmptyState } from "../../components/ui/empty-state"
-import { ErrorState } from "../../components/ui/error-state"
+import { ErrorState, InlineNotice } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
 import { Field } from "../../components/ui/label"
+import { useToast } from "../../components/ui/toast"
 import {
   InitialTile,
   Ledger,
@@ -217,7 +218,7 @@ export function ScheduledTasksPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<ScheduledTask | null>(null)
   const [deleting, setDeleting] = useState<ScheduledTask | null>(null)
-  const [notice, setNotice] = useState<{ text: string; failed: boolean } | null>(null)
+  const { show } = useToast()
 
   // Offset is keyed by workspace: switching starts from page one so we
   // never point past the end of the new result set.
@@ -267,11 +268,17 @@ export function ScheduledTasksPage() {
   }
 
   async function runNow(task: ScheduledTask) {
+    // The result of pressing a button is a passing thing: it says the request
+    // landed, and then it should get out of the way. It used to open a row
+    // under the header that pushed the whole ledger down and never left.
     try {
       await runNowMut.mutateAsync(task.id)
-      setNotice({ text: t("scheduledTasks.runNowOk"), failed: false })
+      show(t("scheduledTasks.runNowOk"))
     } catch (err) {
-      setNotice({ text: err instanceof ApiError ? err.envelope.message : t("scheduledTasks.runNowErr"), failed: true })
+      show(t("scheduledTasks.runNowErr"), {
+        tone: "error",
+        detail: err instanceof ApiError ? err.envelope.message : err instanceof Error ? err.message : undefined,
+      })
     }
   }
 
@@ -307,15 +314,12 @@ export function ScheduledTasksPage() {
           }
         />
 
-        {(notice || (noAgents && workspaceID)) && (
-          <div className="flex h-9 shrink-0 items-center gap-1.5 border-b border-line px-4 text-sm text-fg">
-            {notice && !notice.failed ? (
-              <Check className="h-3.5 w-3.5 shrink-0 text-status-completed" strokeWidth={1.5} aria-hidden="true" />
-            ) : (
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-            )}
-            <span className="truncate">{notice ? notice.text : t("scheduledTasks.noAgents")}</span>
-          </div>
+        {/* A standing condition, not a message: with no agent there is nothing
+            to schedule, which is also why 新建 is disabled. It stays put. */}
+        {noAgents && workspaceID && (
+          <InlineNotice tone="warning" className="shrink-0 border-b border-line px-4 py-2">
+            {t("scheduledTasks.noAgents")}
+          </InlineNotice>
         )}
 
         {!workspaceID ? (
@@ -326,7 +330,7 @@ export function ScheduledTasksPage() {
           <div className="px-6 pt-6">
             <ErrorState
               title={t("scheduledTasks.loadError")}
-              description={loadError instanceof Error ? loadError.message : undefined}
+              detail={loadError instanceof Error ? loadError.message : undefined}
               hint={unreachable ? t("runs.loadError.unreachable.hint") : undefined}
               onRetry={() => void tasksQ.refetch()}
             />

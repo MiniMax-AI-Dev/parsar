@@ -131,7 +131,7 @@ export function ConnectionsPage() {
             <div className="px-4 pt-4">
               <ErrorState
                 title={tc("states.errorTitle")}
-                description={err instanceof Error ? err.message : String(err)}
+                detail={err instanceof Error ? err.message : String(err)}
                 onRetry={() => void connectorsQ.refetch()}
               />
             </div>

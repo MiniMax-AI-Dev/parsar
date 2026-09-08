@@ -154,13 +154,8 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
                 ? t("conversations.loadError.unreachable.title")
                 : t("conversations.loadError.title")
             }
-            description={
-              isUnreachable
-                ? t("conversations.loadError.unreachable.description")
-                : err instanceof Error
-                  ? err.message
-                  : t("conversations.loadError.description")
-            }
+            description={isUnreachable ? t("conversations.loadError.unreachable.description") : t("conversations.loadError.description")}
+            detail={!isUnreachable && err instanceof Error ? err.message : undefined}
             hint={
               isUnreachable
                 ? t("conversations.loadError.unreachable.hint")

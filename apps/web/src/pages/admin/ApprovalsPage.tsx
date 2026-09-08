@@ -23,6 +23,7 @@ import {
 import { Property, PropertyList } from "../../components/ui/property-list"
 import { Skeleton } from "../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
+import { VerbatimBlock } from "../../components/ui/verbatim"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useAgentInteractions, useResolveAgentInteraction } from "../../lib/api-interactions"
@@ -132,13 +133,8 @@ export function ApprovalsPage() {
             <div className="px-6 pt-6">
               <ErrorState
                 title={unreachable ? t("approvals.loadError.unreachable.title") : t("approvals.loadError.title")}
-                description={
-                  unreachable
-                    ? t("approvals.loadError.unreachable.description")
-                    : error instanceof Error
-                      ? error.message
-                      : t("approvals.loadError.description")
-                }
+                description={unreachable ? t("approvals.loadError.unreachable.description") : t("approvals.loadError.description")}
+                detail={!unreachable && error instanceof Error ? error.message : undefined}
                 hint={unreachable ? t("approvals.loadError.unreachable.hint") : t("approvals.loadError.hint")}
                 onRetry={() => {
                   void pendingQ.refetch()
@@ -417,9 +413,9 @@ function InteractionRail({
 
       {isPermission ? (
         <RailSection title={t("approvals.detail.payload")}>
-          <pre className="m-0 mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+          <VerbatimBlock className="mt-1.5 max-h-60">
             {JSON.stringify(interaction.request.payload ?? {}, null, 2)}
-          </pre>
+          </VerbatimBlock>
         </RailSection>
       ) : (
         questions.map((question, index) => {

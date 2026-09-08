@@ -43,7 +43,7 @@ export function SettingsPage() {
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-4">
           <div className="space-y-6">
             <Section title={t("settings.workspace.title")} description={t("settings.workspace.description")}>
-              <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
+              <PropertyList>
                 <Property label={t("settings.workspace.name")}>{workspace?.name ?? "—"}</Property>
                 <Property label={t("settings.workspace.slug")} mono>{workspace?.slug ?? "—"}</Property>
                 <Property label={languageLabel}>
@@ -111,7 +111,7 @@ export function SettingsPage() {
               title={t("settings.runtime.policy.title")}
               description={t("settings.runtime.policy.description")}
             >
-              <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
+              <PropertyList>
                 <Property label={t("settings.runtime.policy.workdirs.title")} mono>
                   /absolute/path, ~/path
                 </Property>

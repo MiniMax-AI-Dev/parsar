@@ -1530,7 +1530,7 @@
           "badge": "Built-in",
           "on": "On",
           "off": "Off",
-          "toggleError": "Toggle failed: {{message}}"
+          "toggleError": "Toggle failed"
         },
         "actions": {
           "enable": "+ Enable",

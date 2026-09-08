@@ -14,6 +14,7 @@ import {
 import { Field } from "../ui/label"
 import { Input } from "../ui/input"
 import { StatusIcon } from "../ui/status-icon"
+import { VerbatimBlock } from "../ui/verbatim"
 import { InlineError } from "../runtime/InlineError"
 import { useCreateRuntimePairing, useWorkspaceRuntimes } from "../../lib/api-runtimes"
 import { useBootstrapStatus } from "../../lib/api-bootstrap"
@@ -254,9 +255,9 @@ function DaemonCommandBlock({
               : t("runtime.agentDaemon.pair.copy", { defaultValue: "Copy" })}
         </Button>
       </div>
-      <pre className="m-0 mt-1 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+      <VerbatimBlock className="mt-1">
         {command}
-      </pre>
+      </VerbatimBlock>
       <p className="mt-1 text-xs text-fg-muted">{description}</p>
     </div>
   )

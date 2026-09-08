@@ -274,7 +274,7 @@ function ValidationPanel({
       )}
 
       {m && (
-        <PropertyList className="grid-cols-[100px_minmax(0,1fr)]">
+        <PropertyList>
           <Property label="name" mono>{m.name}</Property>
           <Property label="version" mono>{m.version}</Property>
           {m.description && <Property label="description" className="h-auto min-h-7 whitespace-normal py-1">{m.description}</Property>}

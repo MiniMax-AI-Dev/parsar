@@ -6,6 +6,7 @@ import { ApiError } from "../../../lib/api-client"
 import { useUpgrade } from "../../../lib/api-marketplace"
 import type { AgentCapability, Capability, CapabilityVersion, Agent } from "../../../lib/api-types"
 import { InlineNotice } from "./notices"
+import type { ShowToast } from "../../../components/ui/toast"
 
 interface UpgradeCapabilityDialogProps {
   agent: Agent
@@ -14,7 +15,7 @@ interface UpgradeCapabilityDialogProps {
   latestVersion?: CapabilityVersion
   workspaceID: string | null
   disabled?: boolean
-  onToast: (message: string) => void
+  onToast: ShowToast
 }
 
 /** Inline "a newer version exists" row with its one upgrade action. */

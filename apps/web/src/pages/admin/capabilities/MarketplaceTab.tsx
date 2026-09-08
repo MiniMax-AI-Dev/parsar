@@ -11,6 +11,7 @@ import { ErrorState } from "../../../components/ui/error-state"
 import { Ledger, LedgerHeader, LedgerNum, LedgerRow, col } from "../../../components/ui/ledger"
 import { PropertyList, Property } from "../../../components/ui/property-list"
 import { Skeleton } from "../../../components/ui/skeleton"
+import { VerbatimBlock } from "../../../components/ui/verbatim"
 import {
   marketplaceSourceName,
   useMarketplaceDetail,
@@ -130,7 +131,8 @@ function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, can
       <div className="px-4 pt-4">
         <ErrorState
           title={t("capabilities.marketplace.loadError.title")}
-          description={marketplaceQ.error instanceof Error ? marketplaceQ.error.message : t("capabilities.marketplace.loadError.description")}
+          description={t("capabilities.marketplace.loadError.description")}
+          detail={marketplaceQ.error instanceof Error ? marketplaceQ.error.message : undefined}
           onRetry={() => void marketplaceQ.refetch()}
         />
       </div>
@@ -329,7 +331,8 @@ function MarketplaceItemDetail({ capability, language, canManage, open, onClosed
               ) : detailQ.error ? (
                 <ErrorState
                   title={t("capabilities.marketplace.detail.loadErrorTitle")}
-                  description={detailQ.error instanceof Error ? detailQ.error.message : t("capabilities.marketplace.detail.loadErrorDescription")}
+                  description={t("capabilities.marketplace.detail.loadErrorDescription")}
+                  detail={detailQ.error instanceof Error ? detailQ.error.message : undefined}
                   onRetry={() => void detailQ.refetch()}
                 />
               ) : detailQ.data ? (
@@ -343,7 +346,6 @@ function MarketplaceItemDetail({ capability, language, canManage, open, onClosed
   )
 }
 
-const CODE_BLOCK_CLASS = "m-0 overflow-x-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg"
 
 function MarketplaceContentPreview({ detail }: { detail: MarketplaceCapabilityDetail }) {
   const { t } = useTranslation("admin")
@@ -352,7 +354,7 @@ function MarketplaceContentPreview({ detail }: { detail: MarketplaceCapabilityDe
   return (
     <div className="space-y-4">
       {hasSource && (
-        <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
+        <PropertyList>
           {detail.git_repo_url && (
             <Property label={t("capabilities.marketplace.detail.sourceRepository")} mono>
               {sourceURL ? <ExternalLinkValue href={sourceURL}>{detail.git_repo_url.replace(/^https?:\/\//, "")}</ExternalLinkValue> : detail.git_repo_url}
@@ -544,7 +546,7 @@ function MCPPreview({ detail }: { detail: MarketplaceCapabilityDetail }) {
               <CapabilityTypeBadge type="mcp" />
             </h4>
             <PreviewLabel>{t("capabilities.marketplace.detail.command")}</PreviewLabel>
-            <pre className={CODE_BLOCK_CLASS}>{command}</pre>
+            <VerbatimBlock>{command}</VerbatimBlock>
             <PreviewLabel>{t("capabilities.marketplace.detail.environment")}</PreviewLabel>
             {env.length === 0 ? (
               <p className="text-sm text-fg-muted">{t("capabilities.marketplace.detail.noEnvironment")}</p>

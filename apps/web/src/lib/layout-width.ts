@@ -10,6 +10,8 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
  * localStorage → sessionStorage → default.
  */
 export interface ResizableWidth {
+  /** Names the panel; the layout prompt keys its question on it. */
+  storageKey: string
   width: number
   dragging: boolean
   /** True while the width is animating back to its default. */
@@ -145,5 +147,5 @@ export function useResizableWidth({ storageKey, defaultWidth, min, max, edge }: 
     return () => window.clearTimeout(id)
   }, [restoring])
 
-  return { width, dragging, restoring, dirty, handleProps: { onPointerDown, onKeyDown }, save, keepTemporary, restore }
+  return { storageKey, width, dragging, restoring, dirty, handleProps: { onPointerDown, onKeyDown }, save, keepTemporary, restore }
 }

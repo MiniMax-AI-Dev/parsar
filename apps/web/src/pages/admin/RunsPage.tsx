@@ -54,6 +54,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "../../components/ui/tabs"
+import { VerbatimBlock } from "../../components/ui/verbatim"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import {
@@ -275,13 +276,8 @@ export function RunsPage({ selectedId }: { selectedId?: string | null }) {
             <div className="px-6 pt-6">
               <ErrorState
                 title={isUnreachable ? t("runs.loadError.unreachable.title") : t("runs.loadError.title")}
-                description={
-                  isUnreachable
-                    ? t("runs.loadError.unreachable.description")
-                    : err instanceof Error
-                      ? err.message
-                      : t("runs.loadError.description")
-                }
+                description={isUnreachable ? t("runs.loadError.unreachable.description") : t("runs.loadError.description")}
+                detail={!isUnreachable && err instanceof Error ? err.message : undefined}
                 hint={isUnreachable ? t("runs.loadError.unreachable.hint") : t("runs.loadError.hint")}
                 onRetry={() => void query.refetch()}
               />
@@ -759,9 +755,9 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
               {open && step.rawEvents.length > 0 && (
                 <div className="space-y-2 pb-2">
                   {formatRawRunEvents(step.rawEvents).map((block) => (
-                    <pre key={block.key} className="m-0 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                    <VerbatimBlock key={block.key}>
                       {block.text}
-                    </pre>
+                    </VerbatimBlock>
                   ))}
                 </div>
               )}

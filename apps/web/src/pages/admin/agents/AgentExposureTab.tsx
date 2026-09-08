@@ -10,6 +10,7 @@ import { useConversations } from "../../../lib/api-conversations"
 import type { FeishuConnectorConfig } from "../../../lib/api-agents"
 import type { AgentDetail } from "../../../lib/api-types"
 import { DetailSection } from "./DetailSection"
+import type { ShowToast } from "../../../components/ui/toast"
 
 /**
  * Where an Agent can be reached from.
@@ -29,7 +30,7 @@ export function AgentExposureTab({ agent, workspaceID, canEdit, onToast }: {
   agent: AgentDetail
   workspaceID: string | null
   canEdit: boolean
-  onToast: (message: string) => void
+  onToast: ShowToast
 }) {
   const { t } = useTranslation("admin")
   const { navigate } = useAdminView()

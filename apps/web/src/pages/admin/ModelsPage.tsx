@@ -340,13 +340,8 @@ export function ModelsPage() {
           <div className="px-6 pt-6">
             <ErrorState
               title={isUnreachable ? t("models.loadError.unreachable.title") : t("models.loadError.title")}
-              description={
-                isUnreachable
-                  ? t("models.loadError.unreachable.description")
-                  : err instanceof Error
-                    ? err.message
-                    : t("models.loadError.description")
-              }
+              description={isUnreachable ? t("models.loadError.unreachable.description") : t("models.loadError.description")}
+              detail={!isUnreachable && err instanceof Error ? err.message : undefined}
               hint={isUnreachable ? t("models.loadError.unreachable.hint") : t("models.loadError.hint")}
               onRetry={refresh}
             />

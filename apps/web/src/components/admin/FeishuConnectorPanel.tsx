@@ -22,6 +22,7 @@ import { PropertyList, Property } from "../ui/property-list"
 import { StatusIcon, type StatusKind } from "../ui/status-icon"
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs"
 import { InlineError } from "../../pages/admin/agents/DetailSection"
+import type { ShowToast } from "../../components/ui/toast"
 
 /* ------------------------------------------------------------------ */
 /*  FeishuConnectorPanel — see docs/feishu-routing.md §6.2             */
@@ -108,7 +109,7 @@ interface FeishuConnectorPanelProps {
   /** Current persisted config — undefined when never configured. */
   current: FeishuConnectorConfig | undefined
   canEdit: boolean
-  onToast: (msg: string) => void
+  onToast: ShowToast
 }
 
 function RequiredMark() {

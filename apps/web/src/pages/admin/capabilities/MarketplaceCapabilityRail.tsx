@@ -62,7 +62,8 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
         ) : installsQ.error ? (
           <ErrorState
             title={t("capabilities.marketplaceDetail.loadError.title")}
-            description={installsQ.error instanceof Error ? installsQ.error.message : t("capabilities.marketplaceDetail.loadError.description")}
+            description={t("capabilities.marketplaceDetail.loadError.description")}
+            detail={installsQ.error instanceof Error ? installsQ.error.message : undefined}
             onRetry={() => void installsQ.refetch()}
           />
         ) : (

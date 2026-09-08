@@ -92,7 +92,7 @@ export function DirectoryDetail({
       {error ? (
         <ErrorState
           title={t("capabilities.mcpDirectory.detail.loadError")}
-          description={error instanceof Error ? error.message : ""}
+          detail={error instanceof Error ? error.message : undefined}
           onRetry={onRetry}
         />
       ) : !item ? (

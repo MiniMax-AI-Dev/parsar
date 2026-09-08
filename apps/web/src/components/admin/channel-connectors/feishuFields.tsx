@@ -13,6 +13,7 @@ import { Button } from "../../ui/button"
 import { PropertyList, Property } from "../../ui/property-list"
 import { InlineError } from "../../runtime/InlineError"
 import { FormSection, ProvisionStatusIcon } from "./shared"
+import type { ShowToast } from "../../../components/ui/toast"
 
 const EMPTY_CONFIG: FeishuConnectorInput = {
   enabled: false,
@@ -40,7 +41,7 @@ export interface FeishuConnectorFieldsProps {
   current: FeishuConnectorInput | undefined
   masterKeyConfigured?: boolean
   canEdit: boolean
-  onToast: (msg: string) => void
+  onToast: ShowToast
   /** State chip rendered in the section head. */
   status?: ReactNode
 }

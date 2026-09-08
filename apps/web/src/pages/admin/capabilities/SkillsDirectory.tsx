@@ -73,7 +73,8 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
         <div className="px-4 pt-4">
           <ErrorState
             title={t("capabilities.skillsDirectory.loadError.title")}
-            description={catalogQ.error instanceof Error ? catalogQ.error.message : t("capabilities.skillsDirectory.loadError.description")}
+            description={t("capabilities.skillsDirectory.loadError.description")}
+            detail={catalogQ.error instanceof Error ? catalogQ.error.message : undefined}
             onRetry={() => void catalogQ.refetch()}
           />
         </div>
@@ -82,7 +83,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
         <div className="px-4 pt-4">
           <ErrorState
             title={t("capabilities.skillsDirectory.install.failed")}
-            description={installMut.error instanceof Error ? installMut.error.message : ""}
+            detail={installMut.error instanceof Error ? installMut.error.message : undefined}
             onRetry={() => installMut.reset()}
           />
         </div>

@@ -15,6 +15,7 @@ import { Input } from "../../components/ui/input"
 import { Kbd } from "../../components/ui/kbd"
 import { InitialTile, Ledger, LedgerHeader, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
 import { Skeleton } from "../../components/ui/skeleton"
+import { VerbatimBlock } from "../../components/ui/verbatim"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useAuditRecords } from "../../lib/api-governance"
@@ -254,13 +255,8 @@ export function AuditPage() {
           <div className="px-4 pt-4">
             <ErrorState
               title={isUnreachable ? t("audit.loadError.unreachable.title") : t("audit.loadError.title")}
-              description={
-                isUnreachable
-                  ? t("audit.loadError.unreachable.description")
-                  : err instanceof Error
-                    ? err.message
-                    : t("audit.loadError.description")
-              }
+              description={isUnreachable ? t("audit.loadError.unreachable.description") : t("audit.loadError.description")}
+              detail={!isUnreachable && err instanceof Error ? err.message : undefined}
               hint={isUnreachable ? t("audit.loadError.unreachable.hint") : t("audit.loadError.hint")}
               onRetry={() => void query.refetch()}
             />
@@ -298,9 +294,9 @@ export function AuditPage() {
                   />
                   {openRow === r.id && (
                     <li className="border-b border-line px-4 py-2">
-                      <pre className="m-0 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                      <VerbatimBlock>
                         {`#${r.id} ${r.event_type}\n${JSON.stringify(r.payload ?? {}, null, 2)}`}
-                      </pre>
+                      </VerbatimBlock>
                     </li>
                   )}
                 </Fragment>

@@ -238,13 +238,8 @@ export function AgentsPage() {
                   ? t("agents.loadError.unreachable.title")
                   : t("agents.loadError.title")
               }
-              description={
-                isUnreachable
-                  ? t("agents.loadError.unreachable.description")
-                  : err instanceof Error
-                    ? err.message
-                    : t("agents.loadError.description")
-              }
+              description={isUnreachable ? t("agents.loadError.unreachable.description") : t("agents.loadError.description")}
+              detail={!isUnreachable && err instanceof Error ? err.message : undefined}
               hint={
                 isUnreachable
                   ? t("agents.loadError.unreachable.hint")
@@ -464,7 +459,8 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
         ) : query.error ? (
           <ErrorState
             title={t("agents.detail.loadError.title")}
-            description={query.error instanceof Error ? query.error.message : t("agents.detail.loadError.description")}
+            description={t("agents.detail.loadError.description")}
+            detail={query.error instanceof Error ? query.error.message : undefined}
             onRetry={() => void query.refetch()}
           />
         ) : (

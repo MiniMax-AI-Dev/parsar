@@ -75,6 +75,7 @@ import { navigateAdmin, useAdminView } from "../../../lib/admin-router"
 import type { AgentCapability, Capability, CapabilityVersion } from "../../../lib/api-types"
 import { useMyWorkspaces } from "../../../lib/api-workspaces"
 import { useToast } from "../../../components/ui/toast"
+import { VerbatimBlock } from "../../../components/ui/verbatim"
 import { useWorkspaceId } from "../../../lib/workspace"
 import { useRelativeTime } from "../../../lib/relative-time"
 import { requiredCredentialsLabel } from "../../../lib/credential-kind-ui"
@@ -331,7 +332,8 @@ export function CapabilitiesPage() {
     <div className="px-4 pt-4">
       <ErrorState
         title={isUnreachable ? t("capabilities.loadError.unreachable.title") : t("capabilities.loadError.title")}
-        description={isUnreachable ? t("capabilities.loadError.unreachable.description") : err instanceof Error ? err.message : t("capabilities.loadError.description")}
+        description={isUnreachable ? t("capabilities.loadError.unreachable.description") : t("capabilities.loadError.description")}
+        detail={!isUnreachable && err instanceof Error ? err.message : undefined}
         hint={isUnreachable ? t("capabilities.loadError.unreachable.hint") : t("capabilities.loadError.hint")}
         onRetry={() => void capsQ.refetch()}
       />
@@ -1271,7 +1273,6 @@ function ViewVersionContentDialog({ version, capability, onOpenChange }: { versi
 
 type Translate = ReturnType<typeof useTranslation<"admin">>["t"]
 
-const CODE_BLOCK_CLASS = "m-0 max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg"
 
 /**
  * Picks the right body for "view version content":
@@ -1297,20 +1298,20 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
         <PropertyList>
           <Property label="mode" mono>{sp?.mode ?? "append"}</Property>
         </PropertyList>
-        <pre className={CODE_BLOCK_CLASS}>{sp?.prompt ?? t("capabilities.none")}</pre>
+        <VerbatimBlock className="max-h-[420px]">{sp?.prompt ?? t("capabilities.none")}</VerbatimBlock>
       </div>
     )
   }
 
   if (capability.type === "mcp") {
-    return <pre className={CODE_BLOCK_CLASS}>{JSON.stringify(canonicalSpec?.mcp ?? version.content ?? {}, null, 2)}</pre>
+    return <VerbatimBlock className="max-h-[420px]">{JSON.stringify(canonicalSpec?.mcp ?? version.content ?? {}, null, 2)}</VerbatimBlock>
   }
 
   if (capability.type === "plugin") {
     const plugin = canonicalSpec?.plugin
     if (!plugin) return <p className="text-sm text-fg-muted">{t("capabilities.none")}</p>
     return (
-      <PropertyList className="grid-cols-[120px_minmax(0,1fr)]">
+      <PropertyList>
         {plugin.name && <Property label="name" mono>{plugin.name}</Property>}
         {plugin.version && <Property label="version" mono>{plugin.version}</Property>}
         {plugin.description && <Property label="description">{plugin.description}</Property>}
@@ -1328,18 +1329,18 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
     const skill = canonicalSpec.skill
     return (
       <div className="space-y-2">
-        <PropertyList className="grid-cols-[120px_minmax(0,1fr)]">
+        <PropertyList>
           {skill.slug && <Property label="slug" mono>{skill.slug}</Property>}
           {skill.title && <Property label="title">{skill.title}</Property>}
           {skill.description && <Property label="description" className="h-auto min-h-7 whitespace-normal py-1">{skill.description}</Property>}
           {skill.trigger && <Property label="trigger" className="h-auto min-h-7 whitespace-normal py-1">{skill.trigger}</Property>}
         </PropertyList>
-        {skill.instruction && <pre className={CODE_BLOCK_CLASS}>{skill.instruction}</pre>}
+        {skill.instruction && <VerbatimBlock className="max-h-[420px]">{skill.instruction}</VerbatimBlock>}
       </div>
     )
   }
   return (
-    <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
+    <PropertyList>
       <Property label={t("capabilities.fields.gitRepoUrl.label")} mono>{version.git_repo_url || t("capabilities.none")}</Property>
       <Property label={t("capabilities.fields.gitRef.label")} mono>{skillVersionRef(version) || t("capabilities.none")}</Property>
       <Property label={t("capabilities.fields.path.label")} mono>{version.path || t("capabilities.none")}</Property>
