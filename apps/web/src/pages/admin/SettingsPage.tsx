@@ -103,7 +103,6 @@ export function SettingsPage() {
                 </Ledger>
               )}
             </PageSection>
-
           </div>
         </div>
       </div>
