@@ -51,17 +51,23 @@ Direct development on `main` is not allowed. Every session honours this rule.
 
 ## Independent blind review
 
-Substantial changes require two independent reviews after implementation and
-verification. Give each reviewer the requirements, acceptance criteria,
-project rules, and scope boundaries, but no implementation summary, suspected
-defects, or findings from the other reviewer. Each reviewer inspects the full
-diff.
+Fix one issue per PR. State the expected behavior, acceptance criteria, and
+explicit scope exclusions before implementation. Keep unrelated refactors,
+features, formatting, and dependency updates in separate PRs.
 
-After material fixes, repeat the two independent reviews. Once only small
-convergence fixes remain, one independent reviewer is enough. If the same
-review-and-fix cycle keeps repeating, stop patching and reassess the design. If
-the design still does not converge, report the problem instead of expanding
-the change.
+After implementation and required checks, ask one fresh subagent to review
+the entire diff. Give it the requirements, acceptance criteria, project rules,
+and scope boundaries. Do not share the developer's conversation, implementation
+summary, suspected defects, or previous review findings.
+
+Address blocking findings within the same scope, rerun the relevant checks,
+and repeat the blind review with a fresh subagent after each revision. Merge
+only after checks pass and the review has no unresolved blocking findings.
+Record verification and the PR outcome in the linked issue.
+
+If review and fixes keep cycling, stop patching and reassess the design. If
+the design still does not converge, document the unresolved problem and defer
+that issue instead of expanding the PR. Continue with independent issues.
 
 ## Architecture baseline
 
