@@ -91,7 +91,7 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
       aria-label={capability.name}
       header={
         <>
-          <span className="min-w-0 truncate text-sm font-medium text-fg">{capability.name}</span>
+          <span className="min-w-0 truncate text-base font-medium text-fg">{capability.name}</span>
           <CapabilityTypeBadge type={capability.type} />
           {/* No "from market" badge: this rail only ever shows capabilities
               that came from the market, so it never varied. And the

@@ -185,7 +185,7 @@ export function ConnectionsPage() {
             header={
               <>
                 <StatusIcon status={STATUS_ICON[railRow.status]} />
-                <span className="shrink-0 text-sm font-medium text-fg">{platformName(railPlatform)}</span>
+                <span className="shrink-0 text-base font-medium text-fg">{platformName(railPlatform)}</span>
                 <LedgerId className="min-w-0 flex-1">{railRow.appID || "—"}</LedgerId>
               </>
             }

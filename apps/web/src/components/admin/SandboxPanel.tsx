@@ -38,22 +38,6 @@ const STATUS_FOR_KIND: Record<SandboxStatusKind, StatusKind> = {
   terminal: "cancelled",
 }
 
-function Section({
-  title,
-  action,
-  children,
-}: {
-  title: string
-  action?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <RailSection title={title} action={action}>
-      {children}
-    </RailSection>
-  )
-}
-
 function Timestamp({ iso }: { iso: string }) {
   // Subscribe to the ticking clock so "Xm ago" advances; the value itself is unused.
   useNow()
@@ -167,7 +151,7 @@ export function SandboxPanel({
   }
   if (!binding) {
     return (
-      <Section title={t("agents.detail.sandbox.title")}>
+      <RailSection title={t("agents.detail.sandbox.title")}>
         {preparing ? (
           <SandboxPreparingNotice
             runtime={sandboxRuntime}
@@ -201,7 +185,7 @@ export function SandboxPanel({
             detail={(acquireMut.error as Error).message}
           />
         )}
-      </Section>
+      </RailSection>
     )
   }
 
@@ -209,7 +193,7 @@ export function SandboxPanel({
 
   return (
     <div className="space-y-4">
-      <Section
+      <RailSection
         title={t("agents.detail.sandbox.title")}
         action={
           <div className="flex items-center gap-1">
@@ -260,7 +244,7 @@ export function SandboxPanel({
             <SandboxPreparingNotice runtime={sandboxRuntime} />
           </div>
         )}
-      </Section>
+      </RailSection>
 
       {rebuildMut.error && (
         <ErrorState

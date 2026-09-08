@@ -265,7 +265,6 @@
       "payload": "Payload preview",
       "createdAt": "Created",
       "expiresIn": "Expires in",
-      "decision": "Decision",
       "allow": "Allowed",
       "deny": "Denied",
       "alreadyDecided": "This approval has been handled — actions are no longer available.",
@@ -738,7 +737,6 @@
       "adminOnly": "Owner / admin only"
     },
     "status": {
-      "active": "Available",
       "deprecated": "Deprecated"
     },
     "table": {
@@ -952,7 +950,6 @@
         "added": "{{count}} workspace(s) added",
         "credential": "Credential: {{kind}}",
         "install": "+ Add to my Agent",
-        "installed": "Enabled on {{count}} Agent(s)",
         "installedBadge": "Added",
         "selfPublished": "Published by you"
       },
@@ -1060,7 +1057,6 @@
       }
     },
     "marketplaceDetail": {
-      "badge": "From market",
       "notFound": {
         "title": "This market capability is not in the current workspace list",
         "description": "Only market capabilities enabled on at least one Agent appear here."
@@ -1126,7 +1122,7 @@
           "confirm": "Clear deprecated"
         }
       },
-      "state": "Listing"
+      "state": "Publication"
     },
     "uninstall": {
       "sectionTitle": "Remove from my workspace",
@@ -1592,7 +1588,8 @@
         "state": {
           "ready": "Ready",
           "attention": "Update available",
-          "blocked": "Not usable"
+          "blocked": "Not usable",
+          "deprecated": "Deprecated"
         }
       },
       "runs": {
@@ -3258,7 +3255,6 @@
       "weekly": "Weekly on {{day}} at {{time}}",
       "monthly": "Monthly on day {{dom}} at {{time}}",
       "weekday": "Weekdays at {{time}}",
-      "custom": "cron: {{cron}}",
       "withTz": "{{desc}} ({{tz}})"
     },
     "weekdays": [

@@ -81,7 +81,7 @@ function BoundaryColumn({
 }) {
   return (
     <div>
-      <h3 className="flex min-h-7 items-center justify-between gap-2 border-b border-line text-lg font-medium text-fg">
+      <h3 className="flex min-h-7 items-center justify-between gap-2 border-b border-line text-sm font-medium text-fg">
         <span>{title}</span>
         <ManagedBadge unmanaged={unmanaged} />
       </h3>

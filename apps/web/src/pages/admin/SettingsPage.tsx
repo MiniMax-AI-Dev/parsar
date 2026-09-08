@@ -1,4 +1,3 @@
-import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { AlertTriangle, ExternalLink } from "lucide-react"
 
@@ -39,9 +38,9 @@ export function SettingsPage() {
           subtitleFor="settings.page.title"
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-4">
           <div className="space-y-6">
-            <Section title={t("settings.workspace.title")} description={t("settings.workspace.description")}>
+            <PageSection title={t("settings.workspace.title")}>
               <PropertyList>
                 <Property label={t("settings.workspace.name")}>{workspace?.name ?? "—"}</Property>
                 <Property label={t("settings.workspace.slug")} mono>{workspace?.slug ?? "—"}</Property>
@@ -60,16 +59,15 @@ export function SettingsPage() {
                   </Tabs>
                 </Property>
               </PropertyList>
-            </Section>
+            </PageSection>
 
-            <Section
+            <PageSection
               title={t("settings.authentication.title")}
-              description={t("settings.authentication.description")}
             >
               {authProvidersQ.isLoading ? (
-                <div className="-mx-4">
+                <div className="-mx-6">
                   {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="flex h-9 items-center gap-3 border-b border-line px-4">
+                    <div key={i} className="flex h-9 items-center gap-3 border-b border-line px-6">
                       <Skeleton className="h-3 w-32" />
                       <Skeleton className="h-3 w-20" />
                       <Skeleton className="h-3 flex-1" />
@@ -86,7 +84,7 @@ export function SettingsPage() {
               ) : (
                 <Ledger
                   columns={PROVIDER_COLUMNS}
-                  className="-mx-4 flex-none overflow-visible"
+                  className="-mx-6 flex-none overflow-visible"
                   role="list"
                   aria-label={t("settings.authentication.title")}
                 >
@@ -104,11 +102,10 @@ export function SettingsPage() {
                   </ul>
                 </Ledger>
               )}
-            </Section>
+            </PageSection>
 
-            <Section
+            <PageSection
               title={t("settings.runtime.policy.title")}
-              description={t("settings.runtime.policy.description")}
             >
               <PropertyList>
                 <Property label={t("settings.runtime.policy.workdirs.title")} mono>
@@ -124,7 +121,7 @@ export function SettingsPage() {
                   {t("settings.runtime.policy.capabilities.value")}
                 </Property>
               </PropertyList>
-            </Section>
+            </PageSection>
           </div>
         </div>
       </div>
@@ -172,22 +169,4 @@ function AuthProviderRow({ provider }: { provider: WorkspaceAuthProvider }) {
   )
 }
 
-/* ------------------------------------------------------------------ */
-/*  Section head                                                       */
-/* ------------------------------------------------------------------ */
 
-/**
- * A page section: a 12px/500 head, then content. `description` is
- * accepted for call-site compatibility and never rendered — the design
- * system has no helper paragraphs.
- */
-function Section({
-  title,
-  children,
-}: {
-  title: string
-  description?: string
-  children: ReactNode
-}) {
-  return <PageSection title={title}>{children}</PageSection>
-}

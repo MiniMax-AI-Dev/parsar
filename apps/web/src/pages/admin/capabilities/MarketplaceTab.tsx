@@ -280,7 +280,7 @@ function MarketplaceItemDetail({ capability, language, canManage, open, onClosed
       header={
         capability ? (
           <>
-            <span className="min-w-0 truncate text-sm font-medium text-fg">{capability.name}</span>
+            <span className="min-w-0 truncate text-base font-medium text-fg">{capability.name}</span>
             <CapabilityTypeBadge type={capability.type} />
             {capability.self_published ? (
               <Badge variant="neutral" dot>{t("capabilities.marketplace.card.selfPublished")}</Badge>

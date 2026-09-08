@@ -45,6 +45,7 @@ import type {
   UpdateAgentRequest,
   UserWorkspace,
 } from "../../lib/api-types"
+import { StatusIcon } from "../../components/ui/status-icon"
 
 const DEFAULT_WORK_DIR = "/workspace"
 
@@ -1380,7 +1381,9 @@ export function CreateAgentDialog({
                             )}
                             {"new_secret" in modelBindingChoice && !modelNewSecretExpanded && (
                               <div className="flex items-center gap-1.5 text-xs text-fg">
-                                <Check className="h-3.5 w-3.5 shrink-0 text-status-completed" strokeWidth={1.5} aria-hidden="true" />
+                                {/* Queued, not done: this secret is created on
+                                    save. A green tick said it already existed. */}
+                                <StatusIcon status="queued" />
                                 <span className="flex-1 truncate">
                                   {t("credentialCheck.sharedNewQueued", { name: modelBindingChoice.new_secret.display_name || t("credentialCheck.modelBindingTitle") })}
                                 </span>

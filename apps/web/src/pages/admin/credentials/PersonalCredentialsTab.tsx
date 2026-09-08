@@ -56,7 +56,7 @@ interface PersonalCredentialsTabProps {
 }
 
 /** kind · code / refs · created · last used · actions */
-const LEDGER_COLUMNS = [col.title(), col.id(176), col.meta(148), col.age(80), col.actions(2)]
+const LEDGER_COLUMNS = [col.title(), col.id(176), col.age(96), col.age(80), col.actions(2)]
 
 export function PersonalCredentialsTab({ standalone = false, query = "", createRequest = 0 }: PersonalCredentialsTabProps) {
   const { t, i18n } = useTranslation("admin")
@@ -190,7 +190,7 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
           <LedgerHeader>
             <span>{t("myCredentials.table.kind")}</span>
             <span>{t("myCredentials.table.kindCode")}</span>
-            <span>{t("myCredentials.table.addedAt")}</span>
+            <span className="text-right">{t("myCredentials.table.addedAt")}</span>
             <span className="text-right">{t("myCredentials.table.lastUsed")}</span>
             <span />
           </LedgerHeader>
@@ -246,7 +246,7 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
                     <span className="truncate font-medium">{kindLabelOf(credential.kind, t("myCredentials.kind.unknown"))}</span>
                   </span>
                   <LedgerId>{credential.kind}</LedgerId>
-                  <span className="truncate text-xs text-fg-muted">{createdLabel(credential.created_at)}</span>
+                  <span className="truncate text-right text-xs tabular-nums text-fg-muted">{createdLabel(credential.created_at)}</span>
                   <span className="truncate text-right text-xs text-fg-muted">{fmtAgo(credential.last_used_at)}</span>
                   <RowActions>
                     <ActionIconButton icon={Pencil} label={t("myCredentials.actions.edit")} onClick={() => setEditTarget(credential)} />

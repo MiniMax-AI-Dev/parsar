@@ -517,7 +517,7 @@ function RunDetailRail({
       header={
         <>
           <StatusIcon status={run.status} />
-          <span className="shrink-0 text-sm font-medium text-fg">{t(`runStatus.${run.status}`)}</span>
+          <span className="shrink-0 text-base font-medium text-fg">{t(`runStatus.${run.status}`)}</span>
           <LedgerId className="min-w-0 flex-1">{run.id}</LedgerId>
         </>
       }

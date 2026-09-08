@@ -255,8 +255,10 @@ export function ModelsPage() {
         const failed = result.failed ?? []
         show(
           t("models.bulkDelete.resultSummary", { deleted: result.deleted.length, failed: failed.length }),
+          // A partial failure lists models by name; it waits to be dismissed
+          // rather than taking the list with it after seven seconds.
           failed.length > 0
-            ? { tone: "error", detail: failed.map((f) => f.error).join("\n") }
+            ? { tone: "error", persist: true, detail: failed.map((f) => f.error).join("\n") }
             : undefined,
         )
         setSelectedModelIDs((current) => {
@@ -325,8 +327,15 @@ export function ModelsPage() {
                 >
                   <FilterGroup value={ownership} onValueChange={(v) => setOwnership(v as OwnershipFilter)}>
                     <FilterOption value="all" label={t("models.ownership.all")} count={allModels.length} />
-                    <FilterOption value="mine" label={t("models.ownership.mine")} count={mineCount} />
-                    <FilterOption value="others" label={t("models.ownership.others")} count={allModels.length - mineCount} />
+                    {/* Only when we know who you are — without a user id these
+                        two cannot filter anything, and the old tabs at least
+                        disabled themselves. */}
+                    {currentUserID && (
+                      <>
+                        <FilterOption value="mine" label={t("models.ownership.mine")} count={mineCount} />
+                        <FilterOption value="others" label={t("models.ownership.others")} count={allModels.length - mineCount} />
+                      </>
+                    )}
                   </FilterGroup>
                 </FilterMenu>
               )}

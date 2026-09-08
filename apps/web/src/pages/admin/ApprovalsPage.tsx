@@ -331,7 +331,7 @@ function InteractionRail({
       header={
         <>
           <StatusIcon status={STATUS_ICON[interaction.status]} />
-          <span className="shrink-0 text-sm font-medium text-fg">{t(`approvals.status.${interaction.status}`)}</span>
+          <span className="shrink-0 text-base font-medium text-fg">{t(`approvals.status.${interaction.status}`)}</span>
           <LedgerId className="min-w-0 flex-1">{interaction.request_id || interaction.id}</LedgerId>
         </>
       }

@@ -303,9 +303,10 @@ export function CapabilitiesPage() {
         key={`${fromMarketplace ? "market" : "own"}-${cap.id}`}
         capability={cap}
         version={version}
-        // Own capabilities show no source: the group header above them
-        // already says 本工作区, once instead of once per row.
-        source={fromMarketplace ? marketplaceSourceName(marketCap) : "—"}
+        // Own capabilities show nothing rather than an em dash: the value is
+        // not missing, it is redundant with the group header — and a dash in
+        // this ledger means "unknown".
+        source={fromMarketplace ? marketplaceSourceName(marketCap) : ""}
         deprecatedLabel={fromMarketplace ? t("capabilities.deprecated.badgeTarget") : t("capabilities.deprecated.badgeSource")}
         enabledCount={enabledCount}
         credentials={requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.credentials.none"))}
@@ -996,7 +997,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
       aria-label={capability.name}
       header={
         <>
-          <span className="min-w-0 truncate text-sm font-medium text-fg">{capability.name}</span>
+          <span className="min-w-0 truncate text-base font-medium text-fg">{capability.name}</span>
           <CapabilityTypeBadge type={capability.type} />
           {/* Only when it is off the shelf. "可用" was on every capability
               that was not deprecated, which is a badge that never varies. */}

@@ -37,7 +37,7 @@ import type {
 } from "../../../lib/api-types"
 import { useNavigateAdmin } from "../../../lib/admin-router"
 import { useRelativeTime } from "../../../lib/relative-time"
-import { cn } from "../../../lib/utils"
+import { StatusIcon } from "../../../components/ui/status-icon"
 
 interface OrgSecretsTabProps {
   workspaceID: string
@@ -225,7 +225,10 @@ function SecretGroup({ label, items, empty, fmtAgo, onDisable, readOnlyLabel, on
                   again on every row — "Model API Key" under 模型 API Keys —
                   inside a badge whose coloured dot silently carried the
                   *status*, with the word only in a `title`. */}
-              <span className={cn("truncate text-xs", active ? "text-fg-muted" : "text-fg")}>{statusLabel}</span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <StatusIcon status={active ? "completed" : "cancelled"} />
+                <span className="truncate text-sm text-fg">{statusLabel}</span>
+              </span>
               <span className="truncate text-xs text-fg-muted">{secret.provider || t("secrets.none")}</span>
               <LedgerId>{secret.masked}</LedgerId>
               <span className="truncate text-right text-xs text-fg-muted">{fmtAgo(secret.updated_at)}</span>

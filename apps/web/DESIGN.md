@@ -58,6 +58,16 @@ typography:
     fontWeight: 500
     lineHeight: "30px"
     letterSpacing: "-0.02em"
+  section-head:
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    fontSize: "16px"
+    fontWeight: 500
+    lineHeight: "24px"
+  rail-section-head:
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    fontSize: "14px"
+    fontWeight: 500
+    lineHeight: "20px"
   panel-title:
     fontFamily: "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Helvetica, Arial, sans-serif"
     fontSize: "13px"
@@ -233,7 +243,7 @@ components:
     typography: "{typography.label}"
   page-section-head:
     textColor: "{colors.ink}"
-    typography: "{typography.panel-title}"
+    typography: "{typography.section-head}"
     height: "28px"
     padding: "0 0 8px"
   ledger-header:
@@ -271,7 +281,7 @@ components:
     padding: "16px"
   dialog-header:
     textColor: "{colors.ink}"
-    typography: "{typography.panel-title}"
+    typography: "{typography.section-head}"
     height: "48px"
     padding: "10px 48px 10px 16px"
   dialog-footer:
@@ -328,8 +338,8 @@ components:
     padding: "0 8px 0 16px"
   rail-section-head:
     textColor: "{colors.ink}"
-    typography: "{typography.label}"
-    padding: "0 0 2px"
+    typography: "{typography.rail-section-head}"
+    padding: "0 0 4px"
   rail-modal:
     backgroundColor: "{colors.paper-panel}"
     rounded: "{rounded.lg}"
@@ -450,13 +460,13 @@ Two tones of ink on paper, one indigo for selection and focus, and six status hu
 
 **Character:** native and invisible. The type looks like the operating system, which is the point: a Mac user sees SF Pro and PingFang exactly as Notion renders them. No webfont is loaded for Latin or CJK. `text-rendering: optimizeLegibility`, headings `text-wrap: balance`, paragraphs `text-wrap: pretty`.
 
-The stylesheet defines an eight-tick scale (`text-2xs` 11 … `text-3xl` 28) with a fixed line-height per tick; arbitrary sizes are forbidden by lint. The console uses five ticks; 16 is reserved for dialog headings, 22 for the entry-panel title, 28 exists for a setup hero, and 11 exists only for the letter inside an 18px initial tile.
+The stylesheet defines an eight-tick scale (`text-2xs` 11 … `text-3xl` 28) with a fixed line-height per tick; arbitrary sizes are forbidden by lint. The console uses six ticks; 16 is the page's section head and a dialog's title, 14 the rail's section head and the sidebar's rows, 22 belongs to the entry-panel title, 28 exists for a setup hero, and 11 exists only for the letter inside an 18px initial tile.
 
 ### Hierarchy
 - **Title** (600, 20px, line-height 1, -0.02em; `.font-display`): the page title in the 64px topbar, followed on the same baseline by the page's English name in 12px muted (`subtitleFor`, resolved from the en-US locale). The only 600 on a screen.
 - **Entry Title** (500, 22px, 30px, -0.02em): the one heading inside `EntryPanel` on login / setup / invite / join. Not 600: the wordmark and the form are the point, not the heading.
 - **Section Head** (500, 16px, 24px): the head of a `PageSection` — the one heading between the page title and its content. Also a dialog's heading.
-- **Rail Section Head** (500, 14px, 20px): the head of a `RailSection`. The rail runs its own compressed ladder — 14 over 13px values over 12px labels — because a 384px panel cannot carry the page's.
+- **Rail Section Head** (500, 14px, 20px): the head of a `RailSection`, and the name of the rail's subject in its header bar. The rail runs its own compressed ladder — 14 for the subject and the section heads, 13 for values, 12 for labels — because a 384px panel cannot carry the page's. The subject is never smaller than the heads beneath it, for the same reason a page title is not.
 - **Panel Title** (500, 13px, 18px): the status word in the rail header, the agent name at the top of the rail body, a sub-head *inside* a section; also every button label, the active nav item, the active tab, the workspace brand, the account name and the "Parsar" wordmark in the entry panel.
 - **Body / UI** (400, 14px, 20px): sidebar nav items, form copy, dialogs, the entry panel's one muted sentence.
 - **Row** (400, 13px, 18px): list rows, inputs, selects, textareas, property values, step titles, inline messages, the toast strip, footers.
@@ -466,7 +476,7 @@ The stylesheet defines an eight-tick scale (`text-2xs` 11 … `text-3xl` 28) wit
 ### Named Rules
 **The Three Weights Rule.** 600 is the page title only. 500 is the name of a thing (workspace, user, row title, run id in the rail), the active nav item or tab, button labels, section heads and the entry title. Everything else, including every label and every value, is 400. 700 does not exist.
 
-**The Five Sizes Rule.** 20 / 14 / 13 / 12 and 12-mono. There is no 11px functional text and no sixth size in the console; 22 belongs to the entry panel alone.
+**The Six Sizes Rule.** 20 / 16 / 14 / 13 / 12 and 12-mono, and each one is a rung: 20 titles a page, 16 heads its sections, 14 is body copy and the rail's own heads, 13 is a row, 12 is a label. There is no 11px functional text and no seventh size; 22 belongs to the entry panel alone.
 
 **The Layered Base Rule.** Element-level type and reset rules live in `@layer base`, never unlayered. An unlayered `button, select, textarea { font: inherit }` outranks Tailwind's utility layer and silently drags every button, tab and nav row to the 16px root size; inside `@layer base` the `text-*` utilities win. Any new element rule added to `src/style.css` goes in that layer.
 
@@ -481,7 +491,7 @@ Panel edges are the user's. A `ResizeHandle` straddles each inner hairline: a 6p
 Sidebar (paper-panel, 1px right hairline, 10px padding): a single 32px text row "Parsar / Workspace ⇕" at the top, then group labels (12px muted, 14px above, 4px below, 8px inset) and 30px nav rows 1px apart, then the account row pinned to the bottom (top hairline, 10px above; 24px avatar tile, name 13px/500, role 12px muted, and a two-segment theme toggle).
 
 Main column: every page begins with the 64px `PageHeader` (title left with its English name; actions right, 8px apart; 24px side padding; bottom hairline). Two page shapes follow:
-- **List pages** (Runs, Members, Agents, Capabilities, Models, Connections, Scheduled, Approvals, Audit, Usage): `AdminLayout fullBleed` with `PageHeader className="static mx-0 mb-0"`, so the sticky 28px column header sits directly under the topbar with no padding between them, then grouped 36px rows, then the 40px `OffsetPagination` footer. The topbar action slot holds a 240px search field, one filter or one primary button.
+- **List pages** (Runs, Members, Agents, Capabilities, Models, Connections, Scheduled, Approvals, Audit, Usage): `AdminLayout fullBleed` with `PageHeader className="static mx-0 mb-0"`, so the sticky 28px column header sits directly under the topbar with no padding between them, then grouped 36px rows, then the 40px `OffsetPagination` footer. The topbar action slot holds a 288px search field, one filter or one primary button.
 - **Settings page** (设置 alone): the ordinary topbar — its action slot free, because there is nothing to do here — then a 24px-padded scrolling body of `PageSection`s. 凭据, 用量 and 审计 are not settings and are not tabs of it; they are their own sidebar entries, each an ordinary ledger or report page.
 - **Conversations**: a full-bleed two-pane page whose list-panel header is also 64px with a bottom hairline, matching the topbar.
 
@@ -526,7 +536,7 @@ Where it applies, selection spends no width. `SelectableStatus` puts the checkbo
 
 ### Product-truth notes
 - The approval bar ships **deny + allow-once** only. The API has no session-scoped approval, so a third button would name a decision the product cannot make. This is a product fact recorded here so it is not read as a missing state.
-- **The Agent is the first-class object; the sidebar says so.** It stands alone above the groups rather than sitting as a sibling of the things it is assembled from. Below it, **运行中 / Activity** is what agents are doing (conversations, inbox, runs, schedules) and **构建 / Build** is what an agent is made of — its model, its capabilities, where it runs (执行层), and the platforms it can be let out on (集成). A thing that only exists to configure an Agent belongs in Build, never beside the Agent.
+- **The Agent is the first-class object; the sidebar says so.** It stands alone above the groups rather than sitting as a sibling of the things it is assembled from. Below it, **运行中 / Activity** is what agents are doing and the record of what they did (conversations, inbox, runs, schedules, usage, audit) and **构建 / Build** is what an agent is made of and given — its model, its capabilities, where it runs (执行层), the platforms it can be let out on (集成), and the credentials it uses (凭据). A thing that only exists to configure an Agent belongs in Build, never beside the Agent.
 - **Tabs are for a different shape of content; groups are for one shape in categories.** 执行层 showed three tabs — local device, cloud sandbox, external agent — where every row was the same shape, a runtime. They are one ledger with `LedgerGroup` headers now, which shows the whole picture at once and folds what the reader does not need. An Agent's 动态 / 配置 / 审计 stay tabs, because those are three different kinds of content.
 - **执行层 lives in Build, not in Settings.** It was a settings tab, which made every settings-family page render a control for it — and, because the tab strip is rendered on each of them, made five unrelated pages fire a `/sandboxes` request they had no use for. One control, one home.
 - **Parsar has two ends, and each gets its own door.** Upward it connects to the platforms people are on — Feishu, Slack, Discord, Teams — which receive events; that is **集成 / Integrations**, in the sidebar, backed by `workspace_im_connectors`. Downward it connects to the agents themselves — `agent_daemon`, `http`, `a2a` — which Parsar *calls* (`AgentConnector.Prompt`); that is an Agent's **connector**, an attribute on the Agent, surfaced as a column and a counted filter on the Agent list. The two ends are not two views of one thing and must never be merged. The UI once named them 连接 and 连接器, one character apart, because it dropped the qualifiers the server already carries (`workspace_im_` and `Agent`); the names above put them back. The bare word **连接器 / Connectors** belongs to the MCP directory, which is where the industry uses it bare. The downstream connector had a page of its own for a while; it does not deserve one. `agent_daemon`, `http` and `a2a` are not instanceable, hold no state and cannot be created — they are the *values of an attribute on Agent*, and a value set is not an object. Promoting one to a first-class place is the OOUX error of mistaking instances for objects, the same mistake as giving "CAC" and "ROAS" pages instead of giving one to Metric. The question the page answered — which connectors are in use, and how many agents on each — belongs on the object that owns the attribute, so the Agent list's filter carries a count per value, zeroes included: a value with nothing on it is usually what the reader opened the menu to check. **集成** rather than **渠道** because the products this console is modelled on — Multica and Linear — both call this Integrations; 渠道 / Channels is the help-desk convention (Intercom, Zendesk), and Parsar is an agent console, not a support desk.
@@ -639,7 +649,7 @@ A conversation is **one** exit, not two: the console frames it in admin chrome a
 - **Skeleton:** paper-muted at 70%, 6px radius, pulse; list skeletons echo the 28px header and 36px rows.
 
 ### Capability row (signature)
-Every capability an agent has renders as one row of the same shape, whichever kind it is: a 14px status glyph carrying the row's worst state (failed = a missing credential, an unsupported engine or a deleted version; running = a new version or a deprecation; cancelled = a built-in switched off; completed = usable), the name in 13px/500, its kind in 12px muted, the pinned version right-aligned in 12px mono, and the verbs in a hover-revealed `RowActions` cluster — switch version, upgrade, remove, or the built-in's power toggle. Beneath: the description on one truncating line, then only the problems worth acting on, one line each with at most one thing to press.
+Every capability an agent has renders as one row of the same shape, whichever kind it is: a 14px status glyph carrying the row's worst state (failed = a missing credential, an unsupported engine or a deleted version; running = a new version or a deprecation; cancelled = a built-in switched off; completed = usable), the name in 13px/500, its kind in 12px muted, the pinned version right-aligned in 12px mono, and the verbs in a `RowActions` cluster — switch version, remove, or the built-in's power toggle. The cluster reveals on hover, except where the verb is the row's whole point: a built-in's toggle and the add-list's 启用 stay visible at rest. Upgrading is not a row verb; it is the action on the "there is a newer version" note. Beneath: the description on one truncating line, then only the problems worth acting on, one line each with at most one thing to press.
 
 It says each fact once. The version lives in the version slot and nowhere else; a credential that is set says nothing at all, because the glyph already reports that the row is in order and an "add credential" link beside a credential you have added is an affordance with nowhere to go; provenance lives on the capability's own page. Where there is no version to show, the slot is empty rather than an em dash.
 
@@ -708,7 +718,7 @@ Short, springy, rare. Every transition is non-linear; nothing is `linear` or def
 - **Do** keep light and dark as one token set; dark is warm grey, never black.
 - **Do** build every list on `Ledger` and pass the column template once so header and rows share one grid; build every detail pane on `DetailRail` + `PropertyList`; build every settings body on `PageSection`; build every entry surface on `EntryPanel`.
 - **Do** write categories as 12px muted text and reserve `Badge` for one neutral-dot secondary state per row.
-- **Do** put navigation tabs in the topbar action slot and content tabs in the 40px hairline row under it.
+- **Do** put content tabs in the 40px hairline row under the topbar, and leave the topbar's action slot to actions and the one filter control.
 - **Do** hide `RowActions` until hover or focus, and pull pagination strings only from `common:pagination.*`.
 - **Do** declare ledger columns with `col.*` and let the primitive build the grid; keep the 24px outer edges so every list shares the topbar's two edges.
 - **Do** keep column headers on one truncating line, centre every cell vertically, and right-align numeric and age columns.
@@ -719,7 +729,7 @@ Short, springy, rare. Every transition is non-linear; nothing is `linear` or def
 
 ### Don't:
 - **Don't** add a description or subtitle under a page title, a keyboard-hint line, a version string, or any helper copy that is not content or a control. The one exception, approved by the user, is the `⌘K` kbd inside the search field. The English page name beside the title is a name, not a description.
-- **Don't** render the same action twice (a header button and a table-footer button, a sidebar utility row and a nav item, a topbar count and a footer count, a settings tab strip in two places).
+- **Don't** render the same action twice (a header button and a table-footer button, a sidebar utility row and a nav item, a topbar count and a footer count).
 - **Don't** use cards, stat tiles, nested bordered boxes, tinted message boxes, or coloured left borders thicker than the 2px selection marker.
 - **Don't** wrap a category (role, type, source) in a chip, or put more than one `Badge` on a row.
 - **Don't** add padding between the topbar and a ledger's column header, or a margin above the first section of a page.
