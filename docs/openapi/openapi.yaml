@@ -228,6 +228,22 @@ definitions:
       type:
         type: string
     type: object
+  dev.acceptInvitationRequest:
+    properties:
+      password:
+        type: string
+      token:
+        type: string
+    type: object
+  dev.acceptInvitationResponse:
+    properties:
+      email:
+        type: string
+      user_id:
+        type: string
+      workspace_id:
+        type: string
+    type: object
   dev.addWorkspaceMemberRequest:
     properties:
       email:
@@ -3576,6 +3592,53 @@ paths:
       summary: Health check
       tags:
       - health
+  /api/v1/invite/accept:
+    post:
+      consumes:
+      - application/json
+      description: New accounts supply a password. Existing accounts must be signed
+        in as the invited user; their password is never changed.
+      parameters:
+      - description: Invitation and optional new-account password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dev.acceptInvitationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dev.acceptInvitationResponse'
+        "400":
+          description: Invalid request or new-account password
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Sign in as the invited account
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "410":
+          description: Invitation invalid, expired, or already used
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Acceptance or session creation failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Accept a workspace invitation
+      tags:
+      - invitations
   /api/v1/me:
     get:
       description: Returns the profile of the caller resolved from the session cookie.
