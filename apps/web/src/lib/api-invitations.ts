@@ -132,6 +132,7 @@ export async function acceptInviteRequest(body: AcceptInviteRequest): Promise<Ac
   return apiRequest<AcceptInviteResponse>("/api/v1/invite/accept", {
     method: "POST",
     body,
+    redirectOnUnauthorized: false,
   })
 }
 

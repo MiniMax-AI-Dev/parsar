@@ -378,6 +378,10 @@ description and keep ownership on the side listed here.
 
 ### API, DB, and generated surfaces
 
+- Accepting an invitation may set a password only for a newly created user.
+  Existing users must authenticate as the invited account; acceptance must
+  preserve their identities and passwords, and rejected attempts must leave
+  the invitation available for its recipient.
 - New persistent state starts with a migration and sqlc query. Avoid direct
   SQL embedded in route handlers or connector code unless the package already
   owns that persistence boundary and tests cover it.
