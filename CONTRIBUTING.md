@@ -180,8 +180,11 @@ description and keep ownership on the side listed here.
 - Agent creation and editing store behavior instructions in `system_prompt`.
   Preserve saved text when opening the form; clearing it sends an empty string.
 - OpenCode model selectors use `provider/model`. Its Anthropic SDK base URL
-  derives from the same endpoint resolver as model probes; explicit provider
-  SDK options retain precedence over generated defaults.
+  derives from the same endpoint resolver as model probes. OpenAI-compatible
+  and OpenAI SDK adapters use the `openai` and `openai-response` endpoint maps,
+  respectively, preserving explicit base paths; absent mappings preserve their
+  legacy base URL. Explicit provider SDK options retain precedence over generated
+  defaults.
 - Claude Code streaming deltas and their per-block assistant copies must be
   emitted once; preserve separate text blocks even when their content matches.
 - Every daemon-side agent adapter must use a shared process runner for CLI
