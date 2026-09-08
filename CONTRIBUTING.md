@@ -154,6 +154,8 @@ description and keep ownership on the side listed here.
 
 ### Server versus daemon ownership
 
+- Agent capability upgrades accept private capabilities from the Agent's own
+  workspace; cross-workspace upgrades still require a public, available source.
 - The server owns auth, workspaces, agent records, runtime bindings, run
   records, audit/usage persistence, and upstream engine session ids.
 - Successful explicit Agent capability enable, upgrade, removal, and built-in
