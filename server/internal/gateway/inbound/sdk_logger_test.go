@@ -15,6 +15,10 @@ func TestFeishuConnectionLogsOmitAuthenticationQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, malformedErr := url.Parse("wss://frontier.example/ws/v2/%zz?extra=two words&access-key=synthetic-access&ticket=synthetic-ticket")
+	if malformedErr == nil {
+		t.Fatal("expected invalid URL escape")
+	}
 	for _, args := range [][]any{
 		{"connected to", parsed, "[conn_id=connection-1]"},
 		{"disconnected to " + address},
@@ -23,6 +27,8 @@ func TestFeishuConnectionLogsOmitAuthenticationQuery(t *testing.T) {
 		{"retry " + address + " then " + address},
 		{"connected to wss://frontier.example/ws/v2?extra='value'&access-key=synthetic-access&ticket=synthetic-ticket"},
 		{&url.Error{Op: "dial", URL: `wss://frontier.example/ws/v2?extra="value"&access-key=synthetic-access&ticket=synthetic-ticket`, Err: errors.New("connection refused")}},
+		{"connect failed:", malformedErr},
+		{"connected to wss://frontier.example/ws/v2?extra=two\nwords&access-key=synthetic-access&ticket=synthetic-ticket"},
 	} {
 		sink := &sdkLogRecorder{}
 		logger := feishuSDKLogger{logger: sink}
@@ -37,6 +43,11 @@ func TestFeishuConnectionLogsOmitAuthenticationQuery(t *testing.T) {
 		if !strings.Contains(message, "frontier.example/ws/v2") || !strings.Contains(message, "[REDACTED]") {
 			t.Fatalf("connection diagnostics missing: %s", message)
 		}
+	}
+	sink := &sdkLogRecorder{}
+	feishuSDKLogger{logger: sink}.Info(t.Context(), "connected to "+address, "[conn_id=connection-1]")
+	if got := sink.messages[0]; got != "connected to wss://frontier.example/ws/v2?[REDACTED] [conn_id=connection-1]" {
+		t.Fatalf("SDK correlation field changed: %s", got)
 	}
 }
 

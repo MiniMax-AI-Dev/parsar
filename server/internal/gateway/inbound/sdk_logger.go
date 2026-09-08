@@ -8,10 +8,9 @@ import (
 	"strings"
 )
 
-// Connection query strings contain short-lived credentials. Redact only the
-// log copy, retaining the host and path for connection diagnostics.
-// RawQuery may contain quotes; they must not terminate redaction early.
-var feishuLogURLQuery = regexp.MustCompile(`(?i)(\b(?:https?|wss?)://[^\s?]+\?)[^\s]+`)
+// SDK fields may embed malformed URLs. Keep the operation and URL path, but
+// omit the entire field tail after the query rather than guess its delimiter.
+var feishuLogURLQuery = regexp.MustCompile(`(?is)(\b(?:https?|wss?)://[^?]*\?).*`)
 
 func redactFeishuConnectionLog(message string) string {
 	return feishuLogURLQuery.ReplaceAllString(message, "${1}[REDACTED]")
@@ -39,6 +38,10 @@ func (l feishuSDKLogger) Error(ctx context.Context, args ...any) {
 }
 
 func (l feishuSDKLogger) write(ctx context.Context, level slog.Level, args ...any) {
-	message := strings.TrimSuffix(fmt.Sprintln(args...), "\n")
-	l.logger.Log(ctx, level, redactFeishuConnectionLog(message))
+	fields := make([]any, len(args))
+	for i, arg := range args {
+		fields[i] = redactFeishuConnectionLog(fmt.Sprint(arg))
+	}
+	message := strings.TrimSuffix(fmt.Sprintln(fields...), "\n")
+	l.logger.Log(ctx, level, message)
 }
