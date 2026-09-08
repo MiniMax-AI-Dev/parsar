@@ -18,20 +18,31 @@ for (const instructions of ["Existing instructions", "Updated instructions\nAsk 
   });
 }
 
-test("creation saves the instructions entered in the form", async ({ page }) => {
-  const writes = await mockAgents(page);
-  await page.goto(`/?ws=${workspace}&admin=agents`);
-  await page.getByRole("button", { name: "New Agent", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "New Agent" });
-  await dialog.getByRole("textbox", { name: "Instructions", exact: true }).fill("Answer from the approved policy.");
-  await dialog.getByRole("radio", { name: /Cloud isolation/ }).check();
-  await dialog.getByPlaceholder("Search models in this Workspace").click();
-  await dialog.getByRole("option", { name: /QA Model/ }).click();
-  await dialog.getByRole("button", { name: "Next", exact: true }).click();
-  await dialog.getByRole("button", { name: "Create Agent", exact: true }).click();
-  await expect.poll(() => writes.creates.length).toBe(1);
-  expect(writes.creates[0].system_prompt).toBe("Answer from the approved policy.");
-});
+for (const instructions of ["Answer from the approved policy.", ""]) {
+  test(`creation saves instructions: ${instructions || "empty"}`, async ({ page }) => {
+    const writes = await mockAgents(page);
+    await page.goto(`/?ws=${workspace}&admin=agents`);
+    await page.getByRole("button", { name: "New Agent", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "New Agent" });
+    await dialog.getByRole("textbox", { name: "Instructions", exact: true }).fill(instructions);
+    await dialog.getByRole("radio", { name: /Cloud isolation/ }).check();
+    await dialog.getByPlaceholder("Search models in this Workspace").click();
+    await dialog.getByRole("option", { name: /QA Model/ }).click();
+    await dialog.getByRole("button", { name: "Next", exact: true }).click();
+    await dialog.getByRole("button", { name: "Create Agent", exact: true }).click();
+    await expect.poll(() => writes.creates.length).toBe(1);
+    expect(writes.creates[0].system_prompt).toBe(instructions);
+    await expect(dialog).not.toBeVisible();
+    await page.goto(`/?ws=${workspace}&admin=agents&id=${agentID}&tab=config`);
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    const edit = page.getByRole("dialog", { name: "Edit Agent" });
+    await expect(edit.getByRole("textbox", { name: "Instructions", exact: true })).toHaveValue(instructions);
+    await edit.getByRole("button", { name: "Next", exact: true }).click();
+    await edit.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(edit).not.toBeVisible();
+    expect(writes.updates[0].system_prompt).toBe(instructions);
+  });
+}
 
 async function mockAgents(page: Page) {
   const writes = { updates: [] as Record<string, unknown>[], creates: [] as Record<string, unknown>[] };
@@ -40,7 +51,7 @@ async function mockAgents(page: Page) {
   const agent = {
     id: agentID, workspace_id: workspace, name: "Instruction test", slug: "instruction-test", status: "active",
     connector_type: "agent_daemon", visibility: "workspace", capabilities: [],
-    config: { agent_kind: "opencode", daemon_mode: "sandbox", system_prompt: "Existing instructions" },
+    config: { agent_kind: "opencode", daemon_mode: "sandbox", system_prompt: "Existing instructions" } as Record<string, unknown>,
   };
   await page.addInitScript(() => localStorage.setItem("i18nextLng", "en-US"));
   await page.route("**/api/v1/**", async (route) => {
@@ -49,7 +60,14 @@ async function mockAgents(page: Page) {
     if (path === "/api/v1/me") return json(route, { user_id: "user-1", name: "User", email: "user@example.test" });
     if (path === "/api/v1/me/workspaces") return json(route, { workspaces: [{ id: workspace, name: "Instruction test", role: "owner" }] });
     if (path === `${base}/agents`) {
-      if (method === "POST") { writes.creates.push(route.request().postDataJSON()); return json(route, { agent }, 201); }
+      if (method === "POST") {
+        const input = route.request().postDataJSON();
+        writes.creates.push(input);
+        // Agent creation omits an empty prompt in the persisted config.
+        if (input.system_prompt) agent.config.system_prompt = input.system_prompt;
+        else delete agent.config.system_prompt;
+        return json(route, { agent }, 201);
+      }
       return json(route, { agents: [agent] });
     }
     if (path === agentURL || path === `/api/v1/agents/${agentID}`) {

@@ -558,7 +558,7 @@ export function CreateAgentDialog({
       setModelSearch("")
       setModelDropdownOpen(false)
       setHighlightedModelID(null)
-      setSystemPrompt(promptFromAgent(agent, defaultSystemPrompt))
+      setSystemPrompt(promptFromAgent(agent, ""))
       setCapabilities(capabilitiesFromAgent(agent))
       setSelectedCapabilityIDs([])
       // capabilityVersionChoices for edit mode is hydrated by a separate
