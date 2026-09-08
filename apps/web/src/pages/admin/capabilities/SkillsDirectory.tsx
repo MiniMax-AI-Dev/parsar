@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent } from "react"
+import { useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { ArrowUpRight, Download, PackageCheck } from "lucide-react"
 
@@ -25,6 +25,7 @@ const SKILL_COLUMNS = [col.fixed(40), col.title(), col.id(200, 1), col.num(72), 
 export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDirectoryProps) {
   const { t, i18n } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
+  const directoryRef = useRef<HTMLDivElement>(null)
   const catalogQ = useSkillsCatalog()
   const installMut = useInstallSkill(workspaceID)
   const [installed, setInstalled] = useState<Record<string, string>>({})
@@ -55,7 +56,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-testid="skills-directory">
+    <div ref={directoryRef} tabIndex={-1} className="flex min-h-0 flex-1 flex-col" data-testid="skills-directory">
       {success ? (
         <InlineNotice
           tone="success"
@@ -87,6 +88,11 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
           detail={installMut.error instanceof Error ? installMut.error.message : String(installMut.error)}
           onClose={() => installMut.reset()}
           onRetry={() => install(failedSkill)}
+          onRestoreFocus={() => {
+            const row = directoryRef.current?.querySelector<HTMLElement>(`[data-catalog-id="${CSS.escape(failedSkill.id)}"]`)
+            const target = row ?? directoryRef.current
+            target?.focus()
+          }}
         />
       ) : null}
 

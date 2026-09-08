@@ -7,18 +7,23 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { VerbatimBlock } from "../../../components/ui/verbatim"
 import { copyText } from "../../../lib/clipboard"
 
-export function SkillInstallErrorDialog({ name, detail, onClose, onRetry }: {
+export function SkillInstallErrorDialog({ name, detail, onClose, onRetry, onRestoreFocus }: {
   name: string
   detail: string
   onClose: () => void
   onRetry: () => void
+  onRestoreFocus: () => void
 }) {
   const { t } = useTranslation("admin")
   const { t: common } = useTranslation("common")
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "copyFailed">("idle")
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent showCloseButton={false} className="w-[calc(100%-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden">
+      <DialogContent
+        showCloseButton={false}
+        onCloseAutoFocus={(event) => { event.preventDefault(); onRestoreFocus() }}
+        className="w-[calc(100%-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden"
+      >
         <DialogHeader className="min-w-0 pr-4">
           <DialogTitle className="flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 text-status-failed" aria-hidden="true" />
@@ -33,7 +38,7 @@ export function SkillInstallErrorDialog({ name, detail, onClose, onRetry }: {
             {t("capabilities.skillsDirectory.install.details")}
           </summary>
           <VerbatimBlock className="mt-3 max-h-52 w-full">{detail}</VerbatimBlock>
-          <Button variant="outline" size="sm" className="mt-2" onClick={async () => setCopyStatus(await copyText(detail) ? "copied" : "copyFailed")}>
+          <Button variant="outline" size="sm" className="mt-2" onClick={async () => setCopyStatus(await copyText(detail, { fallback: false }) ? "copied" : "copyFailed")}>
             <Copy className="h-3.5 w-3.5" aria-hidden="true" />
             {t("capabilities.skillsDirectory.install.copy")}
           </Button>
