@@ -173,12 +173,13 @@ export function AgentsPage() {
     <AdminLayout activeMenu="agents" fullBleed>
       <RailLayout rail={agentRail}>
         <PageHeader
-          className="static mx-0 mb-0"
+          className="static mx-0 mb-0 h-auto min-h-16 flex-wrap py-3"
+          actionClassName="min-w-0 max-w-full flex-wrap"
           title={pageTitle}
           subtitleFor="agents.page.title"
           action={
             <>
-              <div className="relative w-72">
+              <div className="relative w-72 min-w-0 max-w-full grow basis-40">
                 <Search
                   className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
                   strokeWidth={1.5}

@@ -533,6 +533,10 @@ Three concrete rules:
 When a dialog uses a multi-column grid, give every column `min-w-0` —
 otherwise long children push the grid track wider instead of wrapping.
 
+Pages with a detail rail may opt into wrapping header actions through
+`PageHeader.actionClassName` and an auto-height header. Other pages retain
+the default single-row header layout.
+
 ## Typography contract
 
 The type scale has 7 defined steps. Arbitrary pixel sizes (`text-[Npx]`) are
