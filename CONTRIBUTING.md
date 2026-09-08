@@ -378,6 +378,12 @@ description and keep ownership on the side listed here.
 
 ### API, DB, and generated surfaces
 
+- Secret disabling is authorized by `secrets.management_workspace_id`, set
+  from the creation workspace. This ownership must not restrict shared reads
+  or runtime use. Legacy rows inherit only an explicit workspace provenance;
+  rows without it remain usable but cannot be disabled through the API until
+  an operator assigns a verified management workspace in the database.
+  Never infer ownership from the workspace supplied in a disable request.
 - Accepting an invitation may set a password only for a newly created user.
   Existing users must authenticate as the invited account; acceptance must
   preserve their identities and passwords, and rejected attempts must leave

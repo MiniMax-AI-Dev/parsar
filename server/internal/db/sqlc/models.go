@@ -693,6 +693,8 @@ type Secret struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	// Soft-delete marker; non-null means deleted
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+	// Workspace whose owner/admin may disable this secret; does not restrict shared use
+	ManagementWorkspaceID pgtype.UUID `json:"management_workspace_id"`
 }
 
 // Workspace-level spec fragments, each independently injectable and editable

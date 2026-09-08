@@ -129,6 +129,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
 
         {/* Model API Keys — read-only. Rotation lives on the Models page. */}
         <SecretGroup
+          workspaceID={workspaceID}
           label={t("secrets.sections.modelKeys")}
           items={modelKeys}
           empty={t("secrets.empty.modelKeys")}
@@ -138,6 +139,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
           onDisable={setConfirmTarget}
         />
         <SecretGroup
+          workspaceID={workspaceID}
           label={t("secrets.sections.runtimeKeys")}
           items={runtimeKeys}
           empty={t("secrets.empty.runtimeKeys")}
@@ -146,6 +148,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
         />
         {otherKeys.length > 0 && (
           <SecretGroup
+            workspaceID={workspaceID}
             label={t("secrets.sections.otherKeys")}
             items={otherKeys}
             fmtAgo={fmtAgo}
@@ -194,6 +197,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
 }
 
 interface GroupProps {
+  workspaceID: string
   label: string
   items: Secret[]
   empty?: string
@@ -205,7 +209,7 @@ interface GroupProps {
   onOpenModels?: () => void
 }
 
-function SecretGroup({ label, items, empty, fmtAgo, onDisable, readOnlyLabel, onOpenModels }: GroupProps) {
+function SecretGroup({ workspaceID, label, items, empty, fmtAgo, onDisable, readOnlyLabel, onOpenModels }: GroupProps) {
   const { t } = useTranslation("admin")
   return (
     <LedgerGroup label={label} count={items.length}>
@@ -214,6 +218,7 @@ function SecretGroup({ label, items, empty, fmtAgo, onDisable, readOnlyLabel, on
       ) : (
         items.map((secret) => {
           const active = secret.status === "active"
+          const canDisable = secret.management_workspace_id === workspaceID
           const statusLabel = active ? t("secrets.status.active") : t("secrets.status.disabled")
           return (
             <LedgerRow key={secret.id} role="listitem" tabIndex={-1}>
@@ -236,7 +241,13 @@ function SecretGroup({ label, items, empty, fmtAgo, onDisable, readOnlyLabel, on
                 {readOnlyLabel && onOpenModels ? (
                   <ActionIconButton icon={ArrowUpRight} label={readOnlyLabel} onClick={onOpenModels} />
                 ) : active ? (
-                  <ActionIconButton icon={Ban} label={t("secrets.actions.disable")} tone="danger" onClick={() => onDisable(secret)} />
+                  <ActionIconButton
+                    icon={Ban}
+                    label={t(canDisable ? "secrets.actions.disable" : "secrets.actions.disableUnavailable")}
+                    tone="danger"
+                    disabled={!canDisable}
+                    onClick={() => onDisable(secret)}
+                  />
                 ) : null}
               </RowActions>
             </LedgerRow>
