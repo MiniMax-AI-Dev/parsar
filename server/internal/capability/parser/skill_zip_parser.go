@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 )
 
 // MaxSkillZipBytes caps a single Skill upload. 8 MiB carries a Skill with
@@ -76,11 +78,13 @@ func ParseSkillZip(buf []byte) (SkillParseResult, error) {
 		entry *zip.File
 	}
 	stripped := make([]strippedEntry, 0, len(zr.File))
+	seenPaths := make(map[string]string, len(zr.File))
+	caseFolder := cases.Fold()
 	for i, p := range rawPaths {
-		if isMacOSMetadata(p) {
-			continue
-		}
 		if root != "" {
+			if p+"/" == root && zr.File[i].FileInfo().IsDir() {
+				continue
+			}
 			p = strings.TrimPrefix(p, root)
 		}
 		if p == "" {
@@ -93,6 +97,17 @@ func ParseSkillZip(buf []byte) (SkillParseResult, error) {
 		// in a way we don't understand; sanitising could mask intent.
 		if hasParentTraversal(p) {
 			return SkillParseResult{}, fmt.Errorf("%w: zip entry %q contains parent-directory reference (..)", ErrInvalidSkillZip, zr.File[i].Name)
+		}
+		// Extraction cleans dot segments and repeated separators. Reject aliases
+		// before preview can select different bytes from the installed archive.
+		p = path.Clean(p)
+		key := norm.NFC.String(caseFolder.String(norm.NFC.String(p)))
+		if previous, exists := seenPaths[key]; exists {
+			return SkillParseResult{}, fmt.Errorf("%w: duplicate zip path %q conflicts with %q", ErrInvalidSkillZip, zr.File[i].Name, previous)
+		}
+		seenPaths[key] = zr.File[i].Name
+		if isMacOSMetadata(p) {
+			continue
 		}
 		stripped = append(stripped, strippedEntry{rel: p, entry: zr.File[i]})
 	}
