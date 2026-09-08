@@ -413,6 +413,8 @@ description and keep ownership on the side listed here.
   The database smoke gate also runs the cross-workspace secret-disable HTTP
   regression so it cannot silently skip in CI without a test database.
 - Accepting an invitation may set a password only for a newly created user.
+  The saved invitation name initializes that user's name; an empty name keeps
+  the email-prefix fallback. Existing account names are never overwritten.
   Existing users must authenticate as the invited account; acceptance must
   preserve their identities and passwords, and rejected attempts must leave
   the invitation available for its recipient.

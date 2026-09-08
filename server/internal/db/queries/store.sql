@@ -4903,14 +4903,15 @@ where provider = 'email' and subject = @email;
 -- ================================================================
 
 -- name: CreateWorkspaceInvitation :exec
-insert into workspace_invitations(id, token_hash, workspace_id, email, role, invited_by, expires_at, created_at)
-values (@id::uuid, @token_hash::bytea, @workspace_id::uuid, @email, @role, @invited_by::uuid, @expires_at, @created_at);
+insert into workspace_invitations(id, token_hash, workspace_id, email, name, role, invited_by, expires_at, created_at)
+values (@id::uuid, @token_hash::bytea, @workspace_id::uuid, @email, @name, @role, @invited_by::uuid, @expires_at, @created_at);
 
 -- name: GetWorkspaceInvitationByTokenHash :one
 select
   wi.id::text           as id,
   wi.workspace_id::text as workspace_id,
   wi.email,
+  wi.name,
   wi.role,
   wi.invited_by::text   as invited_by,
   wi.expires_at,
