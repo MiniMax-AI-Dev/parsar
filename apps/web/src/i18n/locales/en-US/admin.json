@@ -873,6 +873,10 @@
       "badgeSource": "Deprecated",
       "bannerTarget": "The source workspace marked this capability deprecated. Agents already using it can keep using the pinned version, but cannot upgrade to a newer version."
     },
+    "unpublished": {
+      "badge": "Unpublished",
+      "bannerTarget": "The source workspace unpublished this capability. Existing Agent bindings remain. You can view them or remove the capability from this workspace."
+    },
     "marketStatus": {
       "title": "Market status",
       "published": "Published to market",

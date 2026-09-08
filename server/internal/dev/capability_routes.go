@@ -555,7 +555,7 @@ func previewMarketplaceMCP(spec *canonical.MCPSpec) *marketplaceMCPPreview {
 // workspace has installed (as opposed to authored).
 //
 //	@Summary		List workspace marketplace installs
-//	@Description	Returns the marketplace capabilities the workspace has installed (as opposed to authored).
+//	@Description	Returns installed capabilities, including unpublished sources, with visibility and bound version metadata. Unpublished sources do not expose later private versions.
 //	@Tags			capabilities
 //	@ID				listDevWorkspaceMarketplaceInstalls
 //	@Produce		json

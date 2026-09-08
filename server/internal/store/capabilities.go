@@ -156,6 +156,7 @@ type MarketplaceInstallRead struct {
 	Name                   string               `json:"name"`
 	Description            string               `json:"description"`
 	Type                   string               `json:"type"`
+	Visibility             string               `json:"visibility"`
 	RequiredCredentials    []RequiredCredential `json:"required_credentials"`
 	SourceWorkspaceID      string               `json:"-"`
 	SourceWorkspaceName    string               `json:"source_workspace_name"`
@@ -1024,7 +1025,7 @@ func marketplaceCapabilityFromRow(row sqlc.ListMarketplaceCapabilitiesRow) Marke
 }
 
 func marketplaceInstallFromRow(row sqlc.ListWorkspaceMarketplaceInstallsRow) MarketplaceInstallRead {
-	return MarketplaceInstallRead{CapabilityID: row.CapabilityID, Name: row.Name, Description: row.Description, Type: row.Type, RequiredCredentials: decodeRequiredCredentials(row.RequiredCredentials), SourceWorkspaceID: row.SourceWorkspaceID, SourceWorkspaceName: row.SourceWorkspaceName, PinnedVersionID: row.PinnedVersionID, PinnedVersion: row.PinnedVersion, DeprecatedAt: pgOptionalTime(row.DeprecatedAt), LatestVersionID: row.LatestVersionID, LatestPublishedVersion: row.LatestPublishedVersion, LatestVersionCreatedAt: pgTime(row.LatestVersionCreatedAt), EnabledAgentCount: row.EnabledAgentCount, FromMarketplace: true}
+	return MarketplaceInstallRead{CapabilityID: row.CapabilityID, Name: row.Name, Description: row.Description, Type: row.Type, Visibility: row.Visibility, RequiredCredentials: decodeRequiredCredentials(row.RequiredCredentials), SourceWorkspaceID: row.SourceWorkspaceID, SourceWorkspaceName: row.SourceWorkspaceName, PinnedVersionID: row.PinnedVersionID, PinnedVersion: row.PinnedVersion, DeprecatedAt: pgOptionalTime(row.DeprecatedAt), LatestVersionID: row.LatestVersionID, LatestPublishedVersion: row.LatestPublishedVersion, LatestVersionCreatedAt: pgTime(row.LatestVersionCreatedAt), EnabledAgentCount: row.EnabledAgentCount, FromMarketplace: true}
 }
 
 func decodeRequiredCredentials(raw []byte) []RequiredCredential {

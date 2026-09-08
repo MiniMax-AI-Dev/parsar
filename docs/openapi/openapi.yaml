@@ -6622,8 +6622,9 @@ paths:
       - capabilities
   /api/v1/workspaces/{workspaceID}/capabilities/marketplace-installs:
     get:
-      description: Returns the marketplace capabilities the workspace has installed
-        (as opposed to authored).
+      description: Returns installed capabilities, including unpublished sources,
+        with visibility and bound version metadata. Unpublished sources do not expose
+        later private versions.
       operationId: listDevWorkspaceMarketplaceInstalls
       parameters:
       - description: Workspace UUID
