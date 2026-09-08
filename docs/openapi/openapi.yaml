@@ -414,6 +414,15 @@ definitions:
       plaintext:
         type: string
     type: object
+  dev.createConversationUserMessageBody:
+    properties:
+      content:
+        type: string
+      mentioned_agent_ids:
+        items:
+          type: string
+        type: array
+    type: object
   dev.createCredentialKindBody:
     properties:
       code:
@@ -3431,6 +3440,71 @@ paths:
               type: string
             type: object
       summary: Configure a conversation's external reference
+      tags:
+      - conversations
+  /api/v1/conversations/{conversationID}/messages:
+    post:
+      consumes:
+      - application/json
+      description: Accepts 1-32000 Unicode code points after trimming surrounding
+        whitespace.
+      parameters:
+      - description: Conversation UUID
+        in: path
+        name: conversationID
+        required: true
+        type: string
+      - description: Message and optional Agent mentions
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dev.createConversationUserMessageBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Message and dispatched Agent run
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid body or UUID
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Workspace membership required
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Conversation not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Invalid content or Agent mention
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Message could not be sent
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Conversation messages unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Send a conversation message
       tags:
       - conversations
   /api/v1/conversations/{conversationID}/runs/{runID}/start:

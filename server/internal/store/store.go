@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
@@ -6685,7 +6686,7 @@ func (s *Store) SendUserMessageToConversation(ctx context.Context, input SendUse
 		return result, err
 	}
 	content := strings.TrimSpace(input.Content)
-	if content == "" || len(content) > 32000 {
+	if content == "" || utf8.RuneCountInString(content) > 32000 {
 		return result, ErrInvalidInput
 	}
 
