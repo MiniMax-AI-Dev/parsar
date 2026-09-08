@@ -8142,7 +8142,7 @@ join agents a on a.id = ac.agent_id
 join capability_version cv on cv.id = ac.capability_version_id
 where a.workspace_id = $1::uuid
   and ac.capability_id = $2::uuid
-order by a.name asc, a.id asc
+order by agent_name asc, agent_id asc
 `
 
 type ListEnabledAgentsForMarketplaceCapabilityParams struct {

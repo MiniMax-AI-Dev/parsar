@@ -227,7 +227,7 @@ function normalizeMarketplaceCapability(item: MarketplaceCapability): Marketplac
   return { ...item, id, latest_version: item.latest_version ?? item.latest_published_version, created_at: item.created_at ?? item.latest_version_created_at, updated_at: item.updated_at ?? item.latest_version_created_at }
 }
 
-function normalizeMarketplaceInstall(item: TargetMarketplaceInstall): TargetMarketplaceInstall {
+export function normalizeMarketplaceInstall(item: TargetMarketplaceInstall): TargetMarketplaceInstall {
   return normalizeMarketplaceCapability(item) as TargetMarketplaceInstall
 }
 

@@ -61,6 +61,7 @@ import {
   useDeprecate,
   useInstallCount,
   useMarketplaceEnabledAgents,
+  normalizeMarketplaceInstall,
   useMCPDirectory,
   usePublish,
   useTargetMarketplaceInstalls,
@@ -207,7 +208,7 @@ export function CapabilitiesPage() {
   // the separate full-list endpoint. The standalone endpoint stays mounted to
   // compute totals (and as a fallback if paginated mode is off).
   const pageInstalls = useMemo(
-    () => (capsQ.data?.marketplace_installs ?? []) as TargetMarketplaceInstall[],
+    () => ((capsQ.data?.marketplace_installs ?? []) as TargetMarketplaceInstall[]).map(normalizeMarketplaceInstall),
     [capsQ.data?.marketplace_installs],
   )
   const allInstalls = marketplaceInstallsQ.data ?? []

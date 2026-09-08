@@ -3765,7 +3765,7 @@ join agents a on a.id = ac.agent_id
 join capability_version cv on cv.id = ac.capability_version_id
 where a.workspace_id = @target_workspace_id::uuid
   and ac.capability_id = @source_capability_id::uuid
-order by a.name asc, a.id asc;
+order by agent_name asc, agent_id asc;
 
 -- name: UninstallWorkspaceMarketplaceCapability :execrows
 delete from agent_capabilities ac
