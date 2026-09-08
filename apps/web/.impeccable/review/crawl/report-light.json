@@ -1,7 +1,7 @@
 [
   {
     "view": "conversations",
-    "rows": 22,
+    "rows": 23,
     "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
@@ -40,7 +40,7 @@
   {
     "view": "agents",
     "rows": 2,
-    "rowsAfterClicks": 23,
+    "rowsAfterClicks": 24,
     "dialogsOpened": [
       "新建 Agent"
     ],
@@ -61,20 +61,17 @@
   },
   {
     "view": "models",
-    "rows": 1,
+    "rows": 0,
     "rowsAfterClicks": 0,
-    "dialogsOpened": [
-      "导入模型",
-      "新建模型"
-    ],
+    "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
   },
   {
     "view": "connections",
-    "rows": 0,
-    "rowsAfterClicks": 0,
+    "rows": 4,
+    "rowsAfterClicks": 4,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
@@ -104,8 +101,10 @@
   {
     "view": "secrets",
     "rows": 0,
-    "rowsAfterClicks": 0,
-    "dialogsOpened": [],
+    "rowsAfterClicks": 1,
+    "dialogsOpened": [
+      "添加凭据"
+    ],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
