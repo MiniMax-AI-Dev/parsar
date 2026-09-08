@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react"
-import { Check, Loader2, Search } from "lucide-react"
+import { useMemo, useState, type ReactNode } from "react"
+import { Check, Loader2, Power, Replace, Search, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { SandboxPanel } from "../../../components/admin/SandboxPanel"
-import { Badge } from "../../../components/ui/badge"
+import { ActionIconButton, RowActions } from "../../../components/ui/action-button"
 import { Button } from "../../../components/ui/button"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
@@ -11,6 +11,7 @@ import { Input } from "../../../components/ui/input"
 import { Field } from "../../../components/ui/label"
 import { Select } from "../../../components/ui/select"
 import { Skeleton } from "../../../components/ui/skeleton"
+import { StatusIcon, type StatusKind } from "../../../components/ui/status-icon"
 import {
   Dialog,
   DialogContent,
@@ -43,7 +44,6 @@ import { agentExecutionPlacement } from "../../../lib/agent-runtime"
 import { agentEngineLabel, agentEngineOf, agentEngineSupportsCapability, agentEnginesSupportingCapability } from "../../../lib/agent-view-model"
 import { credentialBinding, hasCredentialKind, sharedSecretsForKind } from "../../../lib/credential-bindings"
 import type { Agent, AgentCapability, AgentDetail, Capability, CapabilityVersion, Secret, UserCredential } from "../../../lib/api-types"
-import { cn } from "../../../lib/utils"
 import { CredentialBindingSelect } from "../../../components/admin/CredentialBindingSelect"
 import { CapabilityTypeBadge } from "../CapabilitiesPage"
 import { UpgradeCapabilityDialog } from "../capabilities/UpgradeCapabilityDialog"
@@ -138,8 +138,65 @@ function useCapabilityVersions(
 }
 
 /** One hairline-separated capability row: name and flags left, controls right. */
-function CapabilityRow({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <li className={cn("border-b border-line py-3 last:border-b-0", className)}>{children}</li>
+/**
+ * One capability, one shape — the whole point of this block.
+ *
+ * Every row reads the same left to right: a 14px glyph carrying the row's
+ * worst state, the name, its kind, the pinned version right-aligned in mono,
+ * and the verbs revealed on hover. Under it, the description, and then only
+ * the problems worth acting on, one line each with one link.
+ *
+ * It used to be three different rows. A built-in rendered two lines with a
+ * checkbox; an installed capability rendered three with two text buttons; one
+ * from the market rendered five, and said its version three times (a mono
+ * `v—`, a "current v2.0.0" in prose, a "published v2.0.0" in a banner), its
+ * missing credential twice (a red badge and a sentence), and its origin twice
+ * (a badge and a line). Nothing lined up, so the column could not be scanned.
+ */
+function CapabilityLine({
+  status,
+  statusLabel,
+  name,
+  kind,
+  description,
+  version,
+  notes,
+  actions,
+}: {
+  status: StatusKind
+  statusLabel: string
+  name: ReactNode
+  kind?: ReactNode
+  description?: ReactNode
+  version?: string
+  /** At most one line each, and each with at most one thing to press. */
+  notes?: { key: string; text: ReactNode; action?: ReactNode }[]
+  actions?: ReactNode
+}) {
+  return (
+    <li className="group border-b border-line last:border-b-0">
+      <div className="flex items-start gap-2 py-2.5">
+        <StatusIcon status={status} title={statusLabel} className="mt-1 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="min-w-0 truncate text-sm font-medium text-fg">{name}</span>
+            {kind && <span className="shrink-0 text-xs text-fg-muted">{kind}</span>}
+          </div>
+          {description && <p className="mt-0.5 truncate text-xs text-fg-muted">{description}</p>}
+          {notes?.map((note) => (
+            <p key={note.key} className="mt-1 flex min-w-0 items-center gap-2 text-xs text-fg">
+              <span className="min-w-0 truncate">{note.text}</span>
+              {note.action}
+            </p>
+          ))}
+        </div>
+        {version && (
+          <span className="mt-0.5 shrink-0 font-mono text-xs tabular-nums text-fg-muted">{version}</span>
+        )}
+        {actions && <RowActions>{actions}</RowActions>}
+      </div>
+    </li>
+  )
 }
 
 function BuiltinCapabilityCard({
@@ -174,235 +231,31 @@ function BuiltinCapabilityCard({
     )
   }
   return (
-    <CapabilityRow>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-fg">{capability?.name ?? key}</span>
-            {capability?.type && <CapabilityTypeBadge type={capability.type} />}
-            <Badge variant="neutral">{t("agents.detail.capabilities.builtin.badge")}</Badge>
-          </div>
-          {capability?.description && <p className="mt-0.5 text-xs text-fg-muted">{capability.description}</p>}
-        </div>
-        <label className={cn("flex h-7 shrink-0 items-center gap-2 text-sm text-fg", isAdmin ? "cursor-pointer" : "cursor-not-allowed opacity-50")}>
-          <input
-            type="checkbox"
-            className="h-3.5 w-3.5 accent-accent"
-            checked={enabled}
-            disabled={!isAdmin || mut.isPending}
-            onChange={(e) => onToggle(e.target.checked)}
-          />
-          <span>{enabled ? t("agents.detail.capabilities.builtin.on") : t("agents.detail.capabilities.builtin.off")}</span>
-        </label>
-      </div>
-    </CapabilityRow>
-  )
-}
-
-function CapabilityCard({
-  item,
-  agent,
-  workspaceID,
-  credentials,
-  sharedSecrets,
-  mode,
-  onToast,
-}: {
-  item: CapabilityCardItem
-  agent: Agent
-  workspaceID: string | null
-  credentials: UserCredential[]
-  sharedSecrets: Secret[]
-  mode: "enabled" | "available"
-  onToast: ShowToast
-}) {
-  const { t } = useTranslation("admin")
-  const capability = item.capability
-  const binding = item.binding
-  const { latest, versions, versionsQ } = useCapabilityVersions(workspaceID, capability, mode === "enabled")
-  const boundVersion = versions.find((version) => version.id === binding?.capability_version_id) ?? (binding?.capability_version_id && capability?.pinned_version ? { id: binding.capability_version_id, capability_id: capability.id, version: capability.pinned_version, created_at: capability.latest_version_created_at ?? capability.created_at } as CapabilityVersion : undefined)
-  const catalogID = catalogIDFromVersion(boundVersion ?? latest)
-  const versionDeleted = !!binding && !versionsQ.isLoading && !boundVersion && !capability?.latest_version_id
-  const missingCredential = capability
-    ? requiredCredentialKinds(capability).some((rc) => !hasUsableCredential(agent, binding, credentials, sharedSecrets, rc.kind, catalogID))
-    : false
-  const fromMarketplace = !!capability?.from_marketplace || (!!capability?.source_workspace_id && capability.source_workspace_id !== workspaceID)
-  const deprecated = !!capability?.deprecated_at
-
-  if (!capability && binding) {
-    return (
-      <CapabilityRow>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <InlineError className="font-medium">{t("agents.detail.capabilities.deletedCapability.title")}</InlineError>
-            <p className="mt-0.5 pl-5 text-xs text-fg-muted">{t("agents.detail.capabilities.deletedCapability.description")}</p>
-          </div>
-          <RemoveCapabilityDialog
-            agent={agent}
-            binding={binding}
-            capabilityName={t("agents.detail.capabilities.deletedCapability.fallbackName")}
-            workspaceID={workspaceID}
-            onToast={onToast}
-          />
-        </div>
-      </CapabilityRow>
-    )
-  }
-  if (!capability) return null
-
-  const agentEngine = agentEngineOf(agent)
-  const incompatible = !agentEngineSupportsCapability(agentEngine, capability.type)
-  const compatibilityMessage = incompatible
-    ? t("agents.detail.capabilities.compatibility.unsupported", {
-        engine: t(agentEngineLabel(agentEngine)),
-        type: t(`agents.detail.capabilities.compatibility.types.${capability.type}`),
-        engines: agentEnginesSupportingCapability(capability.type).map((engine) => t(agentEngineLabel(engine))).join(", "),
-      })
-    : ""
-  const versionLabel = binding
-    ? (boundVersion ? `v${boundVersion.version}` : "v—")
-    : latest
-      ? `v${latest.version} · ${t("agents.detail.capabilities.switchDialog.latest")}`
-      : null
-
-  return (
-    <CapabilityRow>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-fg">{capability.name}</span>
-            <CapabilityTypeBadge type={capability.type} />
-            {fromMarketplace && <Badge variant="primary">{t("agents.detail.capabilities.marketplace.badge")}</Badge>}
-            {incompatible && <Badge variant="destructive" dot>{t("agents.detail.capabilities.compatibility.badge")}</Badge>}
-            {missingCredential && <Badge variant="destructive" dot>{t("agents.detail.capabilities.credential.missingBadge")}</Badge>}
-            {versionDeleted && <Badge variant="destructive" dot>{t("agents.detail.capabilities.bindings.versionDeleted.warning")}</Badge>}
-            {versionDeleted && versions.length > 0 && binding && (
-              <CapabilityVersionDialog
-                mode="switch"
-                agent={agent}
-                capability={capability}
-                binding={binding}
-                workspaceID={workspaceID}
-                triggerLabel={t("agents.detail.capabilities.bindings.versionDeleted.switchAction")}
-                triggerVariant="link"
-                onToast={onToast}
-              />
-            )}
-          </div>
-          {capability.description && <p className="mt-0.5 text-xs text-fg-muted">{capability.description}</p>}
-          {fromMarketplace && <p className="mt-0.5 text-xs text-fg-muted">{t("agents.detail.capabilities.marketplace.source", { source: capability.source_workspace_name ?? "—", version: boundVersion?.version ?? capability.pinned_version ?? latest?.version ?? "—" })}</p>}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {versionLabel && <span className="font-mono text-xs text-fg-muted">{versionLabel}</span>}
-          {mode === "available" ? (
-            <CapabilityVersionDialog
-              mode="enable"
-              agent={agent}
-              capability={capability}
-              credentials={credentials}
-              sharedSecrets={sharedSecrets}
-              workspaceID={workspaceID}
-              disabled={incompatible}
-              onToast={onToast}
-            />
-          ) : binding ? (
-            <>
-              {versions.length > 1 && !versionDeleted && !fromMarketplace && (
-                <CapabilityVersionDialog
-                  mode="switch"
-                  agent={agent}
-                  capability={capability}
-                  binding={binding}
-                  workspaceID={workspaceID}
-                  onToast={onToast}
-                />
-              )}
-              <RemoveCapabilityDialog
-                agent={agent}
-                binding={binding}
-                capabilityName={capability.name}
-                workspaceID={workspaceID}
-                onToast={onToast}
-              />
-            </>
-          ) : null}
-        </div>
-      </div>
-
-      {mode === "enabled" && deprecated && (
-        <InlineError className="mt-2">
-          {t("agents.detail.capabilities.marketplace.deprecatedBanner", { version: boundVersion?.version ?? capability.pinned_version ?? "—" })}
-        </InlineError>
-      )}
-
-      {incompatible && <InlineError className="mt-2">{compatibilityMessage}</InlineError>}
-
-      {mode === "enabled" && fromMarketplace && binding && latest && latest.id !== binding.capability_version_id && (
-        <UpgradeCapabilityDialog
-          agent={agent}
-          capability={capability}
-          binding={binding}
-          latestVersion={latest}
-          workspaceID={workspaceID}
-          disabled={deprecated}
-          onToast={onToast}
+    <CapabilityLine
+      status={enabled ? "completed" : "cancelled"}
+      statusLabel={enabled ? t("agents.detail.capabilities.builtin.on") : t("agents.detail.capabilities.builtin.off")}
+      name={capability?.name ?? key}
+      kind={
+        <>
+          {capability?.type && <CapabilityTypeBadge type={capability.type} className="inline" />}
+          {capability?.type ? " · " : ""}
+          {t("agents.detail.capabilities.builtin.badge")}
+        </>
+      }
+      description={capability?.description}
+      actions={
+        <ActionIconButton
+          icon={Power}
+          label={enabled ? t("agents.detail.capabilities.builtin.disable") : t("agents.detail.capabilities.builtin.enable")}
+          busy={mut.isPending}
+          disabled={!isAdmin || mut.isPending}
+          onClick={() => onToggle(!enabled)}
         />
-      )}
-
-      <CredentialStatus capability={capability} binding={binding} agent={agent} credentials={credentials} sharedSecrets={sharedSecrets} catalogID={catalogID} />
-    </CapabilityRow>
+      }
+    />
   )
 }
 
-function CredentialStatus({
-  capability,
-  binding,
-  agent,
-  credentials,
-  sharedSecrets,
-  catalogID,
-}: {
-  capability: Capability
-  binding?: AgentCapability
-  agent: Agent
-  credentials: UserCredential[]
-  sharedSecrets: Secret[]
-  catalogID: string
-}) {
-  const { t, i18n } = useTranslation("admin")
-  const requiredCreds = capability.required_credentials ?? []
-  if (requiredCreds.length === 0) {
-    return <p className="mt-2 text-xs text-fg-muted">{t("agents.detail.capabilities.credential.none")}</p>
-  }
-  return (
-    <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0">
-      {requiredCreds.map((rc) => {
-        const sharedID = boundSharedSecretID(agent, binding, rc.kind)
-        const sharedSecret = sharedSecretsForKind(sharedSecrets, rc.kind, catalogID).find((secret) => secret.id === sharedID)
-        const credential = agent.visibility === "public" ? undefined : credentials.find((cred) => cred.kind === rc.kind)
-        const available = sharedSecret ?? credential
-        const label = credentialKindLabel(rc.kind, i18n.language, rc.kind)
-        return (
-          <li key={rc.kind} className="flex items-center gap-1.5 text-xs text-fg">
-            {available ? (
-              <Check className="h-3.5 w-3.5 shrink-0 text-status-completed" strokeWidth={1.5} aria-hidden="true" />
-            ) : (
-              <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden="true">
-                <span className="h-1.5 w-1.5 rounded-full bg-status-failed" />
-              </span>
-            )}
-            <span className="min-w-0 truncate">
-              {available
-                ? t("agents.detail.capabilities.credential.present", { kind: label, name: sharedSecret?.name || credential?.display_name || t("agents.detail.capabilities.credential.defaultName") })
-                : t("agents.detail.capabilities.credential.missing", { kind: label })}
-            </span>
-            {!sharedSecret && <CredentialLink kind={rc.kind} className="shrink-0 text-xs text-fg underline underline-offset-4" />}
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
 
 function CredentialLink({ kind, className, children }: { kind?: string; className?: string; children?: React.ReactNode }) {
   const { t } = useTranslation("admin")
@@ -488,6 +341,199 @@ function EnableCredentialBindingList({
   )
 }
 
+/** `v1.4.0`, or nothing at all — never a placeholder dash. */
+function versionOf(version?: string | null): string | undefined {
+  return version ? `v${version}` : undefined
+}
+
+function CapabilityCard({
+  item,
+  agent,
+  workspaceID,
+  credentials,
+  sharedSecrets,
+  mode,
+  onToast,
+}: {
+  item: CapabilityCardItem
+  agent: Agent
+  workspaceID: string | null
+  credentials: UserCredential[]
+  sharedSecrets: Secret[]
+  mode: "enabled" | "available"
+  onToast: ShowToast
+}) {
+  const { t, i18n } = useTranslation("admin")
+  const capability = item.capability
+  const binding = item.binding
+  const { latest, versions, versionsQ } = useCapabilityVersions(workspaceID, capability, mode === "enabled")
+  const boundVersion = versions.find((version) => version.id === binding?.capability_version_id) ?? (binding?.capability_version_id && capability?.pinned_version ? { id: binding.capability_version_id, capability_id: capability.id, version: capability.pinned_version, created_at: capability.latest_version_created_at ?? capability.created_at } as CapabilityVersion : undefined)
+  const catalogID = catalogIDFromVersion(boundVersion ?? latest)
+  const versionDeleted = !!binding && !versionsQ.isLoading && !boundVersion && !capability?.latest_version_id
+  const fromMarketplace = !!capability?.from_marketplace || (!!capability?.source_workspace_id && capability.source_workspace_id !== workspaceID)
+  const deprecated = !!capability?.deprecated_at
+
+  if (!capability && binding) {
+    return (
+      <CapabilityLine
+        status="failed"
+        statusLabel={t("agents.detail.capabilities.deletedCapability.title")}
+        name={t("agents.detail.capabilities.deletedCapability.title")}
+        description={t("agents.detail.capabilities.deletedCapability.description")}
+        actions={
+          <RemoveCapabilityDialog
+            agent={agent}
+            binding={binding}
+            capabilityName={t("agents.detail.capabilities.deletedCapability.fallbackName")}
+            workspaceID={workspaceID}
+            onToast={onToast}
+          />
+        }
+      />
+    )
+  }
+  if (!capability) return null
+
+  const agentEngine = agentEngineOf(agent)
+  const incompatible = !agentEngineSupportsCapability(agentEngine, capability.type)
+  const upgradable = mode === "enabled" && fromMarketplace && !!binding && !!latest && latest.id !== binding.capability_version_id
+
+  // One line per credential the capability needs and the reader has not set.
+  // A credential that *is* set says nothing: the row's glyph already reports
+  // that everything here is in order, and an "add credential" link beside a
+  // credential you have added is an affordance with nowhere to go.
+  const missingKinds = requiredCredentialKinds(capability).filter(
+    (rc) => !hasUsableCredential(agent, binding, credentials, sharedSecrets, rc.kind, catalogID),
+  )
+
+  const notes: { key: string; text: React.ReactNode; action?: React.ReactNode }[] = []
+  for (const rc of missingKinds) {
+    notes.push({
+      key: `cred:${rc.kind}`,
+      text: t("agents.detail.capabilities.credential.missingShort", {
+        kind: credentialKindLabel(rc.kind, i18n.language, rc.kind),
+      }),
+      action: <CredentialLink kind={rc.kind} className="shrink-0 text-xs text-fg underline underline-offset-4" />,
+    })
+  }
+  if (incompatible) {
+    notes.push({
+      key: "incompatible",
+      text: t("agents.detail.capabilities.compatibility.unsupported", {
+        engine: t(agentEngineLabel(agentEngine)),
+        type: t(`agents.detail.capabilities.compatibility.types.${capability.type}`),
+        engines: agentEnginesSupportingCapability(capability.type).map((engine) => t(agentEngineLabel(engine))).join(", "),
+      }),
+    })
+  }
+  if (mode === "enabled" && versionDeleted && versions.length > 0 && binding) {
+    notes.push({
+      key: "version-deleted",
+      text: t("agents.detail.capabilities.bindings.versionDeleted.warning"),
+      action: (
+        <CapabilityVersionDialog
+          mode="switch"
+          agent={agent}
+          capability={capability}
+          binding={binding}
+          workspaceID={workspaceID}
+          onToast={onToast}
+          trigger={(open) => (
+            <Button variant="link" size="sm" className="shrink-0 px-0" onClick={open}>
+              {t("agents.detail.capabilities.bindings.versionDeleted.switchAction")}
+            </Button>
+          )}
+        />
+      ),
+    })
+  }
+  if (mode === "enabled" && deprecated) {
+    notes.push({
+      key: "deprecated",
+      text: t("agents.detail.capabilities.marketplace.deprecatedBanner", {
+        version: boundVersion?.version ?? capability.pinned_version ?? "—",
+      }),
+    })
+  }
+  if (upgradable) {
+    notes.push({
+      key: "upgrade",
+      text: deprecated
+        ? t("agents.detail.capabilities.marketplace.upgradeBlocked")
+        : t("agents.detail.capabilities.marketplace.upgradeShort", { version: latest?.version ?? "—" }),
+      action: (
+        <UpgradeCapabilityDialog
+          agent={agent}
+          capability={capability}
+          binding={binding as AgentCapability}
+          latestVersion={latest}
+          workspaceID={workspaceID}
+          disabled={deprecated}
+          onToast={onToast}
+        />
+      ),
+    })
+  }
+
+  const blocked = versionDeleted || incompatible || missingKinds.length > 0
+  const status: StatusKind = blocked ? "failed" : deprecated || upgradable ? "running" : "completed"
+  const statusLabel = blocked
+    ? t("agents.detail.capabilities.state.blocked")
+    : deprecated || upgradable
+      ? t("agents.detail.capabilities.state.attention")
+      : t("agents.detail.capabilities.state.ready")
+
+  return (
+    <CapabilityLine
+      status={status}
+      statusLabel={statusLabel}
+      name={capability.name}
+      kind={<CapabilityTypeBadge type={capability.type} />}
+      description={capability.description}
+      // The version the agent is actually pinned to. It used to be told three
+      // times over — a mono `v—`, a "current v2.0.0" in prose, a "published
+      // v2.0.0" in a banner — so it lives in one slot now, and says nothing
+      // rather than an em dash when there is nothing to say.
+      version={versionOf(boundVersion?.version ?? binding?.version ?? capability.pinned_version) ?? (mode === "available" ? versionOf(latest?.version) : undefined)}
+      notes={notes}
+      actions={
+        mode === "available" ? (
+          <CapabilityVersionDialog
+            mode="enable"
+            agent={agent}
+            capability={capability}
+            credentials={credentials}
+            sharedSecrets={sharedSecrets}
+            workspaceID={workspaceID}
+            disabled={incompatible}
+            onToast={onToast}
+          />
+        ) : binding ? (
+          <>
+            {versions.length > 1 && !versionDeleted && !fromMarketplace && (
+              <CapabilityVersionDialog
+                mode="switch"
+                agent={agent}
+                capability={capability}
+                binding={binding}
+                workspaceID={workspaceID}
+                onToast={onToast}
+              />
+            )}
+            <RemoveCapabilityDialog
+              agent={agent}
+              binding={binding}
+              capabilityName={capability.name}
+              workspaceID={workspaceID}
+              onToast={onToast}
+            />
+          </>
+        ) : undefined
+      }
+    />
+  )
+}
+
 function CapabilityVersionDialog({
   mode,
   agent,
@@ -496,8 +542,7 @@ function CapabilityVersionDialog({
   sharedSecrets = [],
   workspaceID,
   binding,
-  triggerLabel,
-  triggerVariant = "ghost",
+  trigger,
   disabled = false,
   onToast,
 }: {
@@ -508,8 +553,8 @@ function CapabilityVersionDialog({
   sharedSecrets?: Secret[]
   workspaceID: string | null
   binding?: AgentCapability
-  triggerLabel?: string
-  triggerVariant?: "ghost" | "link"
+  /** Draws the control that opens this dialog; defaults to a row action. */
+  trigger?: (open: () => void) => ReactNode
   disabled?: boolean
   onToast: ShowToast
 }) {
@@ -583,14 +628,20 @@ function CapabilityVersionDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button
-        variant={isSwitch ? triggerVariant : "outline"}
-        size="sm"
-        disabled={disabled}
-        onClick={() => setOpen(true)}
-      >
-        {triggerLabel ?? t(isSwitch ? "agents.detail.capabilities.actions.switchVersion" : "agents.detail.capabilities.actions.enable")}
-      </Button>
+      {trigger ? (
+        trigger(() => setOpen(true))
+      ) : isSwitch ? (
+        <ActionIconButton
+          icon={Replace}
+          label={t("agents.detail.capabilities.actions.switchVersion")}
+          disabled={disabled}
+          onClick={() => setOpen(true)}
+        />
+      ) : (
+        <Button variant="outline" size="sm" disabled={disabled} onClick={() => setOpen(true)}>
+          {t("agents.detail.capabilities.actions.enable")}
+        </Button>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t(isSwitch ? "agents.detail.capabilities.switchDialog.title" : "agents.detail.capabilities.enableDialog.title", { agent: agent.name, cap: capability.name })}</DialogTitle>
@@ -674,7 +725,12 @@ function RemoveCapabilityDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>{t("agents.detail.capabilities.actions.remove")}</Button>
+      <ActionIconButton
+        icon={Trash2}
+        tone="danger"
+        label={t("agents.detail.capabilities.actions.remove")}
+        onClick={() => setOpen(true)}
+      />
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("agents.detail.capabilities.removeDialog.title", { agent: agent.name, cap: capabilityName })}</AlertDialogTitle>

@@ -1502,12 +1502,9 @@
         "emptyAvailable": "当前工作区没有更多可装能力。",
         "credentialsLoadError": "我的凭据状态加载失败；按钮仍保留，提交后端会继续校验权限。",
         "credential": {
-          "none": "不需要凭据",
-          "present": "需要「{{kind}}」· ✓ 你已设置（{{name}}）",
-          "missing": "需要「{{kind}}」· ✗ 你还没设置 — 调用此能力会失败",
-          "missingBadge": "凭据缺失",
           "addCta": "去添加凭据",
-          "defaultName": "默认"
+          "defaultName": "默认",
+          "missingShort": "需要「{{kind}}」，未设置"
         },
         "bindings": {
           "versionDeleted": {
@@ -1516,7 +1513,6 @@
           }
         },
         "compatibility": {
-          "badge": "不支持",
           "unsupported": "{{engine}} 不支持 {{type}} 能力。支持的 Agent 引擎：{{engines}}。",
           "types": {
             "mcp": "MCP",
@@ -1530,7 +1526,9 @@
           "badge": "系统内置",
           "on": "已开启",
           "off": "已关闭",
-          "toggleError": "切换失败"
+          "toggleError": "切换失败",
+          "enable": "启用",
+          "disable": "停用"
         },
         "actions": {
           "enable": "+ 启用",
@@ -1540,7 +1538,7 @@
           "remove": "移除",
           "removeConfirm": "移除",
           "cancel": "取消",
-          "upgrade": "升级到新版本"
+          "upgrade": "升级"
         },
         "enableDialog": {
           "title": "在「{{agent}}」启用「{{cap}}」",
@@ -1588,11 +1586,14 @@
           "description": "后端返回错误。"
         },
         "marketplace": {
-          "badge": "来自市场",
-          "source": "来自 {{source}} · 当前版本 v{{version}}",
           "deprecatedBanner": "此能力已被来源工作区标记废弃。本 Agent 可以继续使用锁定的 v{{version}}，但无法升级到新版本。",
-          "upgradeAvailable": "来源工作区发布了新版本 v{{version}}。",
-          "upgradeBlocked": "源能力已废弃，无法升级。"
+          "upgradeBlocked": "源能力已废弃，无法升级。",
+          "upgradeShort": "有新版本 v{{version}}"
+        },
+        "state": {
+          "ready": "可用",
+          "attention": "有更新",
+          "blocked": "不可用"
         }
       },
       "runs": {

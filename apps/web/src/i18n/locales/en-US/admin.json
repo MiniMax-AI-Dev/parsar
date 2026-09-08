@@ -1502,12 +1502,9 @@
         "emptyAvailable": "No more workspace capabilities are available.",
         "credentialsLoadError": "Could not load my credential status; actions remain visible and the backend will still enforce permissions.",
         "credential": {
-          "none": "No credential required",
-          "present": "Requires {{kind}} · ✓ you have set it ({{name}})",
-          "missing": "Requires {{kind}} · ✗ not set — calls will fail",
-          "missingBadge": "Credential missing",
           "addCta": "Add credential",
-          "defaultName": "default"
+          "defaultName": "default",
+          "missingShort": "Requires {{kind}}, not set"
         },
         "bindings": {
           "versionDeleted": {
@@ -1516,7 +1513,6 @@
           }
         },
         "compatibility": {
-          "badge": "Not supported",
           "unsupported": "{{engine}} does not support {{type}} capabilities. Supported engines: {{engines}}.",
           "types": {
             "mcp": "MCP",
@@ -1530,7 +1526,9 @@
           "badge": "Built-in",
           "on": "On",
           "off": "Off",
-          "toggleError": "Toggle failed"
+          "toggleError": "Toggle failed",
+          "enable": "Enable",
+          "disable": "Disable"
         },
         "actions": {
           "enable": "+ Enable",
@@ -1540,7 +1538,7 @@
           "remove": "Remove",
           "removeConfirm": "Remove",
           "cancel": "Cancel",
-          "upgrade": "Upgrade to new version"
+          "upgrade": "Upgrade"
         },
         "enableDialog": {
           "title": "Enable \"{{cap}}\" on \"{{agent}}\"",
@@ -1588,11 +1586,14 @@
           "description": "Backend returned an error."
         },
         "marketplace": {
-          "badge": "From market",
-          "source": "From {{source}} · current v{{version}}",
           "deprecatedBanner": "The source workspace marked this capability deprecated. This Agent can keep using pinned v{{version}}, but cannot upgrade.",
-          "upgradeAvailable": "The source workspace published v{{version}}.",
-          "upgradeBlocked": "Source capability is deprecated; upgrade is unavailable."
+          "upgradeBlocked": "Source capability is deprecated; upgrade is unavailable.",
+          "upgradeShort": "New version v{{version}}"
+        },
+        "state": {
+          "ready": "Ready",
+          "attention": "Update available",
+          "blocked": "Not usable"
         }
       },
       "runs": {
