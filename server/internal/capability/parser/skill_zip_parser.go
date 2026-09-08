@@ -101,7 +101,15 @@ func ParseSkillZip(buf []byte) (SkillParseResult, error) {
 		// Extraction cleans dot segments and repeated separators. Reject aliases
 		// before preview can select different bytes from the installed archive.
 		p = path.Clean(p)
-		key := norm.NFC.String(caseFolder.String(norm.NFC.String(p)))
+		normalized := norm.NFC.String(p)
+		folded := caseFolder.String(normalized)
+		key := norm.NFC.String(folded)
+		// Stream-safe normalization inserts CGJ into long combining sequences,
+		// which can make equivalent filesystem names compare differently.
+		// Reject such names instead of implementing unbounded normalization.
+		if strings.Count(normalized, "\u034f") != strings.Count(p, "\u034f") || strings.Count(key, "\u034f") != strings.Count(folded, "\u034f") {
+			return SkillParseResult{}, fmt.Errorf("%w: zip entry %q has an unsupported combining sequence", ErrInvalidSkillZip, zr.File[i].Name)
+		}
 		if previous, exists := seenPaths[key]; exists {
 			return SkillParseResult{}, fmt.Errorf("%w: duplicate zip path %q conflicts with %q", ErrInvalidSkillZip, zr.File[i].Name, previous)
 		}

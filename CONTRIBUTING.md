@@ -203,6 +203,8 @@ description and keep ownership on the side listed here.
 - Skill ZIP preview and commit must reject duplicate paths, including
   normalized separator/dot-segment and case aliases, so approved file contents
   cannot differ because an extractor chooses a different duplicate entry.
+  Reject filenames outside Unicode stream-safe normalization rather than
+  adding a separate unbounded normalizer.
 
 ### Plugin Bundle (KindBundle) architecture
 

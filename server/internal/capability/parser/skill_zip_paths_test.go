@@ -55,6 +55,19 @@ func TestParseSkillZipNormalizesUniqueReferencePath(t *testing.T) {
 	}
 }
 
+func TestParseSkillZipRejectsNonStreamSafePaths(t *testing.T) {
+	for _, root := range []string{"", "wrapped/"} {
+		_, err := ParseSkillZip(buildZip(t, []struct{ name, content string }{
+			{root + "SKILL.md", minimalSkillMd},
+			{root + "references/a" + strings.Repeat("\u0301", 30) + "\u0323.md", "PREVIEW-188"},
+			{root + "references/a\u0323" + strings.Repeat("\u0301", 30) + ".md", "RUNTIME-299"},
+		}))
+		if !errors.Is(err, ErrInvalidSkillZip) || !strings.Contains(err.Error(), "unsupported combining sequence") {
+			t.Fatalf("ambiguous long combining sequence accepted or wrong error: %v", err)
+		}
+	}
+}
+
 func TestParseSkillZipWrapperDirectoryIsNotAnEntry(t *testing.T) {
 	_, err := ParseSkillZip(buildZip(t, []struct{ name, content string }{
 		{"wrapped/", ""},
