@@ -158,6 +158,8 @@ description and keep ownership on the side listed here.
   unpublishing. Their installation metadata reports source visibility and only
   bound versions while private; marketplace discovery and new installs still
   require a published source.
+- Conversation user-message limits count Unicode code points after trimming
+  surrounding whitespace, not UTF-8 bytes. Keep route and store validation aligned.
 - Agent capability upgrades accept private capabilities from the Agent's own
   workspace; cross-workspace upgrades still require a public, available source.
 - The server owns auth, workspaces, agent records, runtime bindings, run

@@ -7,6 +7,7 @@ import (
 
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 
@@ -135,6 +136,23 @@ type createConversationUserMessageBody struct {
 	MentionedAgentIDs []string `json:"mentioned_agent_ids"`
 }
 
+// createConversationUserMessage sends a user message to a conversation.
+//
+// @Summary Send a conversation message
+// @Description Accepts 1-32000 Unicode code points after trimming surrounding whitespace.
+// @Tags conversations
+// @Accept json
+// @Produce json
+// @Param conversationID path string true "Conversation UUID"
+// @Param body body createConversationUserMessageBody true "Message and optional Agent mentions"
+// @Success 201 {object} map[string]interface{} "Message and dispatched Agent run"
+// @Failure 400 {object} map[string]string "Invalid body or UUID"
+// @Failure 403 {object} map[string]string "Workspace membership required"
+// @Failure 404 {object} map[string]string "Conversation not found"
+// @Failure 422 {object} map[string]string "Invalid content or Agent mention"
+// @Failure 500 {object} map[string]string "Message could not be sent"
+// @Failure 503 {object} map[string]string "Conversation messages unavailable"
+// @Router /api/v1/conversations/{conversationID}/messages [post]
 func createConversationUserMessage(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -154,7 +172,7 @@ func createConversationUserMessage(runtimeStore RuntimeStore) http.HandlerFunc {
 			}
 		}
 		content := strings.TrimSpace(req.Content)
-		if content == "" || len(content) > 32000 {
+		if content == "" || utf8.RuneCountInString(content) > 32000 {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "content must be 1-32000 characters"})
 			return
 		}
