@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write src",
-    "format:check": "prettier --check src"
+    "format:check": "prettier --check src",
+    "i18n:unused": "node scripts/i18n-unused.mjs"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.15.16",
