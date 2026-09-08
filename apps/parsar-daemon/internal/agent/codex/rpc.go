@@ -282,9 +282,12 @@ func (c *JSONRPCClient) Request(ctx context.Context, method string, params any) 
 	if err != nil {
 		return nil, fmt.Errorf("codex rpc: id: %w", err)
 	}
+	timer := time.NewTimer(c.cfg.RequestTimeout)
+	defer timer.Stop()
 	pending := &pendingRequest{
 		method: method,
 		resp:   make(chan rpcResponse, 1),
+		timer:  timer,
 	}
 	c.pendingMu.Lock()
 	c.pending[id] = pending
@@ -297,10 +300,6 @@ func (c *JSONRPCClient) Request(ctx context.Context, method string, params any) 
 		c.pendingMu.Unlock()
 		return nil, fmt.Errorf("codex rpc: write %s: %w", method, err)
 	}
-
-	timer := time.NewTimer(c.cfg.RequestTimeout)
-	pending.timer = timer
-	defer timer.Stop()
 
 	select {
 	case r := <-pending.resp:
