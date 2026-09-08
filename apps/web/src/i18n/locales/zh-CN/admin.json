@@ -1364,6 +1364,10 @@
         "modelSearch": "搜索当前 Workspace 的模型",
         "capabilitySearch": "搜索能力"
       },
+      "instructions": {
+        "label": "行为指令",
+        "hint": "说明这个 Agent 应该做什么、如何回答，以及什么时候需要向用户确认。"
+      },
       "defaults": {
         "workspaceName": "当前 Workspace",
         "name": "{{workspace}} 的 Agent",

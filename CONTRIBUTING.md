@@ -158,6 +158,9 @@ description and keep ownership on the side listed here.
   workspace; cross-workspace upgrades still require a public, available source.
 - The server owns auth, workspaces, agent records, runtime bindings, run
   records, audit/usage persistence, and upstream engine session ids.
+- Successful explicit Agent capability enable, upgrade, removal, and built-in
+  toggle requests emit Agent-targeted audit events with the authenticated actor
+  and capability identifiers. Never include configuration or credential values.
 - `parsar-daemon` owns CLI discovery, process spawning, CLI-specific env,
   cwd selection inside its host/container, permission prompts, and translating
   CLI streams into Parsar daemon protocol frames.
@@ -174,6 +177,8 @@ description and keep ownership on the side listed here.
 
 ### Agent CLI adapter contract
 
+- Agent creation and editing store behavior instructions in `system_prompt`.
+  Preserve saved text when opening the form; clearing it sends an empty string.
 - Claude Code streaming deltas and their per-block assistant copies must be
   emitted once; preserve separate text blocks even when their content matches.
 - Every daemon-side agent adapter must use a shared process runner for CLI
@@ -610,6 +615,9 @@ integration tests, `make check-web` for web typecheck plus design lint, and
 `make check-cli` for CLI/plugin typechecks, and `make check-installer` for
 Docker-free installer lifecycle checks. Keep the subtargets aligned with
 the full gate whenever the required checks change.
+
+Pin the CI vulnerability scanner to a version compatible with the workflow's
+Go toolchain; do not use `@latest` for that build-time tool.
 
 - Any DB change must ship with a migration. Migrations are immutable
   the moment they land on `main` — prod has already applied them, so
