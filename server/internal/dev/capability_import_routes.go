@@ -324,7 +324,7 @@ func previewPluginImport(ctx context.Context, w http.ResponseWriter, workspaceID
 // is rebuilt from OSS bytes (the on-disk zip is authoritative).
 //
 //	@Summary		Commit a capability import
-//	@Description	Encrypts inline_secrets then runs the whole MCP or Skill import (capability + capability_version + secrets) in a single transaction. For Skill zip imports the canonical_spec is rebuilt from OSS bytes. Owner/admin only.
+//	@Description	Encrypts inline_secrets then runs the whole MCP or Skill import (capability + capability_version + secrets) in a single transaction. Skill Markdown is packaged into a stored ZIP before commit; uploaded Skill ZIPs rebuild canonical_spec from stored bytes. Owner/admin only.
 //	@Tags			capabilities
 //	@ID				commitDevCapabilityImport
 //	@Accept			json
@@ -335,7 +335,8 @@ func previewPluginImport(ctx context.Context, w http.ResponseWriter, workspaceID
 //	@Failure		400 {object} map[string]string "Missing name/kind, unknown kind, or spec rebuild failed"
 //	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin, or oss_key not owned by this workspace"
 //	@Failure		500 {object} map[string]string "Secrets service unavailable"
-//	@Failure		502 {object} map[string]string "Failed to fetch uploaded zip from object storage"
+//	@Failure		422 {object} map[string]string "Invalid Skill content"
+//	@Failure		502 {object} map[string]string "Failed to read or store Skill ZIP"
 //	@Failure		503 {object} map[string]string "Object storage or database not configured"
 //	@Router			/api/v1/workspaces/{workspaceID}/capabilities/import/commit [post]
 func commitCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) http.HandlerFunc {
@@ -429,6 +430,11 @@ func commitCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) htt
 		if skillZipShaped {
 			importInput.OssKey = body.OssKey
 			importInput.SHA256 = skillSHA256
+		}
+		importInput.OssKey, importInput.SHA256, httpErr = ensureSkillImportArchive(r.Context(), workspaceID, spec, importInput.OssKey, importInput.SHA256, blobStore)
+		if httpErr != nil {
+			writeJSON(w, httpErr.status, map[string]string{"error": httpErr.message})
+			return
 		}
 		result, err := runtimeStore.ImportCapability(r.Context(), importInput)
 		if err != nil {
@@ -575,7 +581,7 @@ func rebuildSkillSpecFromOSS(ctx context.Context, workspaceID, ossKey string, bl
 // capability.type or the store returns ErrCapabilityKindMismatch.
 //
 //	@Summary		Commit a new version of an existing capability
-//	@Description	Adds a new version to an existing capability, sharing the parse/rebuild pipeline with capability import commit. When version is omitted, the server advances the latest version automatically. Spec.kind must match capability.type. When oss_key is omitted for plugin or skill-zip kinds, the previous version's bytes are reused. Owner/admin only.
+//	@Description	Adds a new version to an existing capability, sharing the parse/rebuild pipeline with capability import commit. Skill Markdown is packaged into a stored ZIP. When version is omitted, the server advances the latest version automatically. Spec.kind must match capability.type. When oss_key is omitted for plugin or skill-zip kinds, the previous version's bytes are reused. Owner/admin only.
 //	@Tags			capabilities
 //	@ID				commitDevCapabilityVersionImport
 //	@Accept			json
@@ -587,8 +593,9 @@ func rebuildSkillSpecFromOSS(ctx context.Context, workspaceID, ossKey string, bl
 //	@Failure		400 {object} map[string]string "Invalid capability_id, missing kind, or spec rebuild failed"
 //	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin, or oss_key not owned by this workspace"
 //	@Failure		404 {object} map[string]string "Capability not found in this workspace"
+//	@Failure		422 {object} map[string]string "Invalid Skill content or capability kind mismatch"
 //	@Failure		500 {object} map[string]string "Secrets service unavailable"
-//	@Failure		502 {object} map[string]string "Failed to fetch uploaded zip from object storage"
+//	@Failure		502 {object} map[string]string "Failed to read or store Skill ZIP"
 //	@Failure		503 {object} map[string]string "Object storage or database not configured"
 //	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/versions/import/commit [post]
 func commitCapabilityVersionImport(runtimeStore RuntimeStore, blobStore blob.Store) http.HandlerFunc {
@@ -618,6 +625,12 @@ func commitCapabilityVersionImport(runtimeStore RuntimeStore, blobStore blob.Sto
 		if body.CanonicalSpec.Kind == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "canonical_spec.kind is required"})
 			return
+		}
+		if body.CanonicalSpec.Kind == canonical.KindSkill && strings.TrimSpace(body.OssKey) == "" && strings.TrimSpace(body.UploadSource) == "" {
+			if err := validateMarkdownSkillVersionDestination(r.Context(), runtimeStore, workspaceID, capabilityID); err != nil {
+				writeImportCommitError(w, err)
+				return
+			}
 		}
 
 		// Edit-as-new-version: when the client omits oss_key for a kind that
@@ -714,6 +727,11 @@ func commitCapabilityVersionImport(runtimeStore RuntimeStore, blobStore blob.Sto
 		if skillZipShaped {
 			versionInput.OssKey = body.OssKey
 			versionInput.SHA256 = skillSHA256
+		}
+		versionInput.OssKey, versionInput.SHA256, httpErr = ensureSkillImportArchive(r.Context(), workspaceID, spec, versionInput.OssKey, versionInput.SHA256, blobStore)
+		if httpErr != nil {
+			writeJSON(w, httpErr.status, map[string]string{"error": httpErr.message})
+			return
 		}
 		result, err := runtimeStore.ImportCapabilityVersion(r.Context(), versionInput)
 		if err != nil {

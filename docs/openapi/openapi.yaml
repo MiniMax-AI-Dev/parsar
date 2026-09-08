@@ -6395,10 +6395,11 @@ paths:
       consumes:
       - application/json
       description: Adds a new version to an existing capability, sharing the parse/rebuild
-        pipeline with capability import commit. When version is omitted, the server
-        advances the latest version automatically. Spec.kind must match capability.type.
-        When oss_key is omitted for plugin or skill-zip kinds, the previous version's
-        bytes are reused. Owner/admin only.
+        pipeline with capability import commit. Skill Markdown is packaged into a
+        stored ZIP. When version is omitted, the server advances the latest version
+        automatically. Spec.kind must match capability.type. When oss_key is omitted
+        for plugin or skill-zip kinds, the previous version's bytes are reused. Owner/admin
+        only.
       operationId: commitDevCapabilityVersionImport
       parameters:
       - description: Workspace UUID
@@ -6444,6 +6445,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "422":
+          description: Invalid Skill content or capability kind mismatch
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Secrets service unavailable
           schema:
@@ -6451,7 +6458,7 @@ paths:
               type: string
             type: object
         "502":
-          description: Failed to fetch uploaded zip from object storage
+          description: Failed to read or store Skill ZIP
           schema:
             additionalProperties:
               type: string
@@ -6470,8 +6477,9 @@ paths:
       consumes:
       - application/json
       description: Encrypts inline_secrets then runs the whole MCP or Skill import
-        (capability + capability_version + secrets) in a single transaction. For Skill
-        zip imports the canonical_spec is rebuilt from OSS bytes. Owner/admin only.
+        (capability + capability_version + secrets) in a single transaction. Skill
+        Markdown is packaged into a stored ZIP before commit; uploaded Skill ZIPs
+        rebuild canonical_spec from stored bytes. Owner/admin only.
       operationId: commitDevCapabilityImport
       parameters:
       - description: Workspace UUID
@@ -6506,6 +6514,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "422":
+          description: Invalid Skill content
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Secrets service unavailable
           schema:
@@ -6513,7 +6527,7 @@ paths:
               type: string
             type: object
         "502":
-          description: Failed to fetch uploaded zip from object storage
+          description: Failed to read or store Skill ZIP
           schema:
             additionalProperties:
               type: string

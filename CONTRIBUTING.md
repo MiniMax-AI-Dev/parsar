@@ -194,6 +194,9 @@ description and keep ownership on the side listed here.
 - Keep uploaded Skill archives engine-neutral. Materialize adapter-managed
   copies below the `AgentStateKey` runtime directory, then register that root
   through the engine's native CLI, config, or RPC surface.
+- Markdown Skill imports and new versions must store an engine-neutral ZIP
+  containing `SKILL.md`, with its storage reference and SHA-256 persisted before
+  reporting success. Existing versions without archives require a new import.
 
 ### Plugin Bundle (KindBundle) architecture
 
