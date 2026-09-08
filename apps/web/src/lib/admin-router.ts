@@ -104,6 +104,7 @@ function parseRoute(search: string): AppRoute {
 }
 
 export interface NavigateOptions {
+  replace?: boolean
   id?: string | null
   tab?: string | null
   /** "full" lifts the detail rail into its expanded panel. */
@@ -175,7 +176,7 @@ export function useNavigateAdmin() {
     setOptionalParam(url, "from", opts?.from)
     setOptionalParam(url, "pendingCapability", opts?.pendingCapability)
     setOneShotParam(url, "focus", opts?.focus)
-    window.history.pushState({}, "", url.toString())
+    window.history[opts?.replace ? "replaceState" : "pushState"]({}, "", url.toString())
     window.dispatchEvent(new Event("admin:navigate"))
   }, [])
 }
@@ -220,7 +221,7 @@ export function navigateAdmin(next: AdminView, opts?: NavigateOptions) {
   setOptionalParam(url, "from", opts?.from)
   setOptionalParam(url, "pendingCapability", opts?.pendingCapability)
   setOneShotParam(url, "focus", opts?.focus)
-  window.history.pushState({}, "", url.toString())
+  window.history[opts?.replace ? "replaceState" : "pushState"]({}, "", url.toString())
   window.dispatchEvent(new Event("admin:navigate"))
 }
 

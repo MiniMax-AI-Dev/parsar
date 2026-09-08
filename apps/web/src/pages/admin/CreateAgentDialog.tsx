@@ -21,6 +21,7 @@ import { AgentInstructionsField } from "./agents/AgentInstructionsField"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
 import { cn } from "../../lib/utils"
+import { replaceAgentModelSetup } from "../../lib/agent-create-return"
 import { agentCodexModeOf, type CodexCollaborationMode } from "../../lib/agent-view-model"
 import {
   modelProtocols,
@@ -739,9 +740,9 @@ export function CreateAgentDialog({
     url.searchParams.set("admin", target)
     url.searchParams.delete("id")
     url.searchParams.set("return_to", "agents.create")
-    if (name.trim()) url.searchParams.set("agent_name", name.trim())
-    if (description.trim()) url.searchParams.set("agent_description", description.trim())
-    if (systemPrompt.trim()) url.searchParams.set("agent_prompt", systemPrompt.trim())
+    url.searchParams.set("agent_name", name)
+    url.searchParams.set("agent_description", description)
+    url.searchParams.set("agent_prompt", systemPrompt)
     return `${url.pathname}${url.search}${url.hash}`
   }
 
@@ -1736,7 +1737,7 @@ function DependencyCard({ title, description, href, cta }: { title: string; desc
       <p className="text-sm font-medium text-fg">{title}</p>
       <p className="text-xs text-fg-muted">{description}</p>
       <Button variant="link" size="sm" className="mt-1 px-0" asChild>
-        <a href={href}>
+        <a href={href} onClick={replaceAgentModelSetup}>
           {cta} <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
         </a>
       </Button>

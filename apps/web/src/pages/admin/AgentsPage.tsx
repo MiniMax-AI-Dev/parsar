@@ -21,6 +21,7 @@ import {
   TabsTrigger,
 } from "../../components/ui/tabs"
 import { useAdminView, useAppRoute } from "../../lib/admin-router"
+import { useAgentCreateDialog } from "../../lib/agent-create-return"
 import { ApiError } from "../../lib/api-client"
 import { createAgentConversation } from "../../lib/api-conversations"
 import {
@@ -93,7 +94,7 @@ export function AgentsPage() {
   const wid = useWorkspaceId()
   const [keyword, setKeyword] = useState("")
   const [connectorFilter, setConnectorFilter] = useState("")
-  const [createOpen, setCreateOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useAgentCreateDialog()
   const [editAgent, setEditAgent] = useState<Agent | null>(null)
   const [cloneAgent, setCloneAgent] = useState<Agent | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null)

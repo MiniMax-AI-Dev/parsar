@@ -13,6 +13,7 @@
     },
     "actions": {
       "addModel": "新建模型",
+      "continueAgentCreation": "继续创建 Agent",
       "importModels": "导入模型",
       "test": "测试连接",
       "edit": "编辑",

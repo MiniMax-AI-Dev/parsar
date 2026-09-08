@@ -6,7 +6,7 @@
  */
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { AlertTriangle, Database, Download, Loader2, Plus } from "lucide-react"
+import { AlertTriangle, ArrowLeft, Database, Download, Loader2, Plus } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
@@ -24,6 +24,8 @@ import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
 import { Skeleton } from "../../components/ui/skeleton"
 import { ApiError } from "../../lib/api-client"
+import { navigateAdmin } from "../../lib/admin-router"
+import { hasAgentCreateReturn } from "../../lib/agent-create-return"
 import {
   useBackgroundTestModels,
   useBulkDeleteModels,
@@ -307,16 +309,24 @@ export function ModelsPage() {
 
   const pageTitle = t("models.page.title")
   const hasModels = allModels.length > 0
+  const returningToAgent = hasAgentCreateReturn()
 
   return (
     <AdminLayout activeMenu="models" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
         <PageHeader
-          className="static mx-0 mb-0"
+          className={returningToAgent ? "static mx-0 mb-0 h-auto min-h-16 flex-wrap py-3" : "static mx-0 mb-0"}
+          actionClassName={returningToAgent ? "min-w-0 shrink flex-wrap justify-end" : undefined}
           title={pageTitle}
           subtitleFor="models.page.title"
           action={
             <>
+              {returningToAgent && (
+                <Button variant="outline" onClick={() => navigateAdmin("agents", { focus: "create", replace: true })}>
+                  <ArrowLeft strokeWidth={1.5} aria-hidden="true" />
+                  {t("models.actions.continueAgentCreation")}
+                </Button>
+              )}
               {/* A filter, not a navigation control: every other ledger page
                   narrows itself with `FilterMenu`, and the action slot is for
                   what you can do here. */}
