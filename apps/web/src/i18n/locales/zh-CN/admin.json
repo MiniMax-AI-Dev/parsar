@@ -912,10 +912,10 @@
     "uninstall": {
       "action": "从我的工作区移除",
       "title": "从我的工作区移除「{{name}}」？",
-      "description": "移除后，此能力将从能力列表中消失，当前装着此能力的 {{count}} 个 Agent 会被卸载：",
+      "description": "从当前工作区及以下 {{count}} 个 Agent 中移除此能力。Agent 及其其他能力仍可继续使用。",
       "credentialNote": "已有我的凭据会保留，不会被删除。此操作只影响当前工作区。",
       "unknownAgent": "受影响 Agent",
-      "confirm": "移除（并卸载 {{count}} 个 Agent）",
+      "confirm": "移除能力",
       "toast": "「{{name}}」已从当前工作区移除。"
     },
     "import": {

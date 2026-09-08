@@ -912,10 +912,10 @@
     "uninstall": {
       "action": "Remove from my workspace",
       "title": "Remove \"{{name}}\" from my workspace?",
-      "description": "After removal, this capability disappears from your capability list and will be disabled on {{count}} Agent(s):",
-      "credentialNote": "Existing my credentials are kept. Only the current workspace is affected.",
+      "description": "Remove this capability from the workspace and from the following {{count}} Agent(s). The Agents and their other capabilities remain available.",
+      "credentialNote": "Your existing credentials are kept. Only the current workspace is affected.",
       "unknownAgent": "Affected Agent",
-      "confirm": "Remove and disable {{count}} Agent(s)",
+      "confirm": "Remove capability",
       "toast": "{{name}} was removed from this workspace."
     },
     "import": {
