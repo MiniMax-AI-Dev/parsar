@@ -172,6 +172,8 @@ description and keep ownership on the side listed here.
 
 ### Agent CLI adapter contract
 
+- Claude Code streaming deltas and their per-block assistant copies must be
+  emitted once; preserve separate text blocks even when their content matches.
 - Every daemon-side agent adapter must use a shared process runner for CLI
   subprocesses. New adapters must not hand-roll separate `Start`, stdin,
   cancellation, timeout, and `Wait` loops.

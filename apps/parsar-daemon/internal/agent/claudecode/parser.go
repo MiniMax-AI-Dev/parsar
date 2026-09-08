@@ -215,6 +215,13 @@ func (t *translator) translateAssistant(line []byte) (translation, error) {
 
 	var envs []proto.Envelope
 	for index, raw := range msg.Message.Content {
+		partialIndex := index
+		// Claude's per-block assistant frames restart content indexes at zero.
+		if len(msg.Message.Content) == 1 && len(t.partialBlocks) == 1 {
+			for streamedIndex := range t.partialBlocks {
+				partialIndex = streamedIndex
+			}
+		}
 		var head struct {
 			Type string `json:"type"`
 		}
@@ -223,7 +230,7 @@ func (t *translator) translateAssistant(line []byte) (translation, error) {
 		}
 		switch head.Type {
 		case "text":
-			if t.partialBlocks[index] == "text" {
+			if t.partialBlocks[partialIndex] == "text" {
 				continue
 			}
 			var item struct {
@@ -241,7 +248,7 @@ func (t *translator) translateAssistant(line []byte) (translation, error) {
 			}
 			envs = append(envs, env)
 		case "thinking":
-			if t.partialBlocks[index] == "thinking" {
+			if t.partialBlocks[partialIndex] == "thinking" {
 				continue
 			}
 			var item struct {
