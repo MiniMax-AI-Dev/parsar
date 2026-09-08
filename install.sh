@@ -104,6 +104,22 @@ wait_for_health() {
   return 1
 }
 
+prepare_data_directory() {
+  local data_owner
+  local PARSAR_IMAGE_PULL_POLICY=never
+  export PARSAR_IMAGE_PULL_POLICY
+  data_owner="$(compose run -T --rm --no-deps --workdir / --entrypoint /bin/sh parsar-server \
+    -c 'printf "%s:%s" "$(id -u)" "$(id -g)"')"
+  [[ "$data_owner" =~ ^[0-9]+:[0-9]+$ ]] || die "could not determine the server image user"
+
+  # Only the one-off preparation runs as root; the server keeps its image user.
+  compose run -T --rm --no-deps --user 0:0 --workdir / --entrypoint /bin/sh parsar-server \
+    -c 'chown -Rh "$1" /var/lib/parsar' sh "$data_owner"
+  compose run -T --rm --no-deps --workdir / --entrypoint /bin/sh parsar-server \
+    -c 'test -w /var/lib/parsar && mkdir -p /var/lib/parsar/.parsar && test -w /var/lib/parsar/.parsar' \
+    || die "server data directory is not writable by its configured user"
+}
+
 home="${PARSAR_HOME:-$HOME/.parsar}"
 port="${PARSAR_LOCAL_PORT:-18080}"
 bind="${PARSAR_BIND_ADDR:-127.0.0.1}"
@@ -166,6 +182,8 @@ fi
 
 log "Pulling images"
 compose pull parsar-server parsar-runtime
+log "Preparing server data directory"
+prepare_data_directory
 log "Starting Parsar"
 compose up -d --remove-orphans
 
