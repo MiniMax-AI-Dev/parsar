@@ -859,6 +859,7 @@ type WorkspaceInvitation struct {
 	AcceptedAt  pgtype.Timestamptz `json:"accepted_at"`
 	RevokedAt   pgtype.Timestamptz `json:"revoked_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Name        string             `json:"name"`
 }
 
 // Workspace members and roles (with join-request state machine)

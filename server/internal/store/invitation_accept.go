@@ -17,6 +17,7 @@ var ErrInvitationSignInRequired = errors.New("sign in as the invited account bef
 type AcceptInvitationInput struct {
 	TokenHash    []byte
 	Email        string
+	Name         string
 	Role         string
 	WorkspaceID  string
 	PasswordHash string
@@ -60,9 +61,12 @@ func (s *Store) AcceptInvitation(ctx context.Context, input AcceptInvitationInpu
 	}
 
 	// Upsert user by email.
-	name := email
-	if at := strings.Index(email, "@"); at > 0 {
-		name = email[:at]
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		name = email
+		if at := strings.Index(email, "@"); at > 0 {
+			name = email[:at]
+		}
 	}
 	userRow, err := q.UpsertUserByEmail(ctx, sqlc.UpsertUserByEmailParams{
 		ID:    mustUUID(newID()),

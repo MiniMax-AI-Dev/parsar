@@ -100,7 +100,7 @@ func TestCreateInvitationUsesStableUUIDTokenAndConfiguredPublicURL(t *testing.T)
 	req := withTestUser(httptest.NewRequest(
 		http.MethodPost,
 		"/api/v1/workspaces/"+testWorkspaceID+"/invitations",
-		strings.NewReader(`{"email":"new@example.com","role":"member"}`),
+		strings.NewReader(`{"email":"new@example.com","name":"QA Employee","role":"member"}`),
 	))
 	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
@@ -124,6 +124,9 @@ func TestCreateInvitationUsesStableUUIDTokenAndConfiguredPublicURL(t *testing.T)
 	}
 	if !bytes.Equal(st.created.TokenHash, authinvite.TokenHash(token)) {
 		t.Fatal("stored token hash does not match generated token")
+	}
+	if st.created.Name != "QA Employee" {
+		t.Fatalf("invitation name = %q", st.created.Name)
 	}
 }
 
@@ -330,6 +333,7 @@ func TestAcceptInvitationUsesDatabaseFields(t *testing.T) {
 		invitation: store.InvitationRead{
 			WorkspaceID: testWorkspaceID,
 			Email:       "invitee@example.com",
+			Name:        "Database Employee",
 			Role:        "member",
 			ExpiresAt:   time.Now().UTC().Add(time.Hour),
 		},
@@ -347,6 +351,7 @@ func TestAcceptInvitationUsesDatabaseFields(t *testing.T) {
 
 	if st.accepted.WorkspaceID != st.invitation.WorkspaceID ||
 		st.accepted.Email != st.invitation.Email ||
+		st.accepted.Name != st.invitation.Name ||
 		st.accepted.Role != st.invitation.Role {
 		t.Fatalf("accept input = %#v, want database invitation fields", st.accepted)
 	}

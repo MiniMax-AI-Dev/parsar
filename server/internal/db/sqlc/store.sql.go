@@ -3099,8 +3099,8 @@ func (q *Queries) CreateWorkspaceConversation(ctx context.Context, arg CreateWor
 
 const createWorkspaceInvitation = `-- name: CreateWorkspaceInvitation :exec
 
-insert into workspace_invitations(id, token_hash, workspace_id, email, role, invited_by, expires_at, created_at)
-values ($1::uuid, $2::bytea, $3::uuid, $4, $5, $6::uuid, $7, $8)
+insert into workspace_invitations(id, token_hash, workspace_id, email, name, role, invited_by, expires_at, created_at)
+values ($1::uuid, $2::bytea, $3::uuid, $4, $5, $6, $7::uuid, $8, $9)
 `
 
 type CreateWorkspaceInvitationParams struct {
@@ -3108,6 +3108,7 @@ type CreateWorkspaceInvitationParams struct {
 	TokenHash   []byte             `json:"token_hash"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 	Email       string             `json:"email"`
+	Name        string             `json:"name"`
 	Role        string             `json:"role"`
 	InvitedBy   pgtype.UUID        `json:"invited_by"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
@@ -3123,6 +3124,7 @@ func (q *Queries) CreateWorkspaceInvitation(ctx context.Context, arg CreateWorks
 		arg.TokenHash,
 		arg.WorkspaceID,
 		arg.Email,
+		arg.Name,
 		arg.Role,
 		arg.InvitedBy,
 		arg.ExpiresAt,
@@ -6407,6 +6409,7 @@ select
   wi.id::text           as id,
   wi.workspace_id::text as workspace_id,
   wi.email,
+  wi.name,
   wi.role,
   wi.invited_by::text   as invited_by,
   wi.expires_at,
@@ -6423,6 +6426,7 @@ type GetWorkspaceInvitationByTokenHashRow struct {
 	ID            string             `json:"id"`
 	WorkspaceID   string             `json:"workspace_id"`
 	Email         string             `json:"email"`
+	Name          string             `json:"name"`
 	Role          string             `json:"role"`
 	InvitedBy     string             `json:"invited_by"`
 	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
@@ -6439,6 +6443,7 @@ func (q *Queries) GetWorkspaceInvitationByTokenHash(ctx context.Context, tokenHa
 		&i.ID,
 		&i.WorkspaceID,
 		&i.Email,
+		&i.Name,
 		&i.Role,
 		&i.InvitedBy,
 		&i.ExpiresAt,

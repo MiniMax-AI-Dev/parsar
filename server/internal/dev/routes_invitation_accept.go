@@ -26,7 +26,7 @@ type acceptInvitationResponse struct {
 // acceptInvitation consumes an invitation for a new or authenticated existing account.
 //
 // @Summary Accept a workspace invitation
-// @Description New accounts supply a password. Existing accounts must be signed in as the invited user; their password is never changed.
+// @Description New accounts supply a password and use the saved invitation name when provided. Existing accounts must be signed in as the invited user; their name and password are never changed.
 // @Tags invitations
 // @Accept json
 // @Produce json
@@ -78,6 +78,7 @@ func acceptInvitation(runtimeStore RuntimeStore, cfg *routerConfig) http.Handler
 		result, err := runtimeStore.AcceptInvitation(r.Context(), store.AcceptInvitationInput{
 			TokenHash:    authinvite.TokenHash(req.Token),
 			Email:        inv.Email,
+			Name:         inv.Name,
 			Role:         inv.Role,
 			WorkspaceID:  inv.WorkspaceID,
 			PasswordHash: hash,
