@@ -19,7 +19,7 @@ import { InlineNotice } from "./notices"
 import { UninstallMarketplaceDialog } from "./UninstallMarketplaceDialog"
 
 /** agent · version · open */
-const AGENT_COLUMNS = [col.title(), col.id(120), col.icon()]
+const AGENT_COLUMNS = [col.title(0), col.id(64), col.icon()]
 
 /**
  * A capability installed from another workspace, read in the rail beside the
@@ -126,6 +126,7 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
                 {agents.map((agent) => {
                   const agentID = agent.agent_id ?? agent.id
                   const name = agent.name ?? agent.agent_name ?? "—"
+                  const version = `v${agent.version ?? capability.pinned_version ?? "—"}`
                   const openAgent = () => agentID && navigateAdmin("agents", { id: agentID, tab: "config" })
                   const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -137,9 +138,9 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
                     <LedgerRow key={agentID ?? name} onClick={openAgent} onKeyDown={onKeyDown}>
                       <span className="flex min-w-0 items-center gap-1.5">
                         <InitialTile name={name} />
-                        <span className="truncate font-medium">{name}</span>
+                        <span className="truncate font-medium" title={name}>{name}</span>
                       </span>
-                      <span className="truncate font-mono text-xs text-fg">v{agent.version ?? capability.pinned_version ?? "—"}</span>
+                      <span className="truncate font-mono text-xs text-fg" title={version}>{version}</span>
                       <ArrowUpRight className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
                     </LedgerRow>
                   )
