@@ -156,6 +156,9 @@ description and keep ownership on the side listed here.
 
 - The server owns auth, workspaces, agent records, runtime bindings, run
   records, audit/usage persistence, and upstream engine session ids.
+- Successful explicit Agent capability enable, upgrade, removal, and built-in
+  toggle requests emit Agent-targeted audit events with the authenticated actor
+  and capability identifiers. Never include configuration or credential values.
 - `parsar-daemon` owns CLI discovery, process spawning, CLI-specific env,
   cwd selection inside its host/container, permission prompts, and translating
   CLI streams into Parsar daemon protocol frames.
