@@ -79,6 +79,7 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
 
   const source = marketplaceSourceName(capability)
   const deprecated = !!capability.deprecated_at
+  const unpublished = capability.visibility === "workspace"
   const latest = capability.latest_version ?? capability.latest_published_version
   const agentCount = agents.length || capability.enabled_agent_count
 
@@ -98,19 +99,21 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
               deprecation is one word here — the banner below it already gives
               the advice the longer badge was repeating. */}
           {deprecated && <Badge variant="neutral" dot>{t("capabilities.deprecated.badgeSource")}</Badge>}
+          {unpublished && <Badge variant="neutral" dot>{t("capabilities.unpublished.badge")}</Badge>}
         </>
       }
       footer={<Button variant="outline" onClick={() => setUninstallOpen(true)}>{t("capabilities.uninstall.action")}</Button>}
     >
       <>
         {deprecated && <InlineNotice tone="warning" className="mb-4">{t("capabilities.deprecated.bannerTarget")}</InlineNotice>}
+        {unpublished && <InlineNotice tone="warning" className="mb-4">{t("capabilities.unpublished.bannerTarget")}</InlineNotice>}
         {capability.description && <p className="mb-4 text-sm text-fg">{capability.description}</p>}
 
         <RailSection title={t("capabilities.marketplaceDetail.source.title")}>
           <PropertyList>
             <Property label={t("capabilities.marketplaceDetail.source.workspace")}>{source || t("capabilities.none")}</Property>
             <Property label={t("capabilities.marketplaceDetail.source.pinnedVersion")} mono>{capability.pinned_version ? `v${capability.pinned_version}` : t("capabilities.none")}</Property>
-            <Property label={t("capabilities.marketplaceDetail.source.latestVersion")} mono>{latest ? `v${latest}` : t("capabilities.none")}</Property>
+            {!unpublished && <Property label={t("capabilities.marketplaceDetail.source.latestVersion")} mono>{latest ? `v${latest}` : t("capabilities.none")}</Property>}
             <Property label={t("capabilities.table.credentials")}>{requiredCredentialsLabel(capability.required_credentials, i18n.language, t("capabilities.credentials.none"))}</Property>
           </PropertyList>
         </RailSection>

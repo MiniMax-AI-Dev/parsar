@@ -873,6 +873,10 @@
       "badgeSource": "已废弃",
       "bannerTarget": "此能力已被来源工作区标记废弃，建议迁移到其它能力。本工作区已装的 Agent 仍可使用锁定版本，但无法升级到新版本。"
     },
+    "unpublished": {
+      "badge": "已下架",
+      "bannerTarget": "来源工作区已取消发布此能力。已有 Agent 绑定仍保留，可查看使用者或从本工作区卸载。"
+    },
     "marketStatus": {
       "title": "市场状态",
       "published": "已发布到市场",

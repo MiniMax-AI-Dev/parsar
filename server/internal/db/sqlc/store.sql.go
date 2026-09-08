@@ -10044,6 +10044,7 @@ select distinct
   c.name,
   c.description,
   c.type,
+  c.visibility,
   cv.required_credentials,
   c.workspace_id::text as source_workspace_id,
   src_ws.name as source_workspace_name,
@@ -10069,12 +10070,12 @@ join lateral (
   select id, version, created_at
   from capability_version
   where capability_id = c.id
+    and (c.visibility = 'public' or id = ac.capability_version_id)
   order by created_at desc, version desc
   limit 1
 ) latest on true
 where a.workspace_id = $1::uuid
   and c.workspace_id != $1::uuid
-  and c.visibility = 'public'
   and c.deleted_at is null
 order by c.name asc, cv.version asc
 `
@@ -10084,6 +10085,7 @@ type ListWorkspaceMarketplaceInstallsRow struct {
 	Name                   string             `json:"name"`
 	Description            string             `json:"description"`
 	Type                   string             `json:"type"`
+	Visibility             string             `json:"visibility"`
 	RequiredCredentials    []byte             `json:"required_credentials"`
 	SourceWorkspaceID      string             `json:"source_workspace_id"`
 	SourceWorkspaceName    string             `json:"source_workspace_name"`
@@ -10110,6 +10112,7 @@ func (q *Queries) ListWorkspaceMarketplaceInstalls(ctx context.Context, targetWo
 			&i.Name,
 			&i.Description,
 			&i.Type,
+			&i.Visibility,
 			&i.RequiredCredentials,
 			&i.SourceWorkspaceID,
 			&i.SourceWorkspaceName,

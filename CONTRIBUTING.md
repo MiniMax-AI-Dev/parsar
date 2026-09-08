@@ -154,6 +154,10 @@ description and keep ownership on the side listed here.
 
 ### Server versus daemon ownership
 
+- Cross-workspace installed capabilities remain visible and removable after
+  unpublishing. Their installation metadata reports source visibility and only
+  bound versions while private; marketplace discovery and new installs still
+  require a published source.
 - Agent capability upgrades accept private capabilities from the Agent's own
   workspace; cross-workspace upgrades still require a public, available source.
 - The server owns auth, workspaces, agent records, runtime bindings, run

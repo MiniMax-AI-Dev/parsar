@@ -116,7 +116,7 @@ const TYPE_FILTERS: { value: CapabilityTypeFilter; label: string }[] = [
 ]
 
 /** name (+type, +description) · version · source · enabled agents · credentials · updated · actions */
-const LEDGER_COLUMNS = [col.title(), col.id(96, 0.4), col.meta(104), col.num(96), col.meta(120), col.age(80), col.actions(2)]
+const LEDGER_COLUMNS = [col.title(280), col.id(96, 0.4), col.meta(104), col.num(96), col.meta(120), col.age(80), col.actions(2)]
 
 export function CapabilitiesPage() {
   const { t, i18n } = useTranslation("admin")
@@ -308,7 +308,9 @@ export function CapabilitiesPage() {
         // not missing, it is redundant with the group header — and a dash in
         // this ledger means "unknown".
         source={fromMarketplace ? marketplaceSourceName(marketCap) : ""}
-        deprecatedLabel={fromMarketplace ? t("capabilities.deprecated.badgeTarget") : t("capabilities.deprecated.badgeSource")}
+        availabilityLabel={fromMarketplace && cap.visibility === "workspace"
+          ? t("capabilities.unpublished.badge")
+          : cap.deprecated_at ? t(fromMarketplace ? "capabilities.deprecated.badgeTarget" : "capabilities.deprecated.badgeSource") : ""}
         enabledCount={enabledCount}
         credentials={requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.credentials.none"))}
         age={fmtAgo(cap.updated_at ?? cap.created_at)}
@@ -584,7 +586,7 @@ function CapabilityRow({
   capability,
   version,
   source,
-  deprecatedLabel,
+  availabilityLabel,
   enabledCount,
   credentials,
   age,
@@ -595,7 +597,7 @@ function CapabilityRow({
   capability: Capability
   version?: string
   source: string
-  deprecatedLabel: string
+  availabilityLabel: string
   enabledCount: number
   credentials: string
   age: string
@@ -613,11 +615,11 @@ function CapabilityRow({
   return (
     <LedgerRow selected={selected} onClick={onOpen} onKeyDown={onKeyDown}>
       <span className="flex min-w-0 items-center gap-2">
-        <span className="shrink-0 truncate font-medium">{capability.name}</span>
+        <span className="min-w-0 truncate font-medium" title={capability.name}>{capability.name}</span>
         <CapabilityTypeBadge type={capability.type} />
-        {capability.deprecated_at && <Badge variant="neutral" dot>{deprecatedLabel}</Badge>}
+        {availabilityLabel && <Badge variant="neutral" className="shrink-0" dot>{availabilityLabel}</Badge>}
         {capability.description && (
-          <span className="min-w-0 truncate text-xs text-fg-muted">· {capability.description}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">· {capability.description}</span>
         )}
       </span>
       <span className={cnMono(!!version)}>{version ?? "—"}</span>
