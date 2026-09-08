@@ -642,8 +642,8 @@ Go toolchain; do not use `@latest` for that build-time tool.
   the reference style.
 - Feishu WebSocket SDK and lifecycle logs must redact connection URL query
   strings before writing them, without changing the URLs used to connect.
-  Omit the URL-bearing field's tail after `?`, including malformed query text;
-  preserve separate SDK correlation fields and structured route context.
+  Omit each field's tail after its first `?`, without requiring a valid URL
+  prefix; preserve separate SDK correlation fields and structured route context.
 - Use `internal/obs/log` for all logging — never `slog.Default()`,
   `log.Println`, `fmt.Println`, or a hand-rolled `*slog.Logger`. The
   linter (`forbidigo`) rejects direct `slog.Default()` outside

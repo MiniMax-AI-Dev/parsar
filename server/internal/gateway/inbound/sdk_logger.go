@@ -4,16 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"strings"
 )
 
-// SDK fields may embed malformed URLs. Keep the operation and URL path, but
-// omit the entire field tail after the query rather than guess its delimiter.
-var feishuLogURLQuery = regexp.MustCompile(`(?is)(\b(?:https?|wss?)://[^?]*\?).*`)
-
+// SDK fields may embed malformed URLs. Do not rely on parsing their prefix.
 func redactFeishuConnectionLog(message string) string {
-	return feishuLogURLQuery.ReplaceAllString(message, "${1}[REDACTED]")
+	if prefix, _, found := strings.Cut(message, "?"); found {
+		return prefix + "?[REDACTED]"
+	}
+	return message
 }
 
 type feishuSDKLogger struct {

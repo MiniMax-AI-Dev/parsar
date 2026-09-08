@@ -49,6 +49,19 @@ func TestFeishuConnectionLogsOmitAuthenticationQuery(t *testing.T) {
 	if got := sink.messages[0]; got != "connected to wss://frontier.example/ws/v2?[REDACTED] [conn_id=connection-1]" {
 		t.Fatalf("SDK correlation field changed: %s", got)
 	}
+	for _, address := range []string{
+		"\nwss://frontier.example/ws/v2?access-key=synthetic-access&ticket=synthetic-ticket",
+		"wss:/frontier.example/%zz?access-key=synthetic-access&ticket=synthetic-ticket",
+	} {
+		_, err := url.Parse(address)
+		if err == nil {
+			t.Fatal("expected malformed connection URL")
+		}
+		message := redactFeishuConnectionLog(err.Error())
+		if strings.Contains(message, "synthetic-") || !strings.Contains(message, "[REDACTED]") {
+			t.Fatalf("malformed connection credentials leaked: %s", message)
+		}
+	}
 }
 
 func TestFeishuSDKLoggerPreservesDiagnosticsAndLevels(t *testing.T) {
