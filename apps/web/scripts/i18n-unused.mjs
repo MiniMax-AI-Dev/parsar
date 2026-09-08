@@ -27,8 +27,12 @@ const ROOT = path.resolve(import.meta.dirname, "..")
 const SRC = path.join(ROOT, "src")
 const LOCALES = path.join(SRC, "i18n/locales")
 
-/** Anything shaped like a translate call. Aliases are declared as `t: tc`. */
-const T_NAMES = /^(t|tc|td|tCommon|tAdmin|translate|translateDetail|i18nT)$/
+/**
+ * Names that mean "translate". The fixed ones, plus every alias the tree
+ * actually declares — `const { t: ta } = useTranslation("admin")` renames it,
+ * and a hand-maintained list silently goes stale the next time someone does.
+ */
+const T_NAMES = new Set(["t", "i18nT", "translate", "translateDetail"])
 
 function walkFiles(dir, out = []) {
   for (const entry of readdirSync(dir)) {
@@ -56,7 +60,10 @@ function collectFromArg(node) {
     literals.add(node.text)
   } else if (ts.isTemplateExpression(node)) {
     const head = node.head.text.replace(/\.$/, "")
+    // `t(`${section}.title`)` has nothing static to anchor on; the tool cannot
+    // see which keys it reaches, so it says so instead of staying quiet.
     if (head) prefixes.add(head)
+    else emptyHeads.push(node.getText().slice(0, 60))
   } else if (ts.isConditionalExpression(node)) {
     collectFromArg(node.whenTrue)
     collectFromArg(node.whenFalse)
@@ -72,8 +79,36 @@ function collectFromArg(node) {
   }
 }
 
-for (const file of walkFiles(SRC)) {
-  const sf = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true)
+const sources = walkFiles(SRC).map((file) => ({
+  file,
+  sf: ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true),
+}))
+
+// Pass one: whatever `useTranslation()` was destructured into.
+for (const { sf } of sources) {
+  const visit = (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      node.initializer &&
+      ts.isCallExpression(node.initializer) &&
+      ts.isIdentifier(node.initializer.expression) &&
+      node.initializer.expression.text === "useTranslation" &&
+      ts.isObjectBindingPattern(node.name)
+    ) {
+      for (const el of node.name.elements) {
+        const from = el.propertyName && ts.isIdentifier(el.propertyName) ? el.propertyName.text : null
+        if ((from ?? (ts.isIdentifier(el.name) ? el.name.text : "")) === "t" && ts.isIdentifier(el.name)) {
+          T_NAMES.add(el.name.text)
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+}
+
+const emptyHeads = []
+for (const { file, sf } of sources) {
   const visit = (node) => {
     if (ts.isCallExpression(node) && node.arguments.length > 0) {
       const callee = node.expression
@@ -82,7 +117,7 @@ for (const file of walkFiles(SRC)) {
         : ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.name)
           ? callee.name.text
           : ""
-      if (T_NAMES.test(name)) collectFromArg(node.arguments[0])
+      if (T_NAMES.has(name)) collectFromArg(node.arguments[0])
     }
     // The safety net: any dotted literal at all, wherever it sits.
     if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text.includes(".")) {
@@ -106,6 +141,10 @@ for (const l of allLiterals) if (l.endsWith(".")) prefixes.add(l.slice(0, -1))
 
 function isReached(key) {
   if (allLiterals.has(key)) return true
+  // i18next resolves `t("x", { count })` to `x_one` / `x_other`; the base key
+  // is what appears in source, so a plural set stands or falls with it.
+  const base = key.replace(/_(zero|one|two|few|many|other|male|female)$/, "")
+  if (base !== key && allLiterals.has(base)) return true
   for (const p of prefixes) if (key === p || key.startsWith(p + ".")) return true
   // A parent path being referenced (returnObjects, or a whole subtree passed on)
   // keeps its children.
@@ -113,10 +152,43 @@ function isReached(key) {
   return false
 }
 
+/**
+ * The other half of the method, and the half that used to live in someone's
+ * shell history: read the whole repo as raw text and keep any candidate whose
+ * key appears anywhere at all — a Go constant, a test assertion, a doc, the
+ * compiled bundle. A static reader of one directory is not evidence on its own.
+ */
+const REPO = path.resolve(ROOT, "../..")
+const SCAN_EXT = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs", ".go", ".json", ".md", ".py", ".yaml", ".yml", ".sh"])
+function repoText() {
+  const chunks = []
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name === ".git") continue
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else if (SCAN_EXT.has(path.extname(entry.name)) && !full.includes(path.join("i18n", "locales"))) {
+        try { chunks.push(readFileSync(full, "utf8")) } catch { /* unreadable, skip */ }
+      }
+    }
+  }
+  walk(REPO)
+  return chunks.join("\n")
+}
+const corpus = repoText()
+
 const report = {}
-for (const ns of readdirSync(path.join(LOCALES, "zh-CN")).map((f) => f.replace(/\.json$/, ""))) {
-  const keys = flatten(JSON.parse(readFileSync(path.join(LOCALES, "zh-CN", `${ns}.json`), "utf8")))
-  report[ns] = [...keys].filter((k) => !isReached(k)).sort()
+const namespaces = new Set([
+  ...readdirSync(path.join(LOCALES, "zh-CN")),
+  ...readdirSync(path.join(LOCALES, "en-US")),
+].map((f) => f.replace(/\.json$/, "")))
+for (const ns of namespaces) {
+  const keys = new Set()
+  for (const loc of ["zh-CN", "en-US"]) {
+    const f = path.join(LOCALES, loc, `${ns}.json`)
+    try { flatten(JSON.parse(readFileSync(f, "utf8")), "", keys) } catch { /* one-sided namespace */ }
+  }
+  report[ns] = [...keys].filter((k) => !isReached(k) && !corpus.includes(k)).sort()
 }
 
 if (process.argv.includes("--json")) {
@@ -127,4 +199,11 @@ if (process.argv.includes("--json")) {
     console.log(`\n${ns}: ${dead.length} of ${total} keys unreachable`)
     for (const k of dead) console.log(`  ${k}`)
   }
+  if (emptyHeads.length) {
+    console.log(`\n${emptyHeads.length} template key(s) with no static head — this tool cannot see what they reach:`)
+    for (const e of [...new Set(emptyHeads)]) console.log(`  ${e}`)
+  }
+  console.log("\nA key here is unreachable by static reading AND absent from the whole repo as text.")
+  console.log("It is still not proof: run .impeccable/review/probe-missing-keys.mjs after deleting,")
+  console.log("which renders every surface in both locales and looks for raw keys on screen.")
 }

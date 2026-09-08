@@ -546,7 +546,7 @@ Where it applies, selection spends no width. `SelectableStatus` puts the checkbo
 
 ### Compatibility note
 - `adaptLegacyTemplate` in `ledger.tsx` accepts a raw grid string and adapts it to the flexible model. Every page is on `col.*`; the adapter exists so an outside caller does not break. Do not write a new string template.
-- Some i18n strings survive for compatibility and are never rendered: every page `description`, `audit.footer.shownCount`, and login `noAccountHint`. `PageHeader` accepts `description` and drops it. Do not wire them back into the UI.
+- No i18n string survives that nothing renders. `PageHeader` still accepts a `description` and drops it — the prop is kept for call-site compatibility — but the strings behind it are gone, along with 610 others no source file could reach. `npm run i18n:unused` reports any that grow back: it parses with the TypeScript compiler (a grep cannot see a key built in a ternary, an alias or a template), then requires the key to be absent from the whole repo as text. Its output is still not proof — run `.impeccable/review/probe-missing-keys.mjs`, which renders every surface in both locales and looks for a raw key on screen, because that is the only thing that actually demonstrates it.
 
 ## Elevation & Depth
 
@@ -745,5 +745,5 @@ Short, springy, rare. Every transition is non-linear; nothing is `linear` or def
 - **Don't** load Google Fonts for Latin or CJK; Noto Sans SC stays a last-resort fallback only.
 - **Don't** put colour in text to signal state; tint a background or draw an icon instead.
 - **Don't** use linear easing for anything but the running spinner, or declare a keyframe outside `src/style.css`.
-- **Don't** render the compatibility strings (`description`, `audit.footer.shownCount`, login `noAccountHint`).
+- **Don't** leave a locale string that nothing renders; `npm run i18n:unused` is how you find them.
 - **Don't** reach past the semantic tokens (`fg-*`, `surface-*`, `line-*`, `accent`, `status-*`, `app-*`) to the raw palette; lint will fail the build.
