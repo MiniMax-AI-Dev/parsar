@@ -33,13 +33,13 @@ func configuredModelEndpointBaseURL(mr store.ModelRuntime, endpointType string) 
 				continue
 			}
 			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-				return inferModelEndpointBaseURL(want, s), true
+				return strings.TrimSpace(s), true
 			}
 		}
 	case map[string]string:
 		for k, s := range raw {
 			if normalizeModelEndpointType(k) == want && strings.TrimSpace(s) != "" {
-				return inferModelEndpointBaseURL(want, s), true
+				return strings.TrimSpace(s), true
 			}
 		}
 	}

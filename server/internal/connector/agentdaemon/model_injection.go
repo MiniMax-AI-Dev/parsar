@@ -749,7 +749,7 @@ func modelConfigEndpointTypes(config map[string]any) []string {
 
 func modelEndpointBaseURL(mr store.ModelRuntime, endpointType string) string {
 	if base, ok := configuredModelEndpointBaseURL(mr, endpointType); ok {
-		return base
+		return inferModelEndpointBaseURL(normalizeModelEndpointType(endpointType), base)
 	}
 	return inferModelEndpointBaseURL(normalizeModelEndpointType(endpointType), mr.BaseURL)
 }
