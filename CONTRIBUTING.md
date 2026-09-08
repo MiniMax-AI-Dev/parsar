@@ -281,6 +281,9 @@ description and keep ownership on the side listed here.
   protocol request and defer the engine response until
   `SubmitPermission` / `SubmitPromptForUserChoice` arrives. Adapters must not
   silently approve, deny, or synthesize empty answers as a fallback.
+- Codex MCP empty-form confirmations use the same permission lifecycle and
+  reply with MCP action/content fields. Decisions grant only that call; structured
+  forms and URL elicitations remain unsupported rather than implicitly approved.
 - Codex agents that may call `request_user_input` use `config.mode=plan`.
   Prompt wording cannot unlock the tool in default mode; the daemon must pass
   the configured mode through app-server `turn/start.collaborationMode`.
