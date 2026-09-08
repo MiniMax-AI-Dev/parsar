@@ -14,6 +14,9 @@ import {
   Plug,
   Users,
   Settings,
+  ChartBar,
+  ScrollText,
+  KeyRound,
   type LucideIcon,
 } from "lucide-react"
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher"
@@ -96,18 +99,28 @@ function NavRow({ item, activeMenu, onNavigate }: {
 /**
  * The Agent is the product's first-class object, so it stands alone above the
  * groups rather than sitting as a sibling of the things it is assembled from.
+ *
+ * "Settings" is a place, not an object, and it used to hide three real ones
+ * behind a tab strip in the topbar's action slot: a credential ledger, a usage
+ * report and an audit log, none of which is a setting. Each stands where it
+ * belongs now — the two records with the other records, credentials with the
+ * other things an agent is given — and 设置 keeps only the workspace's own
+ * attributes. One fewer level of navigation, and the action slot is actions
+ * again.
  */
 const primaryItem: MenuItem = { id: "agents", itemKey: "agents", icon: Bot }
 
 const menuGroups: MenuGroup[] = [
   {
-    // What agents are doing right now.
+    // What agents are doing right now, and the record of what they did.
     groupKey: "activityGroup",
     items: [
       { id: "conversations", itemKey: "conversations", icon: MessageSquare },
       { id: "approvals", itemKey: "approvals", icon: Inbox },
       { id: "runs", itemKey: "runs", icon: Play },
       { id: "scheduled", itemKey: "scheduled", icon: CalendarClock },
+      { id: "usage", itemKey: "usage", icon: ChartBar },
+      { id: "audit", itemKey: "audit", icon: ScrollText },
     ],
   },
   {
@@ -119,6 +132,7 @@ const menuGroups: MenuGroup[] = [
       { id: "capabilities", itemKey: "capabilities", icon: Wrench },
       { id: "runtime", itemKey: "runtime", icon: Cpu },
       { id: "connections", itemKey: "connections", icon: Plug },
+      { id: "secrets", itemKey: "secrets", icon: KeyRound },
     ],
   },
   {

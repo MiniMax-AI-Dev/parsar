@@ -70,7 +70,7 @@ export function RuntimeCredentialCard({ workspaceID, isAdmin, className }: Runti
   return (
     <section className={className} data-testid="runtime-credential-card">
       <div className="flex h-7 items-center justify-between gap-2">
-        <h2 className="text-xs font-medium text-fg">{t("runtime.credential.title")}</h2>
+        <h2 className="text-lg font-medium text-fg">{t("runtime.credential.title")}</h2>
         {isAdmin && (
           <div className="flex items-center gap-1">
             {hasCredential ? (

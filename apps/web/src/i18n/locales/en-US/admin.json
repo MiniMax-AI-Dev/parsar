@@ -404,7 +404,7 @@
       "caretHint": "Generating…",
       "thinking": "Thinking…",
       "ready": "Ready",
-      "error": "Streaming interrupted: {{error}}",
+      "error": "Streaming interrupted",
       "contextRejected": "The upstream model rejected the current conversation context. The task has stopped and is not still running. Try again later; if it happens again, start a new conversation and restate the task.",
       "retry": "Retry",
       "queued": "Queued",
@@ -1502,12 +1502,9 @@
         "emptyAvailable": "No more workspace capabilities are available.",
         "credentialsLoadError": "Could not load my credential status; actions remain visible and the backend will still enforce permissions.",
         "credential": {
-          "none": "No credential required",
-          "present": "Requires {{kind}} · ✓ you have set it ({{name}})",
-          "missing": "Requires {{kind}} · ✗ not set — calls will fail",
-          "missingBadge": "Credential missing",
           "addCta": "Add credential",
-          "defaultName": "default"
+          "defaultName": "default",
+          "missingShort": "Requires {{kind}}, not set"
         },
         "bindings": {
           "versionDeleted": {
@@ -1516,7 +1513,6 @@
           }
         },
         "compatibility": {
-          "badge": "Not supported",
           "unsupported": "{{engine}} does not support {{type}} capabilities. Supported engines: {{engines}}.",
           "types": {
             "mcp": "MCP",
@@ -1530,7 +1526,9 @@
           "badge": "Built-in",
           "on": "On",
           "off": "Off",
-          "toggleError": "Toggle failed"
+          "toggleError": "Toggle failed",
+          "enable": "Enable",
+          "disable": "Disable"
         },
         "actions": {
           "enable": "+ Enable",
@@ -1540,7 +1538,7 @@
           "remove": "Remove",
           "removeConfirm": "Remove",
           "cancel": "Cancel",
-          "upgrade": "Upgrade to new version"
+          "upgrade": "Upgrade"
         },
         "enableDialog": {
           "title": "Enable \"{{cap}}\" on \"{{agent}}\"",
@@ -1588,11 +1586,14 @@
           "description": "Backend returned an error."
         },
         "marketplace": {
-          "badge": "From market",
-          "source": "From {{source}} · current v{{version}}",
           "deprecatedBanner": "The source workspace marked this capability deprecated. This Agent can keep using pinned v{{version}}, but cannot upgrade.",
-          "upgradeAvailable": "The source workspace published v{{version}}.",
-          "upgradeBlocked": "Source capability is deprecated; upgrade is unavailable."
+          "upgradeBlocked": "Source capability is deprecated; upgrade is unavailable.",
+          "upgradeShort": "New version v{{version}}"
+        },
+        "state": {
+          "ready": "Ready",
+          "attention": "Update available",
+          "blocked": "Not usable"
         }
       },
       "runs": {
@@ -2558,7 +2559,7 @@
     "sourceSharedNew": "Create a new shared secret (paste once)",
     "createNewShared": "+ Create a new shared secret",
     "personalDisabledHint": "Public agents cannot use personal credentials (callers may not be platform users)",
-    "personalYouHaveIt": "You have configured this ✓ (other callers must configure their own)",
+    "personalYouHaveIt": "You have configured this (other callers must configure their own)",
     "personalYouMissing": "You haven't configured this yet — calls will be disabled",
     "sharedNoneAvailable": "No shared secrets available in this workspace",
     "sharedPlaceholder": "Pick a shared secret…",
@@ -2654,14 +2655,19 @@
       "table": {
         "selectAll": "Select all runtime instances",
         "selectOne": "Select runtime instance {{id}}",
-        "rowLabel": "Open runtime detail for agent {{agent}}",
+        "rowLabel": "Instance {{id}}",
         "instance": "Instance",
         "agent": "Agent",
         "image": "Image",
         "status": "Status",
         "lastActive": "Last active",
         "createdAt": "Created",
-        "actions": "Actions"
+        "actions": "Actions",
+        "state": {
+          "live": "Running",
+          "transient": "Starting",
+          "terminal": "Ended"
+        }
       },
       "actions": {
         "refresh": "Refresh",

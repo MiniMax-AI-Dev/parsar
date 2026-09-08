@@ -171,23 +171,41 @@ export function RailLayout({ children, rail }: { children: ReactNode; rail?: Rea
   )
 }
 
-/** Section heading inside a rail: 12px, 500, ink, optional muted count. */
+/**
+ * Section heading inside a rail: 14px, 500, ink, an optional muted count and
+ * one right-aligned action.
+ *
+ * Fourteen is the rail's own step, not the page's sixteen: in a 384px panel
+ * the head introduces a property list rather than a page, so it sits one tick
+ * over the 13px values and two over the 12px labels — enough to separate
+ * "Identity" from "Internal ID" at a glance, which twelve was not, since at
+ * twelve the head was the same size as every label beneath it and differed
+ * only in weight. One head for the whole rail — `DetailSection` is this
+ * component, so a rail cannot end up with two sizes of the same thing.
+ */
 export function RailSection({
   title,
   meta,
+  action,
   children,
   className,
 }: {
   title: ReactNode
   meta?: ReactNode
+  action?: ReactNode
   children: ReactNode
   className?: string
 }) {
   return (
     <section className={cn("mt-5 first:mt-0", className)}>
-      <h3 className="mb-0.5 flex items-center justify-between text-xs font-medium text-fg">
-        <span>{title}</span>
-        {meta && <span className="font-normal tabular-nums text-fg-muted">{meta}</span>}
+      <h3 className="mb-1 flex min-h-5 items-center justify-between gap-2 text-base font-medium text-fg">
+        <span className="flex items-center gap-1.5">
+          <span>{title}</span>
+          {meta !== undefined && meta !== null && (
+            <span className="font-normal tabular-nums text-fg-muted">{meta}</span>
+          )}
+        </span>
+        {action}
       </h3>
       {children}
     </section>

@@ -41,6 +41,7 @@ import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useRelativeTime } from "../../lib/relative-time"
 import { useNow } from "../../lib/use-now"
 import { useWorkspaceId } from "../../lib/workspace"
+import { SectionHead } from "../../components/ui/section"
 
 type CloudState = "loading" | "notConfigured" | "ready" | "error" | "unknown"
 type SortKey = "last_active" | "created_at" | "agent"
@@ -309,18 +310,6 @@ function CloudSandboxPanel({
   )
 }
 
-/** 12px/500 section head with an optional control cluster on the right. */
-function SectionHead({ title, meta, children }: { title: string; meta?: number; children?: React.ReactNode }) {
-  return (
-    <div className="mt-6 flex min-h-7 items-center justify-between gap-3">
-      <h2 className="flex items-baseline gap-1.5 text-xs font-medium text-fg">
-        <span>{title}</span>
-        {meta !== undefined && <span className="font-normal tabular-nums text-fg-muted">{meta}</span>}
-      </h2>
-      {children && <div className="flex items-center gap-2">{children}</div>}
-    </div>
-  )
-}
 
 function LedgerSkeleton({ rows = 3 }: { rows?: number }) {
   return (
@@ -395,9 +384,12 @@ function CloudInstancesPanel({
 
   return (
     <section>
-      <SectionHead title={title} meta={loading || error ? undefined : bindings.length}>
-        {!loading && !error && bindings.length > 0 && (
-          <>
+      <SectionHead
+        title={title}
+        meta={loading || error ? undefined : bindings.length}
+        className="mt-6"
+        action={!loading && !error && bindings.length > 0 && (
+          <div className="flex items-center gap-2">
             <Select
               value={sortKey}
               onChange={(e) => onSortChange(e.target.value as SortKey)}
@@ -420,9 +412,9 @@ function CloudInstancesPanel({
               <Skull strokeWidth={1.5} aria-hidden="true" />
               {t("runtime.list.actions.bulkKill", { count: selected.size })}
             </Button>
-          </>
+          </div>
         )}
-      </SectionHead>
+      />
 
       {bulkErrors.length > 0 && (
         <div className="mt-2 text-sm" role="alert">
@@ -491,7 +483,10 @@ function CloudInstancesPanel({
               const isTesting = testingId === b.binding_id
               const canTest = isAdmin && b.status_kind !== "terminal" && Boolean(b.agent_id)
               const showResult = testResult?.bindingId === b.binding_id
-              const rowLabel = t("runtime.list.table.rowLabel", { agent: b.agent_id ?? b.sandbox_id })
+              // Names the row. It used to say "open runtime detail", which a
+              // screen reader announced as an action on a row that has no
+              // click handler and no detail view behind it.
+              const rowLabel = t("runtime.list.table.rowLabel", { id: b.sandbox_id })
               return (
                 <React.Fragment key={b.binding_id}>
                   <LedgerRow
@@ -501,7 +496,6 @@ function CloudInstancesPanel({
                   >
                     <SelectableStatus
                       status={SANDBOX_STATUS[b.status_kind]}
-                      title={b.status}
                       selected={selected.has(b.binding_id)}
                       selecting={selected.size > 0}
                       onSelectedChange={() => onToggleOne(b.binding_id)}
@@ -509,7 +503,12 @@ function CloudInstancesPanel({
                     />
                     <span className="truncate font-mono text-xs text-fg" title={b.sandbox_id}>{b.sandbox_id}</span>
                     <LedgerId>{b.agent_id ?? "—"}</LedgerId>
-                    <span className="truncate">{b.status}</span>
+                    {/* The state in the reader's language. This column used to
+                        print `b.status` — the server's own granular string
+                        (`killed_by_user`) — untranslated, next to fully
+                        translated neighbours, and the glyph repeated it as a
+                        tooltip. The exact server word is on the row now. */}
+                    <span className="truncate" title={b.status}>{t(`runtime.list.table.state.${b.status_kind}`)}</span>
                     <span className="truncate text-xs text-fg-muted" title={b.template_id}>{b.template_id}</span>
                     <span className="truncate text-right text-xs text-fg-muted" title={b.last_active_at}>{fmtAgo(b.last_active_at)}</span>
                     <span className="truncate text-right text-xs text-fg-muted" title={b.created_at}>{fmtAgo(b.created_at)}</span>

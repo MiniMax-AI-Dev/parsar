@@ -30,6 +30,7 @@ import { findSandboxRuntimeForAgent, isSandboxPairingExpired } from "../../lib/s
 import { useNow } from "../../lib/use-now"
 import { useRelativeTime } from "../../lib/relative-time"
 import { SandboxPreparingNotice, SandboxStartupTimedOutNotice } from "./SandboxProvisioningNotice"
+import { RailSection } from "../ui/detail-rail"
 
 const STATUS_FOR_KIND: Record<SandboxStatusKind, StatusKind> = {
   live: "completed",
@@ -47,13 +48,9 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <section>
-      <div className="flex h-7 items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-fg">{title}</h3>
-        {action}
-      </div>
+    <RailSection title={title} action={action}>
       {children}
-    </section>
+    </RailSection>
   )
 }
 

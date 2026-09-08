@@ -205,7 +205,6 @@ function MarketplaceRow({ capability, language, canManage, selected, onOpen, onI
   const { t } = useTranslation("admin")
   const source = marketplaceSourceName(capability)
   const count = capability.install_count ?? capability.installed_workspace_count ?? 0
-  const agentCount = capability.installed_agent_count ?? capability.enabled_agent_count ?? capability.install_count ?? 0
   return (
     <LedgerRow selected={selected} onClick={onOpen} onKeyDown={rowKeyHandler(onOpen)}>
       <span className="flex min-w-0 items-center gap-2">
@@ -232,9 +231,14 @@ function MarketplaceRow({ capability, language, canManage, selected, onOpen, onI
               {canManage && <ActionIconButton icon={Trash2} tone="danger" label={t("capabilities.rowActions.delete")} onClick={onDelete} />}
             </>
           ) : (
+            // A button's name is the verb it performs. This one used to swap
+            // its accessible name for a status sentence once installed —
+            // "enabled on 4 agents" — while still running the install on
+            // press, and the count it quoted was the workspace's, not the
+            // agents'. The badge beside the name already reports the state.
             <ActionIconButton
               icon={Download}
-              label={capability.installed ? t("capabilities.marketplace.card.installed", { count: agentCount }) : t("capabilities.marketplace.card.install")}
+              label={t("capabilities.marketplace.card.install")}
               onClick={onInstall}
             />
           )}

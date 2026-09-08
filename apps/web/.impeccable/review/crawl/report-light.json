@@ -1,7 +1,7 @@
 [
   {
     "view": "conversations",
-    "rows": 21,
+    "rows": 0,
     "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
@@ -39,11 +39,9 @@
   },
   {
     "view": "agents",
-    "rows": 2,
-    "rowsAfterClicks": 22,
-    "dialogsOpened": [
-      "新建 Agent"
-    ],
+    "rows": 0,
+    "rowsAfterClicks": 0,
+    "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
@@ -82,8 +80,8 @@
   },
   {
     "view": "members",
-    "rows": 3,
-    "rowsAfterClicks": 3,
+    "rows": 4,
+    "rowsAfterClicks": 4,
     "dialogsOpened": [
       "邀请新成员",
       "取消邀请"
@@ -95,7 +93,7 @@
   {
     "view": "settings",
     "rows": 2,
-    "rowsAfterClicks": 14,
+    "rowsAfterClicks": 2,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
@@ -104,8 +102,10 @@
   {
     "view": "secrets",
     "rows": 0,
-    "rowsAfterClicks": 14,
-    "dialogsOpened": [],
+    "rowsAfterClicks": 1,
+    "dialogsOpened": [
+      "添加凭据"
+    ],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
@@ -126,7 +126,7 @@
   {
     "view": "usage",
     "rows": 13,
-    "rowsAfterClicks": 14,
+    "rowsAfterClicks": 2,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],

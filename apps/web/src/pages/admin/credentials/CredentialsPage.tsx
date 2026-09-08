@@ -4,7 +4,6 @@ import { Plus, Search } from "lucide-react"
 
 import { AdminLayout } from "../../../components/layout/AdminLayout"
 import { PageHeader } from "../../../components/layout/PageHeader"
-import { SettingsTabs } from "../../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../../components/admin/ScopeRequiredState"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
@@ -48,7 +47,7 @@ export function CredentialsPage() {
   const pageTitle = t("credentialsPage.title")
 
   return (
-    <AdminLayout activeMenu="settings" fullBleed>
+    <AdminLayout activeMenu="secrets" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
         <PageHeader
           className="static mx-0 mb-0"
@@ -56,7 +55,6 @@ export function CredentialsPage() {
           subtitleFor="credentialsPage.title"
           action={
             <>
-              <SettingsTabs active="credentials" />
               {wsId && (
                 <>
                   <div className="relative w-72">

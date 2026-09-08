@@ -5,7 +5,6 @@ import { ArrowUpRight, Check, Code, ListFilter, MessageSquare, Search, ShieldChe
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
-import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Button } from "../../components/ui/button"
@@ -169,7 +168,7 @@ export function AuditPage() {
   const targetTypeLabel = (tt: string) => t(`audit.targetType.${tt}`, { defaultValue: tt })
 
   return (
-    <AdminLayout activeMenu="settings" fullBleed>
+    <AdminLayout activeMenu="audit" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
         <PageHeader
           className="static mx-0 mb-0"
@@ -177,7 +176,6 @@ export function AuditPage() {
           subtitleFor="audit.page.title"
           action={
             <>
-              <SettingsTabs active="audit" />
               <div className="relative w-72">
                 <Search
                   className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
@@ -293,7 +291,7 @@ export function AuditPage() {
                     onToggle={() => setOpenRow((cur) => (cur === r.id ? null : r.id))}
                   />
                   {openRow === r.id && (
-                    <li className="border-b border-line px-4 py-2">
+                    <li className="border-b border-line px-6 py-2">
                       <VerbatimBlock>
                         {`#${r.id} ${r.event_type}\n${JSON.stringify(r.payload ?? {}, null, 2)}`}
                       </VerbatimBlock>
