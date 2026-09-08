@@ -90,21 +90,15 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
       onClosed={onClosed}
       closeLabel={closeLabel}
       aria-label={capability.name}
-      header={
-        <>
-          <span className="min-w-0 truncate text-base font-medium text-fg">{capability.name}</span>
-          <CapabilityTypeBadge type={capability.type} />
-          {/* No "from market" badge: this rail only ever shows capabilities
-              that came from the market, so it never varied. And the
-              deprecation is one word here — the banner below it already gives
-              the advice the longer badge was repeating. */}
-          {deprecated && <Badge variant="neutral" dot>{t("capabilities.deprecated.badgeSource")}</Badge>}
-          {unpublished && <Badge variant="neutral" dot>{t("capabilities.unpublished.badge")}</Badge>}
-        </>
-      }
+      header={<span className="min-w-0 flex-1 line-clamp-2 break-words text-base font-medium text-fg" title={capability.name}>{capability.name}</span>}
       footer={<Button variant="outline" onClick={() => setUninstallOpen(true)}>{t("capabilities.uninstall.action")}</Button>}
     >
       <>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <CapabilityTypeBadge type={capability.type} />
+          {deprecated && <Badge variant="neutral" dot>{t("capabilities.deprecated.badgeSource")}</Badge>}
+          {unpublished && <Badge variant="neutral" dot>{t("capabilities.unpublished.badge")}</Badge>}
+        </div>
         {deprecated && <InlineNotice tone="warning" className="mb-4">{t("capabilities.deprecated.bannerTarget")}</InlineNotice>}
         {unpublished && <InlineNotice tone="warning" className="mb-4">{t("capabilities.unpublished.bannerTarget")}</InlineNotice>}
         {capability.description && <p className="mb-4 text-sm text-fg">{capability.description}</p>}

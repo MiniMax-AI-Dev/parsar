@@ -362,7 +362,7 @@ export function CreateAgentDialog({
       requiredCredentials: RequiredCredential[]
     }
     const ownCaps = capabilitiesQ.data?.capabilities ?? []
-    const installedCaps = capabilitiesQ.data?.marketplace_installs ?? []
+    const installedCaps = (capabilitiesQ.data?.marketplace_installs ?? []).filter((cap) => cap.visibility !== "workspace")
     const availableCaps = capabilitiesQ.data?.marketplace_available ?? []
     const workspace: PickerOption[] = [...ownCaps, ...installedCaps].map((cap) => ({
       id: cap.id,
@@ -462,7 +462,7 @@ export function CreateAgentDialog({
   const allCapabilitiesPool = useMemo<Capability[]>(() => {
     const data = allCapabilitiesQ.data
     const own = data?.capabilities ?? []
-    const installed = data?.marketplace_installs ?? []
+    const installed = (data?.marketplace_installs ?? []).filter((cap) => cap.visibility !== "workspace")
     // Map MarketplaceCapability into the minimum Capability shape
     // aggregate/required-credentials helpers and submit lookup expect.
     const available: Capability[] = (data?.marketplace_available ?? []).map((cap) => ({
