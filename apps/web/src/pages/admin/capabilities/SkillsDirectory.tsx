@@ -11,6 +11,7 @@ import { Skeleton } from "../../../components/ui/skeleton"
 import { useInstallSkill, useSkillsCatalog, type SkillsCatalogItem } from "../../../lib/api-skills"
 import { useWorkspaceId } from "../../../lib/workspace"
 import { InlineNotice } from "./notices"
+import { SkillInstallErrorDialog } from "./SkillInstallErrorDialog"
 
 interface SkillsDirectoryProps {
   query: string
@@ -41,6 +42,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
     )
   }, [catalogQ.data?.items, query])
   const pendingID = installMut.isPending ? (installMut.variables?.id ?? null) : null
+  const failedSkill = installMut.error ? installMut.variables : null
 
   const install = (skill: SkillsCatalogItem) => {
     if (!canImport || installed[skill.id]) return
@@ -79,14 +81,13 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
           />
         </div>
       ) : null}
-      {installMut.error ? (
-        <div className="px-4 pt-4">
-          <ErrorState
-            title={t("capabilities.skillsDirectory.install.failed")}
-            detail={installMut.error instanceof Error ? installMut.error.message : undefined}
-            onRetry={() => installMut.reset()}
-          />
-        </div>
+      {failedSkill ? (
+        <SkillInstallErrorDialog
+          name={failedSkill.name || failedSkill.slug}
+          detail={installMut.error instanceof Error ? installMut.error.message : String(installMut.error)}
+          onClose={() => installMut.reset()}
+          onRetry={() => install(failedSkill)}
+        />
       ) : null}
 
       {catalogQ.isLoading ? (
