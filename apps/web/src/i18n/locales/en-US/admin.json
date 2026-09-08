@@ -785,7 +785,12 @@
         "installing": "Installing...",
         "installed": "Installed",
         "success": "{{name}} was imported as a workspace Skill Capability.",
-        "failed": "The Skill could not be installed."
+        "failed": "The Skill could not be installed.",
+        "failureDescription": "Installation of \"{{name}}\" failed. Retry, or share the technical details with your administrator if it keeps failing.",
+        "details": "Technical details",
+        "copy": "Copy details",
+        "copied": "Details copied.",
+        "copyFailed": "Copy failed. Select and copy the details above."
       }
     },
     "mcpDirectory": {

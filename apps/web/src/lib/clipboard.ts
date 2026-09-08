@@ -1,4 +1,4 @@
-export async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string, options: { fallback?: boolean } = {}): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text)
@@ -7,6 +7,8 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     // HTTP origins and browser permission policies can reject the modern API.
   }
+
+  if (options.fallback === false) return false
 
   const textarea = document.createElement("textarea")
   textarea.value = text

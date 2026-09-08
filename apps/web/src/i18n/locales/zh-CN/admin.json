@@ -785,7 +785,12 @@
         "installing": "安装中...",
         "installed": "已安装",
         "success": "已将 {{name}} 导入为工作区 Skill Capability。",
-        "failed": "无法安装该 Skill。"
+        "failed": "无法安装该 Skill。",
+        "failureDescription": "「{{name}}」未能完成安装。可以重试；如果仍然失败，请将技术详情交给管理员排查。",
+        "details": "技术详情",
+        "copy": "复制详情",
+        "copied": "详情已复制。",
+        "copyFailed": "复制失败，请选中上方详情手动复制。"
       }
     },
     "mcpDirectory": {
