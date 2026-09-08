@@ -989,12 +989,12 @@ function AddCapabilityDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto]">
         <DialogHeader>
           <DialogTitle>{t("agents.detail.config.capabilities.add")}</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <div className="relative">
+        <div className="flex min-h-0 min-w-0 flex-col gap-3">
+          <div className="relative shrink-0">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
             <Input
               type="search"
@@ -1006,7 +1006,7 @@ function AddCapabilityDialog({
               autoFocus
             />
           </div>
-          <div className="max-h-80 overflow-y-auto">
+          <div className="min-h-0 max-h-80 overflow-y-auto">
             {filtered.length === 0 ? (
               <p className="py-6 text-center text-sm text-fg-muted">
                 {t("agents.detail.capabilities.emptyAvailable")}
