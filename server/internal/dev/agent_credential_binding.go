@@ -34,6 +34,7 @@ func materialiseInlineSecrets(
 	cfg map[string]any,
 	inputs []createAgentInlineSecretBody,
 	actorID string,
+	workspaceID string,
 ) (map[string]any, bool) {
 	if len(inputs) == 0 {
 		return cfg, true
@@ -66,14 +67,15 @@ func materialiseInlineSecrets(
 			return nil, false
 		}
 		secret, err := rs.CreateSecret(ctx, store.CreateSecretInput{
-			Name:               displayName,
-			Kind:               "capability_inline",
-			Provider:           "inline",
-			AuthType:           "literal",
-			Payload:            payload,
-			Masked:             maskSecretValue(plaintext),
-			CreatedBy:          actorID,
-			CredentialKindCode: kind,
+			ManagementWorkspaceID: workspaceID,
+			Name:                  displayName,
+			Kind:                  "capability_inline",
+			Provider:              "inline",
+			AuthType:              "literal",
+			Payload:               payload,
+			Masked:                maskSecretValue(plaintext),
+			CreatedBy:             actorID,
+			CredentialKindCode:    kind,
 		}, encrypted)
 		if err != nil {
 			return nil, false

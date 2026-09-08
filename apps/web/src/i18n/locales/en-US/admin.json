@@ -1557,6 +1557,7 @@
       "disabled": "Disabled"
     },
     "actions": {
+      "disableUnavailable": "Disable is only available in the recorded management workspace. Contact your administrator if ownership is missing.",
       "disable": "Disable"
     },
     "create": {

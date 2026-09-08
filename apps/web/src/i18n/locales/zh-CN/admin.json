@@ -1557,6 +1557,7 @@
       "disabled": "已禁用"
     },
     "actions": {
+      "disableUnavailable": "只能在凭证所属工作区禁用；若未记录归属，请联系管理员。",
       "disable": "禁用"
     },
     "create": {

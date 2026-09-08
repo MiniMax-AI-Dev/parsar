@@ -698,41 +698,6 @@ type UsageLogRead struct {
 	CreatedAt    time.Time      `json:"created_at"`
 }
 
-type CreateSecretInput struct {
-	WorkspaceID string
-	Name        string
-	Kind        string
-	Provider    string
-	AuthType    string
-	Payload     map[string]any
-	Masked      string
-	CreatedBy   string
-	// CredentialKindCode is optional metadata that pins a capability_inline
-	// secret to a single credential_kinds.code. Used by the agent-creation
-	// shared-binding picker to filter secrets by the kind they hold.
-	CredentialKindCode string
-}
-
-type SecretRead struct {
-	ID         string         `json:"id"`
-	Slug       string         `json:"slug"`
-	Name       string         `json:"name"`
-	Kind       string         `json:"kind"`
-	Provider   string         `json:"provider"`
-	AuthType   string         `json:"auth_type"`
-	KeyVersion string         `json:"key_version"`
-	Status     string         `json:"status"`
-	Masked     string         `json:"masked"`
-	Metadata   map[string]any `json:"metadata"`
-	CreatedAt  time.Time      `json:"created_at"`
-	UpdatedAt  time.Time      `json:"updated_at"`
-}
-
-type SecretPayload struct {
-	SecretRead
-	EncryptedPayload []byte
-}
-
 // CreateModelInput carries the fields of a new shared model.
 // Credential mode is one-of inline_secret / credential_ref.
 type CreateModelInput struct {
@@ -1162,17 +1127,18 @@ func (s *Store) RegisterWorkspaceRuntimeCredential(ctx context.Context, in Regis
 
 	// Step 2 — insert the new credential secret.
 	row, err := q.CreateSecret(ctx, sqlc.CreateSecretParams{
-		ID:               mustUUID(newID()),
-		Slug:             generateAutoSlug("secret"),
-		Name:             strings.TrimSpace(in.Name),
-		Kind:             secretKind(in.Kind),
-		Provider:         strings.TrimSpace(in.Provider),
-		AuthType:         strings.TrimSpace(in.AuthType),
-		EncryptedPayload: in.EncryptedPayload,
-		KeyVersion:       "v1",
-		Metadata:         metadataJSON,
-		CreatedBy:        createdBy,
-		Now:              timestamptz(in.Now),
+		ID:                    mustUUID(newID()),
+		Slug:                  generateAutoSlug("secret"),
+		Name:                  strings.TrimSpace(in.Name),
+		Kind:                  secretKind(in.Kind),
+		Provider:              strings.TrimSpace(in.Provider),
+		AuthType:              strings.TrimSpace(in.AuthType),
+		EncryptedPayload:      in.EncryptedPayload,
+		KeyVersion:            "v1",
+		Metadata:              metadataJSON,
+		CreatedBy:             createdBy,
+		ManagementWorkspaceID: wsUUID,
+		Now:                   timestamptz(in.Now),
 	})
 	if err != nil {
 		return SecretRead{}, fmt.Errorf("insert runtime credential secret: %w", err)
@@ -5592,59 +5558,6 @@ func (s *Store) ListWorkspaceUsageLogs(ctx context.Context, workspaceID string, 
 	return usage, nil
 }
 
-func (s *Store) CreateSecret(ctx context.Context, input CreateSecretInput, encryptedPayload []byte) (SecretRead, error) {
-	now := time.Now().UTC()
-	createdBy := nullableUUID(input.CreatedBy)
-	metaPayload := map[string]any{"masked": strings.TrimSpace(input.Masked)}
-	if code := strings.TrimSpace(input.CredentialKindCode); code != "" {
-		metaPayload["credential_kind_code"] = code
-	}
-	if strings.TrimSpace(input.Kind) == "capability_inline" {
-		metaPayload["workspace_id"] = strings.TrimSpace(input.WorkspaceID)
-	}
-	metadata, err := json.Marshal(metaPayload)
-	if err != nil {
-		return SecretRead{}, err
-	}
-	row, err := sqlc.New(s.db).CreateSecret(ctx, sqlc.CreateSecretParams{
-		ID:               mustUUID(newID()),
-		Slug:             generateAutoSlug("secret"),
-		Name:             strings.TrimSpace(input.Name),
-		Kind:             secretKind(input.Kind),
-		Provider:         strings.TrimSpace(input.Provider),
-		AuthType:         strings.TrimSpace(input.AuthType),
-		EncryptedPayload: encryptedPayload,
-		KeyVersion:       "v1",
-		Metadata:         metadata,
-		CreatedBy:        createdBy,
-		Now:              timestamptz(now),
-	})
-	if err != nil {
-		return SecretRead{}, err
-	}
-	read := secretReadFromCreateRow(row)
-
-	s.emitAuditEvent(audit.Event{
-		OccurredAt: now,
-		Source:     audit.SourceAdmin,
-		EventType:  auditSecretCreated,
-		ActorType:  audit.ActorTypeSystem,
-		ActorID:    input.CreatedBy,
-		TargetType: "secret",
-		TargetID:   read.ID,
-		Payload: map[string]any{
-			"source":    auditSourceDevSecretWrite,
-			"name":      read.Name,
-			"slug":      read.Slug,
-			"kind":      read.Kind,
-			"provider":  read.Provider,
-			"auth_type": read.AuthType,
-		},
-	})
-
-	return read, nil
-}
-
 func (s *Store) ListSecrets(ctx context.Context, workspaceID string, limit int32) ([]SecretRead, error) {
 	if limit <= 0 {
 		limit = defaultReadLimit
@@ -5676,42 +5589,6 @@ func (s *Store) ListSecretsByKind(ctx context.Context, kindFilter string, limit 
 		secrets = append(secrets, secretReadFromListRow(row))
 	}
 	return secrets, nil
-}
-
-func (s *Store) DisableSecret(ctx context.Context, workspaceID string, secretID string) (SecretRead, error) {
-	now := time.Now().UTC()
-	if _, err := s.GetSecretPayload(ctx, workspaceID, secretID); err != nil {
-		return SecretRead{}, err
-	}
-	secretUUID, err := uuid(secretID)
-	if err != nil {
-		return SecretRead{}, err
-	}
-	row, err := sqlc.New(s.db).DisableSecret(ctx, sqlc.DisableSecretParams{ID: secretUUID, Now: timestamptz(now)})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return SecretRead{}, fmt.Errorf("%w: %s", ErrUnknownSecret, secretID)
-		}
-		return SecretRead{}, err
-	}
-	read := secretReadFromDisableRow(row)
-
-	s.emitAuditEvent(audit.Event{
-		OccurredAt: now,
-		Source:     audit.SourceAdmin,
-		EventType:  auditSecretDisabled,
-		ActorType:  audit.ActorTypeSystem,
-		TargetType: "secret",
-		TargetID:   read.ID,
-		Payload: map[string]any{
-			"source": auditSourceDevSecretWrite,
-			"name":   read.Name,
-			"slug":   read.Slug,
-			"status": read.Status,
-		},
-	})
-
-	return read, nil
 }
 
 func (s *Store) GetSecretPayload(ctx context.Context, workspaceID string, secretID string) (SecretPayload, error) {
@@ -8221,49 +8098,6 @@ func usageLogFromWorkspaceRunRow(row sqlc.ListWorkspaceUsageLogsByRunRow) UsageL
 
 func usageLogFromRunRow(row sqlc.ListUsageLogsByRunRow) UsageLogRead {
 	return usageLogFromRow(usageLogRow(row))
-}
-
-func secretReadFromCreateRow(row sqlc.CreateSecretRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretReadFromListRow(row sqlc.ListSecretsRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretReadFromWorkspaceListRow(row sqlc.ListSecretsForWorkspaceRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretReadFromDisableRow(row sqlc.DisableSecretRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretReadFromSecretRow(row sqlc.GetSecretPayloadRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretReadFromUpdatePayloadRow(row sqlc.UpdateSecretPayloadRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretRead(id, slug, name, kind, provider, authType, keyVersion, status string, metadataJSON []byte, createdAt, updatedAt pgtype.Timestamptz) SecretRead {
-	metadata := decodeJSONMap(metadataJSON)
-	masked, _ := metadata["masked"].(string)
-	return SecretRead{
-		ID:         id,
-		Slug:       slug,
-		Name:       name,
-		Kind:       kind,
-		Provider:   provider,
-		AuthType:   authType,
-		KeyVersion: keyVersion,
-		Status:     status,
-		Masked:     masked,
-		Metadata:   metadata,
-		CreatedAt:  pgTime(createdAt),
-		UpdatedAt:  pgTime(updatedAt),
-	}
 }
 
 func modelReadFromCreateRow(row sqlc.CreateModelRow) ModelRead {

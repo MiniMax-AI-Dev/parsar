@@ -378,6 +378,14 @@ description and keep ownership on the side listed here.
 
 ### API, DB, and generated surfaces
 
+- Secret disabling is authorized by `secrets.management_workspace_id`, set
+  from the creation workspace. This ownership must not restrict shared reads
+  or runtime use. Legacy rows inherit unambiguous creation metadata or runtime
+  registration ownership. Rows without it remain usable but cannot be disabled until
+  an operator assigns a verified management workspace in the database.
+  Never infer ownership from the workspace supplied in a disable request.
+  The database smoke gate also runs the cross-workspace secret-disable HTTP
+  regression so it cannot silently skip in CI without a test database.
 - Accepting an invitation may set a password only for a newly created user.
   Existing users must authenticate as the invited account; acceptance must
   preserve their identities and passwords, and rejected attempts must leave

@@ -1701,6 +1701,36 @@ definitions:
       required:
         type: boolean
     type: object
+  store.SecretRead:
+    properties:
+      auth_type:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      key_version:
+        type: string
+      kind:
+        type: string
+      management_workspace_id:
+        type: string
+      masked:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      provider:
+        type: string
+      slug:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+    type: object
 info:
   contact: {}
   description: |-
@@ -8391,7 +8421,10 @@ paths:
         "200":
           description: Secret list
           schema:
-            additionalProperties: true
+            additionalProperties:
+              items:
+                $ref: '#/definitions/store.SecretRead'
+              type: array
             type: object
         "400":
           description: Invalid UUID
@@ -8431,8 +8464,7 @@ paths:
         "201":
           description: Created secret
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/store.SecretRead'
         "400":
           description: Invalid body or UUID
           schema:
@@ -8450,8 +8482,9 @@ paths:
       - secrets
   /api/v1/workspaces/{workspaceID}/secrets/{secretID}/disable:
     post:
-      description: Marks the secret as disabled so agents can no longer bind to it.
-        Owner/admin only.
+      description: Marks the secret as disabled. Caller must be owner/admin of the
+        secret's recorded management workspace. Shared use does not grant management
+        rights; legacy secrets without recorded ownership cannot be disabled.
       operationId: disableDevSecret
       parameters:
       - description: Workspace UUID
@@ -8470,8 +8503,7 @@ paths:
         "200":
           description: Disabled secret
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/store.SecretRead'
         "400":
           description: Invalid UUID
           schema:
@@ -8485,7 +8517,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Secret not found
+          description: Secret not found in this management workspace
           schema:
             additionalProperties:
               type: string
