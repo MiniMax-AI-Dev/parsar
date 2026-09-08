@@ -4,7 +4,6 @@ import { AlertTriangle, ExternalLink } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
-import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Badge } from "../../components/ui/badge"
 import { Ledger, LedgerHeader, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
@@ -15,6 +14,7 @@ import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "../../i18n"
 import { useWorkspaceAuthProviders, type WorkspaceAuthProvider } from "../../lib/api-auth"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useWorkspaceId } from "../../lib/workspace"
+import { PageSection } from "../../components/ui/section"
 
 /** provider · status · callback url · missing env · docs */
 const PROVIDER_COLUMNS = [col.title(), col.meta(104), col.id(200, 1.4), col.id(160, 1), col.actions(1)]
@@ -37,7 +37,6 @@ export function SettingsPage() {
           className="static mx-0 mb-0"
           title={t("settings.page.title")}
           subtitleFor="settings.page.title"
-          action={<SettingsTabs active="general" />}
         />
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-4">
@@ -190,10 +189,5 @@ function Section({
   description?: string
   children: ReactNode
 }) {
-  return (
-    <section>
-      <h2 className="mb-2 text-xs font-medium text-fg">{title}</h2>
-      {children}
-    </section>
-  )
+  return <PageSection title={title}>{children}</PageSection>
 }

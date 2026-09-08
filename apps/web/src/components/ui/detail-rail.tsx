@@ -171,23 +171,39 @@ export function RailLayout({ children, rail }: { children: ReactNode; rail?: Rea
   )
 }
 
-/** Section heading inside a rail: 12px, 500, ink, optional muted count. */
+/**
+ * Section heading inside a rail: 12px, 500, ink, an optional muted count and
+ * one right-aligned action.
+ *
+ * It stays 12px while a page's section head is 16px, and that is deliberate:
+ * in a 384px panel the head is an eyebrow over a dense property list, not a
+ * heading over a page, and at 16px it would weigh more than the values it
+ * introduces. One head for the whole rail, though — `DetailSection` is this
+ * component, so a rail cannot end up with two sizes of the same thing.
+ */
 export function RailSection({
   title,
   meta,
+  action,
   children,
   className,
 }: {
   title: ReactNode
   meta?: ReactNode
+  action?: ReactNode
   children: ReactNode
   className?: string
 }) {
   return (
     <section className={cn("mt-5 first:mt-0", className)}>
-      <h3 className="mb-0.5 flex items-center justify-between text-xs font-medium text-fg">
-        <span>{title}</span>
-        {meta && <span className="font-normal tabular-nums text-fg-muted">{meta}</span>}
+      <h3 className="mb-0.5 flex min-h-5 items-center justify-between gap-2 text-xs font-medium text-fg">
+        <span className="flex items-center gap-1.5">
+          <span>{title}</span>
+          {meta !== undefined && meta !== null && (
+            <span className="font-normal tabular-nums text-fg-muted">{meta}</span>
+          )}
+        </span>
+        {action}
       </h3>
       {children}
     </section>

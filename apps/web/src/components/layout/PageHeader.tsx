@@ -40,8 +40,12 @@ export function PageHeader({ title, subtitle, subtitleFor, action, backLink, cla
       )}
     >
       {backLink && <div className="shrink-0 text-xs text-fg-muted">{backLink}</div>}
+      {/* No `leading-none` on the title: a 20px line box around a 20px face has
+          no room below the baseline, and the title truncates, so
+          `overflow: hidden` sliced the tail off every descender — "Settings"
+          lost the foot of its g. The scale's own 24px line is the fix. */}
       {title && (
-        <h1 className="font-display flex min-w-0 items-baseline gap-2 text-xl leading-none text-fg">
+        <h1 className="font-display flex min-w-0 items-baseline gap-2 text-xl text-fg">
           <span className="truncate">{title}</span>
           {resolvedSubtitle && (
             <span className="shrink-0 text-xs font-normal tracking-normal text-fg-muted">{resolvedSubtitle}</span>

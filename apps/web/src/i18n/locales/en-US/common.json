@@ -211,11 +211,8 @@
       "models": "Models",
       "members": "Members",
       "settings": "Settings",
-      "runtime": "Runtime"
-    },
-    "settingsTabs": {
-      "general": "General",
-      "credentials": "Credentials",
+      "runtime": "Runtime",
+      "secrets": "Credentials",
       "usage": "Usage",
       "audit": "Audit"
     },

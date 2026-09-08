@@ -31,7 +31,7 @@
   --text-xs:   0.75rem;    /* 12px — labels, metadata, mono ids, column headers */
   --text-sm:   0.8125rem;  /* 13px — list rows, buttons, inputs, property values */
   --text-base: 0.875rem;   /* 14px — sidebar nav, body copy, dialogs */
-  --text-lg:   1rem;       /* 16px — dialog headings */
+  --text-lg:   1rem;       /* 16px — page section heads, dialog headings */
   --text-xl:   1.25rem;    /* 20px — page title (the only 600 on a screen) */
   --text-2xl:  1.375rem;   /* 22px — secondary headings on account pages */
   --text-3xl:  1.75rem;    /* 28px — hero titles on setup / login */

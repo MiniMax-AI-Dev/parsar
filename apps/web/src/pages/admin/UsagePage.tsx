@@ -4,7 +4,6 @@ import { LineChart as LineChartIcon } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
-import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
@@ -16,6 +15,7 @@ import { ApiError } from "../../lib/api-client"
 import { useUsage } from "../../lib/api-governance"
 import type { UsageLog } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
+import { SectionHead } from "../../components/ui/section"
 
 /* ------------------------------------------------------------------ */
 /*  Aggregation                                                        */
@@ -124,13 +124,12 @@ export function UsagePage() {
   const pageTitle = t("usage.page.title")
 
   return (
-    <AdminLayout activeMenu="settings" fullBleed>
+    <AdminLayout activeMenu="usage" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
         <PageHeader
           className="static mx-0 mb-0"
           title={pageTitle}
           subtitleFor="usage.page.title"
-          action={<SettingsTabs active="usage" />}
         />
         {!wsId ? (
           <ScopeRequiredState scope="workspace" resourceName={pageTitle} />
@@ -161,7 +160,7 @@ export function UsagePage() {
               <Property label={t("usage.stats.cost")} mono className="tabular-nums">{fmtUsd(summary.costUsd)}</Property>
             </PropertyList>
 
-            <h2 className="mb-1 mt-6 px-6 text-xs font-medium text-fg">{t("usage.byModel.title")}</h2>
+            <SectionHead title={t("usage.byModel.title")} className="mt-6 px-6" />
             <Ledger columns={MODEL_COLUMNS} className="flex-none overflow-visible" role="list" aria-label={t("usage.byModel.title")}>
               <LedgerHeader>
                 <span>{t("usage.byModel.provider")}</span>
@@ -185,7 +184,7 @@ export function UsagePage() {
               </ul>
             </Ledger>
 
-            <h2 className="mb-1 mt-6 px-6 text-xs font-medium text-fg">{t("usage.recent.title")}</h2>
+            <SectionHead title={t("usage.recent.title")} className="mt-6 px-6" />
             <Ledger columns={RECENT_COLUMNS} className="flex-none overflow-visible" role="list" aria-label={t("usage.recent.title")}>
               <LedgerHeader>
                 <span>{t("usage.recent.time")}</span>

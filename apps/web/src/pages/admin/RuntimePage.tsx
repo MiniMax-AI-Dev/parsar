@@ -41,6 +41,7 @@ import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useRelativeTime } from "../../lib/relative-time"
 import { useNow } from "../../lib/use-now"
 import { useWorkspaceId } from "../../lib/workspace"
+import { SectionHead } from "../../components/ui/section"
 
 type CloudState = "loading" | "notConfigured" | "ready" | "error" | "unknown"
 type SortKey = "last_active" | "created_at" | "agent"
@@ -309,18 +310,6 @@ function CloudSandboxPanel({
   )
 }
 
-/** 12px/500 section head with an optional control cluster on the right. */
-function SectionHead({ title, meta, children }: { title: string; meta?: number; children?: React.ReactNode }) {
-  return (
-    <div className="mt-6 flex min-h-7 items-center justify-between gap-3">
-      <h2 className="flex items-baseline gap-1.5 text-xs font-medium text-fg">
-        <span>{title}</span>
-        {meta !== undefined && <span className="font-normal tabular-nums text-fg-muted">{meta}</span>}
-      </h2>
-      {children && <div className="flex items-center gap-2">{children}</div>}
-    </div>
-  )
-}
 
 function LedgerSkeleton({ rows = 3 }: { rows?: number }) {
   return (
@@ -395,9 +384,12 @@ function CloudInstancesPanel({
 
   return (
     <section>
-      <SectionHead title={title} meta={loading || error ? undefined : bindings.length}>
-        {!loading && !error && bindings.length > 0 && (
-          <>
+      <SectionHead
+        title={title}
+        meta={loading || error ? undefined : bindings.length}
+        className="mt-6"
+        action={!loading && !error && bindings.length > 0 && (
+          <div className="flex items-center gap-2">
             <Select
               value={sortKey}
               onChange={(e) => onSortChange(e.target.value as SortKey)}
@@ -420,9 +412,9 @@ function CloudInstancesPanel({
               <Skull strokeWidth={1.5} aria-hidden="true" />
               {t("runtime.list.actions.bulkKill", { count: selected.size })}
             </Button>
-          </>
+          </div>
         )}
-      </SectionHead>
+      />
 
       {bulkErrors.length > 0 && (
         <div className="mt-2 text-sm" role="alert">
