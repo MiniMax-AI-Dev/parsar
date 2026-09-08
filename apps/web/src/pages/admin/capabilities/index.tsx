@@ -310,7 +310,7 @@ export function CapabilitiesPage() {
         source={fromMarketplace ? marketplaceSourceName(marketCap) : ""}
         availabilityLabel={fromMarketplace && cap.visibility === "workspace"
           ? t("capabilities.unpublished.badge")
-          : cap.deprecated_at ? t(fromMarketplace ? "capabilities.deprecated.badgeTarget" : "capabilities.deprecated.badgeSource") : ""}
+          : cap.deprecated_at ? t("capabilities.deprecated.badgeSource") : ""}
         enabledCount={enabledCount}
         credentials={requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.credentials.none"))}
         age={fmtAgo(cap.updated_at ?? cap.created_at)}
