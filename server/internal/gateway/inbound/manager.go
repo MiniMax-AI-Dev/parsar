@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/interaction"
@@ -482,12 +483,13 @@ func (m *Manager) startClientWithSecret(ctx context.Context, route store.FeishuA
 
 	clientOpts := []ws.ClientOption{
 		ws.WithEventHandler(eventDispatcher),
+		ws.WithLogger(feishuSDKLogger{logger: log.With("component", "feishu_websocket", "agent_id", route.AgentID, "app_id", cfg.AppID)}),
 		ws.WithOnReady(func() {
 			m.logger.Info("feishu websocket inbound client ready", "source", source, "agent_id", route.AgentID, "app_id", cfg.AppID)
 		}),
 		ws.WithOnError(func(err error) {
 			if err != nil {
-				m.logger.Warn("feishu websocket inbound client error", "source", source, "agent_id", route.AgentID, "app_id", cfg.AppID, "err", err.Error())
+				m.logger.Warn("feishu websocket inbound client error", "source", source, "agent_id", route.AgentID, "app_id", cfg.AppID, "err", redactFeishuConnectionLog(err.Error()))
 			}
 		}),
 		ws.WithOnReconnecting(func() {
@@ -518,7 +520,7 @@ func (m *Manager) startClientWithSecret(ctx context.Context, route store.FeishuA
 
 	go func() {
 		if err := client.Start(clientCtx); err != nil && !errors.Is(err, context.Canceled) {
-			m.logger.Warn("feishu websocket inbound client exited", "source", source, "agent_id", route.AgentID, "app_id", cfg.AppID, "err", err.Error())
+			m.logger.Warn("feishu websocket inbound client exited", "source", source, "agent_id", route.AgentID, "app_id", cfg.AppID, "err", redactFeishuConnectionLog(err.Error()))
 		}
 	}()
 	m.logger.Info("feishu websocket inbound client started", "source", source, "agent_id", route.AgentID, "app_id", cfg.AppID)
