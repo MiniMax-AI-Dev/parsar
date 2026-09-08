@@ -42,6 +42,7 @@ import type {
   Agent,
   ToolStep,
 } from "../../lib/api-types"
+import { isUserMessageSender } from "../../lib/message-sender"
 import { useRelativeTime } from "../../lib/relative-time"
 import { credentialKindLabel } from "../../pages/admin/capability-ui"
 import { ToolCardSlot, SingleSlot, ListSlot } from "../plugin/SlotRenderer"
@@ -477,7 +478,7 @@ function ChatStream({
   const turns = useMemo(
     () =>
       messages
-        .filter((m) => m.sender_type === "user")
+        .filter((m) => isUserMessageSender(m.sender_type))
         .map((m) => ({ key: m.id, preview: turnPreview(m.content) })),
     [messages],
   )
@@ -564,7 +565,7 @@ function ChatStream({
                   onOpenRun={openRun}
                 />
               )
-              if (m.sender_type === "user") {
+              if (isUserMessageSender(m.sender_type)) {
                 // The turn and the work it triggered share one anchor.
                 return (
                   <div key={m.id} data-turn-key={m.id} className="flex flex-col gap-3">
@@ -835,7 +836,7 @@ const MessageRow = memo(function MessageRow({
   onOpenRun?: (runID: string) => void
 }) {
   const { i18n, t } = useTranslation("admin")
-  const isUser = senderType === "user"
+  const isUser = isUserMessageSender(senderType)
   if (isUser) {
     return (
       <div className="flex justify-end">
@@ -843,7 +844,9 @@ const MessageRow = memo(function MessageRow({
           <div className="rounded-md bg-surface-muted px-3 py-2 text-base text-fg">
             <p className="m-0 whitespace-pre-wrap break-words">{content}</p>
           </div>
-          <div className="mt-1 text-xs text-fg-muted">{stamp}</div>
+          <div className="mt-1 text-xs text-fg-muted">
+            {senderType === "external" && <>{t("conversations.detail.externalUser")} · </>}{stamp}
+          </div>
         </div>
       </div>
     )

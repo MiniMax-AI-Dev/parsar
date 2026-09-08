@@ -495,6 +495,9 @@ split relevant pieces out first rather than growing the file further.
 
 ### Frontend shared logic
 
+- Inbound messages with `sender_type=external` are user turns. Web conversation
+  presenters must not assign them the Agent identity or imply they are from the
+  current viewer.
 - Cross-page utilities (date/time/duration formatting, status labels,
   etc.) live once in `apps/web/src/lib/`. Do not reimplement inside a page
   component "because it's just a few lines" — that is how

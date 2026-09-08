@@ -281,7 +281,8 @@
     "detail": {
       "unnamed": "Untitled conversation",
       "emptyTimeline": "No messages yet",
-      "viewRunLink": "View run details"
+      "viewRunLink": "View run details",
+      "externalUser": "IM user"
     },
     "runtime_error": {
       "badge": "Run failed",

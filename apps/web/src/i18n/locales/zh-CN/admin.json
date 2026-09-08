@@ -281,7 +281,8 @@
     "detail": {
       "unnamed": "未命名对话",
       "emptyTimeline": "暂无消息",
-      "viewRunLink": "查看运行详情"
+      "viewRunLink": "查看运行详情",
+      "externalUser": "IM 用户"
     },
     "runtime_error": {
       "badge": "运行失败",
