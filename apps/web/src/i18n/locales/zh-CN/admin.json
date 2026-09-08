@@ -1736,7 +1736,7 @@
         "generatedIdConflict": "这个名称生成的内部标识已被占用，请换一个名称。",
         "generatedIdInvalid": "名称需要包含至少一个字母、数字或中文。",
         "deviceRequired": "请选择一台本地设备。",
-        "workDirAbsolute": "工作目录必须是绝对路径（以 / 开头）。"
+        "workDirAbsolute": "工作目录必须是绝对路径，或以 ~/ 开头。"
       },
       "sandboxSize": {
         "hint": "改完规格后,等当前沙盒被释放才会切换到新规格。",
@@ -1832,8 +1832,8 @@
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
-        "hintLocal": "Agent 在你这台本地设备上运行时的目录。留空则每个会话各用一个临时目录。路径不存在时自动创建。",
-        "hintSandbox": "Agent 在沙盒容器内运行时的目录（如 /workspace/my-app）。留空则每个会话各用一个临时目录。路径不存在时自动创建。"
+        "hintLocal": "Agent 在你这台本地设备上运行时的目录，填绝对路径或以 ~/ 开头的路径。留空则每个会话各用一个临时目录；路径不存在时自动创建。",
+        "hintSandbox": "Agent 在沙盒容器内运行时的目录（如 /workspace/my-app），填绝对路径或以 ~/ 开头的路径。留空则每个会话各用一个临时目录；路径不存在时自动创建。"
       }
     },
     "pendingCapability": {
@@ -2153,17 +2153,6 @@
     "page": {
       "title": "设置"
     },
-    "actions": {
-      "saved": "已保存"
-    },
-    "tabs": {
-      "workspace": "Workspace",
-      "gatewayDefaults": "网关默认值",
-      "security": "安全",
-      "runtime": "运行策略",
-      "advanced": "Advanced",
-      "basic": "基础设置"
-    },
     "workspace": {
       "title": "基础设置",
       "description": "这里只放现在有明确影响范围的 workspace 身份信息。",
@@ -2189,100 +2178,6 @@
         "enabled": "已启用",
         "configured": "已配置",
         "missing": "未配置"
-      }
-    },
-    "gatewayDefaults": {
-      "title": "网关默认值",
-      "description": "新接入网关时自动套用的默认行为。已配置的网关不受影响。",
-      "defaultVisibility": "新对话默认可见性",
-      "defaultVisibilityHint": "决定谁能看到通过这个 Gateway 进来的新对话。",
-      "dedupWindow": "事件去重窗口",
-      "dedupWindowHint": "同一外部 event_id 在此窗口内只处理一次。",
-      "replayProtection": "Replay 防护",
-      "replayProtectionHint": "拒绝 timestamp 漂移过大的 webhook 事件，缓解重放攻击。"
-    },
-    "security": {
-      "session": {
-        "title": "Session 策略",
-        "description": "登录态有效期 + MFA 要求。",
-        "idleTimeout": "Idle 超时",
-        "maxLifetime": "最大寿命",
-        "requireMFA": "Admin 必须 MFA",
-        "requireMFAHint": "对管理员账号强制启用 MFA。"
-      },
-      "pat": {
-        "title": "Personal Access Token (PAT)",
-        "description": "团队成员手动签发的访问 token 策略。",
-        "maxLifetime": "PAT 最大寿命",
-        "allowExpand": "允许成员自助扩展权限",
-        "allowExpandHint": "关闭则只能由 admin 给 PAT 加权限。"
-      },
-      "oidc": {
-        "title": "OIDC 单点登录",
-        "description": "对接企业 IdP（Okta / Azure AD / Auth0 等）。",
-        "issuer": "Issuer",
-        "clientId": "Client ID",
-        "note": "OIDC 是可选项；不配置则用本地账号登录。"
-      }
-    },
-    "runtime": {
-      "capability": {
-        "title": "能力管理",
-        "description": "本工作区运行时治理已迁移到 Agent 管理 → Capabilities 页面。",
-        "migratedHint": "能力管理已迁移到 Agent 管理 → Capabilities 页面。",
-        "requireApprovalHigh": "高风险动作必须人审",
-        "requireApprovalHighHint": "filesystem.write、secret.read、external_api.call 等高风险动作不允许 Agent 自决。"
-      },
-      "workingDir": {
-        "title": "Working directory 策略",
-        "description": "Agent runtime 允许访问的目录边界。",
-        "allowedRoots": "允许的根目录",
-        "absolutePathsOnly": "只接受绝对路径",
-        "absolutePathsOnlyHint": "拒绝相对路径输入，避免 cwd 漂移导致 Agent 写到错误目录。"
-      },
-      "policy": {
-        "title": "当前运行策略",
-        "description": "这些是当前版本真正生效或已有明确产品边界的规则。暂未接入后端的策略不再放成可编辑控件。",
-        "workdirs": {
-          "title": "工作目录输入",
-          "body": "用户提供的工作目录必须是绝对路径或以 ~/ 开头；相对路径会被拒绝。"
-        },
-        "runtimeState": {
-          "title": "运行状态位置",
-          "body": "配置、日志、状态和缓存必须写入 Parsar runtime root，不能污染当前仓库。"
-        },
-        "agentRuntime": {
-          "title": "Agent 执行方式",
-          "body": "runtime 在创建 Agent 时显式选择，创建后不可变；workspace 不再保存默认执行方式。",
-          "value": "Agent 配置"
-        },
-        "capabilities": {
-          "title": "能力边界",
-          "body": "工具权限、能力开关和凭证会在能力与连接器页面承接，不在设置页做假控件。",
-          "value": "能力 / 连接器页面"
-        }
-      }
-    },
-    "advanced": {
-      "dataRetention": {
-        "title": "数据保留",
-        "description": "运行历史和审计日志的保留时长。",
-        "runs": "Run 保留时长",
-        "audit": "Audit log 保留时长"
-      },
-      "experimental": {
-        "title": "实验性功能",
-        "description": "未稳定的能力，开启前请评估风险。",
-        "agentToAgent": "允许 Agent → Agent 调用",
-        "agentToAgentHint": "Agent 之间可以互相 @ 触发。链式深度由工作区配置控制。",
-        "memoryProposal": "Memory 写入提案审核",
-        "memoryProposalHint": "Agent 写入团队记忆前需要人审通过。"
-      },
-      "danger": {
-        "title": "危险区域",
-        "description": "不可逆操作，做之前先确认影响。",
-        "deleteWorkspace": "删除 Workspace",
-        "deleteWorkspaceHint": "删除后所有对话、运行、产物、审计日志都会永久删除，无法恢复。"
       }
     }
   },
@@ -2941,7 +2836,8 @@
         "copyFailed": "请手动选择下方命令",
         "oneLineLabel": "复制后在目标机器上运行",
         "safetyClaude": "Agent CLI、文件与密钥都留在这台机器上。",
-        "waitingConnection": "等待设备接入…"
+        "waitingConnection": "等待设备接入…",
+        "safetyState": "配置、日志、状态和缓存都写在 ~/.parsar/ 下，不会写进 Agent 正在处理的仓库。"
       },
       "delete": {
         "confirm": "删除"

@@ -103,25 +103,6 @@ export function SettingsPage() {
                 </Ledger>
               )}
             </PageSection>
-
-            <PageSection
-              title={t("settings.runtime.policy.title")}
-            >
-              <PropertyList>
-                <Property label={t("settings.runtime.policy.workdirs.title")} mono>
-                  /absolute/path, ~/path
-                </Property>
-                <Property label={t("settings.runtime.policy.runtimeState.title")} mono>
-                  ~/.parsar/
-                </Property>
-                <Property label={t("settings.runtime.policy.agentRuntime.title")}>
-                  {t("settings.runtime.policy.agentRuntime.value")}
-                </Property>
-                <Property label={t("settings.runtime.policy.capabilities.title")}>
-                  {t("settings.runtime.policy.capabilities.value")}
-                </Property>
-              </PropertyList>
-            </PageSection>
           </div>
         </div>
       </div>

@@ -1736,7 +1736,7 @@
         "generatedIdConflict": "This name generates an internal identifier that is already taken. Pick another name.",
         "generatedIdInvalid": "Name needs at least one letter, number, or Chinese character.",
         "deviceRequired": "Select a local device.",
-        "workDirAbsolute": "Working directory must be an absolute path (starting with /)."
+        "workDirAbsolute": "Working directory must be an absolute path, or start with `~/`."
       },
       "sandboxSize": {
         "hint": "Changes take effect after the current sandbox is released.",
@@ -1832,8 +1832,8 @@
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
-        "hintLocal": "Directory the agent runs in on your local device. Leave blank to use a per-conversation scratch dir. Created if it does not exist.",
-        "hintSandbox": "Directory inside the sandbox container (e.g. /workspace/my-app). Leave blank to use a per-conversation scratch dir. Created if it does not exist."
+        "hintLocal": "The directory the agent runs in on your local device — an absolute path, or one starting with `~/`. Leave blank to use a per-conversation scratch dir; created if it does not exist.",
+        "hintSandbox": "The directory the agent runs in inside the sandbox container (e.g. /workspace/my-app) — an absolute path, or one starting with `~/`. Leave blank to use a per-conversation scratch dir; created if it does not exist."
       }
     },
     "pendingCapability": {
@@ -2153,17 +2153,6 @@
     "page": {
       "title": "Settings"
     },
-    "actions": {
-      "saved": "Saved"
-    },
-    "tabs": {
-      "workspace": "Workspace",
-      "gatewayDefaults": "Gateway defaults",
-      "security": "Security",
-      "runtime": "Runtime policy",
-      "advanced": "Advanced",
-      "basic": "Basic settings"
-    },
     "workspace": {
       "title": "Basic settings",
       "description": "Only workspace identity settings with a clear current effect live here.",
@@ -2189,100 +2178,6 @@
         "enabled": "Enabled",
         "configured": "Configured",
         "missing": "Not configured"
-      }
-    },
-    "gatewayDefaults": {
-      "title": "Gateway defaults",
-      "description": "Defaults applied when a new gateway is wired up. Existing gateways aren't affected.",
-      "defaultVisibility": "New conversation visibility",
-      "defaultVisibilityHint": "Who can see new conversations from this gateway by default.",
-      "dedupWindow": "Event dedupe window",
-      "dedupWindowHint": "Same external event_id is processed only once within this window.",
-      "replayProtection": "Replay protection",
-      "replayProtectionHint": "Reject webhook events with stale timestamps to mitigate replay attacks."
-    },
-    "security": {
-      "session": {
-        "title": "Session policy",
-        "description": "Login lifetime + MFA requirements.",
-        "idleTimeout": "Idle timeout",
-        "maxLifetime": "Max lifetime",
-        "requireMFA": "Require MFA for admins",
-        "requireMFAHint": "Force MFA on admin accounts."
-      },
-      "pat": {
-        "title": "Personal Access Tokens",
-        "description": "Policy for tokens members issue manually.",
-        "maxLifetime": "Max PAT lifetime",
-        "allowExpand": "Allow self-service permission expansion",
-        "allowExpandHint": "Off means only admins can grant new scopes to a PAT."
-      },
-      "oidc": {
-        "title": "OIDC SSO",
-        "description": "Connect to your enterprise IdP (Okta / Azure AD / Auth0).",
-        "issuer": "Issuer",
-        "clientId": "Client ID",
-        "note": "OIDC is optional; without it, members log in via local accounts."
-      }
-    },
-    "runtime": {
-      "capability": {
-        "title": "Capability management",
-        "description": "Workspace runtime capability management has moved to Agent Management → Capabilities.",
-        "migratedHint": "Capability management has moved to Agent Management → Capabilities.",
-        "requireApprovalHigh": "Require approval for high-risk actions",
-        "requireApprovalHighHint": "filesystem.write, secret.read, external_api.call etc. cannot be self-approved by Agents."
-      },
-      "workingDir": {
-        "title": "Working directory policy",
-        "description": "Boundaries the Agent runtime is allowed to touch.",
-        "allowedRoots": "Allowed roots",
-        "absolutePathsOnly": "Absolute paths only",
-        "absolutePathsOnlyHint": "Reject relative paths to avoid cwd drift writing to the wrong place."
-      },
-      "policy": {
-        "title": "Current runtime policy",
-        "description": "These are the rules that currently take effect or have a clear product boundary. Backend-less controls are no longer shown as editable settings.",
-        "workdirs": {
-          "title": "Working directory input",
-          "body": "User-provided working directories must be absolute paths or start with ~/. Relative paths are rejected."
-        },
-        "runtimeState": {
-          "title": "Runtime state location",
-          "body": "Config, logs, state, and cache must be written under the Parsar runtime root, not the current repository."
-        },
-        "agentRuntime": {
-          "title": "Agent execution mode",
-          "body": "Runtime is selected explicitly when an Agent is created and is immutable afterward; workspace settings no longer store a default execution mode.",
-          "value": "Agent config"
-        },
-        "capabilities": {
-          "title": "Capability boundary",
-          "body": "Tool permissions, capability toggles, and credentials belong in Capabilities and Connectors instead of fake Settings controls.",
-          "value": "Capabilities / Connectors"
-        }
-      }
-    },
-    "advanced": {
-      "dataRetention": {
-        "title": "Data retention",
-        "description": "How long run history and audit logs are kept.",
-        "runs": "Run retention",
-        "audit": "Audit log retention"
-      },
-      "experimental": {
-        "title": "Experimental features",
-        "description": "Unstable capabilities. Evaluate risk before enabling.",
-        "agentToAgent": "Allow agent → agent calls",
-        "agentToAgentHint": "Agents can @-mention each other. Chain depth controlled per workspace.",
-        "memoryProposal": "Memory write proposal review",
-        "memoryProposalHint": "Agent memory writes need human approval first."
-      },
-      "danger": {
-        "title": "Danger zone",
-        "description": "Irreversible. Confirm impact before proceeding.",
-        "deleteWorkspace": "Delete workspace",
-        "deleteWorkspaceHint": "Permanently deletes all conversations, runs, artifacts, and audit logs. Cannot be undone."
       }
     }
   },
@@ -2941,7 +2836,8 @@
         "copyFailed": "Select the command below",
         "oneLineLabel": "Copy and run on the target machine",
         "safetyClaude": "Agent CLI, files, and secrets stay on this machine.",
-        "waitingConnection": "Waiting for the device to connect…"
+        "waitingConnection": "Waiting for the device to connect…",
+        "safetyState": "Config, logs, state and cache are written under ~/.parsar/ — never into the repository the agent is working in."
       },
       "delete": {
         "confirm": "Delete"

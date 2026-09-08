@@ -145,6 +145,11 @@ export function PairDaemonDialog({ open, onClose, workspaceID, onPaired }: PairD
                   })}
                 </li>
                 <li>
+                  {t("runtime.agentDaemon.pair.safetyState", {
+                    defaultValue: "Config, logs, state and cache are written under ~/.parsar/ — never into the repository the agent is working in.",
+                  })}
+                </li>
+                <li>
                   {t("runtime.agentDaemon.pair.safetyOnce", {
                     defaultValue: "The token is shown once — it cannot be recovered after this dialog closes.",
                   })}

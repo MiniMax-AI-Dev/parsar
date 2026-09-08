@@ -193,6 +193,17 @@ function runtimeFromAgent(a?: Agent | null): RuntimeChoice {
   return a?.runtime ?? "sandbox"
 }
 
+/**
+ * What the daemon and the server both accept: an absolute path, or one under
+ * the operating user's home. The form used to demand a leading `/`, which was
+ * stricter than either — `codex/options.go` and `claudecode/session.go` expand
+ * `~/` themselves, and the server's own check reads "must be absolute or start
+ * with ~".
+ */
+function isUsableWorkDir(path: string): boolean {
+  return path.startsWith("/") || path.startsWith("~/")
+}
+
 function deviceIDFromAgent(a?: Agent | null): string {
   return String(agentConfig(a).device_id ?? "")
 }
@@ -790,7 +801,7 @@ export function CreateAgentDialog({
     if (!name.trim() || !hasConnector) return
     if (connector === "agent_daemon" && executionMode === "local_device" && !deviceID) return
     const trimmedWorkDir = workDir.trim()
-    if (connector === "agent_daemon" && trimmedWorkDir !== "" && !trimmedWorkDir.startsWith("/")) {
+    if (connector === "agent_daemon" && trimmedWorkDir !== "" && !isUsableWorkDir(trimmedWorkDir)) {
       // The daemon also enforces absolute paths, but failing fast here gives
       // the user a clearer error tied to the input instead of a stream error.
       return
@@ -969,7 +980,7 @@ export function CreateAgentDialog({
   }
 
   const workDirTrimmed = workDir.trim()
-  const workDirValid = connector !== "agent_daemon" || workDirTrimmed === "" || workDirTrimmed.startsWith("/")
+  const workDirValid = connector !== "agent_daemon" || workDirTrimmed === "" || isUsableWorkDir(workDirTrimmed)
   const canSubmit =
     !pending &&
     name.trim() !== "" &&
@@ -1195,7 +1206,7 @@ export function CreateAgentDialog({
                 <Field
                   label={t("agents.form.fields.workDir")}
                   hint={t(executionMode === "sandbox" ? "agents.form.workDir.hintSandbox" : "agents.form.workDir.hintLocal")}
-                  error={submitAttempted && workDir.trim() !== "" && !workDir.trim().startsWith("/") ? t("agents.form.errors.workDirAbsolute") : undefined}
+                  error={submitAttempted && workDir.trim() !== "" && !isUsableWorkDir(workDir.trim()) ? t("agents.form.errors.workDirAbsolute") : undefined}
                 >
                   <Input
                     value={workDir}
