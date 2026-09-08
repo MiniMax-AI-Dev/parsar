@@ -19,6 +19,7 @@ interface PageHeaderProps {
    */
   description?: ReactNode
   action?: ReactNode
+  actionClassName?: string
   backLink?: ReactNode
   className?: string
 }
@@ -28,7 +29,7 @@ interface PageHeaderProps {
  * (the only 600 weight on the screen), actions on the right. Sticks to
  * the top of the scrolling main column and spans its full width.
  */
-export function PageHeader({ title, subtitle, subtitleFor, action, backLink, className }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, subtitleFor, action, actionClassName, backLink, className }: PageHeaderProps) {
   const { t } = useTranslation("admin")
   const english = subtitleFor ? (t(subtitleFor as never, { lng: "en-US" }) as unknown as string) : undefined
   const resolvedSubtitle = subtitle ?? (english && english !== title && english !== subtitleFor ? english : undefined)
@@ -52,7 +53,7 @@ export function PageHeader({ title, subtitle, subtitleFor, action, backLink, cla
           )}
         </h1>
       )}
-      {action && <div className="ml-auto flex shrink-0 items-center gap-2">{action}</div>}
+      {action && <div className={cn("ml-auto flex shrink-0 items-center gap-2", actionClassName)}>{action}</div>}
     </header>
   )
 }

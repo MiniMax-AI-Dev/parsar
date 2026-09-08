@@ -37,11 +37,11 @@ export function AgentConfigSummary({
     <>
       <DetailSection title={t("agents.detail.config.identity.title")}>
         <PropertyList className={CONFIG_PROPERTY_LIST}>
-          <Property label={t("agents.detail.config.identity.slug")} mono>{agent.slug}</Property>
+          <Property label={t("agents.detail.config.identity.slug")} mono className="block h-auto min-h-7 break-all whitespace-normal py-1">{agent.slug}</Property>
           <Property label={t("agents.detail.config.identity.visibility")}>
             {t(`agents.visibility.${agent.visibility ?? "workspace"}`)}
           </Property>
-          <Property label={t("agents.detail.config.identity.agentId")} mono>{agent.id}</Property>
+          <Property label={t("agents.detail.config.identity.agentId")} mono className="block h-auto min-h-7 break-all whitespace-normal py-1">{agent.id}</Property>
           <Property label={t("agents.detail.config.identity.created")} mono>
             {formatDate(agent.created_at, i18n.language)}
           </Property>
