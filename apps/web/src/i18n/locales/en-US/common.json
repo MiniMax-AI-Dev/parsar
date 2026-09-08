@@ -1,5 +1,4 @@
 {
-  "appName": "Parsar",
   "languageSwitcher": {
     "label": "Language",
     "description": "Used across the admin UI. Your choice is remembered on this device.",
@@ -8,7 +7,6 @@
   },
   "theme": {
     "label": "Theme",
-    "trigger": "Change theme",
     "options": {
       "light": "Light",
       "dark": "Dark",
@@ -16,7 +14,6 @@
     }
   },
   "actions": {
-    "refresh": "Refresh",
     "cancel": "Cancel",
     "confirm": "Confirm",
     "save": "Save",
@@ -24,10 +21,6 @@
     "disable": "Disable",
     "enable": "Enable",
     "test": "Test",
-    "rotate": "Rotate",
-    "search": "Search",
-    "viewDetail": "View detail",
-    "viewAuditLog": "View Audit Log",
     "retry": "Retry",
     "close": "Close",
     "done": "Done",
@@ -48,7 +41,6 @@
     "demoWorkspace": "Demo Workspace",
     "workspaceLabel": "Workspace",
     "noWorkspaces": "No workspaces available",
-    "pickWorkspaceFirst": "Pick a workspace first",
     "discoverLabel": "Other workspaces",
     "memberCount": "{{count}} members",
     "requestJoinAction": "Request to join",
@@ -60,13 +52,9 @@
     "joinSubmittedToast": "Join request submitted for \"{{name}}\"",
     "discoverViewAll": "View all ({{count}})",
     "discoverDialogTitle": "Discover workspaces",
-    "discoverDialogDescription": "Search and request to join public workspaces in your org. Private workspaces are invite-only.",
     "discoverSearchPlaceholder": "Search by name…",
     "discoverEmpty": "No workspaces available to join",
     "discoverNoMatch": "No workspaces match \"{{q}}\"",
-    "discoverRange": "{{start}}–{{end}} of {{total}}",
-    "paginationPrev": "Previous",
-    "paginationNext": "Next",
     "membersColumn": "Members"
   },
   "workspaceCrud": {
@@ -74,13 +62,10 @@
       "create": "Create",
       "save": "Save",
       "archive": "Archive",
-      "submitJoinRequest": "Submit request",
-      "approve": "Approve",
-      "reject": "Reject"
+      "submitJoinRequest": "Submit request"
     },
     "fields": {
       "name": "Name",
-      "description": "Description",
       "visibility": "Visibility",
       "reason": "Reason",
       "optional": "(optional)"
@@ -92,9 +77,7 @@
     "workspace": {
       "createAction": "New workspace",
       "createTitle": "Create workspace",
-      "createDescription": "Workspaces hold agents, members, and shared registry. You become the owner of any workspace you create. The system identifier is generated automatically.",
       "renameTitle": "Rename workspace",
-      "renameDescription": "Change the workspace display name. The system identifier is permanent and not editable.",
       "archiveTitle": "Archive workspace",
       "archiveDescription": "Archive \"{{name}}\"? The workspace will disappear from the switcher; existing members and agents stay in the database but become unreachable through the workspace JOIN.",
       "archiveMarketplaceDependents": "If capabilities published by this workspace are still used by Agents in other workspaces, archive will be blocked. Unpublish first and wait for those workspaces to remove the capabilities.",
@@ -108,13 +91,10 @@
         "loading": "Preparing the request…",
         "loginRequired": "Sign in to request access to \"{{name}}\"",
         "loginCta": "Sign in with Feishu",
-        "notFoundTitle": "Workspace not found",
-        "notFoundDescription": "It may have been deleted, or it doesn't accept public join requests. Contact the workspace admin to request access.",
         "privateTitle": "This workspace doesn't accept public join requests",
         "privateDescription": "Contact the workspace admin to be invited.",
         "alreadyMember": "You're already a member — redirecting…",
         "pendingTitle": "Request submitted — waiting for admin approval",
-        "pendingDescription": "You'll be added automatically once an admin approves.",
         "withdrawAction": "Withdraw request",
         "successTitle": "Request sent",
         "successDescription": "An admin will be notified; you can revisit this page to check the status.",
@@ -123,8 +103,6 @@
     }
   },
   "login": {
-    "title": "Parsar",
-    "subtitle": "Team agent control plane",
     "loading": "Loading sign-in status...",
     "emailLabel": "Email",
     "emailPlaceholder": "you@company.com",
@@ -134,9 +112,6 @@
     "submitting": "Signing in...",
     "invalidCredentials": "Invalid email or password",
     "genericError": "Something went wrong. Please try again.",
-    "ssoDivider": "SSO",
-    "ssoButton": "Sign in with {{provider}}",
-    "noAccountHint": "First time here? Ask your admin for an invite.",
     "headline": "Your team's agent console.",
     "headlineSub": "Log in to your Parsar account",
     "orContinue": "or continue with",
@@ -170,10 +145,7 @@
     "workspacePlaceholder": "Acme",
     "passwordLabel": "Password",
     "submitButton": "Create owner account",
-    "submitting": "Creating your account...",
-    "closedTitle": "Setup already complete",
-    "closedBody": "This install already has an owner. Sign in with your existing account.",
-    "goToLogin": "Go to sign in"
+    "submitting": "Creating your account..."
   },
   "workspaceDefaults": {
     "personal": "{{name}}'s workspace",
@@ -181,7 +153,6 @@
   },
   "onboarding": {
     "title": "Create your first workspace",
-    "subtitle": "A workspace is a shared space where your team collaborates on agents. You'll be its Owner.",
     "fields": {
       "name": "Workspace name",
       "namePlaceholder": "e.g. Platform Team"
@@ -245,8 +216,7 @@
   },
   "scopeRequired": {
     "workspace": {
-      "title": "Choose a Workspace to view {{resource}}",
-      "description": "This data is managed by Workspace. Choose a Workspace in the header first."
+      "title": "Choose a Workspace to view {{resource}}"
     }
   },
   "invite": {

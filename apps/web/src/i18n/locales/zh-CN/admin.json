@@ -9,8 +9,7 @@
   },
   "models": {
     "page": {
-      "title": "模型",
-      "description": "公司共享的模型 catalog。任何人都可以新建模型，只有创建者(或超管)可以编辑/删除。"
+      "title": "模型"
     },
     "actions": {
       "addModel": "新建模型",
@@ -18,11 +17,8 @@
       "test": "测试连接",
       "edit": "编辑",
       "copy": "复制为新模型",
-      "disable": "禁用",
       "delete": "删除",
-      "menu": "更多操作",
       "editForbidden": "只有创建者或超管可以编辑此模型。",
-      "disableForbidden": "只有创建者或超管可以禁用此模型。",
       "deleteForbidden": "只有创建者或超管可以删除此模型。"
     },
     "copy": {
@@ -30,7 +26,6 @@
       "secretInaccessible": "原 Secret 你不可访问，请选其它 Secret 或重新填一把 Key。"
     },
     "status": {
-      "active": "可用",
       "pending": "待配置凭据",
       "disabled": "已禁用"
     },
@@ -44,12 +39,8 @@
     "table": {
       "model": "模型",
       "modelKey": "Model Key",
-      "compatibility": "接口兼容性",
       "baseURL": "服务地址",
       "credentialMode": "凭据模式",
-      "status": "状态",
-      "health": "健康状态",
-      "actions": "操作",
       "lastTested": "上次测试"
     },
     "loadError": {
@@ -67,16 +58,11 @@
       "description": "登记一个模型供 Agent (和同事) 使用。根据你是想全公司共用一把 Key、还是让每个人各自提供 Key，选择不同的凭据模式。",
       "descriptionShort": "没有符合当前过滤条件的模型。"
     },
-    "disable": {
-      "title": "禁用模型「{{name}}」?",
-      "description": "禁用后新的请求会失败，已在跑的运行不受影响。可以之后再启用。"
-    },
     "delete": {
       "title": "删除模型「{{name}}」?",
       "description": "这会永久删除该模型。仍被活跃 Agent 引用的模型会被后端拒绝删除。"
     },
     "bulkDelete": {
-      "selectAll": "选择当前可见的全部模型",
       "selectOne": "选择 {{name}}",
       "selectedCount": "已选 {{count}} 个",
       "deleteSelected": "删除所选",
@@ -99,8 +85,6 @@
       "unsupported": "暂不支持 (仅 OpenAI / Anthropic 协议)",
       "details": {
         "title": "模型测试诊断",
-        "open": "详情",
-        "summary": "{{healthy}}/{{total}} 个接口健康",
         "primaryEndpoint": "主结果：{{endpoint}} · {{ms}}ms",
         "noEndpoint": "没有测试任何接口",
         "unknownEndpoint": "未知接口",
@@ -131,7 +115,6 @@
         "openai": "OpenAI",
         "anthropic": "Anthropic Claude",
         "anthropicCompatible": "自定义网关 (Anthropic 协议)",
-        "google": "Google Gemini",
         "openaiCompatible": "自定义网关 (OpenAI 协议)"
       }
     },
@@ -142,7 +125,6 @@
         "namePlaceholder": "例：Claude Opus 4.5",
         "modelKey": "模型 Key",
         "modelKeyPlaceholder": "claude-3-5-sonnet-20241022",
-        "modelKeyCatalogHint": "可从该厂商的已知模型中选择，也可手动输入任意模型 id。",
         "modelKeySearch": "搜索或输入模型 id…",
         "modelKeyUse": "使用",
         "modelKeyEmpty": "无匹配模型 —— 可直接输入任意 id",
@@ -151,23 +133,18 @@
       "credentialMode": {
         "inlineSecret": {
           "title": "共享 Key (全公司)",
-          "apiKeyHint": "我们会把这把 Key 加密成一条 Secret。也可以复用已有的 Secret。",
           "reuseSecret": "或复用已有 Secret",
           "reuseNone": "(在上方填新 Key)"
         },
         "credentialRef": {
           "title": "个人 Key (每人一把)",
-          "kindLabel": "凭据类型",
-          "kindHint": "用户会在「我的凭据」页面按这个 kind code 填写自己的 Key。"
+          "kindLabel": "凭据类型"
         }
       },
       "submit": "创建模型"
     },
     "bulkImport": {
       "title": "从 /v1/models 导入模型",
-      "description": "填写供应商 Base URL 和 API Key，然后选择发现到的模型导入共享 catalog。",
-      "apiKeyHintInline": "用于发现模型；如果不复用已有 Secret，导入时会存成一条共享 Secret 并给所有导入模型共用。",
-      "apiKeyHintPersonal": "仅用于发现模型。导入后的模型会使用所选个人凭据类型。",
       "discover": "发现模型",
       "discovering": "发现中",
       "search": "搜索已发现模型…",
@@ -192,17 +169,14 @@
         "customHeaders": "自定义 HTTP Headers"
       },
       "endpointBaseURLs": {
-        "title": "接口服务地址",
-        "description": "按协议保存的最终 Base URL，用于运行时请求和模型测试。"
+        "title": "接口服务地址"
       },
       "credentialBinding": {
         "boundSecret": "当前绑定的 Secret",
         "boundSecretNone": "(没有绑 Secret — 当前不可用)",
         "rotateNewKey": "换一把新 Key",
         "rotateHint": "留空保持当前 Secret 不变。粘贴新 Key 会自动生成一条新 Secret。",
-        "rotateExplain": "我们会把新 Key 加密成一条 Secret 并把模型指过去。旧 Secret 不动，便于审计 / 回退。",
-        "kindCode": "凭据类型",
-        "kindCodeHint": "用户会在「我的凭据」页面按这个 kind code 填写自己的 Key。"
+        "kindCode": "凭据类型"
       }
     },
     "ownership": {
@@ -221,20 +195,6 @@
     "interrupted": "已中断"
   },
   "approvals": {
-    "page": {
-      "title": "收件箱 / 审批",
-      "description": "集中处理需要人类判断的事项。Agent 想做高风险动作时会落到这里，不让风险动作散落在 IM thread 里。"
-    },
-    "tabs": {
-      "pending": "待审批",
-      "decided": "已处理",
-      "expired": "已过期 / 已取消"
-    },
-    "risk": {
-      "high": "高风险",
-      "medium": "中风险",
-      "low": "低风险"
-    },
     "actions": {
       "allowOnce": "允许一次",
       "deny": "拒绝",
@@ -260,20 +220,13 @@
     "detail": {
       "agent": "Agent",
       "conversation": "关联对话",
-      "requestedBy": "请求者",
-      "resource": "目标资源",
       "payload": "Payload 摘要",
       "createdAt": "创建于",
       "expiresIn": "剩余时间",
-      "allow": "已允许",
-      "deny": "已拒绝",
       "alreadyDecided": "这条审批已经处理过，不能再操作。",
       "readOnly": "当前为只读模式。工作区所有者、管理员和成员可以处理。",
-      "relatedLinks": "关联跳转",
       "openRun": "打开 Run Detail",
       "openConversation": "打开 Conversation",
-      "openIM": "跳回 IM thread",
-      "empty": "选一条审批查看详情",
       "decidedBy": "决定人"
     },
     "empty": {
@@ -290,29 +243,21 @@
         "hint": "检查后端是否在 18080 端口运行：`make server` 或 `make dev`。"
       }
     },
-    "mockBanner": {
-      "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace。"
-    },
     "table": {
       "request": "请求"
     }
   },
   "conversations": {
     "page": {
-      "title": "对话",
-      "description": "和团队 Agent 在这里对话。"
+      "title": "对话"
     },
     "sidebar": {
       "allAgentsHint": "选择一个 Agent",
       "newConversation": "新对话",
-      "recents": "最近会话",
       "foldAria": "折叠会话列表",
       "expandAria": "展开会话列表",
-      "currentAgentDesc": "当前 Agent",
       "switchAgent": "切换 Agent",
       "emptyForAgent": "还没有对话，点上方 + 新对话开始。",
-      "youLabel": "我",
       "renameAria": "重命名会话",
       "renameCommit": "保存",
       "renameCancel": "取消",
@@ -330,33 +275,13 @@
     },
     "empty": {
       "greet": "今天想聊点什么？",
-      "mode": "Web 对话",
       "placeholderWithAgent": "和 {{agent}} 聊聊…",
       "placeholderNoAgent": "选个 Agent 后开始聊"
     },
-    "create": {
-      "title": "新对话",
-      "description": "创建一个 1v1 对话。",
-      "fields": {
-        "title": "标题（可选）",
-        "titlePlaceholder": "留空会用首条消息前 30 字自动生成",
-        "agent": "Agent",
-        "agentPlaceholder": "选一个 Agent",
-        "agentRequired": "请选择一个 Agent"
-      },
-      "cancel": "取消",
-      "submit": "开始对话",
-      "submitting": "创建中…"
-    },
     "detail": {
-      "kind": "CONVERSATION",
       "unnamed": "未命名对话",
       "emptyTimeline": "暂无消息",
-      "agentTyping": "正在生成回复…",
-      "stamp": "{{time}} · {{agent}}",
-      "viewRunLink": "查看运行详情",
-      "cancelAll": "全部取消",
-      "cancelAllAria": "取消此对话中所有进行中的任务"
+      "viewRunLink": "查看运行详情"
     },
     "runtime_error": {
       "badge": "运行失败",
@@ -375,7 +300,6 @@
       "readOnly": "当前为只读权限，无法发送消息。",
       "label": "发送消息",
       "placeholder": "和 {{agent}} 聊聊…",
-      "addContext": "添加附件 / 上下文",
       "send": "发送",
       "sending": "发送中…",
       "stopAria": "停止生成",
@@ -401,39 +325,19 @@
     "stream": {
       "caretHint": "正在生成…",
       "thinking": "思考中…",
-      "ready": "就绪",
       "error": "流式输出中断",
       "contextRejected": "上游模型拒绝了当前会话上下文，任务已经停止，并非仍在运行。请稍后重试；如果再次出现，请新建会话并重新描述任务。",
-      "retry": "重试",
       "queued": "排队中",
       "queuedWithPosition": "排队中（第 {{position}} 位）",
-      "waitingForHuman": "Agent 正在等待你的审批或回答。",
-      "openInbox": "打开收件箱",
       "interactionTitle": "Agent 需要你的决定",
-      "interactionDescription": "直接在这里处理，请求完成后 Agent 会继续运行。",
-      "viewAllInteractions": "在收件箱中查看全部",
       "loadingInteraction": "正在加载审批请求…",
       "interactionLoadError": "无法在对话中加载该请求，请打开收件箱重试。"
     },
     "permission": {
-      "header": "Agent 请求批准",
-      "headerWithAgent": "{{agent}} 请求批准",
-      "toolLabel": "工具：",
-      "unknownTool": "(未指定)",
-      "defaultTitle": "请求执行 {{tool}}",
-      "payloadToggle": "查看完整参数",
-      "allowOnce": "批准一次",
-      "alwaysAllow": "总是批准",
-      "deny": "拒绝",
-      "deciding": "提交中…",
-      "decided": "已{{decision}}",
-      "allow_once": "批准（一次）",
-      "always_allow": "批准（始终）",
-      "decideFailed": "提交失败：{{error}}"
+      "unknownTool": "(未指定)"
     },
     "steps": {
       "working": "执行中…",
-      "completedCount": "已完成 {{count}} 步",
       "totalLabel": "{{count}} 步",
       "doneInline": "{{count}} 完成",
       "completedInline": "已完成 {{count}} 个",
@@ -479,8 +383,7 @@
   },
   "runs": {
     "page": {
-      "title": "运行",
-      "description": "Agent 每一次执行都对应一条 Run。这里能看到正在跑、卡住、失败、待审批的 run。"
+      "title": "运行"
     },
     "tabs": {
       "all": "全部",
@@ -492,17 +395,8 @@
     },
     "table": {
       "run": "Run",
-      "status": "状态",
       "conversation": "对话",
-      "model": "模型",
       "duration": "耗时",
-      "cost": "成本",
-      "pagination": {
-        "prev": "上一页",
-        "next": "下一页",
-        "range": "第 {{from}}-{{to}} 条，共 {{total}} 条",
-        "empty": "暂无数据"
-      },
       "agent": "Agent",
       "connector": "连接器",
       "age": "时间"
@@ -526,31 +420,21 @@
         "hint": "检查后端是否在 18080 端口运行：`make server` 或 `make dev`。重试只会再发一次请求，不会修复 server。"
       }
     },
-    "mockBanner": {
-      "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace。"
-    },
     "empty": {
       "title": "还没有 Agent Run",
       "description": "在 IM 群或 Web 对话里 @Agent，运行记录会出现在这里。"
     },
     "detail": {
       "duration": "耗时",
-      "cost": "成本",
       "conversation": "对话",
-      "errorTitle": "运行失败",
-      "errorHint": "具体错误请查看下方 Steps 标签。",
       "tabs": {
         "overview": "概览",
-        "events": "事件",
         "steps": "步骤",
         "artifacts": "产物",
-        "permissions": "审批",
         "audit": "审计"
       },
       "overview": {
         "runtime": "运行环境",
-        "lifecycle": "生命周期",
         "diagnostics": "诊断"
       },
       "runtime": {
@@ -558,7 +442,6 @@
         "state": "状态",
         "provider": "提供方",
         "type": "类型",
-        "connector": "连接器",
         "agentKind": "Agent 引擎",
         "mode": "运行模式",
         "executionPlace": "运行环境",
@@ -573,14 +456,12 @@
         "lastHeartbeat": "最近心跳",
         "capturedAt": "快照时间",
         "health": "健康状态",
-        "heartbeatAge": "心跳延迟",
         "action": "建议",
         "empty": "这条 Run 没有记录运行环境快照。"
       },
       "diagnostics": {
         "noEvents": "暂无事件",
         "fields": {
-          "status": "状态",
           "latestEvent": "最新事件",
           "result": "结果",
           "reason": "原因",
@@ -623,14 +504,12 @@
         },
         "runtimeHealth": {
           "noSnapshot": "无快照",
-          "adminDisabled": "管理状态异常",
           "offline": "离线或不健康",
           "stale": "心跳过旧",
           "ready": "可用"
         },
         "runtimeActions": {
           "noSnapshot": "检查这条 Run 是否绑定了 agent_daemon runtime。",
-          "adminDisabled": "启用或修复该 runtime 后再重试。",
           "offline": "重连 daemon 或切换到可用设备。",
           "stale": "确认 daemon 仍在运行并上报心跳。",
           "ready": "运行环境状态正常。"
@@ -644,12 +523,9 @@
         }
       },
       "steps": {
-        "title": "Steps 时间轴",
         "empty": "这条 run 还没有持久化事件。新运行会在这里显示 token、工具、审批和完成状态。",
         "viewRaw": "查看原始事件",
         "hideRaw": "收起原始事件",
-        "viewAllRaw": "全部展开",
-        "hideAllRaw": "全部收起",
         "generated": "生成了 {{count}} 个字符",
         "started": "运行开始",
         "messageComplete": "消息生成完成",
@@ -670,13 +546,10 @@
       },
       "close": "关闭",
       "openConversation": "打开对话",
-      "agent": "Agent",
       "connector": "连接器",
       "created": "创建",
       "started": "开始",
       "finished": "完成",
-      "runId": "Run id",
-      "rawEvents": "原始事件",
       "notFound": {
         "title": "这条运行已不可用",
         "description": "它可能已被移除，或其 Agent 已被删除。"
@@ -722,16 +595,12 @@
     },
     "actions": {
       "create": "新建能力",
-      "createSubmit": "添加",
       "edit": "编辑",
       "save": "保存修改",
       "cancel": "取消",
       "close": "关闭",
       "addVersion": "提交新版本",
-      "disable": "停用",
-      "enable": "启用",
-      "delete": "删除能力",
-      "browse": "浏览市场"
+      "enable": "启用"
     },
     "permission": {
       "adminOnly": "仅 owner / admin 可添加"
@@ -744,16 +613,8 @@
       "latestVersion": "最新版本",
       "enabledAgents": "已启用 Agent 数",
       "credentials": "凭据需求",
-      "actions": "操作",
       "updated": "更新于",
       "installs": "安装数"
-    },
-    "pagination": {
-      "perPage": "每页",
-      "range": "{{start}}–{{end}} / 共 {{total}} 条",
-      "page": "第 {{page}} / {{totalPages}} 页",
-      "prev": "上一页",
-      "next": "下一页"
     },
     "credentials": {
       "none": "无需凭据"
@@ -769,16 +630,10 @@
       "reset": "清除筛选"
     },
     "rowActions": {
-      "view": "查看详情",
       "edit": "编辑 / 新增版本",
-      "addVersion": "编辑 / 新增版本",
       "more": "更多操作",
-      "disable": "停用",
-      "enable": "启用",
       "publish": "发布到市场",
       "unpublish": "取消发布",
-      "deprecate": "标记为废弃",
-      "undeprecate": "解除废弃",
       "delete": "删除",
       "uninstall": "从工作区移除"
     },
@@ -792,16 +647,9 @@
         "success": "「{{name}}」已删除。"
       }
     },
-    "create": {
-      "title": "新建能力",
-      "typeHelp": {
-        "skill": "从 GitHub 公共仓库加载 Skill 包，Agent 沙盒启动时加载。"
-      }
-    },
     "edit": {
       "title": "编辑能力",
-      "description": "类型和版本内容不可在这里修改；升级请添加新版本。",
-      "credentialWarning": "修改凭据类型会让已设置的对应凭据不再匹配，使用此能力的运行会提示重新设置。"
+      "description": "类型和版本内容不可在这里修改；升级请添加新版本。"
     },
     "fields": {
       "name": {
@@ -813,27 +661,18 @@
         "label": "一句话描述",
         "placeholder": "Agent 用这个能力能做什么"
       },
-      "version": {
-        "label": "版本号",
-        "help": "展示用版本号；首版建议 1.0.0。"
-      },
       "gitRepoUrl": {
-        "label": "GitHub 仓库地址",
-        "help": "仅支持 GitHub 公共仓库；私有仓库 / SSH / GitLab 暂不支持。"
+        "label": "GitHub 仓库地址"
       },
       "gitRef": {
-        "label": "版本号",
-        "placeholder": "如 v1.2.3、main、commit SHA",
-        "help": "建议钉到具体 tag 或 commit SHA；用 main 表示永远跟最新。"
+        "label": "版本号"
       },
       "path": {
-        "label": "子路径（可选）",
-        "help": "仓库内子目录；如果仓库根目录就是 Skill 包，留空。"
+        "label": "子路径（可选）"
       }
     },
     "detail": {
       "backToList": "能力",
-      "noDescription": "（无描述）",
       "notFound": {
         "title": "此能力不存在或已删除",
         "description": "可能已被删除，或当前工作区无权访问。"
@@ -851,7 +690,6 @@
     "versions": {
       "title": "版本历史",
       "latest": "最新",
-      "delete": "删除",
       "empty": {
         "title": "此能力还没有版本",
         "description": "添加一个版本后，Agent 才能启用它。"
@@ -859,8 +697,7 @@
       "table": {
         "version": "版本号",
         "createdAt": "创建时间",
-        "enabledAgents": "在用 Agent 数",
-        "actions": "操作"
+        "enabledAgents": "在用 Agent 数"
       },
       "add": {
         "title": "{{name}} — 添加新版本",
@@ -869,37 +706,10 @@
         "inlineSecretLostWarning": "上一版的 inline secret（{{keys}}）已隐藏。如需保留，请重新输入明文；或改成已托管的凭据。"
       },
       "viewContent": {
-        "action": "查看内容",
         "title": "查看 {{version}} 内容",
         "description": "这里展示该版本运行时会使用的只读内容。"
-      },
-      "deleteDialog": {
-        "title": "删除「{{name}}」的 {{version}}？",
-        "description": "此版本将从历史消失。",
-        "notAvailable": "暂不支持删除单个版本；如需移除整个能力，请使用下方「危险区」。"
       }
     },
-    "danger": {
-      "title": "危险区",
-      "description": "停用或删除会影响已启用此能力的 Agent。",
-      "deleteDisabled": "请先在所有 Agent 上禁用此能力，再来删除（当前 {{count}} 个 Agent 启用中）。",
-      "disable": {
-        "title": "停用「{{name}}」能力？",
-        "description": "停用后：已启用此能力的 {{count}} 个 Agent 在下一次运行时会失败；已在跑的运行完成当前轮次后失败；已添加的凭据保留，可以随时重新启用。",
-        "confirm": "确认停用"
-      },
-      "enable": {
-        "title": "启用「{{name}}」能力？",
-        "description": "启用后，Agent 可以在下一次运行时继续使用此能力。",
-        "confirm": "启用"
-      },
-      "delete": {
-        "title": "永久删除「{{name}}」能力？",
-        "description": "删除后：此能力将从工作区列表消失，所有版本一起删除，此操作不可撤销。当前装配数：{{count}}。",
-        "confirm": "永久删除"
-      }
-    },
-    "deleteBlocked": "请先从这些 Agent 移除装配，再删除此能力。",
     "errors": {
       "nameRequired": "请填写能力名。",
       "nameTooLong": "能力名最多 50 个字符。",
@@ -907,16 +717,13 @@
     },
     "toast": {
       "created": "{{name}} 能力已添加。到 Agent 详情即可启用使用。",
-      "createdWithCredential": "{{name}} 能力已添加。下一步：到 Agent 详情启用，或先在「我的凭据」补一次「{{kind}}」。",
       "updated": "{{name}} 能力已更新。",
       "versionAdded": "{{name}} 已添加新版本。",
-      "disabled": "{{name}} 已停用。",
       "enabled": "{{name}} 已启用。"
     },
     "none": "—",
     "empty": {
       "title": "本工作区还没添加能力。",
-      "descriptionAdmin": "能力属于工作区能力池，是 Agent 可用的外部工具（MCP）或可加载的 Skill 包。添加后，本工作区下的 Agent 可按需启用。",
       "descriptionMember": "本工作区能力池还没有任何能力。请联系 owner / admin 添加。"
     },
     "loadError": {
@@ -930,25 +737,10 @@
       }
     },
     "marketplace": {
-      "actions": {
-        "browse": "浏览市场"
-      },
-      "sourceLine": "来自 {{source}} · v{{version}}",
-      "drawer": {
-        "breadcrumb": "Agent 管理 / 能力",
-        "title": "能力市场",
-        "description": "浏览所有工作区已发布的能力。选择一个能力后，到 Agent 详情页装到具体 Agent 使用。"
-      },
       "filters": {
-        "all": "全部",
-        "search": "搜索能力名 / 描述",
         "hideInstalled": "隐藏本工作区已添加"
       },
       "card": {
-        "source": "▷ 来自：{{source}}",
-        "latest": "最新版本 v{{version}}",
-        "added": "{{count}} 个工作区已添加",
-        "credential": "凭据需求：{{kind}}",
         "install": "+ 装到我的 Agent",
         "installedBadge": "已添加",
         "selfPublished": "你已发布"
@@ -957,7 +749,6 @@
         "back": "返回市场列表",
         "addedCount": "已添加工作区数",
         "contentTitle": "能力内容",
-        "contentDescription": "添加到 Agent 前，可查看完整的 Skill 文件或 MCP 启动配置。",
         "loadErrorTitle": "无法加载能力内容",
         "loadErrorDescription": "无法读取最新发布版本。",
         "contentUnavailable": "该旧版本未保存可预览的 Skill 或 MCP 内容。",
@@ -965,7 +756,6 @@
         "sourceCommit": "来源提交",
         "sourcePath": "来源路径",
         "skillBadge": "Skill 文件",
-        "files": "文件",
         "command": "启动命令",
         "environment": "环境变量",
         "noEnvironment": "不需要环境变量。",
@@ -982,7 +772,6 @@
       }
     },
     "skillsDirectory": {
-      "installs": "{{count}} 次安装",
       "loadError": {
         "title": "无法加载 Skills 目录",
         "description": "可以直接重试，不会离开能力市场。"
@@ -1001,14 +790,12 @@
     },
     "mcpDirectory": {
       "title": "连接器",
-      "description": "在同一个能力市场中浏览精选连接器和各工作区发布的 MCP 能力。",
       "verified": "已验证",
       "securityNotice": "导入只会保存配置，不会立即运行。启用并绑定 Agent 后，该 MCP 才可能在 Runtime 中执行。",
       "filters": {
         "category": "连接器分类",
         "allCategories": "全部分类",
-        "verified": "仅已验证",
-        "sort": "连接器排序"
+        "verified": "仅已验证"
       },
       "sort": {
         "featured": "精选优先",
@@ -1036,7 +823,6 @@
       },
       "detail": {
         "loadError": "无法加载连接器详情",
-        "notFound": "未找到该连接器",
         "version": "版本",
         "transport": "传输方式",
         "endpoint": "远程地址",
@@ -1085,7 +871,6 @@
       "title": "市场状态",
       "published": "已发布到市场",
       "unpublished": "未发布",
-      "installCount": "{{count}} 个工作区已添加",
       "actions": {
         "publish": "发布到市场",
         "unpublish": "取消发布",
@@ -1125,8 +910,6 @@
       "state": "发布状态"
     },
     "uninstall": {
-      "sectionTitle": "从我的工作区移除",
-      "sectionDescription": "移除会从当前工作区所有 Agent 上卸载此能力。",
       "action": "从我的工作区移除",
       "title": "从我的工作区移除「{{name}}」？",
       "description": "移除后，此能力将从能力列表中消失，当前装着此能力的 {{count}} 个 Agent 会被卸载：",
@@ -1138,7 +921,6 @@
     "import": {
       "envMode": {
         "label": "凭据来源",
-        "literal": "保留原值",
         "inlineSecret": "团队共享密钥",
         "credentialRef": "个人凭据"
       },
@@ -1146,14 +928,9 @@
         "credential": "凭据"
       },
       "envValue": {
-        "configPlaceholder": "配置值",
-        "literalSecretPlaceholder": "保留原占位符",
         "inlineSecretPlaceholder": "粘贴团队共用 token，导入时加密保存",
         "inlineSecretNote": "适合团队共用的服务账号 token；提交后配置里只保留密钥引用，不保存明文。",
         "credentialRefNote": "适合 GitLab PAT 这类个人 token；运行时使用调用者在「我的凭据」里绑定的值。"
-      },
-      "envHint": {
-        "placeholderValue": "这个 env 占位符需要选择团队共享密钥或个人凭据。"
       },
       "envEmpty": {
         "noCredentialPlaceholders": "无需要处理的凭据"
@@ -1161,7 +938,6 @@
       "dialog": {
         "description": "粘贴第三方 MCP 配置(JSON / TOML),会自动解析并预览。普通 env 值原样导入;只有 env 值以 $ 开头时需要选择凭据来源。",
         "descriptionSkill": "粘贴 SKILL.md 或上传 zip 包。Skill 的名称和描述由 frontmatter 决定,正文会作为 instruction 注入模型。",
-        "descriptionPlugin": "上传 .claude-plugin 打包好的 zip,服务端会校验 manifest 并解析。",
         "descriptionPlaceholder": "用一句话说明这个能力做什么,Claude 会用它判断是否调用"
       },
       "skill": {
@@ -1192,23 +968,15 @@
   },
   "agents": {
     "page": {
-      "title": "Agent",
-      "description": "管理团队里的数字同事：它是谁、能做什么、用哪个模型、能调用哪些能力。"
+      "title": "Agent"
     },
     "actions": {
       "create": "新建 Agent",
       "chat": "聊一下",
       "edit": "编辑",
       "clone": "复制",
-      "disable": "禁用",
-      "enable": "启用",
       "delete": "删除",
       "more": "更多操作"
-    },
-    "tabs": {
-      "all": "全部",
-      "active": "已启用",
-      "issues": "有异常"
     },
     "search": {
       "placeholder": "搜索名称、描述、Slug、引擎或模型…"
@@ -1216,27 +984,16 @@
     "table": {
       "agent": "Agent",
       "engine": "引擎",
-      "execution": "运行方式",
       "updated": "最近启用",
-      "status": "状态",
       "connector": "连接器",
-      "sandbox": "沙盒",
       "model": "默认模型",
-      "runtime": "运行环境",
-      "visibility": "可见性",
-      "creator": "创建者",
-      "lastRun": "最近运行",
-      "recentFailures": "近 7 天失败",
-      "actions": "操作"
+      "runtime": "运行环境"
     },
     "runtimeCell": {
       "unbound": "未绑定 Runtime",
       "pending": "待分配"
     },
     "modelUnavailable": "模型不可用",
-    "sandbox": {
-      "running": "运行中"
-    },
     "status": {
       "active": "已启用",
       "disabled": "已停用",
@@ -1259,7 +1016,6 @@
     },
     "feishuConnector": {
       "title": "飞书 Bot 绑定",
-      "description": "把这个 Agent 绑到一个飞书自建应用上, 群里 @ 它就能进 Parsar. 凭证 (App Secret / Verification Token / Encrypt Key) 必须先存进 Secrets, 这里只填 Secret 引用.",
       "ownerOnly": "仅 owner / admin 可改",
       "saved": "飞书 Bot 配置已保存",
       "diagnostics": {
@@ -1296,7 +1052,6 @@
       },
       "provision": {
         "title": "扫码创建 Bot",
-        "subtitle": "管理员扫码授权后自动保存凭证",
         "start": "开始扫码",
         "qrAlt": "飞书扫码创建 Bot 二维码",
         "openLink": "打开授权页",
@@ -1311,10 +1066,6 @@
           "stopped": "已停止",
           "waiting": "等待中"
         }
-      },
-      "enabled": {
-        "label": "启用飞书 Bot 绑定",
-        "hint": "关闭后这个 Bot 应用不再接收入站消息, 出站消息也不再发送"
       },
       "fields": {
         "appId": {
@@ -1359,14 +1110,6 @@
         "reset": "撤销修改"
       }
     },
-    "runtime": {
-      "label": "运行环境",
-      "local": "本机连接",
-      "sandbox": "云端隔离 (推荐)",
-      "localHint": "Agent 直接在本机进程运行，与当前机器共享文件系统。",
-      "sandboxHint": "Agent 在云端独立沙盒里跑，互不影响、不接触你本地。",
-      "followWorkspace": "跟随工作区默认 (推荐)"
-    },
     "loadError": {
       "title": "无法加载 Agent 列表",
       "description": "后端返回错误。",
@@ -1377,38 +1120,24 @@
         "hint": "检查后端是否在 18080 端口运行：`make server` 或 `make dev`。"
       }
     },
-    "mockBanner": {
-      "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace。"
-    },
     "empty": {
       "title": "还没有 Agent",
       "description": "创建第一个 Agent，让它在飞书 / Slack / Web 里和团队协作。"
     },
     "detail": {
       "tabs": {
-        "overview": "Overview",
-        "prompt": "Prompt & Profile",
-        "connector": "Connector",
-        "model": "Model",
-        "capabilities": "Capabilities",
-        "sandbox": "Sandbox",
-        "runs": "Runs",
         "audit": "审计",
         "dynamics": "动态",
         "config": "配置",
-        "scheduled": "定时任务",
         "exposure": "暴露"
       },
       "dynamics": {
         "current": {
           "title": "当前",
-          "subtitle": "进行中的工作",
           "empty": "这个智能体当前没有在跑任何 task。"
         },
         "metrics": {
           "title": "近 30 天",
-          "subtitle": "表现",
           "completed": "完成数",
           "successRate": "成功率",
           "avgDuration": "平均耗时",
@@ -1416,9 +1145,7 @@
         },
         "recent": {
           "title": "最近工作",
-          "subtitle": "最近 {{count}} 条",
-          "empty": "暂无运行记录。",
-          "untitled": "(未命名)"
+          "empty": "暂无运行记录。"
         }
       },
       "config": {
@@ -1440,7 +1167,6 @@
         "runtime": {
           "title": "运行环境",
           "model": "模型",
-          "runtime": "Runtime",
           "execution": "运行方式",
           "connector": "连接器",
           "workdir": "工作目录",
@@ -1461,44 +1187,10 @@
         "title": "无法加载 Agent",
         "description": "Agent 可能不存在，或当前用户没有访问权限。"
       },
-      "overview": {
-        "summary": "基本信息",
-        "runs7d": "近 7 天 Runs",
-        "successRate": "成功率",
-        "failures7d": "近 7 天失败",
-        "approvals7d": "近 7 天审批",
-        "tags": "标签"
-      },
-      "fields": {
-        "slug": "内部标识",
-        "runtimeType": "Runtime type",
-        "visibility": "可见性"
-      },
-      "prompt": {
-        "system": "System prompt",
-        "profile": "Agent profile",
-        "tone": "Tone",
-        "persona": "Persona"
-      },
-      "model": {
-        "default": "默认"
-      },
       "capabilities": {
-        "sections": {
-          "enabled": "已启用 ({{count}})",
-          "available": "工作区可装 ({{count}})",
-          "unregistered": "未在工作区登记的能力"
-        },
-        "empty": {
-          "title": "本 Agent 还没启用任何能力。",
-          "description": "Agent 当前只能用通用对话能力。从下方「工作区可装」段挑一个能力启用。"
-        },
-        "emptyEnabled": "本 Agent 还没启用任何能力。Agent 当前只能用通用对话能力。从下方「工作区可装」段挑一个能力启用。",
         "emptyAvailable": "当前工作区没有更多可装能力。",
-        "credentialsLoadError": "我的凭据状态加载失败；按钮仍保留，提交后端会继续校验权限。",
         "credential": {
           "addCta": "去添加凭据",
-          "defaultName": "默认",
           "missingShort": "需要「{{kind}}」，未设置"
         },
         "bindings": {
@@ -1539,11 +1231,7 @@
           "title": "在「{{agent}}」启用「{{cap}}」",
           "description": "启用后，本 Agent 在运行时可以调用此能力。",
           "version": "使用版本",
-          "noCredential": "此能力不需要外部账号，启用后即可使用。",
-          "credentialReady": "✓ 已找到你的「{{kind}}」凭据。启用后可以立即使用。",
-          "credentialMissing": "✗ 此能力需要「{{kind}}」，你还没设置。",
-          "addCredential": "现在去设置",
-          "ackMissingCredential": "我知道这个能力需要凭据才能正常工作，启用后会以「凭据缺失」状态展示"
+          "noCredential": "此能力不需要外部账号，启用后即可使用。"
         },
         "switchDialog": {
           "title": "切换「{{cap}}」版本",
@@ -1559,11 +1247,6 @@
           "impactCapability": "此能力本身保留在工作区，可以随时重新启用。",
           "impactCredential": "不会删除已有我的凭据。"
         },
-        "unregistered": {
-          "description": "如果你需要的能力工作区里还没有，请联系 owner / admin 添加。",
-          "adminCta": "去 Capabilities 添加",
-          "memberHint": "如需新能力，请联系 owner / admin 添加。"
-        },
         "deletedCapability": {
           "title": "此能力在工作区已被删除",
           "description": "运行时会失败。请联系 admin 重新登记或在此移除。",
@@ -1571,18 +1254,12 @@
         },
         "toast": {
           "enabled": "「{{cap}}」已在「{{agent}}」启用 v{{version}}。",
-          "enabledMissingCredential": "「{{cap}}」已装上，但需要你先在「我的凭据」设置「{{kind}}」才能使用。",
           "switched": "「{{cap}}」已切换到 v{{version}}，下次运行生效。",
           "removed": "已从「{{agent}}」移除「{{cap}}」，下次运行生效。",
           "upgraded": "「{{cap}}」已升级到 v{{version}}，下次运行生效。"
         },
-        "loadError": {
-          "title": "无法加载 Agent 能力",
-          "description": "后端返回错误。"
-        },
         "marketplace": {
           "deprecatedBanner": "此能力已被来源工作区标记废弃。本 Agent 可以继续使用锁定的 v{{version}}，但无法升级到新版本。",
-          "upgradeBlocked": "源能力已废弃，无法升级。",
           "upgradeShort": "有新版本 v{{version}}"
         },
         "state": {
@@ -1592,30 +1269,15 @@
           "deprecated": "已废弃"
         }
       },
-      "runs": {
-        "hint": "Agent 详情这里只显示最近运行摘要，完整列表请到 Runs 页面带 agent filter 查看。",
-        "view": "前往 Runs"
-      },
       "sandbox": {
         "title": "长期 Sandbox",
         "errorTitle": "加载 sandbox 状态失败",
-        "killError": "Kill 失败",
         "rebuildError": "Rebuild 失败",
         "renewError": "续期失败",
         "notLiveHint": "当前 sandbox 已经不在 live 状态，Kill 与 Rebuild 暂时不可用。下一次 prompt 会自动重新创建 sandbox。",
-        "tabBadge": {
-          "live": "存在一个 live sandbox",
-          "terminal": "sandbox 已 kill 或 terminal，下次 prompt 会重建"
-        },
         "empty": {
-          "title": "当前没有 sandbox",
-          "description": "该 Agent 当前没有绑定长期 sandbox。下一次 prompt 会自动 lift 一个新的（或者运行时仍是 local 模式，根本不 spawn sandbox）。"
+          "title": "当前没有 sandbox"
         },
-        "local": {
-          "title": "当前 Agent 跑在本机",
-          "description": "本机模式不需要长期 sandbox。切换到 Sandbox 后，这里会显示状态、Kill 和 Rebuild 操作。"
-        },
-        "configHint": "如果已选择 Sandbox，请确认工作区已配置 sandbox 运行环境，否则启动会报错。",
         "fields": {
           "sandboxId": "E2B sandbox id",
           "templateId": "Template",
@@ -1628,8 +1290,6 @@
           "cacheKey": "Cache key"
         },
         "actions": {
-          "kill": "Kill sandbox",
-          "killing": "Killing…",
           "rebuild": "Rebuild",
           "rebuilding": "Rebuilding…",
           "renew": "续期",
@@ -1639,16 +1299,12 @@
         },
         "expires": {
           "remaining": "剩余 {{value}}",
-          "expired": "已过期",
-          "fresh": "刚续期"
+          "expired": "已过期"
         },
         "renewedToast": "已续期到 {{expiresAt}}",
         "provisionError": "分配失败",
-        "provisioningHint": "沙盒正在准备中。热启动通常需要 10-30 秒；本地 Docker 首次启动可能需要先拉取沙盒镜像，因此会更久。",
         "preparing": {
           "title": "正在准备沙盒",
-          "body": "正在启动沙盒，并等待 parsar-daemon 完成配对。",
-          "coldStartBody": "热启动通常需要 10-30 秒。本地 Docker 首次启动可能需要先拉取沙盒镜像，因此会更久。",
           "runtimeId": "Runtime id",
           "started": "开始于",
           "steps": {
@@ -1668,11 +1324,6 @@
           "body": "沙盒没有在启动 token 过期前完成配对。常见原因是本地 Docker 首次启动仍在拉取沙盒镜像。"
         },
         "confirm": {
-          "kill": {
-            "title": "确定 Kill 这个 sandbox 吗？",
-            "description": "与该 Agent 绑定的长期 E2B sandbox 会立刻销毁。当前 sandbox 里正在做的事会丢失；下一次 prompt 会从基础模板冷启一个新 sandbox（约 10-20 秒）。如果你最近改过 Agent 的沙盒规格,Kill 后下次冷启会切到新规格。",
-            "confirmLabel": "Kill sandbox"
-          },
           "rebuild": {
             "title": "确定 Rebuild 这个 sandbox 吗？",
             "description": "当前 sandbox 会销毁，下一次 prompt 从干净的基础模板重新 spawn。适用于 sandbox 里堆积了脏状态（坏的依赖缓存、过期 clone 等）。当前进行中的工作会丢失。",
@@ -1692,20 +1343,12 @@
         "edit": "编辑 Agent"
       },
       "sections": {
-        "basic": "基础",
-        "main": "主要配置",
-        "advanced": "高级",
-        "capabilities": "能力",
         "credentials": "所需凭据"
       },
       "fields": {
         "name": "名称",
         "description": "描述",
-        "connector": "连接器",
         "model": "模型",
-        "systemPrompt": "系统提示词（可选）",
-        "tags": "标签",
-        "slug": "内部标识",
         "executionMode": "执行方式",
         "agentEngine": "Agent 引擎",
         "codexMode": "Codex 协作模式",
@@ -1719,8 +1362,7 @@
         "name": "e.g. 数据分析助手",
         "description": "一句话说明这个 Agent 适合做什么",
         "modelSearch": "搜索当前 Workspace 的模型",
-        "capabilitySearch": "搜索能力",
-        "systemPrompt": "留空时使用默认助手提示词"
+        "capabilitySearch": "搜索能力"
       },
       "defaults": {
         "workspaceName": "当前 Workspace",
@@ -1729,12 +1371,8 @@
         "systemPrompt": "你是这个团队的 AI 助手。请保持简洁、准确，并优先提供可执行的建议。"
       },
       "errors": {
-        "nameConflict": "已有同名 Agent，请换一个",
-        "slugConflict": "内部标识已被占用，请换一个名称。",
         "modelRequired": "请选择一个模型",
         "modelUnavailable": "当前模型已不可用，请重新选择一个可用模型。",
-        "generatedIdConflict": "这个名称生成的内部标识已被占用，请换一个名称。",
-        "generatedIdInvalid": "名称需要包含至少一个字母、数字或中文。",
         "deviceRequired": "请选择一台本地设备。",
         "workDirAbsolute": "工作目录必须是绝对路径，或以 ~/ 开头。"
       },
@@ -1760,16 +1398,8 @@
         "description": "先去 Models 页接入一个模型；当前已填内容会带过去，配完后可以回到新建 Agent。",
         "cta": "去配置 Model"
       },
-      "emptyConnector": {
-        "title": "还没有可用 Connector",
-        "description": "先配置一个 Connector，Agent 才知道在哪里运行。",
-        "cta": "去配置 Connector"
-      },
-      "runtimeHint": "运行环境是 Agent 身份的一部分，创建后不可修改。要换运行方式请新建 Agent。选「云端隔离」需要部署已启用云端沙盒；开源/自托管场景可能需要工作区运行凭证。",
-      "runtimeLocked": "运行环境创建时确定，不可修改",
       "noTagsAdmin": "当前工作区还没有可复用的能力标签。",
       "noTagsMember": "当前工作区还没有可复用的能力标签。",
-      "goCapabilities": "去能力页 →",
       "noCapabilityVersion": "无可用版本",
       "deprecatedCapabilityBadge": "已下架",
       "deprecatedCapabilityTooltip": "该能力已下架,保留旧绑定可继续使用;取消勾选后无法再选回。",
@@ -1844,17 +1474,11 @@
     },
     "listActions": {
       "cancel": "取消",
-      "disableConfirmTitle": "停用「{{name}}」？",
-      "disableConfirmDescription": "这个 Agent 将停止接收新的运行请求。历史对话、运行和审计记录会保留，之后仍可重新启用。",
-      "disableConfirm": "停用",
-      "disabledToast": "已停用 {{name}}",
-      "enabledToast": "已启用 {{name}}",
       "clonedToast": "已复制为「{{name}}」"
     },
     "delete": {
       "title": "删除「{{name}}」？",
       "description": "这会从当前工作区永久删除该 Agent。历史对话、运行和审计记录会保留。",
-      "confirmNameLabel": "输入 {{name}} 以确认删除。",
       "confirmNamePrefix": "输入",
       "confirmNameSuffix": "以确认删除。",
       "copyName": "复制 Agent 名称",
@@ -1879,20 +1503,16 @@
     },
     "engine": {
       "claudeCode": {
-        "title": "Claude Code",
-        "description": "通过 parsar-daemon 运行 Claude Code CLI。"
+        "title": "Claude Code"
       },
       "codex": {
-        "title": "Codex",
-        "description": "通过 app-server 协议运行 OpenAI Codex（codex-rs）。"
+        "title": "Codex"
       },
       "pi": {
-        "title": "Pi",
-        "description": "通过 parsar-daemon 运行 pi coding agent CLI。"
+        "title": "Pi"
       },
       "opencode": {
-        "title": "OpenCode",
-        "description": "通过 parsar-daemon 运行 OpenCode CLI，适合本机或 sandbox daemon 的 OpenCode 工作流。"
+        "title": "OpenCode"
       }
     },
     "filters": {
@@ -1926,38 +1546,20 @@
     }
   },
   "secrets": {
-    "page": {
-      "title": "凭据",
-      "description": "查看、轮换和禁用 Parsar 访问外部服务用到的 API Key 与 OAuth 凭据。凭据通常会由业务流程（模型、运行环境、连接）自动创建。"
-    },
     "none": "未指定",
     "sections": {
       "modelKeys": "模型 API Keys",
-      "modelKeysDescription": "通常从 Models 页创建 Provider 时自动保存并绑定。",
       "runtimeKeys": "运行环境凭据",
-      "runtimeKeysDescription": "用于云端运行环境、E2B 等基础设施。",
-      "otherKeys": "其它 API Keys",
-      "otherKeysDescription": "兜底保存的自定义服务凭据。"
-    },
-    "usage": {
-      "modelProvider": "被模型 Provider 使用；在 Models 页创建时会自动绑定。",
-      "runtime": "被云端运行环境使用；用于启动或管理隔离运行实例。",
-      "feishu": "被飞书入口或 Agent Bot 使用。",
-      "custom": "自定义 API Key；请在对应能力或配置中绑定使用。"
+      "otherKeys": "其它 API Keys"
     },
     "status": {
       "active": "启用",
       "disabled": "已禁用"
     },
     "actions": {
-      "disable": "禁用",
-      "alreadyDisabled": "已禁用"
+      "disable": "禁用"
     },
     "create": {
-      "cta": "添加 API Key",
-      "title": "添加 API Key",
-      "description": "这是兜底入口。模型、运行环境和 OAuth 账号优先在对应业务页面里创建。API Key 会由服务端加密保存。",
-      "requiresWorkspace": "需要先选择 Workspace",
       "field": {
         "purpose": "用途",
         "name": "名称",
@@ -1965,7 +1567,6 @@
         "apiKey": "API Key"
       },
       "purpose": {
-        "modelProvider": "模型服务",
         "runtime": "运行环境",
         "custom": "自定义 API"
       },
@@ -2013,10 +1614,6 @@
       "pending": "待审批"
     },
     "pendingRequests": {
-      "tabLabel": "待审批",
-      "empty": "暂无待审批申请",
-      "requestedAt": "申请时间",
-      "reason": "申请理由",
       "noReason": "(未填写)",
       "confirmRejectTitle": "拒绝该申请?",
       "confirmRejectBody": "确认拒绝「{{name}}」的加入申请? 申请人之后仍可重新提交。",
@@ -2028,9 +1625,7 @@
     "table": {
       "user": "用户",
       "role": "角色",
-      "userStatus": "账号状态",
-      "joinedAt": "加入时间",
-      "actions": "操作"
+      "joinedAt": "加入时间"
     },
     "role": {
       "owner": "所有者",
@@ -2039,13 +1634,9 @@
       "viewer": "访客"
     },
     "userStatus": {
-      "active": "活跃",
       "disabled": "已禁用"
     },
     "add": {
-      "cta": "添加成员",
-      "title": "添加 Workspace 成员",
-      "requiresWorkspace": "需要先选择 Workspace",
       "field": {
         "user": "选择用户",
         "role": "角色"
@@ -2063,15 +1654,11 @@
       "submitting": "添加中 ({{done}}/{{total}})…",
       "partialError": {
         "title": "成功 {{success}} 个,失败 {{failed}} 个"
-      },
-      "error": {
-        "title": "添加失败"
       }
     },
     "invite": {
       "cta": "邀请新成员",
       "title": "邀请新成员",
-      "description": "为该邮箱和角色创建一个邀请链接，链接将在 72 小时后过期。",
       "emailLabel": "邮箱",
       "emailPlaceholder": "teammate@company.com",
       "nameLabel": "姓名",
@@ -2083,11 +1670,8 @@
       "close": "关闭",
       "resultTitle": "邀请已创建",
       "resultBody": "将此邀请链接发送给 {{email}}，链接将在 72 小时后过期。",
-      "existingUserNotice": "如果该邮箱已属于 Parsar 用户，接受邀请后会将其现有账号加入工作区。",
       "copyAll": "复制邀请链接",
       "copied": "已复制!",
-      "pendingTitle": "待处理邀请（{{count}}）",
-      "pendingStatus": "待处理",
       "expiresAt": "{{value}} 过期",
       "copyLink": "复制邀请链接",
       "copyError": "复制邀请链接失败",
@@ -2106,9 +1690,7 @@
         "error": "取消邀请失败"
       },
       "credential": {
-        "url": "登录链接",
-        "email": "邮箱",
-        "password": "密码"
+        "url": "登录链接"
       },
       "tabs": {
         "link": "邀请链接",
@@ -2122,9 +1704,6 @@
       "description": "会软删除这个 user 在当前 workspace 的 membership。User 记录本身保留，可以之后再加回来。",
       "cancel": "取消",
       "confirm": "移除"
-    },
-    "mutation": {
-      "errorTitle": "操作失败"
     },
     "empty": {
       "ws": {
@@ -2143,10 +1722,6 @@
         "description": "前端访问不到后端 API（/api/v1/...）。可能 server 没启动、端口被占用，或者 Vite proxy 配置不对。",
         "hint": "检查后端是否在 18080 端口运行：`make server` 或 `make dev`。"
       }
-    },
-    "mockBanner": {
-      "title": "{{scope}}",
-      "ws": "请先在顶部选择 Workspace。"
     }
   },
   "settings": {
@@ -2155,24 +1730,14 @@
     },
     "workspace": {
       "title": "基础设置",
-      "description": "这里只放现在有明确影响范围的 workspace 身份信息。",
       "name": "Workspace 名称",
-      "nameHint": "当前 workspace 的显示名；重命名请使用顶部 workspace 切换器。",
-      "slug": "内部标识",
-      "slugHint": "系统自动生成的稳定标识。",
-      "region": "数据区域",
-      "runtimeRoot": "本地 Runtime Root",
-      "runtimeRootHint": "运行配置、日志、状态和缓存统一放在这里，不写入仓库根目录。"
+      "slug": "内部标识"
     },
     "authentication": {
       "title": "认证",
-      "description": "只读展示部署配置里的登录 Provider 状态。Secret 仍由 env 或 secret manager 管理。",
-      "loading": "正在加载认证 Provider 状态...",
       "error": "无法加载认证 Provider 状态。",
       "callbackUrl": "Callback URL",
-      "requiredEnv": "必需 env",
       "missingEnv": "缺失 env",
-      "noneMissing": "没有缺失的必需 env。",
       "docsHint": "部署文档:",
       "status": {
         "enabled": "已启用",
@@ -2183,8 +1748,7 @@
   },
   "audit": {
     "page": {
-      "title": "审计日志",
-      "description": "Parsar 所有可追溯的动作。身份、配置、运行、审批、数据访问按 5 类来源分组，新→旧排列。"
+      "title": "审计日志"
     },
     "tabs": {
       "all": "全部",
@@ -2203,8 +1767,7 @@
     },
     "filters": {
       "targetType": "目标类型",
-      "targetTypeAll": "全部目标类型",
-      "targetTypeNone": "当前来源无目标类型"
+      "targetTypeAll": "全部目标类型"
     },
     "targetType": {
       "agent_run": "Agent 运行",
@@ -2225,14 +1788,9 @@
       "source": "来源",
       "actor": "发起方",
       "event": "事件",
-      "target": "目标",
-      "payload": "附加字段",
-      "payloadFields": "{{count}} 项"
+      "target": "目标"
     },
     "detail": {
-      "recordId": "Record ID",
-      "actorType": "Actor 类型",
-      "target": "目标",
       "payload": "Payload",
       "openRun": "查看运行",
       "openConversation": "查看对话"
@@ -2249,10 +1807,6 @@
         "description": "前端无法访问后端 API（/api/v1/...）。可能 server 没启动、端口被占用，或者 Vite proxy 配置不对。",
         "hint": "检查后端是否在 18080 端口运行：`make server` 或 `make dev`。"
       }
-    },
-    "mockBanner": {
-      "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace。"
     },
     "empty": {
       "title": "暂无审计记录",
@@ -2310,10 +1864,6 @@
         "hint": "检查后端是否在 18080 端口运行：`make server` 或 `make dev`。"
       }
     },
-    "mockBanner": {
-      "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace。"
-    },
     "empty": {
       "title": "还没有用量数据",
       "description": "Agent 跑过后会自动产生 usage 记录。"
@@ -2321,36 +1871,26 @@
   },
   "myCredentials": {
     "page": {
-      "title": "我的凭据",
-      "description": "这里设置你在所有工作区使用的外部账号。一种凭据填一次，跨工作区共享；凭据仅你自己可见，他人即便是同一 Agent 的协作成员也用各自的凭据。"
+      "title": "我的凭据"
     },
     "actions": {
-      "add": "+ 添加凭据",
       "edit": "编辑",
       "delete": "删除"
     },
     "returnBanner": {
-      "description": "完成设置后，可以返回原页面继续操作。",
       "action": "返回原页面"
     },
     "search": {
       "placeholder": "搜索类型或备注名"
     },
     "table": {
-      "displayName": "备注名",
       "kind": "凭据类型",
       "lastUsed": "最近使用",
-      "actions": "操作",
-      "unnamed": "（未命名）",
       "kindCode": "类型标识",
       "addedAt": "添加于"
     },
     "kind": {
       "unknown": "未知凭据"
-    },
-    "empty": {
-      "title": "你还没设置任何凭据",
-      "description": "当你启用的能力（或同事的 Agent 帮你调用的能力）需要 GitHub / Slack / 数据库等外部账号时，回到这里填写。每种账号只需填一次，跨工作区共享。"
     },
     "emptyFiltered": {
       "title": "没有匹配的凭据",
@@ -2370,7 +1910,6 @@
     "dialog": {
       "createTitle": "添加凭据",
       "editTitle": "编辑凭据",
-      "description": "凭据仅你本人可见，加密保存。",
       "openProvider": "打开官方创建页面 →",
       "tokenSet": "已设置凭据值；Parsar 不会再次展示明文。",
       "replaceToken": "替换 token",
@@ -2381,44 +1920,27 @@
       "submit": "保存",
       "fields": {
         "kind": "凭据类型",
-        "kindHint": "没看到你需要的类型？联系 owner / admin。后续版本会支持自定义凭据类型。",
-        "displayName": "备注名（可选）",
-        "displayNamePlaceholder": "例：我的 GitHub PAT (work)",
-        "displayNameHint": "仅你自己看到，方便区分；不影响 Agent 调用。",
-        "value": "凭据值",
-        "valueHint": "粘贴后只在加密保存时使用；后续不会再展示。"
+        "value": "凭据值"
       }
     },
     "delete": {
       "title": "删除「{{kind}}」凭据？",
       "description": "删除后，所有使用「{{kind}}」类型的能力将无法被你触发；已启用此类能力的 Agent 在你下次发起会话时会失败，并提示你重新设置。凭据值会被加密销毁，不可恢复。",
       "impactTitle": "当前使用此凭据类型的能力",
-      "loadingImpact": "正在检查影响范围…",
       "noImpact": "暂无能力使用此凭据类型。",
       "hasImpact": "{{count}} 个能力（跨 {{workspaceCount}} 个工作区）正在使用此凭据类型。",
       "cancel": "取消",
       "confirm": "永久删除"
-    },
-    "security": {
-      "title": "凭据如何被使用",
-      "encrypted": "凭据值加密保存，Parsar 服务端从不展示明文给任何人。",
-      "crossWorkspace": "凭据是 user 级别的，跨工作区共享；不同工作区不需要重复设置。",
-      "sandbox": "当某个 Agent 调用需要凭据的能力时：v0.2 阶段，沙盒在你发起会话时注入你的凭据；他人在同一会话里的调用也会用你的凭据。后续版本会改为按动作发起人精细注入。"
     }
   },
   "credentialsPage": {
     "title": "凭据",
-    "description": "凭据分两类：「我的个人」是你自己的外部账号（GitHub、Notion 等），跨工作区共享、仅你可见；「组织共享」是 workspace 管理员配置的服务凭据（模型 API Key、运行环境等）。",
     "tabs": {
       "personal": "我的个人凭据",
       "org": "组织共享凭据"
     },
     "personal": {
       "add": "添加凭据",
-      "banner": {
-        "title": "你还缺 {{count}} 个凭据",
-        "description": "你所在工作区里有 agent / 能力 / 模型用到这些凭据；运行时遇到会被拦下，提前配好可以避免临时打断。"
-      },
       "pending": {
         "title": "待配置",
         "refCount": "被 {{count}} 处引用",
@@ -2434,24 +1956,17 @@
       }
     },
     "org": {
-      "scopeNote": "这里管理整个组织共享的服务凭据（模型 API Key、运行环境等）。仅 workspace 管理员可见和编辑。",
       "add": "添加 API Key",
       "openModels": "前往 Models",
       "create": {
-        "title": "添加组织共享凭据",
-        "description": "用于运行环境（如 E2B）或自定义服务的 API Key。模型 API Key 请在 Models 页创建 Provider 时自动保存。"
+        "title": "添加组织共享凭据"
       }
     }
   },
   "credentialCheck": {
-    "present": "「{{kind}}」已就绪（{{name}}）",
-    "missing": "需要「{{kind}}」— 你还没设置",
-    "addAction": "添加凭证",
     "requiredBadge": "必需",
     "sourcePersonal": "每个调用者用自己的 token",
     "sourceShared": "使用共享密钥",
-    "sourceSharedExisting": "使用已有共享密钥",
-    "sourceSharedNew": "新建共享密钥（粘贴一次）",
     "createNewShared": "+ 新建共享密钥",
     "personalDisabledHint": "公开 Agent 不支持个人凭据（调用者可能不是平台用户）",
     "personalYouHaveIt": "你已配置（其他调用者需各自配置）",
@@ -2463,7 +1978,6 @@
     "modelBindingTitle": "Model 凭据",
     "modelBindingPersonal": "调用者各自的 API key",
     "modelBindingShared": "使用共享 API key",
-    "modelBindingNew": "新建共享 API key（粘贴一次）",
     "form": {
       "displayName": "名称（可选）",
       "value": "凭证值",
@@ -2474,8 +1988,7 @@
   },
   "runtime": {
     "page": {
-      "title": "执行层",
-      "description": ""
+      "title": "执行层"
     },
     "capability": {
       "local": {
@@ -2492,7 +2005,6 @@
     },
     "credential": {
       "title": "E2B API Key",
-      "description": "Agent 选择云端沙盒时会使用这条 Key。保存后只展示遮蔽形式。",
       "state": {
         "hasCredential": "已保存",
         "noCredential": "尚未录入。"
@@ -2500,8 +2012,6 @@
       "actions": {
         "save": "录入 E2B API Key",
         "reset": "更换 Key",
-        "manageSaved": "E2B Key · {{value}}",
-        "manageMissing": "录入 E2B Key",
         "delete": "删除",
         "cancel": "取消"
       },
@@ -2527,20 +2037,13 @@
     },
     "status": {
       "cloudReady": "云端运行已就绪",
-      "cloudReadyHint": "当前工作区可让 Agent 运行在云端隔离环境中。",
-      "cloudReadyManaged": "运行环境由 Parsar 托管，无需配置。",
-      "cloudReadyOps": "云端运行已就绪 · 由管理员配置。联系系统管理员调整额度。",
       "cloudOff": "本工作区尚未录入云端凭证",
-      "cloudOffHint": "Agent 仍可走本机或外部环境运行；如需让 Agent 走云端隔离，请在下方「工作区凭证」录入。",
-      "cloudOffActionDocs": "查看部署文档",
       "cloudMisconfigured": "云端运行配置不完整 — 请检查工作区凭证或联系部署方。",
       "unreachable": "无法连接到 Parsar 后端，无法判断运行环境状态。",
       "retry": "重试",
-      "cloudRunnerUnavailable": "云端沙盒暂未启用",
-      "cloudRunnerUnavailableHint": "当前部署还没有启用云端沙盒。请联系部署管理员开启后再使用。"
+      "cloudRunnerUnavailable": "云端沙盒暂未启用"
     },
     "list": {
-      "summary": "{{count}} 个运行实例",
       "sort": {
         "label": "排序",
         "lastActive": "最近活跃（最新优先）",
@@ -2557,7 +2060,6 @@
         "status": "状态",
         "lastActive": "最近活跃",
         "createdAt": "创建于",
-        "actions": "操作",
         "state": {
           "live": "运行中",
           "transient": "准备中",
@@ -2565,54 +2067,9 @@
         }
       },
       "actions": {
-        "refresh": "刷新",
         "bulkKill": "回收选中 ({{count}})",
         "killN": "回收 {{count}} 个运行实例",
         "killingPending": "正在回收 {{count}} 个…"
-      },
-      "empty": {
-        "newDeployment": {
-          "title": "还没有正在运行的云端沙盒",
-          "description": "选择云端沙盒的 Agent 收到消息后，会自动启动隔离环境并出现在这里。",
-          "tryCta": "想立刻验证配置已通？点击下方按钮，会临时启动一个测试环境、运行健康检查，然后自动回收。不会占用任何 Agent。",
-          "tryCtaInline": "验证连接"
-        },
-        "localOss": {
-          "title": "本工作区尚未录入云端凭证",
-          "description": "Agent 仍可走本机或外部环境运行。如需让 Agent 在云端隔离环境运行，请在上方「工作区凭证」录入 sandbox 提供方 API key。",
-          "afterSnippet": "录入完成后，本工作区里所有 runtime=sandbox 的 Agent 会共用这条凭证。完整说明见 ",
-          "docsLink": "部署文档",
-          "e2bSignup": "还没有 E2B account？在 E2B 创建一个"
-        },
-        "localManaged": {
-          "title": "云端运行未启用",
-          "description": "你的工作区当前没有云端运行环境配额。请联系 Parsar 团队或你的 workspace owner 开启。",
-          "fallback": "仍可使用本机/外部 Agent 运行模式 —— 进入 Agent 详情 → 运行环境 tab 选择「跟随工作区」之外的选项。"
-        },
-        "localSelfhost": {
-          "title": "本工作区尚未录入云端凭证",
-          "description": "你的私有部署当前在本地模式运行。工作区管理员可以在上方的「工作区凭证」卡片录入云端 sandbox 凭证；如果公司统一管理凭证，请联系 ops 或 IT 管理员协助。",
-          "afterSnippet": "录入凭证前，Agent 只能在本地或外部环境运行。"
-        },
-        "misconfiguredOss": {
-          "title": "云端运行配置不完整",
-          "description": "当前工作区的云端运行凭证无法连通。建议：",
-          "step1": "检查工作区保存的 E2B 凭证是否仍然有效；",
-          "step2": "查看 server 日志中以 sandbox-runner / e2b-client 开头的错误；",
-          "step3": "修复凭证后，可点击右上角 [ 🔁 重测云端可达性 ] 或 [ 修改 E2B 凭证 ] 验证。",
-          "docsLink": "查看部署文档"
-        },
-        "misconfiguredManaged": {
-          "title": "云端运行暂时不可用",
-          "description": "我们已经收到这条工作区的运行环境异常告警，Parsar 团队正在处理。受影响的 Agent 会自动 fall back 到本地或外部模式。",
-          "statusLink": "查看运维状态页"
-        },
-        "misconfiguredSelfhost": {
-          "title": "云端运行配置异常",
-          "description": "后端检测到云端运行环境凭证无法连通。请联系你公司的 ops 检查部署日志：",
-          "step1": "查找 sandbox-runner / e2b-client 日志条目；",
-          "step2": "验证出网防火墙是否允许 Parsar server 访问 E2B endpoint。"
-        }
       },
       "errors": {
         "loadFailed": "加载运行实例失败",
@@ -2627,37 +2084,13 @@
     },
     "detail": {
       "placeholderTitle": "运行实例详情",
-      "placeholderDescription": "完整详情视图（连通性测试、概览、技术细节）将在后续 PR 中实现。",
       "placeholderBody": "详情页建设中 — Agent ID: {{id}}",
-      "title": "{{agentName}} 的运行实例",
-      "subtitle": "云端隔离环境 · 由 Agent {{agentName}} 的下次消息按需启用，超过空闲阈值自动回收。",
-      "sections": {
-        "overview": "概览",
-        "connectivity": "连通性测试结果",
-        "runtime": "运行环境详情",
-        "technical": "技术细节"
-      },
       "fields": {
-        "boundAgent": "绑定 Agent",
-        "status": "状态",
-        "lastActive": "最近活跃",
-        "createdAt": "创建于",
-        "killedAt": "已停止于",
-        "image": "镜像",
-        "mode": "运行模式",
-        "region": "区域 / Host",
-        "sandboxId": "Sandbox ID",
-        "bindingId": "Binding ID",
-        "cacheKey": "Cache Key",
-        "metadata": "Metadata"
-      },
-      "jumpToAgent": "在 Agent 详情中查看 →",
-      "jumpToRuns": "最近运行 →",
-      "jumpToAudit": "审计日志 →"
+        "status": "状态"
+      }
     },
     "managedBoundary": {
       "title": "管理边界",
-      "description": "Parsar 只能治理自己注册和下发的行为。手动放入或手动运行在 sandbox 内的内容，不在直接审计覆盖内。",
       "managedTitle": "Managed（Parsar 管控范围）",
       "unmanagedTitle": "Unmanaged（不在审计范围）",
       "managed": {
@@ -2672,14 +2105,8 @@
       }
     },
     "connectivity": {
-      "action": "连通性测试",
-      "actionPending": "测试中…",
-      "actionDisabled": "运行实例未就绪，无法测试",
       "testButton": "测试连接",
       "testing": "测试中…",
-      "lastRun": "最近一次：{{ago}}",
-      "emptyHint": "还没有运行过连通性测试。点击右上角 [ 连通性测试 ] 试一次。",
-      "emptyHintSecondary": "（测试是只读的、不会影响 Agent 的工作。）",
       "summary": {
         "pass": "✅ 连通正常 · 用时 {{seconds}}s",
         "partial": "⚠ 部分检查失败 · 用时 {{seconds}}s",
@@ -2709,80 +2136,27 @@
         "promptTimeout": "建议先 Rebuild 本运行实例；如反复失败请联系管理员。",
         "unknown": "请联系管理员检查 server 日志。"
       },
-      "details": "详细检查项",
       "collapse": "收起",
       "suggestionLabel": "建议",
       "notRunAfter": "后续检查未执行（前置依赖未通过）。"
     },
     "cloud": {
-      "state": {
-        "loading": {
-          "label": "读取中",
-          "body": "正在读取运行环境状态。"
-        },
-        "deploymentOff": {
-          "label": "部署未启用",
-          "body": "当前部署还没有启用云端沙盒。这里不需要继续填写，启用后再配置工作区的 E2B API Key。",
-          "bodyWithCredential": "E2B API Key 已保存；当前部署还没有启用云端沙盒。启用后，选择云端沙盒的 Agent 才能启动隔离环境。"
-        },
-        "notConfigured": {
-          "label": "工作区未配置",
-          "body": "录入 E2B API Key 后，Agent 才能选择云端沙盒运行。"
-        },
-        "ready": {
-          "label": "已就绪",
-          "body": "云端沙盒已就绪。当前有 {{count}} 个 Agent 选择云端沙盒。"
-        },
-        "error": {
-          "label": "异常",
-          "body": "云端沙盒暂时不可用。请检查工作区配置后再验证。",
-          "managedBody": "云端沙盒由部署方托管，但当前暂不可用。请联系部署管理员检查沙盒服务。",
-          "bodyWithCredential": "已保存 {{value}}，但当前连接校验没有通过。可以重新录入 E2B API Key 后再验证。"
-        },
-        "unknown": {
-          "label": "未知",
-          "body": "暂时无法读取运行环境状态。可以刷新页面后重试。"
-        }
-      },
-      "savedCredential": "已保存：{{value}}",
-      "stats": {
-        "deployment": "部署状态",
-        "workspace": "工作区配置",
-        "agents": "选择云端沙盒的 Agent",
-        "enabled": "已启用",
-        "disabled": "未启用",
-        "configured": "已配置",
-        "unconfigured": "未配置"
-      },
-      "managed": {
-        "title": "由组织托管",
-        "body": "本工作区不需要单独录入 E2B API Key。"
-      },
       "instances": {
         "title": "正在运行的云端沙盒",
         "emptyTitle": "还没有正在运行的云端沙盒",
         "emptyBody": "选择云端沙盒的 Agent 收到消息后，会自动启动隔离环境并出现在这里。"
-      },
-      "provider": {
-        "title": "云端沙盒供应商"
       }
     },
     "agentDaemon": {
-      "intro": "本地设备通过 parsar-daemon 反向连接 Parsar，让 Agent 使用这台机器上的 Claude Code / OpenCode 等 CLI。",
-      "errors": {},
       "actions": {
         "pair": "接入新设备",
-        "enable": "启用",
-        "disable": "禁用",
         "delete": "删除设备"
       },
       "table": {
         "name": "名称",
         "version": "版本",
         "agentEngines": "Agent 引擎",
-        "status": "状态",
-        "heartbeat": "最后心跳",
-        "actions": "操作"
+        "heartbeat": "最后心跳"
       },
       "status": {
         "online": "在线",
@@ -2792,45 +2166,19 @@
         "offline": "离线"
       },
       "load": {
-        "idle": "空闲",
         "active": "{{count}} 个运行中"
-      },
-      "agentKind": {
-        "available": "available",
-        "unavailable": "unavailable",
-        "notDetected": "{{label}} 未检测到",
-        "usable": "{{label}} 可用"
-      },
-      "capabilities": {
-        "streaming": "Streaming",
-        "permissions": "Permissions",
-        "usage": "Usage",
-        "resume": "Resume"
-      },
-      "detail": {
-        "disabled": "管理员已暂停调度；daemon 仍可继续上报心跳。",
-        "pendingPairing": "等待执行 parsar-daemon connect 完成配对。",
-        "offlineNoSnapshot": "还没收到 capability 快照；请先确认设备上的 parsar-daemon 已连上。",
-        "offlineWithSnapshot": "最近心跳中断；可在设备上运行 parsar-daemon status 或 parsar-daemon logs 排查。",
-        "error": "daemon 上报错误；请在设备上运行 parsar-daemon logs 查看最近错误。",
-        "onlineNoCli": "WebSocket 在线，但本机没有可用的 Agent CLI。",
-        "onlineActive": "当前有 {{count}} 个运行在执行。",
-        "onlineIdle": "在线，等待新请求。"
       },
       "pair": {
         "title": "接入新设备",
         "description": "为这台设备生成一次性 token,然后在目标机器上运行 parsar-daemon connect。daemon 会主动通过 WebSocket 连回 Parsar。",
         "nameLabel": "设备名称",
-        "safetyTitle": "连接说明",
         "safetyOutbound": "由本机主动出站连接,无需开放任何入站端口",
         "safetyOnce": "Token 只显示一次,生成后请立刻复制",
         "mint": "生成连接命令",
         "minting": "生成中…",
         "success": "连接命令已生成。请在目标机器运行下面的命令：",
-        "connectLabel": "连接 daemon",
         "copy": "复制",
         "copyCommand": "复制命令",
-        "tokenOnlyToggle": "只看 token",
         "connected": "设备已接入",
         "copied": "已复制",
         "copyFailed": "请手动选择下方命令",
@@ -2865,7 +2213,6 @@
   "scopeRequired": {
     "workspace": {
       "title": "选择 Workspace 查看{{resource}}",
-      "description": "这些数据按 Workspace 管理。请在顶部选择一个 Workspace。",
       "pick": "选择 Workspace"
     }
   },
@@ -2873,58 +2220,16 @@
     "page": {
       "title": "集成"
     },
-    "providers": {
-      "github": "用于 GitHub PR、Issue、Repo 等能力。",
-      "slack": "用于 Slack 消息、频道和工作流能力。",
-      "feishu": "用于飞书应用、消息回写和事件验签。"
-    },
-    "connected": "已连接",
-    "loading": "读取中",
-    "comingSoon": "即将支持",
     "connect": "连接账号",
-    "reconnect": "重新连接",
-    "oauth": {
-      "title": "第三方账号",
-      "empty": "暂时没有可连接的第三方账号。"
-    },
-    "model": {
-      "title": "模型 API Key",
-      "addAction": "新增模型 API Key",
-      "linkAction": "关联 Key",
-      "configured": "已配置",
-      "reconfigure": "重新配置",
-      "remove": "删除",
-      "empty": "还没有可用的模型 API Key 类型。"
-    },
-    "createKind": {
-      "title": "新增模型 API Key 类型",
-      "code": "Code",
-      "codePlaceholder": "mistral_api_key",
-      "codeHint": "小写字母、数字、下划线;创建后不可修改",
-      "displayName": "显示名",
-      "displayNamePlaceholder": "Mistral API Key",
-      "descriptionField": "描述(可选)",
-      "descriptionPlaceholder": "Personal Mistral API key",
-      "submit": "创建",
-      "cancel": "取消",
-      "errorGeneric": "创建失败,请稍后再试"
-    },
     "connector": {
       "adminOnly": "仅工作区所有者和管理员可以编辑连接器设置。",
       "savedBadge": "已保存",
       "actions": {
         "save": "保存",
-        "saveDraft": "保存草稿",
-        "reset": "重置"
-      },
-      "status": {
-        "enabled": "已启用",
-        "disabled": "已停用"
+        "saveDraft": "保存草稿"
       },
       "platformList": {
         "title": "消息平台",
-        "description": "选择平台后直接填写凭据，配置完整后再启用。",
-        "noAppId": "未填写 App ID",
         "status": {
           "enabled": "已启用",
           "configured": "已配置",
@@ -2944,18 +2249,14 @@
       },
       "feishu": {
         "title": "飞书连接器",
-        "description": "使用飞书扫一扫授权，系统会自动创建并绑定机器人。",
         "masterKeyMissing": "服务端尚未完成必要的安全配置，暂时无法连接飞书。请联系管理员完成配置后再试。",
         "provision": {
           "title": "扫码连接飞书",
-          "subtitle": "点击“开始扫码”，使用飞书扫一扫授权；系统会自动创建并绑定机器人。",
-          "connectedSubtitle": "机器人已绑定。需要更换机器人时，可点击“重新扫码”。",
           "connected": "飞书机器人已连接",
           "start": "开始扫码",
           "reconnect": "重新扫码",
           "qrAlt": "飞书扫码连接二维码",
           "openLink": "打开授权页",
-          "pending": "等待飞书确认…",
           "success": "已连接飞书 Bot",
           "successWithName": "已连接 {{name}}",
           "saved": "飞书连接器已绑定。",
@@ -2970,7 +2271,6 @@
       },
       "slack": {
         "title": "Slack 连接器",
-        "description": "为本工作区绑定一个 Slack 机器人。从本工作区可达的所有 Agent 共用此机器人。",
         "saved": "Slack 连接器已保存。",
         "docLink": {
           "label": "前往 api.slack.com/apps 创建 Slack 应用",
@@ -2978,32 +2278,22 @@
         },
         "fields": {
           "enabled": {
-            "label": "启用",
-            "hint": "开启后,Slack 消息将通过此机器人路由。",
             "toggle": "启用 Slack 机器人"
           },
           "appId": {
-            "label": "App ID",
-            "hint": "「Basic Information」页 → App Credentials → App ID(以 A 开头)。"
+            "label": "App ID"
           },
           "botToken": {
-            "label": "Bot Token",
-            "hint": "「OAuth & Permissions」标签页 → Bot User OAuth Token(以 xoxb- 开头)。需先 Install to Workspace。加密存储。",
-            "savedHint": "已保存 Bot Token(OAuth & Permissions → Bot User OAuth Token)。如需更换请输入新的 xoxb 令牌。"
+            "label": "Bot Token"
           },
           "appToken": {
-            "label": "App-Level Token",
-            "hint": "「Basic Information」→ App-Level Tokens → Generate Token,勾选 connections:write 权限(以 xapp- 开头)。socket 模式必填。加密存储。",
-            "savedHint": "已保存 App-Level Token(Basic Information → App-Level Tokens)。如需更换请输入新的 xapp 令牌。"
+            "label": "App-Level Token"
           },
           "signingSecret": {
-            "label": "Signing Secret",
-            "hint": "「Basic Information」→ App Credentials → Signing Secret。events 模式必填。加密存储。",
-            "savedHint": "已保存 Signing Secret(Basic Information → App Credentials → Signing Secret)。如需更换请输入新值。"
+            "label": "Signing Secret"
           },
           "eventMode": {
             "label": "事件模式",
-            "hint": "Socket 建立长连接(本地可用,需 xapp 令牌);events 通过 HTTP 回调接收(需 Signing Secret)。",
             "options": {
               "socket": "Socket 模式",
               "events": "Events API"
@@ -3018,7 +2308,6 @@
       },
       "discord": {
         "title": "Discord 连接器",
-        "description": "为本工作区绑定一个 Discord 机器人。从本工作区可达的所有 Agent 共用此机器人。",
         "saved": "Discord 连接器已保存。",
         "docLink": {
           "label": "前往 Discord 开发者门户创建应用",
@@ -3026,27 +2315,19 @@
         },
         "fields": {
           "enabled": {
-            "label": "启用",
-            "hint": "开启后,Discord 消息将通过此机器人路由。",
             "toggle": "启用 Discord 机器人"
           },
           "appId": {
-            "label": "Application ID",
-            "hint": "「General Information」页 → Application ID。"
+            "label": "Application ID"
           },
           "botToken": {
-            "label": "Bot Token",
-            "hint": "「Bot」标签页 → Reset Token 获取机器人令牌。加密存储。",
-            "savedHint": "已保存 Bot Token(Bot 标签页 → Token)。如需更换请输入新值。"
+            "label": "Bot Token"
           },
           "publicKey": {
-            "label": "Public Key",
-            "hint": "「General Information」页 → Public Key,用于校验交互签名。加密存储。",
-            "savedHint": "已保存 Public Key(General Information → Public Key)。如需更换请输入新值。"
+            "label": "Public Key"
           },
           "intents": {
-            "label": "Gateway Intents",
-            "hint": "在「Bot」→ Privileged Gateway Intents 打开对应意图(如 MESSAGE CONTENT),否则消息正文会为空。"
+            "label": "Gateway Intents"
           }
         },
         "errors": {
@@ -3057,7 +2338,6 @@
       },
       "teams": {
         "title": "Microsoft Teams 连接器",
-        "description": "为本工作区绑定一个 Teams 机器人。从本工作区可达的所有 Agent 共用此机器人。",
         "saved": "Teams 连接器已保存。",
         "docLink": {
           "label": "前往 Azure 门户注册 Bot / 应用",
@@ -3065,22 +2345,16 @@
         },
         "fields": {
           "enabled": {
-            "label": "启用",
-            "hint": "开启后,Teams 消息将通过此机器人路由。",
             "toggle": "启用 Teams 机器人"
           },
           "appId": {
-            "label": "App ID",
-            "hint": "Azure「应用注册」→ 你的应用 → 应用程序(客户端) ID。"
+            "label": "App ID"
           },
           "appPassword": {
-            "label": "应用密码",
-            "hint": "Azure「应用注册」→ 证书和密码 → 客户端密码值。加密存储。",
-            "savedHint": "已保存应用密码(证书和密码 → 客户端密码)。如需更换请输入新值。"
+            "label": "应用密码"
           },
           "tenantId": {
-            "label": "租户 ID",
-            "hint": "可选。单租户机器人填目录(租户) ID;多租户(botframework.com)机器人留空。"
+            "label": "租户 ID"
           }
         },
         "errors": {
@@ -3096,21 +2370,16 @@
   },
   "scheduledTasks": {
     "title": "定时任务",
-    "subtitle": "到点用独立 session 自动触发一次 agent run，结果落到运行历史。",
     "new": "新建任务",
     "empty": "还没有定时任务，点右上角新建一个。",
     "emptyReadOnly": "还没有定时任务。",
     "loadError": "加载定时任务失败",
     "noAgents": "当前项目还没有可用的 Agent，请先创建并启用一个 Agent 再配置定时任务。",
-    "never": "—",
-    "enabled": "已启用",
     "disabled": "已停用",
     "col": {
       "name": "任务名",
       "frequency": "频率",
-      "status": "状态",
       "nextRun": "下次运行",
-      "actions": "操作",
       "lastRun": "上次运行"
     },
     "action": {
@@ -3131,11 +2400,6 @@
       "skipped_overlap": "跳过(上次未完成)",
       "auto_disabled": "已自动停用",
       "none": "未运行"
-    },
-    "pagination": {
-      "prev": "上一页",
-      "next": "下一页",
-      "range": "第 {{from}}-{{to}} 条,共 {{total}} 条"
     },
     "freq": {
       "hourly": "每小时",

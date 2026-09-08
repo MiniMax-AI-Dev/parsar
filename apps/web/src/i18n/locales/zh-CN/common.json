@@ -1,5 +1,4 @@
 {
-  "appName": "Parsar",
   "languageSwitcher": {
     "label": "语言",
     "description": "用于整个管理界面。你的选择会记忆在本机。",
@@ -8,7 +7,6 @@
   },
   "theme": {
     "label": "主题",
-    "trigger": "切换主题",
     "options": {
       "light": "浅色",
       "dark": "深色",
@@ -16,7 +14,6 @@
     }
   },
   "actions": {
-    "refresh": "刷新",
     "cancel": "取消",
     "confirm": "确认",
     "save": "保存",
@@ -24,10 +21,6 @@
     "disable": "禁用",
     "enable": "启用",
     "test": "测试",
-    "rotate": "轮换",
-    "search": "搜索",
-    "viewDetail": "查看详情",
-    "viewAuditLog": "查看审计日志",
     "retry": "重试",
     "close": "关闭",
     "done": "完成",
@@ -48,7 +41,6 @@
     "demoWorkspace": "演示工作区",
     "workspaceLabel": "工作区",
     "noWorkspaces": "暂无可用工作区",
-    "pickWorkspaceFirst": "请先选择一个工作区",
     "discoverLabel": "其他工作区",
     "memberCount": "{{count}} 人",
     "requestJoinAction": "申请加入",
@@ -60,13 +52,9 @@
     "joinSubmittedToast": "已提交「{{name}}」的加入申请,等待审批",
     "discoverViewAll": "查看全部 ({{count}})",
     "discoverDialogTitle": "发现工作区",
-    "discoverDialogDescription": "搜索并申请加入你团队里的公开工作区。私密工作区只能通过邀请加入。",
     "discoverSearchPlaceholder": "按名称搜索…",
     "discoverEmpty": "暂时没有可申请加入的工作区",
     "discoverNoMatch": "没有匹配「{{q}}」的工作区",
-    "discoverRange": "{{start}}–{{end}} / 共 {{total}}",
-    "paginationPrev": "上一页",
-    "paginationNext": "下一页",
     "membersColumn": "成员"
   },
   "workspaceCrud": {
@@ -74,13 +62,10 @@
       "create": "创建",
       "save": "保存",
       "archive": "归档",
-      "submitJoinRequest": "提交申请",
-      "approve": "同意",
-      "reject": "拒绝"
+      "submitJoinRequest": "提交申请"
     },
     "fields": {
       "name": "名称",
-      "description": "描述",
       "visibility": "可见性",
       "reason": "申请理由",
       "optional": "（可选）"
@@ -92,9 +77,7 @@
     "workspace": {
       "createAction": "新建工作区",
       "createTitle": "新建工作区",
-      "createDescription": "工作区承载 Agent、成员和共享注册表。你将自动成为新建工作区的 Owner。系统标识会自动生成。",
       "renameTitle": "重命名工作区",
-      "renameDescription": "修改工作区显示名称。系统标识不可修改。",
       "archiveTitle": "归档工作区",
       "archiveDescription": "确认归档「{{name}}」？归档后将从切换器中消失，原有成员和 Agent 保留在数据库中，但通过工作区维度的查询都不会再返回。",
       "archiveMarketplaceDependents": "如果这个工作区发布的市场能力仍被其它工作区的 Agent 使用，归档会被阻止。请先取消发布并等待对方移除后再归档。",
@@ -108,13 +91,10 @@
         "loading": "正在准备申请…",
         "loginRequired": "登录后即可申请加入「{{name}}」",
         "loginCta": "使用飞书登录",
-        "notFoundTitle": "找不到这个工作区",
-        "notFoundDescription": "工作区可能已删除,或它不接受公开申请。如需访问,请联系工作区管理员。",
         "privateTitle": "该工作区不接受公开申请",
         "privateDescription": "请联系工作区管理员加入。",
         "alreadyMember": "你已经是该工作区的成员,正在跳转…",
         "pendingTitle": "申请已提交,等待管理员审批",
-        "pendingDescription": "审批通过后会自动加入该工作区。",
         "withdrawAction": "撤回申请",
         "successTitle": "申请已发送",
         "successDescription": "管理员审批后会通知你,你也可以稍后在此页面查看状态。",
@@ -123,8 +103,6 @@
     }
   },
   "login": {
-    "title": "Parsar",
-    "subtitle": "团队 Agent 协作控制台",
     "loading": "登录态加载中...",
     "emailLabel": "邮箱",
     "emailPlaceholder": "you@company.com",
@@ -134,9 +112,6 @@
     "submitting": "登录中...",
     "invalidCredentials": "邮箱或密码错误",
     "genericError": "发生错误,请稍后重试。",
-    "ssoDivider": "SSO",
-    "ssoButton": "使用 {{provider}} 登录",
-    "noAccountHint": "首次访问?请联系管理员发送邀请。",
     "headline": "团队的 Agent 控制台。",
     "headlineSub": "登录你的 Parsar 账号",
     "orContinue": "或使用以下方式",
@@ -170,10 +145,7 @@
     "workspacePlaceholder": "Acme",
     "passwordLabel": "密码",
     "submitButton": "创建管理员账号",
-    "submitting": "正在创建...",
-    "closedTitle": "已完成初始化",
-    "closedBody": "本实例已经存在拥有者。请使用已有账号登录。",
-    "goToLogin": "前往登录"
+    "submitting": "正在创建..."
   },
   "workspaceDefaults": {
     "personal": "{{name}}的工作区",
@@ -181,7 +153,6 @@
   },
   "onboarding": {
     "title": "创建你的第一个工作区",
-    "subtitle": "工作区是团队协作处理 Agent 的共享空间。你将自动成为它的 Owner。",
     "fields": {
       "name": "工作区名称",
       "namePlaceholder": "例如：平台团队"
@@ -245,8 +216,7 @@
   },
   "scopeRequired": {
     "workspace": {
-      "title": "选择 Workspace 查看{{resource}}",
-      "description": "这些数据按 Workspace 管理。请在顶部选择一个 Workspace。"
+      "title": "选择 Workspace 查看{{resource}}"
     }
   },
   "invite": {
