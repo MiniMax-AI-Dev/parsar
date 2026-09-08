@@ -334,11 +334,11 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 	return out, nil
 }
 
-func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery) {
-	registry.RegisterKind(agentCLIs.ClaudeCode, claudecode.Factory)
-	registry.RegisterKind(agentCLIs.OpenCode, opencodeagent.Factory)
-	registry.RegisterKind(agentCLIs.Codex, codex.Factory)
-	registry.RegisterKind(agentCLIs.Pi, pi.Factory)
+func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery, serverURL string) {
+	registry.RegisterKind(agentCLIs.ClaudeCode, withCapabilityDownloads(claudecode.Factory, serverURL))
+	registry.RegisterKind(agentCLIs.OpenCode, withCapabilityDownloads(opencodeagent.Factory, serverURL))
+	registry.RegisterKind(agentCLIs.Codex, withCapabilityDownloads(codex.Factory, serverURL))
+	registry.RegisterKind(agentCLIs.Pi, withCapabilityDownloads(pi.Factory, serverURL))
 }
 
 // spawnBackground forks the daemon into the background. Parent
@@ -428,7 +428,7 @@ func mainLoop(rc *runContext, profile string, prof auth.Profile, agentCLIs agent
 	obslog.Bg().Info("bootstrap ok", "device_id", boot.DeviceID, "ws_url", wsURL, "heartbeat_interval", boot.HeartbeatInterval())
 
 	registry := agent.NewRegistry()
-	registerAgentKinds(registry, agentCLIs)
+	registerAgentKinds(registry, agentCLIs, prof.ServerURL)
 
 	dial := func(ctx context.Context) (*transport.Conn, error) {
 		return transport.Dial(ctx, transport.DialOptions{

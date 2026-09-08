@@ -134,6 +134,9 @@ description and keep ownership on the side listed here.
 
 ### Runtime and execution concepts
 
+- The daemon resolves loopback Postgres capability-download URLs through its
+  paired server address before calling an adapter. Preserve the signed query
+  and resource path; external storage URLs and browser upload URLs are unchanged.
 - `connector_type` chooses the protocol Parsar uses to run an agent
   (`agent_daemon`, `http_agent`, ...). It does not say where the process
   runs.

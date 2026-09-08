@@ -228,7 +228,7 @@ func TestRegisterAgentKindsPreservesDescriptors(t *testing.T) {
 				Resume:    true,
 			},
 		},
-	})
+	}, "https://parsar.example.test")
 
 	kinds := reg.SupportedAgentKinds()
 	if len(kinds) != 4 {
