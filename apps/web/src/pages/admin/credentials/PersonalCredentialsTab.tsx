@@ -167,9 +167,11 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
 
   const showPending = !capabilitiesScan.isLoading && missing.length > 0
   const kindLabelOf = (kind: string, fallback: string) => credentialKindLabel(kind, i18n.language, fallback, kindOptions.kinds)
+  // The date alone: the column header says "添加于" once, at the top, instead of
+  // the cell repeating it on every row.
   const createdLabel = (iso: string) => {
     const ms = Date.parse(iso)
-    return Number.isNaN(ms) ? "—" : t("myCredentials.table.createdAt", { date: new Date(ms).toLocaleDateString() })
+    return Number.isNaN(ms) ? "—" : new Date(ms).toLocaleDateString()
   }
 
   return (
@@ -182,10 +184,13 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
         />
       ) : (
         <Ledger columns={LEDGER_COLUMNS} role="list" aria-label={t("credentialsPage.tabs.personal")}>
+          {/* Every column that carries something is named. Two of these were
+              blank, so the mono kind code and the date beneath them stood in
+              unlabelled columns. */}
           <LedgerHeader>
             <span>{t("myCredentials.table.kind")}</span>
-            <span />
-            <span />
+            <span>{t("myCredentials.table.kindCode")}</span>
+            <span>{t("myCredentials.table.addedAt")}</span>
             <span className="text-right">{t("myCredentials.table.lastUsed")}</span>
             <span />
           </LedgerHeader>
@@ -343,23 +348,27 @@ function PendingRow({
   const { t } = useTranslation("admin")
   return (
     <LedgerRow role="listitem" tabIndex={-1}>
+      {/* The disclosure belongs to the name, in the name's column. It used to
+          sit in the second column, which the header calls 类型标识 — a count
+          of references standing under a label for a kind code. */}
       <span className="flex min-w-0 items-center gap-1.5">
         <KeyRound className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
         <span className="truncate font-medium">{label}</span>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={onToggle}
+          className="inline-flex min-w-0 shrink items-center gap-1 truncate text-left text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-spring", !open && "-rotate-90")}
+            strokeWidth={1.5}
+            aria-hidden="true"
+          />
+          <span className="truncate">{t("credentialsPage.personal.pending.refCount", { count: row.refCount })}</span>
+        </button>
       </span>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={onToggle}
-        className="inline-flex min-w-0 items-center gap-1 truncate text-left text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-      >
-        <ChevronDown
-          className={cn("h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-spring", !open && "-rotate-90")}
-          strokeWidth={1.5}
-          aria-hidden="true"
-        />
-        <span className="truncate">{t("credentialsPage.personal.pending.refCount", { count: row.refCount })}</span>
-      </button>
+      <span />
       <span />
       <span />
       <RowActions>

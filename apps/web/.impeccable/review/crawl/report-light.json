@@ -1,7 +1,7 @@
 [
   {
     "view": "conversations",
-    "rows": 0,
+    "rows": 25,
     "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
@@ -39,9 +39,11 @@
   },
   {
     "view": "agents",
-    "rows": 0,
-    "rowsAfterClicks": 0,
-    "dialogsOpened": [],
+    "rows": 2,
+    "rowsAfterClicks": 26,
+    "dialogsOpened": [
+      "新建 Agent"
+    ],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
@@ -60,10 +62,14 @@
   {
     "view": "models",
     "rows": 1,
-    "rowsAfterClicks": 0,
+    "rowsAfterClicks": 1,
     "dialogsOpened": [
       "导入模型",
-      "新建模型"
+      "新建模型",
+      "测试连接",
+      "编辑",
+      "复制为新模型",
+      "删除"
     ],
     "pageErrors": [],
     "consoleErrors": [],
@@ -114,14 +120,10 @@
     "view": "runtime",
     "rows": 0,
     "rowsAfterClicks": 0,
-    "dialogsOpened": [
-      "接入新设备"
-    ],
+    "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
-    "bad": [
-      "runtime/load: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
-    ]
+    "bad": []
   },
   {
     "view": "usage",

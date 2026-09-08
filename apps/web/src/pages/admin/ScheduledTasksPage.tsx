@@ -158,7 +158,9 @@ function parseCron(cron: string): CronForm {
 
 function describeCron(cron: string, t: TFunction<"admin">, weekdays: string[]): string {
   const f = cron.trim().split(/\s+/)
-  if (f.length !== 5) return t("scheduledTasks.desc.custom", { cron })
+  // Nothing, not "cron: */15 * * * *". The next column *is* the expression, so
+  // an unrecognised schedule used to print it twice, side by side.
+  if (f.length !== 5) return ""
   const [min, hour, dom, mon, dow] = f
   const hh = Number(hour)
   const mm = Number(min)

@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next"
 import { AlertTriangle, ArrowUpRight, Ban, Loader2 } from "lucide-react"
 
 import { ActionIconButton, RowActions } from "../../../components/ui/action-button"
-import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
 import {
   Dialog,
@@ -38,6 +37,7 @@ import type {
 } from "../../../lib/api-types"
 import { useNavigateAdmin } from "../../../lib/admin-router"
 import { useRelativeTime } from "../../../lib/relative-time"
+import { cn } from "../../../lib/utils"
 
 interface OrgSecretsTabProps {
   workspaceID: string
@@ -120,7 +120,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
       <Ledger columns={LEDGER_COLUMNS} role="list" aria-label={t("credentialsPage.tabs.org")}>
         <LedgerHeader>
           <span>{t("secrets.create.field.name")}</span>
-          <span>{t("myCredentials.table.kind")}</span>
+          <span>{t("secrets.table.status")}</span>
           <span>{t("secrets.create.field.provider")}</span>
           <span>{t("secrets.create.field.apiKey")}</span>
           <span className="text-right">{t("myCredentials.table.lastUsed")}</span>
@@ -221,11 +221,11 @@ function SecretGroup({ label, items, empty, fmtAgo, onDisable, readOnlyLabel, on
                 <span className="truncate font-medium">{secret.name}</span>
                 {secret.slug && <LedgerId className="shrink-0">{secret.slug}</LedgerId>}
               </span>
-              <span className="min-w-0">
-                <Badge variant={active ? "success" : "neutral"} dot title={statusLabel}>
-                  {kindLabel(secret.kind)}
-                </Badge>
-              </span>
+              {/* The state, in words. This cell used to print the group header
+                  again on every row — "Model API Key" under 模型 API Keys —
+                  inside a badge whose coloured dot silently carried the
+                  *status*, with the word only in a `title`. */}
+              <span className={cn("truncate text-xs", active ? "text-fg-muted" : "text-fg")}>{statusLabel}</span>
               <span className="truncate text-xs text-fg-muted">{secret.provider || t("secrets.none")}</span>
               <LedgerId>{secret.masked}</LedgerId>
               <span className="truncate text-right text-xs text-fg-muted">{fmtAgo(secret.updated_at)}</span>

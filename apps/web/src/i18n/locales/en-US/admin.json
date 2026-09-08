@@ -39,9 +39,7 @@
       "personal": "Personal key"
     },
     "ownershipFilter": {
-      "all": "All ({{count}})",
-      "mine": "Mine ({{count}})",
-      "others": "Others ({{count}})"
+      "label": "Filter"
     },
     "table": {
       "model": "Model",
@@ -276,7 +274,8 @@
       "openRun": "Open Run Detail",
       "openConversation": "Open Conversation",
       "openIM": "Open in IM thread",
-      "empty": "Select an approval to see details"
+      "empty": "Select an approval to see details",
+      "decidedBy": "Decided by"
     },
     "empty": {
       "title": "No approvals",
@@ -744,7 +743,6 @@
     },
     "table": {
       "name": "Capability",
-      "type": "Type",
       "latestVersion": "Latest version",
       "enabledAgents": "Enabled Agents",
       "credentials": "Credential requirement",
@@ -1127,7 +1125,8 @@
           "description": "The capability appears in the market again, migration hints disappear, and existing workspaces can upgrade again.",
           "confirm": "Clear deprecated"
         }
-      }
+      },
+      "state": "Listing"
     },
     "uninstall": {
       "sectionTitle": "Remove from my workspace",
@@ -2003,6 +2002,9 @@
         "description": "The frontend cannot reach the backend API.",
         "hint": "Check that the backend is running on port 18080."
       }
+    },
+    "table": {
+      "status": "Status"
     }
   },
   "members": {
@@ -2448,7 +2450,8 @@
       "lastUsed": "Last used",
       "actions": "Actions",
       "unnamed": "(unnamed)",
-      "createdAt": "Created {{date}}"
+      "kindCode": "Kind code",
+      "addedAt": "Added"
     },
     "kind": {
       "unknown": "Unknown credential"
@@ -3034,7 +3037,8 @@
           "configured": "Configured",
           "incomplete": "Incomplete",
           "notConfigured": "Not configured"
-        }
+        },
+        "updatedAt": "Updated"
       },
       "platformSelect": {
         "label": "Platform",

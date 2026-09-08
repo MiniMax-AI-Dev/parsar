@@ -400,14 +400,11 @@ function InteractionRail({
         </Property>
         <Property label={t("approvals.detail.createdAt")}>{fmtAgo(interaction.created_at)}</Property>
         {pending && <Property label={t("approvals.detail.expiresIn")}>{fmtUntil(interaction.expires_at)}</Property>}
-        {!pending && (
-          <Property label={t("approvals.detail.decision")}>
-            <StatusIcon status={STATUS_ICON[interaction.status]} />
-            <span className="truncate">
-              {t(`approvals.status.${interaction.status}`)}
-              {interaction.resolved_by && <span className="text-fg-muted"> · {interaction.resolved_by}</span>}
-            </span>
-          </Property>
+        {/* Who decided — not what was decided. The rail's header already
+            carries the status glyph and the same word; this property used to
+            repeat both, so the reader saw "⊗ 已拒绝" twice, once per pane. */}
+        {!pending && interaction.resolved_by && (
+          <Property label={t("approvals.detail.decidedBy")}>{interaction.resolved_by}</Property>
         )}
       </PropertyList>
 

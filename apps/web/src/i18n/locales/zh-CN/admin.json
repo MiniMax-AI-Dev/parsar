@@ -39,9 +39,7 @@
       "personal": "个人 Key"
     },
     "ownershipFilter": {
-      "all": "全部 ({{count}})",
-      "mine": "我的 ({{count}})",
-      "others": "他人的 ({{count}})"
+      "label": "筛选"
     },
     "table": {
       "model": "模型",
@@ -276,7 +274,8 @@
       "openRun": "打开 Run Detail",
       "openConversation": "打开 Conversation",
       "openIM": "跳回 IM thread",
-      "empty": "选一条审批查看详情"
+      "empty": "选一条审批查看详情",
+      "decidedBy": "决定人"
     },
     "empty": {
       "title": "暂时没有审批",
@@ -720,7 +719,7 @@
     "tabs": {
       "workspace": "本工作区",
       "marketplace": "能力市场",
-      "skills": "Skills"
+      "skills": "技能"
     },
     "actions": {
       "create": "新建能力",
@@ -744,7 +743,6 @@
     },
     "table": {
       "name": "能力名",
-      "type": "Type",
       "latestVersion": "最新版本",
       "enabledAgents": "已启用 Agent 数",
       "credentials": "凭据需求",
@@ -997,7 +995,7 @@
         "description": "请更换搜索词。"
       },
       "install": {
-        "action": "Install",
+        "action": "安装",
         "installing": "安装中...",
         "installed": "已安装",
         "success": "已将 {{name}} 导入为工作区 Skill Capability。",
@@ -1127,7 +1125,8 @@
           "description": "解除后，此能力重新出现在能力市场，已添加工作区的迁移提示会消失，并可以再次升级。",
           "confirm": "解除废弃"
         }
-      }
+      },
+      "state": "上架状态"
     },
     "uninstall": {
       "sectionTitle": "从我的工作区移除",
@@ -2003,6 +2002,9 @@
         "description": "前端访问不到后端 API。",
         "hint": "检查后端是否在 18080 端口运行。"
       }
+    },
+    "table": {
+      "status": "状态"
     }
   },
   "members": {
@@ -2448,7 +2450,8 @@
       "lastUsed": "最近使用",
       "actions": "操作",
       "unnamed": "（未命名）",
-      "createdAt": "添加于 {{date}}"
+      "kindCode": "类型标识",
+      "addedAt": "添加于"
     },
     "kind": {
       "unknown": "未知凭据"
@@ -3034,7 +3037,8 @@
           "configured": "已配置",
           "incomplete": "未完整",
           "notConfigured": "未配置"
-        }
+        },
+        "updatedAt": "更新于"
       },
       "platformSelect": {
         "label": "平台",
