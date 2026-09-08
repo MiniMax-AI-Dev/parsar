@@ -3608,6 +3608,19 @@ where c.workspace_id = @workspace_id::uuid
   and coalesce(cv.source_payload->>'catalog_id', '') <> ''
 order by cv.source_payload->>'catalog_id', cv.created_at desc, cv.id desc;
 
+-- name: ListSkillsDirectoryInstalls :many
+select distinct on (cv.source_payload->>'registry_id')
+  coalesce(cv.source_payload->>'registry_id', '')::text as registry_id,
+  c.id::text as capability_id
+from capability c
+join capability_version cv on cv.capability_id = c.id
+where c.workspace_id = @workspace_id::uuid
+  and c.type = 'skill'
+  and c.deleted_at is null
+  and cv.source_payload->>'registry' = 'skills.sh'
+  and coalesce(cv.source_payload->>'registry_id', '') <> ''
+order by cv.source_payload->>'registry_id', cv.created_at desc, cv.id desc;
+
 -- name: UpdateCapability :one
 update capability
 set name = @name,

@@ -9103,6 +9103,45 @@ func (q *Queries) ListSecretsForWorkspace(ctx context.Context, arg ListSecretsFo
 	return items, nil
 }
 
+const listSkillsDirectoryInstalls = `-- name: ListSkillsDirectoryInstalls :many
+select distinct on (cv.source_payload->>'registry_id')
+  coalesce(cv.source_payload->>'registry_id', '')::text as registry_id,
+  c.id::text as capability_id
+from capability c
+join capability_version cv on cv.capability_id = c.id
+where c.workspace_id = $1::uuid
+  and c.type = 'skill'
+  and c.deleted_at is null
+  and cv.source_payload->>'registry' = 'skills.sh'
+  and coalesce(cv.source_payload->>'registry_id', '') <> ''
+order by cv.source_payload->>'registry_id', cv.created_at desc, cv.id desc
+`
+
+type ListSkillsDirectoryInstallsRow struct {
+	RegistryID   string `json:"registry_id"`
+	CapabilityID string `json:"capability_id"`
+}
+
+func (q *Queries) ListSkillsDirectoryInstalls(ctx context.Context, workspaceID pgtype.UUID) ([]ListSkillsDirectoryInstallsRow, error) {
+	rows, err := q.db.Query(ctx, listSkillsDirectoryInstalls, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSkillsDirectoryInstallsRow{}
+	for rows.Next() {
+		var i ListSkillsDirectoryInstallsRow
+		if err := rows.Scan(&i.RegistryID, &i.CapabilityID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStaleFeishuPermissionInflightCards = `-- name: ListStaleFeishuPermissionInflightCards :many
 select id::text                  as conversation_id,
        workspace_id::text        as workspace_id,

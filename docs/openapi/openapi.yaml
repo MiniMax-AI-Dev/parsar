@@ -8850,6 +8850,63 @@ paths:
       summary: Install a Skills.sh Skill as a capability
       tags:
       - capabilities
+  /api/v1/workspaces/{workspaceID}/skills/installed:
+    get:
+      operationId: listSkillsDirectoryInstalls
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Registry ID to workspace capability ID
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List installed Skills.sh skills
+      tags:
+      - capabilities
   /api/v1/workspaces/{workspaceID}/spec/fragments:
     get:
       description: Returns spec fragments visible to the workspace. Optional source/tag

@@ -45,6 +45,7 @@ type RuntimeStore interface {
 	RegisterWorkspaceRuntimeCredential(ctx context.Context, input store.RegisterWorkspaceRuntimeCredentialInput) (store.SecretRead, error)
 	PatchWorkspaceSettings(ctx context.Context, workspaceID string) (store.WorkspaceSettingsRead, error)
 	ListCapabilities(ctx context.Context, workspaceID string, filter store.ListCapabilityFilter) ([]store.CapabilityRead, error)
+	ListSkillsDirectoryInstalls(ctx context.Context, workspaceID string) (map[string]string, error)
 	ListMarketplaceCapabilities(ctx context.Context, targetWorkspaceID string) ([]store.MarketplaceCapabilityRead, error)
 	ListWorkspaceMarketplaceInstalls(ctx context.Context, targetWorkspaceID string) ([]store.MarketplaceInstallRead, error)
 	CountInstalls(ctx context.Context, sourceCapabilityID string) (int64, error)
@@ -648,6 +649,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			// the all-or-nothing materialization.
 			r.Post("/workspaces/{workspaceID}/capabilities/import/preview", previewCapabilityImport(runtimeStore, cfg.blobStore))
 			r.Post("/workspaces/{workspaceID}/capabilities/import/commit", commitCapabilityImport(runtimeStore, cfg.blobStore))
+			r.Get("/workspaces/{workspaceID}/skills/installed", listSkillsDirectoryInstalls(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/skills/install", installSkillFromRegistry(runtimeStore, cfg.blobStore, cfg.skillInstallRunner, cfg.skillInstallHTTPClient))
 			r.Post("/workspaces/{workspaceID}/capabilities/plugins/install", installPlugin(runtimeStore))
 			// Plugin client bundle serving — browser fetches the built
