@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/modelendpoint"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -35,18 +36,6 @@ func isAnthropicMessagesAdapter(adapter string) bool {
 		return true
 	default:
 		return false
-	}
-}
-
-func anthropicMessagesURL(baseURL string) string {
-	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	switch {
-	case strings.HasSuffix(base, "/v1/messages"), strings.HasSuffix(base, "/messages"):
-		return base
-	case strings.HasSuffix(base, "/v1"):
-		return base + "/messages"
-	default:
-		return base + "/v1/messages"
 	}
 }
 
@@ -420,7 +409,7 @@ func probeModelEndpoint(ctx context.Context, mr store.ModelRuntime, endpointType
 func modelProbeRequestSpec(mr store.ModelRuntime, endpointType string) (string, map[string]any) {
 	switch endpointType {
 	case "anthropic":
-		return anthropicMessagesURL(endpointBaseURLFromConfig(mr.ProviderConfig, "anthropic", mr.BaseURL)), map[string]any{
+		return modelendpoint.AnthropicMessagesURL(endpointBaseURLFromConfig(mr.ProviderConfig, "anthropic", mr.BaseURL)), map[string]any{
 			"model":      mr.ModelKey,
 			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
 			"max_tokens": modelProbeMaxTokens,
