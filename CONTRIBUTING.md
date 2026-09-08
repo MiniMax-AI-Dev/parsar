@@ -101,6 +101,9 @@ description and keep ownership on the side listed here.
 - The one-command installer is both install and upgrade path. Default GHCR
   images must be pulled before `docker compose up` so `:latest` does not
   silently reuse a stale local image after `main` changes.
+- After pulling, the installer prepares its server data mount for the image's
+  actual UID/GID and verifies writability before starting services. Only the
+  preparation container runs as root; the server retains its configured user.
 - `install.sh` may still write stable random overrides such as
   `PARSAR_MASTER_KEY` and `PARSAR_SHARED_RUNTIME_TOKEN` for safer local
   installs, but raw Compose/Dokploy deployments must not depend on those
@@ -589,7 +592,8 @@ make check
 CI may run independently based on the changed paths: `make check-go` for sqlc
 drift plus non-store Go tests, `make check-store` for migration/store
 integration tests, `make check-web` for web typecheck plus design lint, and
-`make check-cli` for CLI/plugin typechecks. Keep the subtargets aligned with
+`make check-cli` for CLI/plugin typechecks, and `make check-installer` for
+Docker-free installer lifecycle checks. Keep the subtargets aligned with
 the full gate whenever the required checks change.
 
 - Any DB change must ship with a migration. Migrations are immutable
