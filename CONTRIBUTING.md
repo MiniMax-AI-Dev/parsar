@@ -202,6 +202,11 @@ description and keep ownership on the side listed here.
 - Markdown Skill imports and new versions must store an engine-neutral ZIP
   containing `SKILL.md`, with its storage reference and SHA-256 persisted before
   reporting success. Existing versions without archives require a new import.
+- Skill ZIP preview and commit must reject duplicate paths, including
+  normalized separator/dot-segment and case aliases, so approved file contents
+  cannot differ because an extractor chooses a different duplicate entry.
+  Reject filenames outside Unicode stream-safe normalization rather than
+  adding a separate unbounded normalizer.
 
 ### Plugin Bundle (KindBundle) architecture
 
