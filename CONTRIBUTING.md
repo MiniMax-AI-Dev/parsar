@@ -647,6 +647,10 @@ Go toolchain; do not use `@latest` for that build-time tool.
   the build on any drift. See `server/internal/api/health.go:livenessHandler`
   and `server/internal/dev/routes.go:listWorkspaceEnabledAgents` for
   the reference style.
+- Feishu WebSocket SDK and lifecycle logs must redact connection URL query
+  strings before writing them, without changing the URLs used to connect.
+  Omit each field's tail after its first `?`, without requiring a valid URL
+  prefix; preserve separate SDK correlation fields and structured route context.
 - Use `internal/obs/log` for all logging — never `slog.Default()`,
   `log.Println`, `fmt.Println`, or a hand-rolled `*slog.Logger`. The
   linter (`forbidigo`) rejects direct `slog.Default()` outside
