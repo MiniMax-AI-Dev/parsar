@@ -262,8 +262,8 @@ func TestStreamPrompt_ManagedOpenCodeModelInjection(t *testing.T) {
 	if payload.AgentOptions["model"] != "gpt-4o-mini" {
 		t.Fatalf("agent_options.model=%v, want platform model key", payload.AgentOptions["model"])
 	}
-	if payload.AgentOptions["model_selector"] != "gpt-4o-mini" {
-		t.Fatalf("agent_options.model_selector=%v, want platform model key", payload.AgentOptions["model_selector"])
+	if payload.AgentOptions["model_selector"] != "openai/gpt-4o-mini" {
+		t.Fatalf("agent_options.model_selector=%v, want provider/model selector", payload.AgentOptions["model_selector"])
 	}
 	envMap, ok := payload.AgentOptions["env"].(map[string]any)
 	if !ok {

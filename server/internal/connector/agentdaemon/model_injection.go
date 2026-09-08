@@ -330,6 +330,9 @@ func injectOpenCodeManagedModel(opts map[string]any, modelID string, mr store.Mo
 	if providerSlug == "" || modelKey == "" || adapter == "" {
 		return fmt.Errorf("%w: model_id=%s provider_slug=%q model_key=%q adapter=%q", ErrManagedModelConfigInvalid, modelID, mr.ProviderType, mr.ModelKey, mr.Adapter)
 	}
+	if adapter == "@ai-sdk/anthropic" {
+		mr.BaseURL = modelEndpointBaseURL(mr, "anthropic")
+	}
 	configJSON, err := runtimeopencode.RenderConfig(mr, apiKey, runtimeopencode.RenderInput{})
 	if err != nil {
 		return fmt.Errorf("agent_daemon: render opencode config for model %s: %w", modelID, err)
@@ -338,7 +341,7 @@ func injectOpenCodeManagedModel(opts map[string]any, modelID string, mr store.Mo
 		return fmt.Errorf("%w: model_id=%s provider_slug=%q model_key=%q adapter=%q", ErrManagedModelConfigInvalid, modelID, mr.ProviderType, mr.ModelKey, mr.Adapter)
 	}
 	opts["model"] = modelKey
-	opts["model_selector"] = modelKey
+	opts["model_selector"] = providerSlug + "/" + modelKey
 	opts["opencode_json"] = string(configJSON)
 	return nil
 }

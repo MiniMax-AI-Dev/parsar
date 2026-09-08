@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/modelendpoint"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -58,6 +59,9 @@ func RenderConfig(modelRuntime store.ModelRuntime, apiKey string, in RenderInput
 	providerOptions := map[string]any{"apiKey": apiKey}
 	if modelRuntime.BaseURL != "" {
 		providerOptions["baseURL"] = modelRuntime.BaseURL
+		if modelRuntime.Adapter == "@ai-sdk/anthropic" {
+			providerOptions["baseURL"] = strings.TrimSuffix(modelendpoint.AnthropicMessagesURL(modelRuntime.BaseURL), "/messages")
+		}
 	}
 	if extra, ok := modelRuntime.ProviderConfig["options"].(map[string]any); ok {
 		for k, v := range extra {
