@@ -1201,8 +1201,9 @@
         },
         "capabilities": {
           "title": "能力",
-          "add": "+ 添加",
-          "empty": "还没有启用任何 capability。点击右上角「+ 添加」从工作区可装 capability 中挑一个。",
+          "add": "添加能力",
+          "pickerHint": "为此 Agent 选择 Skill 或工具。启用后在下次运行生效，实际可用性会在执行时检查。",
+          "empty": "尚未启用能力。点击“添加能力”从此工作区中选择。",
           "loadError": "加载 capability 失败。"
         }
       },
@@ -1292,7 +1293,8 @@
           "upgradeShort": "有新版本 v{{version}}"
         },
         "state": {
-          "ready": "可用",
+          "ready": "已在配置中启用",
+          "available": "可启用",
           "attention": "有更新",
           "blocked": "不可用",
           "deprecated": "已废弃"
