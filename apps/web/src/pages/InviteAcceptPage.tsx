@@ -47,7 +47,13 @@ export function InviteAcceptPage({ token }: { token: string }) {
   if (infoQ.isError || !infoQ.data) {
     return (
       <EntryPage>
-        <EntryPanel title={t("invite.invalidTitle")} description={t("invite.invalidDescription")} />
+        <EntryPanel title={t("invite.invalidTitle")} description={t("invite.invalidDescription")}>
+          <Button asChild>
+            <a href={user ? "/" : "/login"} onClick={() => popPendingJoinIntent()}>
+              {t(user ? "invite.backToConsole" : "login.backToLogin")}
+            </a>
+          </Button>
+        </EntryPanel>
       </EntryPage>
     )
   }

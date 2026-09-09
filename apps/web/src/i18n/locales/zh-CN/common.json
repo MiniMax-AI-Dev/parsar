@@ -226,7 +226,8 @@
   "invite": {
     "loading": "邀请加载中...",
     "invalidTitle": "邀请无效",
-    "invalidDescription": "该邀请链接无效、已过期或已被使用。",
+    "invalidDescription": "该邀请链接无效、已过期或已被使用。请联系邀请人获取新的邀请链接。",
+    "backToConsole": "返回控制台",
     "title": "加入 {{name}}",
     "description": "你被邀请为 {{role}}。设置密码以激活账号。",
     "existingDescription": "你已使用 {{email}} 登录。接受邀请后将以 {{role}} 身份加入。",
