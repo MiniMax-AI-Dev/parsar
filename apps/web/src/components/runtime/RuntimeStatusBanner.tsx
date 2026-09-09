@@ -15,8 +15,7 @@ interface RuntimeStatusBannerProps {
 }
 
 /**
- * Cloud runtime status as a 32px hairline row: a 14px status icon, the
- * status sentence in ink, and at most one action on the right.
+ * Cloud runtime status and its existing recovery action.
  */
 export function RuntimeStatusBanner({ workspaceID, action, className }: RuntimeStatusBannerProps) {
   const { t } = useTranslation("admin")
@@ -25,7 +24,7 @@ export function RuntimeStatusBanner({ workspaceID, action, className }: RuntimeS
   if (query.isLoading) {
     return (
       <div className={className} data-testid="runtime-status-banner-loading">
-        <div className="flex h-8 items-center border-b border-line">
+        <div className="flex h-8 items-center">
           <Skeleton className="h-3 w-56" />
         </div>
       </div>
@@ -113,12 +112,12 @@ function StatusRow({
 }) {
   return (
     <div
-      className={`flex h-8 items-center gap-2 border-b border-line text-sm text-fg ${className ?? ""}`}
+      className={`flex min-h-8 flex-wrap items-center gap-2 text-sm text-fg ${className ?? ""}`}
       role={role}
       data-testid={testId}
     >
       <StatusIcon status={status} />
-      <span className="min-w-0 flex-1 truncate">{title}</span>
+      <span className="min-w-0 flex-1 break-all">{title}</span>
       {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
     </div>
   )

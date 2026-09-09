@@ -2100,6 +2100,7 @@
       },
       "errors": {
         "loadFailed": "Failed to load runtime instances",
+        "details": "Technical details",
         "bulkKillPartial": "Some runtime instances could not be reclaimed",
         "bulkKillDismiss": "Dismiss"
       },
@@ -2168,6 +2169,7 @@
       "notRunAfter": "Subsequent checks were not run (prerequisite failed)."
     },
     "cloud": {
+      "setupTitle": "Cloud runtime",
       "instances": {
         "title": "Active Cloud Sandboxes",
         "emptyTitle": "No active Cloud Sandbox yet",

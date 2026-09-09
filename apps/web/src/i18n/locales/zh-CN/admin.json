@@ -2100,6 +2100,7 @@
       },
       "errors": {
         "loadFailed": "加载运行实例失败",
+        "details": "技术详情",
         "bulkKillPartial": "部分运行实例回收失败",
         "bulkKillDismiss": "关闭"
       },
@@ -2168,6 +2169,7 @@
       "notRunAfter": "后续检查未执行（前置依赖未通过）。"
     },
     "cloud": {
+      "setupTitle": "云端配置",
       "instances": {
         "title": "正在运行的云端沙盒",
         "emptyTitle": "还没有正在运行的云端沙盒",
