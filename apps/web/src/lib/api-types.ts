@@ -777,6 +777,7 @@ export interface CreateConversationRequest {
  */
 export interface ConversationTimelineMessage {
   id: string
+  workspace_id?: string
   conversation_id: string
   sender_type: string
   sender_id?: string

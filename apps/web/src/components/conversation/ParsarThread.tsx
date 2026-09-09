@@ -30,6 +30,7 @@ import { ParsarToolCallCard } from "./ParsarToolCallCard"
 import { Button } from "../ui/button"
 import { ErrorState } from "../ui/error-state"
 import { credentialKindLabel } from "../../lib/credential-kind-ui"
+import { conversationRecoveryLinks } from "../../lib/conversation-recovery-links"
 import { cn } from "../../lib/utils"
 
 // ---------------------------------------------------------------------------
@@ -303,13 +304,14 @@ function RuntimeErrorCard({ text, metadata }: { text: string; metadata: Record<s
   let message = text || t("conversations.runtime_error.generic")
   let action = ""
   let href = ""
-  const current = `${window.location.pathname}${window.location.search}`
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  const links = conversationRecoveryLinks(stringMeta(metadata, "workspace_id"), capabilityID, credentialKind, current)
 
   switch (subKind) {
     case "capability_credential_missing":
       message = t("conversations.runtime_error.capability_credential_missing", { name: capabilityName, kind: kindLabel })
       action = t("conversations.runtime_error.addCredential")
-      href = credentialKind ? `?profile=credentials&kind=${encodeURIComponent(credentialKind)}&returnTo=${encodeURIComponent(current)}` : ""
+      href = links.credential
       break
     case "capability_credential_decrypt_failed":
       message = t("conversations.runtime_error.capability_credential_decrypt_failed", { name: capabilityName })
@@ -317,12 +319,12 @@ function RuntimeErrorCard({ text, metadata }: { text: string; metadata: Record<s
     case "capability_credential_kind_mismatch":
       message = t("conversations.runtime_error.capability_credential_kind_mismatch", { name: capabilityName })
       action = t("conversations.runtime_error.resetCredential")
-      href = credentialKind ? `?profile=credentials&kind=${encodeURIComponent(credentialKind)}&returnTo=${encodeURIComponent(current)}` : ""
+      href = links.credential
       break
     case "capability_version_unavailable":
       message = t("conversations.runtime_error.capability_version_unavailable", { name: capabilityName })
       action = t("conversations.runtime_error.manageCapability")
-      href = capabilityID ? `?admin=capabilities&id=${encodeURIComponent(capabilityID)}` : "?admin=capabilities"
+      href = links.capability
       break
   }
 

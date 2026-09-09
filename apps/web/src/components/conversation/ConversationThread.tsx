@@ -44,6 +44,7 @@ import type {
 } from "../../lib/api-types"
 import { isUserMessageSender } from "../../lib/message-sender"
 import { isRuntimeCapabilityError } from "../../lib/message-kind"
+import { conversationRecoveryLinks } from "../../lib/conversation-recovery-links"
 import { useRelativeTime } from "../../lib/relative-time"
 import { credentialKindLabel } from "../../pages/admin/capability-ui"
 import { ToolCardSlot, SingleSlot, ListSlot } from "../plugin/SlotRenderer"
@@ -564,7 +565,7 @@ function ChatStream({
                   outputRuns={runsByOutputMessage.get(m.id)}
                   stamp={fmtAgo(m.created_at)}
                   agentName={agent?.name || (m.sender_id === convInfoQ.data?.primary_agent_id ? agentName : "")}
-                  conversationId={conversationId}
+                  workspaceID={convWorkspaceId}
                   onOpenRun={openRun}
                 />
               )
@@ -592,7 +593,7 @@ function ChatStream({
               content={stream.deltaText}
               stamp={t("conversations.stream.caretHint")}
               agentName={agentName}
-              conversationId={conversationId}
+              workspaceID={convWorkspaceId}
             />
           )}
           <ConversationInteractionCards
@@ -808,7 +809,7 @@ const MessageRow = memo(function MessageRow({
   outputRuns,
   stamp,
   agentName,
-  conversationId,
+  workspaceID,
   onOpenRun,
 }: {
   senderType: string
@@ -818,7 +819,7 @@ const MessageRow = memo(function MessageRow({
   outputRuns?: ConversationTimelineRun[]
   stamp: string
   agentName: string
-  conversationId: string
+  workspaceID: string | null
   onOpenRun?: (runID: string) => void
 }) {
   const { i18n, t } = useTranslation("admin")
@@ -840,7 +841,7 @@ const MessageRow = memo(function MessageRow({
   const senderName = senderType === "system" ? t("conversations.detail.systemSender") : agentName
   const byline = senderName ? `${senderName} · ${stamp}` : stamp
   if (isRuntimeCapabilityError(messageType, metadata)) {
-    const runtimeError = runtimeErrorViewModel(metadata, content, conversationId, i18n.language, t)
+    const runtimeError = runtimeErrorViewModel(metadata, content, workspaceID, i18n.language, t)
     return (
       <div className="max-w-[85%]">
         <div className="mb-1 text-xs text-fg-muted">{byline}</div>
@@ -896,7 +897,7 @@ const MessageRow = memo(function MessageRow({
 function runtimeErrorViewModel(
   metadata: Record<string, unknown> | undefined,
   fallback: string,
-  conversationId: string,
+  workspaceID: string | null,
   language: string,
   t: ReturnType<typeof useTranslation<"admin">>["t"],
 ) {
@@ -911,13 +912,8 @@ function runtimeErrorViewModel(
     language,
     t("capabilities.credentials.none"),
   )
-  const current = `${window.location.pathname}${window.location.search || `?admin=conversations&id=${conversationId}`}`
-  const href = credentialKind
-    ? `?profile=credentials&kind=${encodeURIComponent(credentialKind)}&returnTo=${encodeURIComponent(current)}`
-    : ""
-  const manageCapabilityHref = capabilityID
-    ? `?admin=capabilities&id=${encodeURIComponent(capabilityID)}`
-    : "?admin=capabilities"
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  const { credential: href, capability: manageCapabilityHref } = conversationRecoveryLinks(workspaceID, capabilityID, credentialKind, current)
 
   switch (subKind) {
     case "capability_credential_missing":
