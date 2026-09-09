@@ -20,9 +20,11 @@ test("create a scheduled task with an agent, run it now, see it in the list", as
   await page.getByTestId("scheduled-name").fill(name)
   // Standalone page picks the executing agent in the dialog; default is the
   // first active agent, select it explicitly to exercise the dropdown.
-  await page.getByTestId("scheduled-agent").selectOption({ index: 0 })
+  await page.getByTestId("scheduled-agent").click()
+  await page.getByRole("listbox").getByRole("option").first().click()
   await page.getByTestId("scheduled-prompt").fill("e2e smoke prompt")
-  await page.getByTestId("scheduled-freq").selectOption("custom")
+  await page.getByTestId("scheduled-freq").click()
+  await page.getByRole("option", { name: "Custom", exact: true }).click()
   await page.getByTestId("scheduled-cron").fill("0 9 * * *")
   await page.getByTestId("scheduled-save").click()
 

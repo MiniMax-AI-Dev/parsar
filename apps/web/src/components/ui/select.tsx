@@ -19,7 +19,10 @@ export const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
     <SelectPrimitive.Root
       value={value === undefined ? undefined : itemValue(value)}
       defaultValue={defaultValue === undefined ? undefined : itemValue(defaultValue)}
-      onValueChange={(next) => onValueChange?.(next.slice(6))}
+      onValueChange={(next) => {
+        // The native form bridge emits an unencoded empty value while options load.
+        if (next.startsWith("value:")) onValueChange?.(next.slice(6))
+      }}
       disabled={disabled}
     >
       <span className={cn("relative inline-flex min-w-0 w-full", wrapperClassName)}>
