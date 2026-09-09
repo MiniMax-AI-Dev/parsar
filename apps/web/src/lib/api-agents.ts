@@ -54,10 +54,11 @@ function normalizeAgentId(a: Agent): Agent {
   return agentID ? { ...a, id: agentID } : a
 }
 
-async function listAgents(workspaceID: string | null): Promise<ListAgentsResponse> {
+async function listAgents(workspaceID: string | null, includeDisabled: boolean): Promise<ListAgentsResponse> {
   if (!workspaceID) return { agents: [] }
   const res = await apiRequest<ListAgentsResponse>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents`
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents`,
+    { query: { include_disabled: includeDisabled || undefined } }
   )
   return { ...res, agents: (res.agents ?? []).map(normalizeAgentId) }
 }
@@ -238,10 +239,10 @@ async function updateAgentProfileRequest(
 
 /* --- React Query hooks -------------------------------------------------- */
 
-export function useAgents(workspaceID: string | null) {
+export function useAgents(workspaceID: string | null, includeDisabled = false) {
   return useQuery({
-    queryKey: KEY_AGENTS(workspaceID ?? "_none"),
-    queryFn: () => listAgents(workspaceID),
+    queryKey: [...KEY_AGENTS(workspaceID ?? "_none"), includeDisabled],
+    queryFn: () => listAgents(workspaceID, includeDisabled),
     retry: noUnreachableRetry,
     staleTime: 30_000,
   })
@@ -661,19 +662,15 @@ export function usePollAgentFeishuProvisioning(workspaceID: string | null) {
   })
 }
 
-export function useSetAgentStatus(workspaceID: string | null) {
+export function useSetAgentStatus(workspaceID: string | null, agentID: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({
-      agentID,
-      enabled,
-    }: {
-      agentID: string
-      enabled: boolean
-    }) => setAgentStatus(agentID, enabled),
-    onSuccess: (_agent, variables) => {
-      void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
-      void qc.invalidateQueries({ queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", variables.agentID) })
+    mutationFn: (enabled: boolean) => setAgentStatus(agentID, enabled),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") }),
+        qc.invalidateQueries({ queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", agentID) }),
+      ])
     },
   })
 }

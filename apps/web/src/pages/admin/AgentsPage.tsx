@@ -5,7 +5,6 @@ import { Bot, Plus, Search, Wrench } from "lucide-react"
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
 import { DetailRail, RailLayout } from "../../components/ui/detail-rail"
-import { FilterGroup, FilterMenu, FilterOption } from "../../components/ui/filter-menu"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { ResourceAuditTimeline } from "../../components/admin/ResourceAuditTimeline"
 import { Button } from "../../components/ui/button"
@@ -36,10 +35,7 @@ import { useModels } from "../../lib/api-models"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useMarketplaceList } from "../../lib/api-marketplace"
 import {
-  AGENT_CONNECTOR_TYPES,
   searchAgents,
-  agentConnectorKey,
-  agentConnectorLabel,
   defaultModelOf,
 } from "../../lib/agent-view-model"
 import type { Agent } from "../../lib/api-types"
@@ -49,9 +45,11 @@ import { useRelativeTime } from "../../lib/relative-time"
 import { CreateAgentDialog } from "./CreateAgentDialog"
 import { AgentConfigTab } from "./agents/AgentConfigTab"
 import { AgentDetailActions } from "./agents/AgentDetailActions"
+import { AgentStatusControl } from "./agents/AgentStatusControl"
 import { AgentExposureTab } from "./agents/AgentExposureTab"
 import { AgentDynamicsTab } from "./agents/AgentDynamicsTab"
 import { AgentsListTable } from "./agents/AgentsListTable"
+import { AgentsFilters, type AgentStatusFilter } from "./agents/AgentsFilters"
 import { AgentStatusBadge } from "./agents/AgentStatusBadge"
 import { DeleteAgentDialog } from "./agents/DeleteAgentDialog"
 import { DetailSection } from "./agents/DetailSection"
@@ -94,6 +92,7 @@ export function AgentsPage() {
   const wid = useWorkspaceId()
   const [keyword, setKeyword] = useState("")
   const [connectorFilter, setConnectorFilter] = useState("")
+  const [statusFilter, setStatusFilter] = useState<AgentStatusFilter>("")
   const [createOpen, setCreateOpen] = useState(false)
   const [editAgent, setEditAgent] = useState<Agent | null>(null)
   const [cloneAgent, setCloneAgent] = useState<Agent | null>(null)
@@ -101,14 +100,18 @@ export function AgentsPage() {
   const toast = useToast()
   const fmtAgo = useRelativeTime()
 
-  const query = useAgents(wid)
+  const workspacesQ = useMyWorkspaces()
+  const currentWorkspace = workspacesQ.data?.workspaces.find((w) => w.id === wid)
+  const workspaceRole = currentWorkspace?.role
+  const workspaceName = currentWorkspace?.name
+  const { canManage, canChat } = agentActionPermissions(workspaceRole)
+  const query = useAgents(wid, canManage)
   const createMut = useCreateAgent(wid)
   const cloneMut = useCreateAgent(wid)
   const modelsQ = useModels(wid)
   const updateMut = useUpdateAgent(wid)
   const updateProfileMut = useUpdateAgentProfile(wid)
   const deleteMut = useDeleteAgent(wid)
-  const workspacesQ = useMyWorkspaces()
   const agents = useMemo(() => {
     const list = query.data?.agents ?? []
     // Sort: newest first (by enabled_at / created_at descending)
@@ -119,25 +122,7 @@ export function AgentsPage() {
     })
   }, [query.data])
   const models = useMemo(() => modelsQ.data?.models ?? [], [modelsQ.data])
-  // Counted over the agents the search already narrowed to, so the menu
-  // describes the list on screen rather than one the reader cannot see.
-  // The known set is always listed — a connector with nothing on it is
-  // usually what you opened the menu to check — plus any type actually in
-  // use, because `connector_type` is unconstrained text on the server.
   const searched = useMemo(() => searchAgents(agents, keyword, models, t), [agents, keyword, models, t])
-  const connectorCounts = useMemo(() => {
-    const counts = new Map<string, number>(AGENT_CONNECTOR_TYPES.map((c) => [c, 0]))
-    for (const agent of searched) {
-      const key = agentConnectorKey(agent.connector_type)
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    }
-    return counts
-  }, [searched])
-  const connectorOptions = useMemo(() => [...connectorCounts.keys()], [connectorCounts])
-  const currentWorkspace = workspacesQ.data?.workspaces.find((w) => w.id === wid)
-  const workspaceRole = currentWorkspace?.role
-  const workspaceName = currentWorkspace?.name
-  const { canManage, canChat } = agentActionPermissions(workspaceRole)
   const { startChat: startChatWith, pendingID: chatPendingID } = useAgentChat(wid, canChat)
   const pendingCapability = usePendingCapability(wid)
 
@@ -183,22 +168,14 @@ export function AgentsPage() {
                   onChange={(event) => setKeyword(event.target.value)}
                 />
               </div>
-              <FilterMenu
-                label={t("agents.filters.label")}
-                summary={connectorFilter ? agentConnectorLabel(connectorFilter) : null}
-              >
-                <FilterGroup value={connectorFilter} onValueChange={setConnectorFilter}>
-                  <FilterOption value="" label={t("agents.filters.allConnectors")} count={searched.length} />
-                  {connectorOptions.map((connector) => (
-                    <FilterOption
-                      key={connector}
-                      value={connector}
-                      label={agentConnectorLabel(connector)}
-                      count={connectorCounts.get(connector) ?? 0}
-                    />
-                  ))}
-                </FilterGroup>
-              </FilterMenu>
+              <AgentsFilters
+                agents={searched}
+                connectorFilter={connectorFilter}
+                statusFilter={canManage ? statusFilter : ""}
+                onConnectorChange={setConnectorFilter}
+                onStatusChange={setStatusFilter}
+                canManage={canManage}
+              />
               {canManage && <Button onClick={() => setCreateOpen(true)}>
                 <Plus strokeWidth={1.5} aria-hidden="true" />
                 {t("agents.actions.create")}
@@ -246,7 +223,7 @@ export function AgentsPage() {
           />
         ) : (
           <AgentsListTable
-            agents={agents}
+            agents={canManage && statusFilter ? agents.filter((agent) => agent.status === statusFilter) : agents}
             workspaceRole={workspaceRole}
             models={models}
             keyword={keyword}
@@ -254,6 +231,7 @@ export function AgentsPage() {
             onClearFilters={() => {
               setKeyword("")
               setConnectorFilter("")
+              setStatusFilter("")
             }}
             selectedID={entityId}
             chatPendingID={chatPendingID}
@@ -463,6 +441,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
 
   const model = defaultModelOf(agent, models, t("agents.modelUnavailable"))
   return (
+    <AgentStatusControl key={agent.id} agent={agent} workspaceID={wid}>{(statusAction) => (
     <DetailRail
       open={open}
       onClose={onClose}
@@ -478,6 +457,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
       footer={
         <AgentDetailActions
           agent={agent}
+          statusAction={statusAction}
           workspaceID={wid}
           workspaceName={currentWorkspace?.name}
           workspaceRole={workspaceRole}
@@ -539,5 +519,6 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
         </TabsContent>
       </Tabs>
     </DetailRail>
+    )}</AgentStatusControl>
   )
 }
