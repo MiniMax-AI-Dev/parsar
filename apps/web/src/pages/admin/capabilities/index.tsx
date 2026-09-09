@@ -81,6 +81,7 @@ import { useWorkspaceId } from "../../../lib/workspace"
 import { useRelativeTime } from "../../../lib/relative-time"
 import { requiredCredentialsLabel } from "../../../lib/credential-kind-ui"
 import { CapabilityTypeBadge } from "./CapabilityTypeBadge"
+import { CapabilityRow } from "./CapabilityRow"
 import { InlineNotice } from "./notices"
 import { useCapabilityEnabledAgents } from "./use-capability-enabled-agents"
 import { MarketplaceCapabilityRail } from "./MarketplaceCapabilityRail"
@@ -110,7 +111,7 @@ const TYPE_FILTERS: { value: CapabilityTypeFilter; label: string }[] = [
 ]
 
 /** name (+type, +description) · version · source · enabled agents · credentials · updated · actions */
-const LEDGER_COLUMNS = [col.title(280), col.id(96, 0.4), col.meta(104), col.num(96), col.meta(120), col.age(80), col.actions(2)]
+const LEDGER_COLUMNS = [col.title(0), col.id(48, 0.4), col.meta(0), col.num(48), col.meta(0), col.age(0), col.actions(2)]
 
 export function CapabilitiesPage() {
   const { t, i18n } = useTranslation("admin")
@@ -298,15 +299,12 @@ export function CapabilitiesPage() {
         key={`${fromMarketplace ? "market" : "own"}-${cap.id}`}
         capability={cap}
         version={version}
-        // Own capabilities show nothing rather than an em dash: the value is
-        // not missing, it is redundant with the group header — and a dash in
-        // this ledger means "unknown".
-        source={fromMarketplace ? marketplaceSourceName(marketCap) : ""}
+        source={fromMarketplace ? marketplaceSourceName(marketCap) : t("capabilities.table.ownSource")}
         availabilityLabel={fromMarketplace && cap.visibility === "workspace"
           ? t("capabilities.unpublished.badge")
           : cap.deprecated_at ? t("capabilities.deprecated.badgeSource") : ""}
         enabledCount={enabledCount}
-        credentials={requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.credentials.none"))}
+        credentials={requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.table.noCredentials"))}
         age={fmtAgo(cap.updated_at ?? cap.created_at)}
         selected={cap.id === entityId}
         onOpen={() => openCapability(cap, fromMarketplace)}
@@ -359,13 +357,13 @@ export function CapabilitiesPage() {
     />
   ) : (
     <>
-      <Ledger columns={LEDGER_COLUMNS} role="listbox" aria-label={pageTitle}>
-        <LedgerHeader>
+      <Ledger columns={LEDGER_COLUMNS} className="@container/capability-list" role="listbox" aria-label={pageTitle}>
+        <LedgerHeader className="h-auto min-h-7 py-1 @max-xl/capability-list:hidden [&>*]:break-words [&>*]:whitespace-normal">
           <span>{t("capabilities.table.name")}</span>
-          <span>{t("capabilities.table.latestVersion")}</span>
+          <span>{t("capabilities.table.version")}</span>
           <span>{t("capabilities.marketplaceDetail.source.title")}</span>
           <span className="text-right">{t("capabilities.table.enabledAgents")}</span>
-          <span>{t("capabilities.table.credentials")}</span>
+          <span>{t("capabilities.table.credentialsShort")}</span>
           <span className="text-right">{t("capabilities.table.updated")}</span>
           <span />
         </LedgerHeader>
@@ -570,66 +568,6 @@ export function CapabilitiesPage() {
       )}
     </AdminLayout>
   )
-}
-
-/* ------------------------------------------------------------------ */
-/*  List row                                                            */
-/* ------------------------------------------------------------------ */
-
-function CapabilityRow({
-  capability,
-  version,
-  source,
-  availabilityLabel,
-  enabledCount,
-  credentials,
-  age,
-  selected,
-  onOpen,
-  actions,
-}: {
-  capability: Capability
-  version?: string
-  source: string
-  availabilityLabel: string
-  enabledCount: number
-  credentials: string
-  age: string
-  selected: boolean
-  onOpen: () => void
-  actions: ReactNode
-}) {
-  const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
-    if (e.target !== e.currentTarget) return
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault()
-      onOpen()
-    }
-  }
-  return (
-    <LedgerRow selected={selected} onClick={onOpen} onKeyDown={onKeyDown}>
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="min-w-0 truncate font-medium" title={capability.name}>{capability.name}</span>
-        <CapabilityTypeBadge type={capability.type} />
-        {availabilityLabel && <Badge variant="neutral" className="shrink-0" dot>{availabilityLabel}</Badge>}
-        {capability.description && (
-          <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">· {capability.description}</span>
-        )}
-      </span>
-      <span className={cnMono(!!version)}>{version ?? "—"}</span>
-      <span className="truncate text-xs text-fg-muted">{source}</span>
-      <LedgerNum>{enabledCount}</LedgerNum>
-      <span className="truncate text-xs text-fg-muted">{credentials}</span>
-      <span className="truncate text-right text-xs text-fg-muted">{age}</span>
-      <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-        {actions}
-      </span>
-    </LedgerRow>
-  )
-}
-
-function cnMono(present: boolean) {
-  return present ? "truncate font-mono text-xs text-fg" : "truncate font-mono text-xs text-fg-muted"
 }
 
 function LedgerSkeleton() {

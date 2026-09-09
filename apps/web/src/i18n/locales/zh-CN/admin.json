@@ -616,10 +616,14 @@
     "table": {
       "name": "能力名",
       "latestVersion": "最新版本",
-      "enabledAgents": "已启用 Agent 数",
+      "enabledAgents": "Agent 数",
       "credentials": "凭据需求",
       "updated": "更新于",
-      "installs": "安装数"
+      "installs": "安装数",
+      "version": "版本",
+      "credentialsShort": "凭据",
+      "noCredentials": "无需凭据",
+      "ownSource": "本工作区"
     },
     "credentials": {
       "none": "无需凭据"
