@@ -175,7 +175,12 @@ export async function listAgentCapabilities(
 }
 
 function normalizeCapability(capability: Capability): Capability {
-  return { ...capability, id: capability.id ?? capability.capability_id ?? "", latest_version: capability.latest_version ?? capability.latest_published_version }
+  return {
+    ...capability,
+    id: capability.id ?? capability.capability_id ?? "",
+    latest_version: capability.latest_version ?? capability.latest_published_version,
+    from_marketplace: capability.from_marketplace ?? ("self_published" in capability && capability.self_published === false),
+  }
 }
 
 function normalizeAgentCapability(item: AgentCapability): AgentCapability {

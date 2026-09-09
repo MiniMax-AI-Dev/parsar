@@ -113,7 +113,7 @@ export function CapabilityVersionDialog({
   onOpenChange?: (open: boolean) => void
   onInstalled?: () => void
   onBack?: () => void
-  credentialHelp?: ReactNode
+  credentialHelp?: (pending: boolean) => ReactNode
 }) {
   const { t } = useTranslation(["admin", "common"])
   const [localOpen, setOpen] = useState(false)
@@ -260,7 +260,7 @@ export function CapabilityVersionDialog({
             </>
           )}
           {isSwitch && <p className="text-sm text-fg-muted">{t("agents.detail.capabilities.switchDialog.notice", { agent: agent.name })}</p>}
-          {credentialHelp}
+          {credentialHelp?.(mut.isPending)}
           {versionsQ.error instanceof Error && <InlineError>{versionsQ.error.message}</InlineError>}
           {mut.error instanceof Error && <InlineError>{mut.error.message}</InlineError>}
         </div>

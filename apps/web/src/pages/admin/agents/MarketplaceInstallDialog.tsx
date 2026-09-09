@@ -46,7 +46,7 @@ export function MarketplaceInstallDialog({ capabilityID, workspaceID, agentID, w
   if (allowed && !loading && !error && capability && agent && !installed) {
     const current = window.location.pathname + window.location.search
     const credentialHelp = agent.visibility !== "public" && capability.required_credentials?.some((item) => item.required)
-      ? <a className="text-sm text-fg underline underline-offset-4" href={`?profile=credentials&returnTo=${encodeURIComponent(current)}`}>{t("agents.pendingCapability.manageCredentials")}</a>
+      ? (pending: boolean) => <a className="text-sm text-fg underline underline-offset-4 aria-disabled:opacity-50" aria-disabled={pending || undefined} tabIndex={pending ? -1 : undefined} href={pending ? undefined : `?profile=credentials&returnTo=${encodeURIComponent(current)}`}>{t("agents.pendingCapability.manageCredentials")}</a>
       : undefined
     return <CapabilityVersionDialog
       key={`${capability.id}:${agent.id}`}
