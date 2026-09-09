@@ -423,6 +423,7 @@ function RunDetailRail({
     setShownId(id)
     setConfirmCancel(false)
     setCancelError(null)
+    setActiveTab("steps")
   }
 
   const runData = runQ.data
