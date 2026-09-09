@@ -417,11 +417,13 @@ function RunDetailRail({
   const requeueRun = useRequeueRun(wsId)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState("steps")
 
   if (shownId !== id) {
     setShownId(id)
     setConfirmCancel(false)
     setCancelError(null)
+    setActiveTab("steps")
   }
 
   const runData = runQ.data
@@ -588,7 +590,7 @@ function RunDetailRail({
         )}
       </PropertyList>
 
-      <Tabs defaultValue="steps" className="mt-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
         <TabsList className="flex w-full">
           <TabsTrigger value="overview" className="flex-1">{t("runs.detail.tabs.overview")}</TabsTrigger>
           <TabsTrigger value="steps" className="flex-1">{t("runs.detail.tabs.steps")}</TabsTrigger>
