@@ -834,7 +834,8 @@ const MessageRow = memo(function MessageRow({
       </div>
     )
   }
-  const byline = agentName ? `${agentName} · ${stamp}` : stamp
+  const senderName = senderType === "system" ? t("conversations.detail.systemSender") : agentName
+  const byline = senderName ? `${senderName} · ${stamp}` : stamp
   if (messageType === "runtime_error") {
     const runtimeError = runtimeErrorViewModel(metadata, content, conversationId, i18n.language, t)
     return (
