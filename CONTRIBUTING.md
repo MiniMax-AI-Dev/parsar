@@ -540,8 +540,9 @@ split relevant pieces out first rather than growing the file further.
 - Agent management opts into disabled records with a separate query-cache key.
   Ordinary Agent selectors keep active-only reads; status mutations invalidate
   both list variants and the detail before their pending state ends. Agent status
-  operation state and feedback belong above the detail rail/modal presentations
-  so changing presentation cannot drop an in-flight outcome.
+  operation state and feedback belong to the management page, above its selected
+  detail and rail/modal presentations. Serialize status submissions until the
+  current operation settles; changing details cannot drop an in-flight outcome.
 
 - Tool-result failure is independent of the run's final status. Live and
   persisted tool views share the explicit result-failure predicate; ending a

@@ -662,11 +662,11 @@ export function usePollAgentFeishuProvisioning(workspaceID: string | null) {
   })
 }
 
-export function useSetAgentStatus(workspaceID: string | null, agentID: string) {
+export function useSetAgentStatus(workspaceID: string | null) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (enabled: boolean) => setAgentStatus(agentID, enabled),
-    onSuccess: async () => {
+    mutationFn: ({ agentID, enabled }: { agentID: string; enabled: boolean }) => setAgentStatus(agentID, enabled),
+    onSuccess: async (_agent, { agentID }) => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") }),
         qc.invalidateQueries({ queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", agentID) }),

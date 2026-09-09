@@ -134,14 +134,17 @@ export function AgentsPage() {
   // vanishing — the same pattern every ledger uses.
   const [railID, setRailID] = useState<string | null>(entityId)
   if (entityId && entityId !== railID) setRailID(entityId)
-  const agentRail = railID ? (
-    <AgentDetailRail
-      id={railID}
-      open={!!entityId}
-      onClose={() => navigate("agents")}
-      onClosed={() => setRailID(null)}
-    />
-  ) : null
+  const agentRail = (
+    <AgentStatusControl workspaceID={wid}>{(renderStatusAction) => railID ? (
+        <AgentDetailRail
+          id={railID}
+          renderStatusAction={renderStatusAction}
+          open={!!entityId}
+          onClose={() => navigate("agents")}
+          onClosed={() => setRailID(null)}
+        />
+    ) : null}</AgentStatusControl>
+  )
 
   return (
     <AdminLayout activeMenu="agents" fullBleed>
@@ -386,11 +389,12 @@ function AgentsLoadingSkeleton() {
  * rail's widest brief: identity in the header, its verbs in the footer, and
  * the expand button for the times the config form wants room.
  */
-export function AgentDetailRail({ id, open, onClose, onClosed }: {
+export function AgentDetailRail({ id, open, onClose, onClosed, renderStatusAction }: {
   id: string
   open: boolean
   onClose: () => void
   onClosed: () => void
+  renderStatusAction: (agent: Agent) => ReactNode
 }) {
   const { t } = useTranslation("admin")
   const { navigate, tab: requestedTab } = useAdminView()
@@ -441,7 +445,6 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
 
   const model = defaultModelOf(agent, models, t("agents.modelUnavailable"))
   return (
-    <AgentStatusControl key={agent.id} agent={agent} workspaceID={wid}>{(statusAction) => (
     <DetailRail
       open={open}
       onClose={onClose}
@@ -457,7 +460,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
       footer={
         <AgentDetailActions
           agent={agent}
-          statusAction={statusAction}
+          statusAction={renderStatusAction(agent)}
           workspaceID={wid}
           workspaceName={currentWorkspace?.name}
           workspaceRole={workspaceRole}
@@ -519,6 +522,5 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
         </TabsContent>
       </Tabs>
     </DetailRail>
-    )}</AgentStatusControl>
   )
 }
