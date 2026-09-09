@@ -602,6 +602,13 @@ of the available width. Labels wrap and values retain their existing overflow
 behavior. Do not size individual groups from their longest label or add
 page-specific label widths; groups in the same context must align.
 
+Single-choice form controls use the shared Radix-backed `Select` and
+`SelectOption` components. Pass values through `onValueChange`; do not fabricate
+DOM change events. Keep option values, labels and disabled rules in the caller,
+and popup styling, keyboard navigation and focus behavior in the shared control.
+Keep its Radix dismissal and focus dependencies compatible with `Dialog` so
+nested menus share one layer stack.
+
 Persistent execution failures use `ErrorState` with `appearance="panel"` to
 separate recovery guidance from expandable technical detail. Keep raw reasons
 in one place; historical conversation messages disable live announcements.

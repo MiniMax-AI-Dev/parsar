@@ -24,7 +24,7 @@ import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import type { StatusKind } from "../../components/ui/status-icon"
 import { Ledger, LedgerHeader, LedgerId, LedgerRow, SelectableStatus, col } from "../../components/ui/ledger"
-import { Select } from "../../components/ui/select"
+import { Select, SelectOption } from "../../components/ui/select"
 import { Skeleton } from "../../components/ui/skeleton"
 import { ApiError } from "../../lib/api-client"
 import { useRuntimeStatus, type ConnectivityResult } from "../../lib/api-runtime"
@@ -319,15 +319,15 @@ function CloudInstancesPanel({
           <div className="flex items-center gap-2">
             <Select
               value={sortKey}
-              onChange={(e) => onSortChange(e.target.value as SortKey)}
+              onValueChange={(nextValue) => onSortChange(nextValue as SortKey)}
               aria-label={t("runtime.list.sort.label")}
               wrapperClassName="w-[180px]"
               className="h-6 text-xs"
               data-testid="runtime-sort"
             >
-              <option value="last_active">{t("runtime.list.sort.lastActive")}</option>
-              <option value="created_at">{t("runtime.list.sort.createdAt")}</option>
-              <option value="agent">{t("runtime.list.sort.agent")}</option>
+              <SelectOption value="last_active">{t("runtime.list.sort.lastActive")}</SelectOption>
+              <SelectOption value="created_at">{t("runtime.list.sort.createdAt")}</SelectOption>
+              <SelectOption value="agent">{t("runtime.list.sort.agent")}</SelectOption>
             </Select>
             <Button
               size="sm"

@@ -1,4 +1,4 @@
-import { Fragment, forwardRef, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react"
+import { Fragment, forwardRef, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { useQueryClient } from "@tanstack/react-query"
 import { AlertTriangle, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, Search } from "lucide-react"
@@ -16,7 +16,7 @@ import {
 } from "../../components/ui/dialog"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
-import { Select } from "../../components/ui/select"
+import { Select, SelectOption } from "../../components/ui/select"
 import { AgentInstructionsField } from "./agents/AgentInstructionsField"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
@@ -1107,17 +1107,17 @@ export function CreateAgentDialog({
                     <Field label={t("agents.form.fields.agentEngine")} required>
                       <Select
                         value={agentEngine}
-                        onChange={(e) => {
-                          const next = e.target.value
+                        onValueChange={(nextValue) => {
+                          const next = nextValue
                           if (next === "claude_code" || next === "codex" || next === "pi") setAgentEngine(next)
                         }}
                         disabled={pending}
                         aria-label={t("agents.form.fields.agentEngine")}
                       >
-                        <option value="claude_code">{t("agents.engine.claudeCode.title")}</option>
-                        <option value="codex">{t("agents.engine.codex.title")}</option>
-                        <option value="pi">{t("agents.engine.pi.title")}</option>
-                        <option value="opencode" disabled>{t("agents.engine.opencode.title")}</option>
+                        <SelectOption value="claude_code">{t("agents.engine.claudeCode.title")}</SelectOption>
+                        <SelectOption value="codex">{t("agents.engine.codex.title")}</SelectOption>
+                        <SelectOption value="pi">{t("agents.engine.pi.title")}</SelectOption>
+                        <SelectOption value="opencode" disabled>{t("agents.engine.opencode.title")}</SelectOption>
                       </Select>
                     </Field>
                   )}
@@ -1128,12 +1128,12 @@ export function CreateAgentDialog({
                     >
                       <Select
                         value={codexMode}
-                        onChange={(e) => setCodexMode(e.target.value === "plan" ? "plan" : "default")}
+                        onValueChange={(nextValue) => setCodexMode(nextValue === "plan" ? "plan" : "default")}
                         disabled={pending}
                         aria-label={t("agents.form.fields.codexMode")}
                       >
-                        <option value="default">{t("agents.form.codexMode.default")}</option>
-                        <option value="plan">{t("agents.form.codexMode.plan")}</option>
+                        <SelectOption value="default">{t("agents.form.codexMode.default")}</SelectOption>
+                        <SelectOption value="plan">{t("agents.form.codexMode.plan")}</SelectOption>
                       </Select>
                     </Field>
                   )}
@@ -1145,12 +1145,12 @@ export function CreateAgentDialog({
                       >
                         <Select
                           value={sandboxSize}
-                          onChange={(e) => setSandboxSize(e.target.value === "xl" ? "xl" : "standard")}
+                          onValueChange={(nextValue) => setSandboxSize(nextValue === "xl" ? "xl" : "standard")}
                           disabled={pending}
                           aria-label={t("agents.form.fields.sandboxSize")}
                         >
-                          <option value="standard">{t("agents.form.sandboxSize.standard")}</option>
-                          <option value="xl">{t("agents.form.sandboxSize.xl")}</option>
+                          <SelectOption value="standard">{t("agents.form.sandboxSize.standard")}</SelectOption>
+                          <SelectOption value="xl">{t("agents.form.sandboxSize.xl")}</SelectOption>
                         </Select>
                       </Field>
                       <Field
@@ -1355,25 +1355,24 @@ export function CreateAgentDialog({
                             {sharedSecrets.length > 0 && (
                               <Select
                                 value={"existing_secret_id" in modelBindingChoice ? modelBindingChoice.existing_secret_id : "__new__"}
-                                onChange={(e) => {
-                                  e.stopPropagation()
-                                  if (e.target.value === "__new__") {
+                                onValueChange={(nextValue) => {
+                                  if (nextValue === "__new__") {
                                     setModelNewSecretExpanded(true)
                                     if (!("new_secret" in modelBindingChoice)) {
                                       setModelNewSecretDisplayName("")
                                       setModelNewSecretPlaintext("")
                                     }
                                   } else {
-                                    setModelBindingChoice({ source: "shared", existing_secret_id: e.target.value })
+                                    setModelBindingChoice({ source: "shared", existing_secret_id: nextValue })
                                     setModelNewSecretExpanded(false)
                                   }
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {sharedSecrets.map((s) => (
-                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                  <SelectOption key={s.id} value={s.id}>{s.name}</SelectOption>
                                 ))}
-                                <option value="__new__">{t("credentialCheck.createNewShared")}</option>
+                                <SelectOption value="__new__">{t("credentialCheck.createNewShared")}</SelectOption>
                               </Select>
                             )}
                             {sharedSecrets.length === 0 && !modelNewSecretExpanded && !("new_secret" in modelBindingChoice) && (
@@ -1791,10 +1790,7 @@ function CapabilityVersionPicker({
     ? "__latest__"
     : choice?.versionID ?? "__latest__"
 
-  const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    event.stopPropagation()
-    event.preventDefault()
-    const value = event.target.value
+  const handleChange = (value: string) => {
     if (value === "__latest__") {
       onChange({ pinningMode: "latest", versionID: latestVersionID, pinnedVersion: undefined })
       return
@@ -1808,7 +1804,7 @@ function CapabilityVersionPicker({
   return (
     <Select
       value={selectValue}
-      onChange={handleChange}
+      onValueChange={handleChange}
       onClick={(event) => event.stopPropagation()}
       // Marketplace bindings see the same picker but the cue (label
       // suffix) reminds the user that breaking changes can land
@@ -1818,9 +1814,9 @@ function CapabilityVersionPicker({
       className="w-auto font-mono text-xs"
       title={fromMarketplace ? t("agents.form.versionPicker.marketplaceHint") : t("agents.form.versionPicker.localHint")}
     >
-      <option value="__latest__">
+      <SelectOption value="__latest__">
         {t("agents.form.versionPicker.latest")}{latestVersion ? ` (v${latestVersion})` : ""}
-      </option>
+      </SelectOption>
       {versions.length === 0 && choice?.pinningMode === "pinned" && choice.versionID && (
         // Versions list still loading — keep the current pin visible
         // so the dropdown doesn't appear to forget the user's choice
@@ -1830,12 +1826,12 @@ function CapabilityVersionPicker({
         // fall back to latestVersion here, which would mis-label the
         // pinned option with whatever the capability's newest version
         // happens to be.
-        <option value={choice.versionID}>v{choice.pinnedVersion || "?"}</option>
+        <SelectOption value={choice.versionID}>v{choice.pinnedVersion || "?"}</SelectOption>
       )}
       {versions.map((version) => (
-        <option key={version.id} value={version.id}>
+        <SelectOption key={version.id} value={version.id}>
           v{version.version}
-        </option>
+        </SelectOption>
       ))}
     </Select>
   )

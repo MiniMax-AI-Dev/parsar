@@ -42,7 +42,7 @@ import {
 } from "../../components/ui/ledger"
 import { OffsetPagination } from "../../components/ui/offset-pagination"
 import { Property, PropertyList } from "../../components/ui/property-list"
-import { Select } from "../../components/ui/select"
+import { Select, SelectOption } from "../../components/ui/select"
 import { Skeleton } from "../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
 import { Textarea } from "../../components/ui/textarea"
@@ -612,10 +612,10 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
             {task ? (
               <Input id="sched-agent" value={agentName.get(task.agent_id) ?? task.agent_id} disabled readOnly />
             ) : (
-              <Select id="sched-agent" value={agentID} onChange={(e) => setAgentID(e.target.value)} disabled={pending} data-testid="scheduled-agent">
-                {agents.length === 0 && <option value="">—</option>}
+              <Select id="sched-agent" value={agentID} onValueChange={(nextValue) => setAgentID(nextValue)} disabled={pending} data-testid="scheduled-agent">
+                {agents.length === 0 && <SelectOption value="">—</SelectOption>}
                 {agents.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
+                  <SelectOption key={a.id} value={a.id}>{a.name}</SelectOption>
                 ))}
               </Select>
             )}
@@ -635,13 +635,13 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
 
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("scheduledTasks.dialog.frequency")} htmlFor="sched-freq">
-              <Select id="sched-freq" value={freq} onChange={(e) => setFreq(e.target.value as FreqType)} disabled={pending} data-testid="scheduled-freq">
-                <option value="daily">{t("scheduledTasks.freq.daily")}</option>
-                <option value="weekday">{t("scheduledTasks.freq.weekday")}</option>
-                <option value="weekly">{t("scheduledTasks.freq.weekly")}</option>
-                <option value="monthly">{t("scheduledTasks.freq.monthly")}</option>
-                <option value="hourly">{t("scheduledTasks.freq.hourly")}</option>
-                <option value="custom">{t("scheduledTasks.freq.custom")}</option>
+              <Select id="sched-freq" value={freq} onValueChange={(nextValue) => setFreq(nextValue as FreqType)} disabled={pending} data-testid="scheduled-freq">
+                <SelectOption value="daily">{t("scheduledTasks.freq.daily")}</SelectOption>
+                <SelectOption value="weekday">{t("scheduledTasks.freq.weekday")}</SelectOption>
+                <SelectOption value="weekly">{t("scheduledTasks.freq.weekly")}</SelectOption>
+                <SelectOption value="monthly">{t("scheduledTasks.freq.monthly")}</SelectOption>
+                <SelectOption value="hourly">{t("scheduledTasks.freq.hourly")}</SelectOption>
+                <SelectOption value="custom">{t("scheduledTasks.freq.custom")}</SelectOption>
               </Select>
             </Field>
 
@@ -684,9 +684,9 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
 
             {freq === "weekly" && (
               <Field label={t("scheduledTasks.dialog.dayOfWeek")} htmlFor="sched-dow">
-                <Select id="sched-dow" value={dow} onChange={(e) => setDow(Number(e.target.value))} disabled={pending}>
+                <Select id="sched-dow" value={dow} onValueChange={(nextValue) => setDow(Number(nextValue))} disabled={pending}>
                   {weekdays.map((d, idx) => (
-                    <option key={idx} value={idx}>{d}</option>
+                    <SelectOption key={idx} value={idx}>{d}</SelectOption>
                   ))}
                 </Select>
               </Field>
@@ -694,18 +694,18 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
 
             {freq === "monthly" && (
               <Field label={t("scheduledTasks.dialog.dayOfMonth")} htmlFor="sched-dom">
-                <Select id="sched-dom" value={dom} onChange={(e) => setDom(Number(e.target.value))} disabled={pending}>
+                <Select id="sched-dom" value={dom} onValueChange={(nextValue) => setDom(Number(nextValue))} disabled={pending}>
                   {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
-                    <option key={d} value={d}>{d}</option>
+                    <SelectOption key={d} value={d}>{d}</SelectOption>
                   ))}
                 </Select>
               </Field>
             )}
 
             <Field label={t("scheduledTasks.dialog.timezone")} htmlFor="sched-tz" className={freq === "weekly" || freq === "monthly" ? undefined : "col-span-2"}>
-              <Select id="sched-tz" value={tz} onChange={(e) => setTz(e.target.value)} disabled={pending} data-testid="scheduled-tz">
+              <Select id="sched-tz" value={tz} onValueChange={(nextValue) => setTz(nextValue)} disabled={pending} data-testid="scheduled-tz">
                 {tzOptions.map((z) => (
-                  <option key={z} value={z}>{z}</option>
+                  <SelectOption key={z} value={z}>{z}</SelectOption>
                 ))}
               </Select>
             </Field>

@@ -11,7 +11,7 @@ import { setWorkspaceId } from "../../lib/workspace"
 import { workspaceOwnerName } from "../../lib/workspace-defaults"
 import { Button } from "../ui/button"
 import { EmptyState } from "../ui/empty-state"
-import { Select } from "../ui/select"
+import { Select, SelectOption } from "../ui/select"
 import { WorkspaceFormDialog } from "../layout/WorkspaceCrudDialogs"
 
 interface ScopeRequiredStateProps {
@@ -53,17 +53,17 @@ export function ScopeRequiredState({ resourceName }: ScopeRequiredStateProps) {
         aria-label={pickLabel}
         defaultValue=""
         wrapperClassName="w-60"
-        onChange={(event) => {
-          if (event.target.value) setWorkspaceId(event.target.value)
+        onValueChange={(nextValue) => {
+          if (nextValue) setWorkspaceId(nextValue)
         }}
       >
-        <option value="" disabled>
+        <SelectOption value="" disabled>
           {pickLabel}
-        </option>
+        </SelectOption>
         {workspaces.map((workspace) => (
-          <option key={workspace.id} value={workspace.id}>
+          <SelectOption key={workspace.id} value={workspace.id}>
             {workspace.name}
-          </option>
+          </SelectOption>
         ))}
       </Select>
     )

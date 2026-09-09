@@ -31,7 +31,7 @@ import { ErrorState } from "../../components/ui/error-state"
 import { Field } from "../../components/ui/label"
 import { Input } from "../../components/ui/input"
 import { PropertyList, Property } from "../../components/ui/property-list"
-import { Select } from "../../components/ui/select"
+import { Select, SelectOption } from "../../components/ui/select"
 import { CredentialKindCombobox } from "./capabilities/CredentialKindCombobox"
 import { ModelKeyCombobox } from "./ModelKeyCombobox"
 import { ProviderTypeCombobox } from "./ProviderTypeCombobox"
@@ -616,10 +616,10 @@ export function CreateModelDialog({
                 <Select
                   id="model-auth-scheme"
                   value={authScheme}
-                  onChange={(e) => setAuthScheme(e.target.value as "api-key" | "bearer")}
+                  onValueChange={(nextValue) => setAuthScheme(nextValue as "api-key" | "bearer")}
                 >
-                  <option value="api-key">x-api-key</option>
-                  <option value="bearer">Authorization: Bearer</option>
+                  <SelectOption value="api-key">x-api-key</SelectOption>
+                  <SelectOption value="bearer">Authorization: Bearer</SelectOption>
                 </Select>
               </Field>
             )}
@@ -649,28 +649,28 @@ export function CreateModelDialog({
                     <Select
                       id="model-existing-secret"
                       value={existingSecretID}
-                      onChange={(e) => {
-                        setExistingSecretID(e.target.value)
-                        if (e.target.value !== "") setApiKey("")
+                      onValueChange={(nextValue) => {
+                        setExistingSecretID(nextValue)
+                        if (nextValue !== "") setApiKey("")
                       }}
                     >
-                      <option value="">
+                      <SelectOption value="">
                         {t("models.createModel.credentialMode.inlineSecret.reuseNone")}
-                      </option>
+                      </SelectOption>
                       {sourceSecretMissing && (
                         // Phantom option for a duplicate whose source Secret
                         // is not visible to the caller. Marked disabled so
                         // submit can't proceed via this path — the user has
                         // to either pick another visible Secret or paste a
                         // fresh key in the field above.
-                        <option value={existingSecretID} disabled>
+                        <SelectOption value={existingSecretID} disabled>
                           {`${existingSecretID.slice(0, 8)}… (${t("models.copy.secretInaccessible")})`}
-                        </option>
+                        </SelectOption>
                       )}
                       {activeSecrets.map((s) => (
-                        <option key={s.id} value={s.id}>
+                        <SelectOption key={s.id} value={s.id}>
                           {s.name} ({s.masked})
-                        </option>
+                        </SelectOption>
                       ))}
                     </Select>
                     {sourceSecretMissing && (
@@ -909,16 +909,16 @@ export function EditModelDialog({
                   id="edit-model-secret"
                   aria-label={t("models.editModel.credentialBinding.boundSecret")}
                   value={secretID}
-                  onChange={(e) => setSecretID(e.target.value)}
+                  onValueChange={(nextValue) => setSecretID(nextValue)}
                   disabled={newAPIKey.trim() !== ""}
                 >
-                  <option value="">
+                  <SelectOption value="">
                     {t("models.editModel.credentialBinding.boundSecretNone")}
-                  </option>
+                  </SelectOption>
                   {activeSecrets.map((s) => (
-                    <option key={s.id} value={s.id}>
+                    <SelectOption key={s.id} value={s.id}>
                       {s.name} ({s.masked})
-                    </option>
+                    </SelectOption>
                   ))}
                 </Select>
                 <TextField

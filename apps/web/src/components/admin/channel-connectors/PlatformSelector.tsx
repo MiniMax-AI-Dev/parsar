@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next"
 
 import { Field } from "../../ui/label"
-import { Select } from "../../ui/select"
+import { Select, SelectOption } from "../../ui/select"
 
 export type ConnectorPlatform = "feishu" | "slack" | "discord" | "teams"
 
@@ -31,14 +31,14 @@ export function PlatformSelector({
       <Select
         id={id}
         value={value}
-        onChange={(e) => onChange(e.target.value as ConnectorPlatform)}
+        onValueChange={(nextValue) => onChange(nextValue as ConnectorPlatform)}
         disabled={disabled}
         data-testid={testId ?? "channel-connector-platform-select"}
       >
         {options.map((opt) => (
-          <option key={opt} value={opt}>
+          <SelectOption key={opt} value={opt}>
             {t(`connections.connector.platformSelect.options.${opt}`)}
-          </option>
+          </SelectOption>
         ))}
       </Select>
     </Field>

@@ -1,4 +1,4 @@
-import { Select } from "../ui/select"
+import { Select, SelectOption } from "../ui/select"
 import type { Secret } from "../../lib/api-types"
 
 interface CredentialBindingSelectProps {
@@ -30,18 +30,18 @@ export function CredentialBindingSelect({
   return (
     <Select
       value={value}
-      onChange={(event) => onChange(event.target.value)}
+      onValueChange={(nextValue) => onChange(nextValue)}
       onClick={(event) => event.stopPropagation()}
       className={className}
     >
-      {allowPersonal && <option value="">{personalLabel}</option>}
-      {!allowPersonal && !value && <option value="">{personalPlaceholder ?? personalLabel}</option>}
+      {allowPersonal && <SelectOption value="">{personalLabel}</SelectOption>}
+      {!allowPersonal && !value && <SelectOption value="">{personalPlaceholder ?? personalLabel}</SelectOption>}
       {secrets.map((secret) => (
-        <option key={secret.id} value={secret.id}>
+        <SelectOption key={secret.id} value={secret.id}>
           {sharedLabel}: {secret.name}
-        </option>
+        </SelectOption>
       ))}
-      {allowCreateNew && <option value="__new__">{createNewLabel ?? sharedLabel}</option>}
+      {allowCreateNew && <SelectOption value="__new__">{createNewLabel ?? sharedLabel}</SelectOption>}
     </Select>
   )
 }

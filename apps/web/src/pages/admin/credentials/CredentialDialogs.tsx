@@ -24,7 +24,7 @@ import {
 import { ErrorState } from "../../../components/ui/error-state"
 import { Input } from "../../../components/ui/input"
 import { Field } from "../../../components/ui/label"
-import { Select } from "../../../components/ui/select"
+import { Select, SelectOption } from "../../../components/ui/select"
 import { Skeleton } from "../../../components/ui/skeleton"
 import {
   ApiError,
@@ -117,21 +117,21 @@ export function CredentialDialog({
               <Select
                 id="credential-kind"
                 value={kind}
-                onChange={(event) => setKind(event.target.value)}
+                onValueChange={(nextValue) => setKind(nextValue)}
                 disabled={kindLocked}
               >
                 {/* A locked kind may not be in the live options list
                     (legacy data, admin-added kind, in-flight prefill);
                     render it explicitly so the field shows a label. */}
                 {kindLocked && !kindOptions.options.includes(kind) && (
-                  <option value={kind}>
+                  <SelectOption value={kind}>
                     {credentialKindLabel(kind, i18n.language, kind, kindOptions.kinds)}
-                  </option>
+                  </SelectOption>
                 )}
                 {kindOptions.options.map((option) => (
-                  <option key={option} value={option}>
+                  <SelectOption key={option} value={option}>
                     {credentialKindLabel(option, i18n.language, option, kindOptions.kinds)}
-                  </option>
+                  </SelectOption>
                 ))}
               </Select>
             </Field>

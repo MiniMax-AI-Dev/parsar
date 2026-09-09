@@ -23,7 +23,7 @@ import {
   LedgerRow,
   col,
 } from "../../../components/ui/ledger"
-import { Select } from "../../../components/ui/select"
+import { Select, SelectOption } from "../../../components/ui/select"
 import { Skeleton } from "../../../components/ui/skeleton"
 import { ApiError } from "../../../lib/api-client"
 import {
@@ -300,15 +300,15 @@ function CreateDialog({ onClose, onSubmit, pending, error }: CreateDialogProps) 
               <Select
                 id="secret-purpose"
                 value={purpose}
-                onChange={(event) => {
-                  const next = event.target.value as "runtime" | "custom_api"
+                onValueChange={(nextValue) => {
+                  const next = nextValue as "runtime" | "custom_api"
                   setPurpose(next)
                   if (next === "runtime") setProvider("e2b")
                   else setProvider("")
                 }}
               >
-                <option value="runtime">{t("secrets.create.purpose.runtime")}</option>
-                <option value="custom_api">{t("secrets.create.purpose.custom")}</option>
+                <SelectOption value="runtime">{t("secrets.create.purpose.runtime")}</SelectOption>
+                <SelectOption value="custom_api">{t("secrets.create.purpose.custom")}</SelectOption>
               </Select>
             </Field>
             <Field label={t("secrets.create.field.name")} htmlFor="secret-name">
