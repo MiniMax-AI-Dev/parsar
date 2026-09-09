@@ -498,6 +498,7 @@
           "runtime": "检查 daemon 设备、liveness 和最近心跳。",
           "model": "检查模型 provider、model 配置和 opencode_json。",
           "inspect": "查看事件和审计记录定位原因。",
+          "agentDeleted": "Agent 已删除，历史运行记录不能重试。",
           "requeueIfNeeded": "确认上下文仍有效后可重新入队。",
           "waitOrCancel": "可等待调度；不再需要时取消。",
           "inspectRuntime": "打开运行环境状态检查心跳和可用性。",

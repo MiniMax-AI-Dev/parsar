@@ -472,6 +472,7 @@ function RunDetailRail({
   const errorSummary = run.error_summary ?? run.user_facing_reason
   const translateDetail = (key: string, options?: Record<string, unknown>) => t(key as never, options as never) as unknown as string
   const diagnosis = buildRunDiagnosis(run, events, translateDetail)
+  if (run.agent_deleted) diagnosis.action = t("runs.detail.diagnostics.actions.agentDeleted")
   const runtimeDiagnosis = buildRuntimeDiagnosis(run, translateDetail)
   // Viewers may watch a run but not stop it (main #234ef56).
   const role = workspacesQ.data?.workspaces.find((w) => w.id === run.workspace_id)?.role
