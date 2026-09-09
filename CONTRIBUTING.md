@@ -189,6 +189,9 @@ description and keep ownership on the side listed here.
 - `internal/agentdaemon/proto` is the only shared wire contract between the
   server and daemon. The daemon must not import `server/internal/...`, and the
   server must not import daemon-internal adapter packages.
+- The conversation SSE first-event timer observes run state; it is not an
+  execution deadline. Keep waiting while the stored run is queued or running.
+  Dispatch retains ownership of execution timeouts and terminal state.
 - Any state needed to recover a conversation after a server restart, daemon
   reconnect, or child-process exit must be stored durably by the server.
   In-memory maps may cache waiters or sockets only; they must not be the
