@@ -43,7 +43,7 @@ export function ErrorState({
       <div className="flex w-full items-start gap-2">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="break-all font-medium text-fg">{resolvedTitle}</p>
+          <p className="font-medium text-fg [overflow-wrap:anywhere]">{resolvedTitle}</p>
           {description && <p className="break-words text-xs text-fg">{description}</p>}
           {appearance === "panel" && detail ? (
             <details className="min-w-0">

@@ -30,12 +30,12 @@ export function ErrorDialog({ title, message, detail, onClose, onRestoreFocus, f
         className="w-[calc(100%-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden"
       >
         <DialogHeader className="min-w-0 pr-4">
-          <DialogTitle className="flex items-start gap-2 break-all">
+          <DialogTitle className="flex items-start gap-2 [overflow-wrap:anywhere]">
             <AlertTriangle className="h-4 w-4 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
             {title}
           </DialogTitle>
         </DialogHeader>
-        <DialogDescription className="break-all text-fg">{message}</DialogDescription>
+        <DialogDescription className="text-fg [overflow-wrap:anywhere]">{message}</DialogDescription>
         {detail && (
           <details className="min-w-0">
             <summary className="cursor-pointer text-sm text-fg-muted focus-visible:outline-accent">
