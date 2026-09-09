@@ -48,7 +48,6 @@ import { useAgents } from "../../../lib/api-agents"
 import {
   KEY_AGENT_CAPABILITIES,
   KEY_CAPABILITY_VERSIONS,
-  agentCapabilityVersionID,
   listCapabilityVersions,
   listAgentCapabilities,
   skillVersionRef,
@@ -83,6 +82,7 @@ import { useRelativeTime } from "../../../lib/relative-time"
 import { requiredCredentialsLabel } from "../../../lib/credential-kind-ui"
 import { CapabilityTypeBadge } from "./CapabilityTypeBadge"
 import { InlineNotice } from "./notices"
+import { useCapabilityEnabledAgents } from "./use-capability-enabled-agents"
 import { MarketplaceCapabilityRail } from "./MarketplaceCapabilityRail"
 import { MarketplaceTab } from "./MarketplaceTab"
 import { DeprecateCapabilityDialog } from "./DeprecateCapabilityDialog"
@@ -96,13 +96,6 @@ export { CapabilityTypeBadge } from "./CapabilityTypeBadge"
 
 type MarketAction = "publish" | "unpublish" | "deprecate" | "undeprecate" | null
 type MarketCapabilityAction = Exclude<MarketAction, null>
-
-interface AgentInstallation {
-  agentID: string
-  agentName: string
-  version: string
-  latest: boolean
-}
 
 /** "" = every type; "bundle" is the server's name for plugin bundles. */
 type CapabilityTypeFilter = "" | "mcp" | "skill" | "bundle"
@@ -1386,34 +1379,6 @@ function useCapabilityVersionSummary(workspaceID: string | null, capabilities: C
   }, [capabilities, queries.map((q) => q.dataUpdatedAt).join(":")])
 }
 
-function useCapabilityEnabledAgents(wid: string | null, agents: Array<{ id: string; name: string }>, capability: Capability | null, versions: CapabilityVersion[]) {
-  const queries = useQueries({
-    queries: agents.map((agent) => ({
-      queryKey: KEY_AGENT_CAPABILITIES(wid ?? "_none", agent.id),
-      queryFn: () => listAgentCapabilities(wid, agent.id),
-      enabled: !!wid && !!capability,
-      retry: noUnreachableRetry,
-      staleTime: 30_000,
-    })),
-  })
-  return useMemo(() => {
-    const latest = versions[0]
-    const versionByID = new Map(versions.map((v) => [v.id, v.version]))
-    const versionCounts = new Map<string, number>()
-    const installations: AgentInstallation[] = []
-    if (!capability) return { installations, versionCounts, isLoading: queries.some((q) => q.isLoading) }
-    queries.forEach((q, idx) => {
-      for (const item of q.data?.installed ?? []) {
-        if (!item.enabled || item.capability_id !== capability.id) continue
-        const versionID = agentCapabilityVersionID(item)
-        versionCounts.set(versionID, (versionCounts.get(versionID) ?? 0) + 1)
-        installations.push({ agentID: agents[idx].id, agentName: agents[idx].name, version: versionByID.get(versionID) ?? "—", latest: versionID === latest?.id })
-      }
-    })
-    return { installations, versionCounts, isLoading: queries.some((q) => q.isLoading) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capability, agents, versions, queries.map((q) => q.dataUpdatedAt).join(":")])
-}
 
 function countCapabilityInstalls(groups: AgentCapability[][]) {
   const counts = new Map<string, number>()
