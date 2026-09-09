@@ -1511,7 +1511,7 @@ export function CreateAgentDialog({
                 <Input value={capabilitySearch} onChange={(e) => setCapabilitySearch(e.target.value)} placeholder={t("agents.form.placeholders.capabilitySearch")} />
                 {capabilityOptions.length === 0 ? (
                   <p className="py-2 text-sm text-fg-muted">
-                    {admin ? t("agents.form.noTagsAdmin") : t("agents.form.noTagsMember")}
+                    {capabilitySearch.trim() ? tc("states.noResults") : admin ? t("agents.form.noTagsAdmin") : t("agents.form.noTagsMember")}
                   </p>
                 ) : (
                   <>
