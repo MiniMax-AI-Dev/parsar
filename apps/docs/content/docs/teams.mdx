@@ -1,0 +1,34 @@
+---
+title: Microsoft Teams
+description: Configure Teams bot credentials and the deployment's message endpoint.
+---
+
+Open **Integrations → Microsoft Teams** in the sidebar. Owners and admins enter workspace bot credentials; deployment administrators enable the server's receiving endpoint.
+
+## Deployment prerequisite
+
+The current Teams receiver still requires a deployment administrator to set `PARSAR_TEAMS_CONNECTORS=true` and a stable `PARSAR_MASTER_KEY` in the Parsar server process, then restart it. Enabling the bot in the Web form alone does not activate the receiver.
+
+Set the Azure Bot Messaging endpoint to:
+
+```text
+https://your-parsar-domain/api/teams/messages
+```
+
+The endpoint must be publicly reachable over HTTPS. In Compose deployments, additional server variables must be wired into the service environment; adding an unused variable to .env alone does not pass it to the container.
+
+## Enter workspace configuration
+
+Register the app and bot in the [Azure portal](https://portal.azure.com), enable the Teams channel, then return to Parsar:
+
+1. Open **Integrations → Microsoft Teams**.
+2. Enter the application (client) ID as **App ID**.
+3. Enter the client secret's **value** from Certificates & secrets as the application password, not its secret ID.
+4. Enter the **Tenant ID** for a single-tenant app; leave it empty for a multi-tenant configuration.
+5. Enable the Teams bot and save. Confirm **Enabled** in the list.
+
+## Verification and limitations
+
+Senders need platform identity mappings and workspace access. There is currently no Teams self-service account-linking page; deployment administrators must prepare the mappings first. Add the bot to Teams, send a request, and inspect the corresponding **Run** in Parsar.
+
+When settings save but no messages arrive, check that the receiver is enabled, Azure's Messaging endpoint is correct, and sender identities are mapped. See [Chat integrations](/integrations) and [Deployment configuration](/configuration).

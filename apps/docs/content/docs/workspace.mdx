@@ -1,0 +1,47 @@
+---
+title: Workspaces
+description: Create, switch, and manage your team's shared workspace.
+---
+
+A workspace holds team members, Agents, conversations, runs, capabilities, devices, and integrations. The **Parsar / workspace name** control at the top left is the workspace switcher.
+
+The [model catalog](/models-credentials) is shared across the Parsar instance. Switching workspaces does not create a separate model catalog.
+
+## Create a workspace
+
+1. Click the workspace name at the top left.
+2. Choose **New workspace**.
+3. Enter a **Name** and choose **Private** or **Public** visibility.
+4. Click **Create**.
+
+The creator becomes the workspace's `owner`. An account with no workspace membership first sees an onboarding page after signing in. That page asks only for a workspace name and creates a private workspace. Use the workspace switcher afterward to change its visibility.
+
+Private workspaces accept members through invitations or an administrator adding them. Public workspaces also appear in discovery for signed-in users. Public visibility does not expose conversations or runs; an applicant still needs approval to join.
+
+## Switch or request access
+
+The switcher lists workspaces you have joined. Click a name to switch. This changes the current scope without moving or copying data.
+
+Choose a public workspace in the discovery area and submit a join request. A reason is optional. Use **Withdraw** while the request is pending. Owners and admins process requests in the **Pending** section of **Members** in the sidebar.
+
+## Change the name or visibility
+
+Owners and admins open the workspace switcher and click the pencil icon (**Rename workspace**) beside a workspace. Update the name or visibility and save.
+
+## Archive a workspace
+
+Owners and admins click the archive icon (**Archive workspace**) on the same row and confirm.
+
+Archiving removes the workspace from the switcher and discovery, closes normal access, and preserves historical data. The current UI has no restore action. The server rejects archiving when other workspaces depend on its marketplace capabilities.
+
+## Membership and resource access
+
+Workspace membership and Agent access are checked separately. Members must meet an Agent's access settings to use it. Viewers can read but cannot start runs or resolve approvals.
+
+The workspace menu currently has no leave action. Member removal is available on **Members**; see [Members and roles](/members-roles) for permissions.
+
+## Next steps
+
+- [Members and roles](/members-roles)
+- [Create and configure an Agent](/create-agent)
+- [Conversations and shared conversations](/conversations)

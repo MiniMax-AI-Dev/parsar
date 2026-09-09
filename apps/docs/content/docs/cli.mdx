@@ -1,0 +1,63 @@
+---
+title: CLI reference
+description: Manage device connections and access specs and memories inside execution environments.
+---
+
+Parsar provides two commands: `parsar-daemon` connects devices, and `parsar` is a companion CLI used inside execution environments. They do not provide the Web application's user sign-in flow.
+
+## Connect and manage a device
+
+First follow [Install Agent Runtime](/install-runtime): generate a command under **Runtime → Connect device** and execute it on the target machine.
+
+The pairing installer does not add the binary to `PATH`. Complete [Make the command available](/install-runtime#make-the-command-available), or replace `parsar-daemon` below with the downloaded binary's full path. Then inspect status and logs:
+
+```bash
+parsar-daemon status
+parsar-daemon logs -n 100
+parsar-daemon logs -f
+```
+
+| Command | Purpose |
+| --- | --- |
+| `connect --url <server-url> --token <pairing-token> -b` | Pair once and run in the background. |
+| `connect -b` | Reconnect in the background using the saved profile. |
+| `status` | Inspect the local profile and background process. |
+| `logs -n 100` | Show the latest 100 log lines; `-f` follows output. |
+| `stop` | Stop the background connection process. |
+| `logout` | Remove saved credentials from the local profile. |
+| `version` | Print the version. |
+
+Profile operations accept `--profile <name>`, defaulting to `default`. Configuration and logs live in `~/.parsar/parsar-daemon/<profile>/`.
+
+Pairing saves runner credentials in `auth.json` within the profile directory, with file permissions `0600`. After stopping the process or rebooting, use `parsar-daemon connect -b`, or `parsar-daemon connect --profile <name> -b` for a named profile. A new pairing token is needed only when the saved credentials are missing or no longer accepted.
+
+To retire a device, stop its daemon, then have a workspace owner or admin delete the device on **Runtime**. `logout` only removes local saved credentials; it does not stop the running daemon or delete the server record.
+
+## parsar inside an execution environment
+
+Spec, memory, and injection commands use Runtime APIs. They require `PARSAR_SERVER_URL`, `PARSAR_RUNNER_TOKEN`, and the current workspace and caller context. The execution environment injects these values. A browser session cannot replace runner credentials.
+
+| Command | Purpose |
+| --- | --- |
+| `parsar spec list` | Read workspace spec fragments. |
+| `parsar spec add`, `edit`, `rm` | Add, edit, or remove specs. |
+| `parsar memory list` | Read memories, using `--scope user` or `--scope workspace`. |
+| `parsar memory add`, `edit`, `rm` | Add, edit, or remove memories. |
+| `parsar inject snapshot` | Print the current injection snapshot. |
+| `parsar inject incremental --since <RFC3339-time>` | Print changes after a timestamp. |
+| `parsar sync` | Print a human-readable injection snapshot. |
+| `parsar version` | Print the version. |
+
+Put options before positional arguments:
+
+```bash
+parsar spec edit --title "Updated title" --json <id>
+```
+
+Use `parsar spec add --help`, or the relevant subcommand's `--help`, for required fields.
+
+## Current plugin command limitation
+
+Help also lists `parsar plugin add`, `list`, and `remove`. Their authentication does not match the server's plugin endpoints, so they return HTTP 401 with normal authentication enabled. They are not a working plugin installation flow.
+
+Import Skills and MCP servers through [Capabilities](/capabilities). Do not disable server authentication to run plugin commands.

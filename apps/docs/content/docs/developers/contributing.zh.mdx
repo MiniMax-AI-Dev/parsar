@@ -1,0 +1,42 @@
+---
+title: 参与开发
+description: 准备开发分支，验证修改，并完成独立审查。
+---
+
+开发流程的规范来源是[贡献指南](https://github.com/MiniMax-AI-Dev/parsar/blob/main/CONTRIBUTING.md)。以下是开始一次修改所需的步骤。
+
+## 准备工作区
+
+从最新的 `origin/main` 创建独立分支和 Git worktree，放在 `.worktrees/` 下。所有修改都在该 worktree 完成，保留已有的无关修改。
+
+```bash
+git fetch origin main
+git worktree add .worktrees/my-change -b feature/my-change origin/main
+```
+
+较大实现前阅读贡献指南。涉及架构规则、模块职责、检查流程或生成契约时，在同一分支更新规范。
+
+## 验证修改
+
+从 worktree 根目录运行：
+
+```bash
+make check
+```
+
+这个检查包含 Go、数据库、Web、文档和 CLI 的对应检查项。文档包也可单独运行：
+
+```bash
+pnpm --filter @parsar/docs typecheck
+pnpm --filter @parsar/docs build
+```
+
+涉及 API 或数据库查询时，按[仓库约定](/zh/developers/conventions)重新生成契约和查询代码。检查失败时记录准确命令和错误，不标记为通过。
+
+## 审查与交付
+
+较大修改在实现与验证后需要两次相互独立的审查。审查者根据需求、验收标准、项目规范和完整差异检查结果；实质性修复后重新审查。
+
+提交的内容应聚焦于本次修改，排除密钥、运行状态和构建缓存。PR 面向 `main`，说明问题、最终行为和验证结果，合并前完成 PR 审查。
+
+产品文档的中英文版本同步更新，链接分别使用英文根路径和中文 `/zh/` 路径。其他注释和文档使用英文。

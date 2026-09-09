@@ -1,0 +1,43 @@
+---
+title: How Parsar works
+description: Follow a message to its result and understand the server and execution device.
+---
+
+Parsar records and coordinates work; the coding CLI on an execution device performs it. The browser, Parsar server, device, and model service must each be available.
+
+## How a message runs
+
+1. You send a request in a conversation. Parsar selects the bound Agent or the Agents mentioned in the message.
+2. The server checks access, saves the message, and creates a Run.
+3. The Agent Daemon connector delivers the request to the selected Runtime. The daemon starts the engine with its model, instructions, capabilities, and working directory.
+4. The engine calls the model and tools, returning replies, tool events, and interaction requests to Parsar.
+5. You read replies in the conversation and resolve requests in the inbox. The Run records its final state when execution ends.
+
+Existing HTTP Agents execute through an external HTTP service without a local coding CLI. New Agents currently use a local device or cloud isolation. See [Create and configure an Agent](/create-agent).
+
+## Responsibilities
+
+| Component | Responsibility |
+| --- | --- |
+| Browser | Send messages, display progress, resolve requests, and manage configuration. |
+| Parsar server | Authenticate and authorize access, save resources, dispatch runs, and record history and audit events. |
+| Device daemon | Discover coding CLIs, start processes, prepare working directories, and report events. |
+| Coding CLI and model service | Generate answers, invoke tools, and report results and usage. |
+
+Local devices connect outbound to the server. The server does not access your local directory through the browser. An Agent uses files and networks accessible from its execution device.
+
+## Where results appear
+
+- **Conversations**: messages, replies, and current interaction requests.
+- **Runs → a record**: status, Steps, Artifacts, Audit, and recorded execution environment details.
+- **Settings → Usage**: token and cost data reported by the engine.
+
+Artifacts and usage depend on what execution submits. No artifact records produces an empty state; missing usage does not mean the model incurred no cost.
+
+## When execution stops progressing
+
+Queued means the Run has been created but execution has not started. Running means an executor has claimed it but has not finished. Neither proves the model has started returning output.
+
+Check the latest Run events, pending requests in **Inbox**, and device status on **Runtime**. Follow the recorded error to resolve an offline device, missing CLI, model rejection, or missing credentials. A device coming online does not automatically retry failed runs.
+
+The server retains received messages and run records across browser refreshes. Reconnecting a device and starting a new run are separate actions. See [Troubleshooting](/troubleshooting).

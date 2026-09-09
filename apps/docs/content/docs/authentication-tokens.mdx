@@ -1,0 +1,44 @@
+---
+title: Tokens and credentials
+description: Distinguish login sessions, device pairing tokens, and model or tool credentials.
+---
+
+Parsar uses different credentials for sign-in, device connections, and external services. Manage each through its own page; everyday use does not require copying browser cookies into a terminal.
+
+## Where to manage credentials
+
+| Credential | Entry point | Purpose |
+| --- | --- | --- |
+| Login session | Login page; **Sign out** in the user menu | Keep the current browser signed in. |
+| Device pairing token | **Runtime → Connect device → Generate command** | Connect a machine to the current workspace. |
+| Model key | **Models** in the sidebar | Access the selected model service. |
+| Personal and organization credentials | **Settings → Credentials** | Supply external credentials to capabilities, models, and runtimes. |
+| Chat bot credentials | **Integrations** in the sidebar | Connect Feishu, Slack, Discord, or Teams. |
+
+## Browser sessions
+
+After sign-in, the browser stores the `parsar_session` cookie. It expires after **30 days** by default; using it does not extend its original expiry. Signing out revokes the current server session. Deployment administrators should serve Parsar over HTTPS.
+
+## Device pairing tokens
+
+A generated connection command contains an `rtk_` token. It expires after **15 minutes** and is invalidated after one successful pairing. The server stores only its hash.
+
+Pairing gives the daemon an `rtc_` runner credential to maintain the device connection. Neither the pairing token nor the runner credential replaces user sign-in.
+
+Successful pairing saves the runner credential in `~/.parsar/parsar-daemon/<profile>/auth.json` with file permissions `0600`; the default profile is `default`. Background logs and PID files use the same directory, as `connect.log` and `connect.pid`. Setting `PARSAR_HOME` replaces the `~/.parsar` base directory.
+
+After stopping the daemon or rebooting, run `parsar-daemon connect -b` to reuse valid saved credentials. These commands require [adding the binary to PATH](/install-runtime#make-the-command-available), or using its full download path. For a retired device, stop the daemon, then have an owner or admin delete the device on **Runtime**. `parsar-daemon logout` removes local credentials only.
+
+## Model and tool credentials
+
+Model keys, organization credentials, personal credentials, and chat bot secrets are encrypted on the server. The UI shows names, status, and masked values; it has no action to retrieve saved plaintext.
+
+After replacing an external service token, update the corresponding model, credential, or integration and run a related task again. Personal credentials are resolved for the caller; organization credentials are referenced by workspace configuration. See [Models and credentials](/models-credentials) for the steps.
+
+`PARSAR_MASTER_KEY` is the deployment's encryption key, not a user API key. Back it up securely with the database; replacing it directly makes existing encrypted credentials unreadable.
+
+## Secret answers in interactions
+
+When an Agent marks a question as sensitive, the free-text input in the conversation or inbox masks the answer. The answer is sent to the waiting Agent, while Parsar redacts stored interaction responses and related run and audit events. This does not change the value received by the Agent and its tools. See [Interaction requests](/conversations).
+
+Keep pairing tokens and API keys out of ordinary messages, run artifacts, and issue screenshots.

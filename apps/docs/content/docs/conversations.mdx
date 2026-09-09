@@ -1,0 +1,55 @@
+---
+title: Conversations and shared conversations
+description: Start a conversation, copy its link, and answer Agent requests.
+---
+
+A conversation keeps your messages and the Agent's replies together. Send follow-up messages in the same conversation; each execution has a Run with its own status and events.
+
+## Start a conversation
+
+1. Open **Agents** in the sidebar and find the Agent to use.
+2. Click its **Chat** action to open a conversation.
+3. Enter your request and send it. Replies and tool calls appear in the timeline.
+4. Continue in that conversation, or open **Conversations** in the sidebar to return to an existing thread.
+
+The Agent must be enabled, with a usable execution device and model. When it needs a decision, respond to the card in the conversation or open **Inbox** in the sidebar.
+
+## Share a conversation
+
+A shared conversation is a separate page for the same thread and message history. Opening it does not create a copy.
+
+1. Find the conversation in **Conversations**.
+2. Click the link icon on its row, labeled **Copy share link** on hover.
+3. Send the link to a member of the same workspace. Its format is `https://your-server/c/conversation-id`.
+4. After signing in, the recipient sees the same conversation without the administration sidebar. Owners, admins, and members can continue the conversation; viewers can only read it.
+
+The link does not grant access. People outside the workspace cannot read the conversation just by obtaining its URL. Making an Agent public does not publish its existing conversations. Workspace members can read workspace conversations, so keep passwords and API keys out of ordinary messages.
+
+## Answer Agent requests
+
+Permission cards show the proposed action and available allow or deny choices. Question cards show questions, options, and any permitted answer fields. Submit your decision to let the waiting Agent proceed. Resolved or expired requests cannot be answered again.
+
+A **secret answer** is an input mode for a question the Agent marks as sensitive, such as a temporary passphrase. Its free-text field masks typing with dots. Ordinary messages and ordinary answer fields do not automatically receive this protection.
+
+The submitted value is delivered to the waiting Agent. Stored interaction answers contain `[REDACTED]`, and interaction and audit records do not reveal the original value. This protects the answer's delivery and records; do not ask the Agent to repeat the secret in a later reply or file.
+
+## Mention another Agent
+
+The composer currently has no `@` autocomplete menu. Type `@` followed by the Agent's full name or slug in the current workspace, then your request:
+
+```text
+@reviewer Check the risks in this change.
+```
+
+Names after `@` can contain Chinese characters, letters, numbers, underscores, and hyphens, but no spaces. Use the slug for a name containing spaces. Put `@` at the start of the message or after whitespace, an opening bracket, or Chinese punctuation.
+
+- Without mention text, the message goes to the conversation's bound Agent.
+- Each valid mentioned Agent gets a separate Run. Duplicate targets run once.
+- A misspelled name or disabled target creates no Run for that mention. A message containing mention text does not fall back to the default Agent.
+
+After sending, open **Runs** and check the Agent column. Chat-platform `@bot` mentions use the platform's own mention picker; see [Chat integrations](/integrations).
+
+## Related pages
+
+- [Runs, approvals, and logs](/runs-approvals-logs)
+- [Create and configure an Agent](/create-agent)

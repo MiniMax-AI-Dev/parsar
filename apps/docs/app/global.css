@@ -1,0 +1,79 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+:root {
+  --color-fd-primary: hsl(240 5.9% 10%);
+}
+
+/* Keep the active navigation item readable in dark mode. The neutral theme
+   defines a light primary color for dark surfaces; this override must be more
+   specific than the root token declared above. */
+.dark {
+  --color-fd-primary: hsl(0 0% 98%);
+  --color-fd-primary-foreground: hsl(240 5.9% 10%);
+}
+
+body {
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+/* Medium weight maps to regular in common CJK fonts. */
+.prose :where(strong):not(:where(.not-prose, .not-prose *)) {
+  font-weight: 700;
+}
+
+.prose pre {
+  min-width: 0;
+  width: 100%;
+}
+
+.prose pre,
+.prose code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Make the page-tree separators read as navigation groups, not page links. */
+#nd-sidebar [data-radix-scroll-area-viewport] p {
+  width: 100%;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--color-fd-border);
+  color: var(--color-fd-muted-foreground);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.25rem;
+}
+
+#nd-sidebar [data-radix-scroll-area-viewport] p:first-of-type {
+  margin-top: 0;
+}
+
+#nd-sidebar [data-radix-scroll-area-viewport] a[href^="/"] {
+  min-height: 2.25rem;
+  font-size: 0.875rem;
+}
+
+/* Keep the language menu compact inside the sidebar and on narrow screens. */
+[role="dialog"][data-side] {
+  width: min(11rem, calc(100vw - 2rem));
+  min-width: 0 !important;
+  /* Radix anchors this bottom-left menu at x=0; keep it off the viewport edge. */
+  margin-left: 0.75rem;
+}
+
+[role="dialog"][data-side] button {
+  width: 100%;
+}
+
+/* Text selection: tint the background with the theme's primary color and keep
+   the original text color, so contrast is inherited from body text in both
+   themes. Forcing --color-fd-primary-foreground here previously produced white
+   text on a mid-gray highlight in light mode. */
+::selection {
+  background: color-mix(in srgb, var(--color-fd-primary) 22%, transparent);
+}

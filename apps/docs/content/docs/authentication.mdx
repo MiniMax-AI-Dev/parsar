@@ -1,0 +1,52 @@
+---
+title: Login and registration
+description: Create the first account, join through an invitation, and sign in to Parsar.
+---
+
+Open your Parsar server URL in a browser. A new instance shows the setup form; an initialized instance shows the login page.
+
+## Create the first account
+
+1. Enter **Your name**, **Email**, **Password**, and **Workspace name**.
+2. Use at least 8 password characters and satisfy the form's password checks.
+3. Click **Create owner account**.
+
+You are signed in automatically and become the first workspace's Owner. Once an Owner exists, setup closes and other members join through invitations.
+
+## Register through an invitation
+
+Open the invitation link you received, or click **Register** on the login page, paste the link, and click **Continue**.
+
+The invitation page fixes the invited email and workspace. Enter and confirm a password, then click **Set password and join**. Success signs you in and opens the workspace. Invitation links expire after 72 hours; used, revoked, and expired links cannot be accepted again.
+
+Accepting an invitation sets the invited account's password, including for an existing account. Administrators can add existing accounts through **Members → Invite new member → Existing users**. See [Members and roles](/members-roles).
+
+## Sign in and sign out
+
+Sign in with an email and password. The login page also lists Feishu login when it is configured for the deployment.
+
+To sign out, open the user menu at the bottom of the sidebar and click **Sign out**. This revokes the current browser session. Sessions expire after 30 days by default; using them does not extend the original expiry.
+
+## Configure Feishu login
+
+The deployment administrator configures login separately from the Feishu bot QR connection in **Integrations**:
+
+1. Prepare a login application in the Feishu developer console and obtain its App ID and App Secret. Request and publish the `contact:user.id:readonly`, `contact:user.base:readonly`, and `contact:user.email:readonly` permissions. Login requires a returned user ID and email.
+2. Pass `PARSAR_FEISHU_APP_ID` and `PARSAR_FEISHU_APP_SECRET` to the Parsar server process, and set `PARSAR_FEISHU_MOCK=false`.
+3. Set `PARSAR_PUBLIC_URL` to the user-facing server URL. Register `https://your-server-domain/api/v1/auth/feishu/callback` as the application's callback.
+4. To use a different callback, set `PARSAR_FEISHU_REDIRECT_URI` to that same address.
+5. Restart the server and complete a Feishu sign-in from the login page.
+
+These are deployment settings; there is no workspace login-provider editor. For Compose, add the variables to the service's `environment`. Appending values to .env alone does not pass them into the container.
+
+## Sign-in problems
+
+| Symptom | Check and action |
+| --- | --- |
+| Invalid email or password | Check the email and current password. After accepting a new invitation, use the password set on that invitation page. |
+| Returned to login or an API returns 401 | Sign in again and check whether the browser stores and sends the session cookie. |
+| Feishu authorization cannot return | Check the public URL and registered callback, then restart sign-in. |
+| Workspace creation appears after login | The account has no accessible workspace. Create one or accept an invitation. |
+| Signed in but unable to use an Agent | Check the workspace role and the Agent's access settings. |
+
+See [Tokens and credentials](/authentication-tokens) and [Deployment configuration](/configuration).

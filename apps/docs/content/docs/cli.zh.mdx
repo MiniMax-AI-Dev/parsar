@@ -1,0 +1,63 @@
+---
+title: CLI 参考
+description: 管理设备连接，并在执行环境中查看规范与记忆。
+---
+
+Parsar 提供两个命令：`parsar-daemon` 连接执行设备，`parsar` 是执行环境内使用的辅助 CLI。它们不提供与 Web 相同的用户登录流程。
+
+## 连接和管理设备
+
+先完成[安装 Agent Runtime](/zh/install-runtime)：在**执行层 → 接入新设备**生成命令，并在目标机器执行。
+
+配对安装器不会将二进制加入 `PATH`。先完成[将命令加入 PATH](/zh/install-runtime#将命令加入-path)，或把下文的 `parsar-daemon` 替换为下载文件的完整路径，然后查看状态和日志：
+
+```bash
+parsar-daemon status
+parsar-daemon logs -n 100
+parsar-daemon logs -f
+```
+
+| 命令 | 作用 |
+| --- | --- |
+| `connect --url <服务地址> --token <配对令牌> -b` | 一次性配对并在后台运行。 |
+| `connect -b` | 使用已保存的 profile 在后台重新连接。 |
+| `status` | 查看本地 profile 与后台进程状态。 |
+| `logs -n 100` | 查看最近 100 行日志；`-f` 持续跟踪。 |
+| `stop` | 停止后台连接进程。 |
+| `logout` | 删除本地 profile 已保存的凭据。 |
+| `version` | 查看版本。 |
+
+上述 profile 操作支持 `--profile <名称>`，默认为 `default`。配置与日志位于 `~/.parsar/parsar-daemon/<profile>/`。
+
+配对成功后，运行凭据写入 profile 目录中的 `auth.json`，文件权限为 `0600`。进程停止或机器重启后执行 `parsar-daemon connect -b`；命名 profile 使用 `parsar-daemon connect --profile <名称> -b`。只有已保存凭据丢失或不再被服务端接受时，才需要新的配对令牌。
+
+不再使用某台设备时，先停止其 daemon，再由工作区所有者或管理员在**执行层**删除设备。`logout` 只删除本地已保存的凭据，不会停止正在运行的 daemon，也不会删除服务端设备记录。
+
+## 执行环境内的 parsar
+
+`parsar` 的规范、记忆和注入命令使用 Runtime 接口，需要 `PARSAR_SERVER_URL`、`PARSAR_RUNNER_TOKEN` 以及当前工作区和调用者上下文。这些值由运行环境注入；浏览器登录会话不能替代 Runner 凭据。
+
+| 命令 | 作用 |
+| --- | --- |
+| `parsar spec list` | 查看工作区规范片段。 |
+| `parsar spec add`、`edit`、`rm` | 添加、修改、删除规范。 |
+| `parsar memory list` | 查看记忆，`--scope user` 或 `--scope workspace` 选择范围。 |
+| `parsar memory add`、`edit`、`rm` | 添加、修改、删除记忆。 |
+| `parsar inject snapshot` | 输出当前注入快照。 |
+| `parsar inject incremental --since <RFC3339时间>` | 输出指定时间后的增量。 |
+| `parsar sync` | 输出便于阅读的注入快照。 |
+| `parsar version` | 查看版本。 |
+
+带位置参数的命令先写选项，例如：
+
+```bash
+parsar spec edit --title "Updated title" --json <id>
+```
+
+使用 `parsar spec add --help` 或相应子命令的 `--help` 查看必填字段。
+
+## 插件命令的当前限制
+
+帮助中还列出 `parsar plugin add`、`list` 和 `remove`。当前这些命令的认证方式与服务端插件接口不匹配，正常登录认证开启时返回 HTTP 401，因此不作为可用的插件安装流程。
+
+Skill 和 MCP 使用[能力页面](/zh/capabilities)导入。不要为了运行插件命令而关闭服务端认证。

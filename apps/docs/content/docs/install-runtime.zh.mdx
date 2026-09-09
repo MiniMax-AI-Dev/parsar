@@ -1,0 +1,81 @@
+---
+title: 安装 Agent Runtime
+description: 从执行层页面生成连接命令，将电脑或服务器接入 Parsar。
+---
+
+要让 Agent 使用你的电脑或服务器，需要在这台机器上运行 `parsar-daemon`。它主动连接 Parsar，并调用机器上已安装的编程 CLI。
+
+## 开始前准备
+
+- 使用工作区所有者或管理员账号接入设备和创建 Agent。
+- 在目标机器上安装要使用的 CLI。当前新建 Agent 可选择 Claude Code、Codex 或 pi；见[Agent 引擎对照](/zh/agent-tools)。
+- 使用将运行 daemon 的操作系统账号，确认 CLI 在 `PATH` 中且能够启动。
+- 目标机器能访问 Parsar 服务地址和模型服务。本地设备接入不需要开放入站端口。
+- 安装命令支持 Linux、macOS 的 x64 和 ARM64。Windows 上使用 WSL，并在同一个 WSL 环境中安装 CLI 和执行连接命令。
+
+## 接入设备
+
+1. 登录 Parsar，选择目标工作区，打开左侧的**执行层**（Runtime）。
+2. 点击右上角**接入新设备**。
+3. 填写**设备名称**，例如 `my-laptop`，点击**生成连接命令**。
+4. 点击**复制命令**，在目标机器的终端中执行。该命令会下载 daemon 并在后台连接，无需先手动安装二进制。
+5. 返回对话框，等待显示**设备已接入**，然后点击**完成**。
+6. 在执行层列表中确认设备为**在线**，并显示你需要的 Agent 引擎。
+
+连接命令中的配对令牌有效期为 **15 分钟**，只能使用一次。关闭对话框后无法再次查看令牌；尚未配对成功且令牌过期或丢失时，重新打开**接入新设备**生成新命令。
+
+## 让 Agent 使用这台设备
+
+打开 **Agent → 新建 Agent**，选择**本地设备**、Agent 引擎和刚接入的设备，配置模型并保存。设备选择器按引擎过滤；例如只安装 Codex 的设备不会出现在 Claude Code 的设备列表中。
+
+发送一个简单请求，例如“只回复 OK”。在**运行**中确认该 Run 为**已完成**，并检查详情中的执行环境。设备在线只说明 daemon 已连接，不代表模型凭据已通过验证。
+
+## 命令执行后一直等待设备接入
+
+生成的命令在后台连接，错误写入目标机器的日志：
+
+```bash
+tail -n 100 ~/.parsar/parsar-daemon/default/connect.log
+```
+
+| 日志或现象 | 处理方式 |
+| --- | --- |
+| 未找到任何 Agent CLI | 使用同一操作系统账号安装 CLI，确认 `PATH`，然后重新执行连接命令。CLI 预检失败不会消耗令牌。 |
+| `401` / `pair_invalid` | 令牌已过期或已使用，重新生成连接命令。 |
+| 服务地址不可达 | 检查目标机器能否访问命令中的服务地址。另一台电脑不能使用指向 Parsar 服务器自身的 `127.0.0.1` 地址。 |
+| 终端用户能运行 CLI，但 daemon 找不到 | 确认没有切换到另一个用户或使用 `sudo`；不同账号的安装路径不同。 |
+
+## 将命令加入 PATH
+
+连接命令默认把二进制下载到 `~/Downloads`，并在终端的 `Downloaded to` 后显示完整路径。它会启动 daemon，但不会自动把命令加入 `PATH`。文件名包含操作系统和架构，从版本发布页下载时还会包含版本号。
+
+Linux x64（含 x64 WSL）从 Parsar 服务下载的文件名为 `parsar-daemon-linux-amd64`。使用当前账号安装命令：
+
+```bash
+mkdir -p ~/.parsar/bin
+install -m 755 ~/Downloads/parsar-daemon-linux-amd64 ~/.parsar/bin/parsar-daemon
+export PATH="$HOME/.parsar/bin:$PATH"
+parsar-daemon version
+```
+
+macOS、ARM64 或带版本号的下载文件，需要将 `install` 的源文件路径替换为实际的 `Downloaded to` 路径。`export` 只对当前终端生效；Bash 用户将同一行加入 `~/.bashrc`，zsh 用户加入 `~/.zshrc`，即可在新终端继续使用。也可以不安装命令，直接用下载文件的完整路径调用。
+
+## 停止和重新连接
+
+已安装 `parsar-daemon` 并加入 `PATH` 时，可以使用：
+
+```bash
+parsar-daemon status
+parsar-daemon logs -n 100
+parsar-daemon stop
+```
+
+配对成功后，设备凭据保存在 `~/.parsar/parsar-daemon/default/auth.json`。停止 daemon 或重启机器后，使用已保存的凭据重新连接：
+
+```bash
+parsar-daemon connect -b
+```
+
+配对令牌不能重复使用，但有效的已保存 profile 不需要新令牌。使用命名 profile 时执行 `parsar-daemon connect --profile <名称> -b`。只有已保存凭据丢失或不再被服务端接受时，才需要重新生成连接命令。profile 管理见[CLI 参考](/zh/cli)。
+
+参见[Runtime 与执行位置](/zh/runtimes)和[故障排查](/zh/troubleshooting)。

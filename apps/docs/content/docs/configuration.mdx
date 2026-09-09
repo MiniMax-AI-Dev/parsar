@@ -1,0 +1,63 @@
+---
+title: Deployment configuration
+description: Set the self-hosted server address, ports, keys, and optional services.
+---
+
+This page is for deployment administrators. Models, credentials, bots, and devices have their own UI entry points; everyday use does not require filling out an environment-variable inventory.
+
+## Choose the configuration entry
+
+| Setting | Entry |
+| --- | --- |
+| Model URL, protocol, and model key | **Models** in the sidebar. |
+| Personal or organization credentials | **Settings → Credentials**. |
+| Feishu, Slack, Discord, or Teams | **Integrations** in the sidebar. |
+| Local devices and workspace E2B key | **Runtime** in the sidebar. |
+| Domain, listening port, database, and encryption keys | Deployment configuration below. |
+
+## After a one-command install
+
+The default installation stores Compose configuration and .env in `~/.parsar/` and generates a database password, encryption key, and shared Runtime token. Preserve those generated keys.
+
+Apply installation configuration changes from that directory:
+
+```bash
+cd ~/.parsar
+docker compose up -d
+docker compose ps
+```
+
+Substitute the actual installation directory if you changed it.
+
+## Address and ports
+
+| Variable | Default installation value | Purpose |
+| --- | --- | --- |
+| `PARSAR_LOCAL_PORT` | `18080` | Host port exposed to users. |
+| `PARSAR_BIND_ADDR` | `127.0.0.1` | Host listening address. |
+| `PARSAR_PUBLIC_URL` | `http://127.0.0.1:18080` | Full server address for users and external devices. |
+
+With a domain, set `PARSAR_PUBLIC_URL` to the reverse proxy's public HTTPS address. It is used for login redirects and device connection commands. A loopback address cannot connect another computer to this server.
+
+Compose uses the host port and bind address. The server process's `PARSAR_ADDR` defaults to `:8080`; it is a separate setting.
+
+## Data and keys
+
+The installer manages `PARSAR_PG_PASSWORD`, `PARSAR_MASTER_KEY`, and `PARSAR_SHARED_RUNTIME_TOKEN`. For a manual deployment, use stable random values; generate a master key with `openssl rand -hex 32`. Securely back up the keys with the database. Replacing the master key prevents existing credentials from being decrypted.
+
+The installer places database data in `~/.parsar/postgres` and server data in `~/.parsar/data` by default. Keep runtime data and secrets out of source control.
+
+## Optional services
+
+- **Feishu login**: configure the server's login App ID, App Secret, and callback. See [Authentication](/authentication). Bot scan authorization is in **Integrations**.
+- **Teams**: the current receiver requires a deployment flag. See [Microsoft Teams](/teams).
+- **Cloud sandboxes**: the deployment needs a sandbox template and usable provider credentials. See [Runtimes and execution locations](/runtimes).
+- **Object storage**: capability files use PostgreSQL by default. Configure `PARSAR_BLOB_BACKEND=oss` and storage credentials only when adopting OSS.
+
+Additional server variables must be supplied to the process by the deployment platform or wired into the Compose service's `environment`. .env only supplies values referenced by Compose; it does not automatically pass every variable into containers.
+
+## Running the server process directly
+
+A direct production deployment requires `DATABASE_URL`, `PARSAR_PUBLIC_URL`, and `PARSAR_MASTER_KEY`. The server loads built-in defaults, then YAML from `PARSAR_CONFIG_FILE`, then environment overrides. Empty environment variables do not clear existing YAML values. Configuration paths must be absolute or start with `~/`.
+
+After applying changes, check `/healthz` and `/readyz`, then verify login, device connection, and one Agent Run. See [Self-hosting quickstart](/self-host-quickstart) and [Troubleshooting](/troubleshooting).

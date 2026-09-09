@@ -1,0 +1,43 @@
+---
+title: Security model
+description: Understand access, execution devices, credentials, and shared records.
+---
+
+Before using an Agent, establish who can call it, where it executes, and which tools and credentials it can access.
+
+## Workspace and Agent access
+
+Sign-in establishes account identity. Workspace membership controls workspace access, and roles control administration and writes. Viewers cannot send messages, start runs, or resolve interactions.
+
+Agent visibility and access are checked separately. Owners and admins can manage configuration but must still meet the Agent's access settings when running it. See [Create and configure an Agent](/create-agent).
+
+Workspace members can read workspace conversations. Sharing a link provides another way to open the original conversation; it does not relax access or create a private-message boundary. See [Conversations and shared conversations](/conversations).
+
+## Execution placement
+
+A local daemon executes coding CLIs as the operating-system account that started it. File and network access are bounded by that account and its environment. Setting a working directory does not create a filesystem sandbox.
+
+Cloud isolation uses a separate sandbox environment; external HTTP Agents use their service's environment. Confirm placement and engine in Agent details before binding capabilities and credentials.
+
+Approvals originate from engines that support them. The absence of an approval card does not mean every engine blocks tool operations. See [Agent engine comparison](/agent-tools).
+
+## Credentials and secret answers
+
+Manage model and tool credentials on **Models** and **Settings → Credentials**, and bot credentials on **Integrations**. The server encrypts these secrets. Device pairing and runner credentials are stored as hashes for verification.
+
+Secret answers are delivered to the waiting Agent, with stored interaction responses and related run and audit events redacted. Ordinary conversation messages are not secret inputs; inspect any text or files the Agent later produces. See [Tokens and credentials](/authentication-tokens).
+
+## Disabling and removing resources
+
+- Disable an Agent: stop accepting new run requests while retaining history.
+- Remove a member: revoke workspace membership while retaining the account and history, without automatically disabling Agents or Runtimes.
+- Archive a workspace: close normal access and retain history. There is currently no UI restore action.
+- Stop a device temporarily: run `parsar-daemon stop` on the device. To retire it, stop the daemon and have an owner or admin delete the device on **Runtime**.
+
+To cancel active execution, open **Runs → the record → Cancel run** and confirm the terminal status. Removing a member is not a run cancellation action.
+
+## Audit and deployment
+
+Use **Settings → Audit** for workspace operations, **Runs** for individual execution events, and **Settings → Usage** for reported usage.
+
+Serve self-hosted deployments over HTTPS, retain stable installer-generated keys, and securely back up the database and encryption key. Losing the key makes existing encrypted credentials unreadable. See [Deployment configuration](/configuration).

@@ -1,0 +1,50 @@
+---
+title: Create and configure an Agent
+description: Choose an Agent's model, engine, execution device, and capabilities.
+---
+
+An Agent stores its name, instructions, model, and execution configuration. A device runs the Agent; each request's execution record is a Run.
+
+## Before you start
+
+Prepare a tested [model](/models-credentials) and an online [device](/install-runtime) supporting the required engine. Only workspace owners and admins can create Agents.
+
+## Create an Agent
+
+1. Open **Agents → New Agent** in the sidebar.
+2. Enter a name and optional description.
+3. Choose **Local device** or **Cloud isolation** as the execution mode. External Agent is currently disabled.
+4. Select **Agent engine**: Claude Code, Codex, or pi. OpenCode is currently unavailable in this form.
+5. For a local device, select a device compatible with the engine. Cloud isolation requires a configured deployment sandbox.
+6. Select a model. If **Model credential** appears, choose **Use a shared API key** and select or create a shared key.
+7. Enter instructions and required capability settings, and save.
+
+The device picker filters out devices that do not support the selected engine. If it becomes empty after an engine change, inspect the device's reported tools in **Runtime**.
+
+## Working directory
+
+The working directory belongs to the execution device, not the computer running your browser. The current Agent form requires an absolute path starting with `/`, such as `/home/me/projects/demo`. In WSL, use its path, such as `/mnt/d/projects/demo`.
+
+Enter the full path rather than a relative path or `~/project`. The execution engine creates a missing directory automatically. The daemon's operating-system account must have permission to create and access it.
+
+## Edit configuration
+
+Open the Agent's details and use **Config** to inspect its model, Prompt, engine, device, and capabilities. To change the model, Prompt, engine, or device, click **Edit** at the bottom of the details, update the form, and click **Save**. Codex collaboration mode offers Default and Plan; choose Plan for its user-input question tool.
+
+The Agent's connector follows its creation-time execution mode. Local devices and cloud isolation use Agent Daemon. Editing a historical Run cannot change the connector.
+
+Manage capability bindings directly in **Config**. They can follow the latest version or pin a version. See [Capabilities, Skills, and MCP](/capabilities).
+
+## Visibility
+
+The current **New Agent** form creates a **Public** Agent (`public`). It has no visibility selector, and the edit form cannot change visibility. Existing Agent records can also have **Workspace** or **Tenant** visibility (`workspace` or `tenant`).
+
+Public Agents cannot use each caller's personal model credential. Use a model with a shared key, or select a shared key under **Model credential** when the model uses credential references. See [Models and credentials](/models-credentials).
+
+Public Agent visibility does not publish its existing conversations. Those conversations retain their workspace access requirements. See [Shared conversations](/conversations).
+
+## Verify
+
+After saving, click **Chat** and send a small request. Open **Runs** to confirm the Agent, execution location, and final status before starting real work.
+
+See [Agent engine comparison](/agent-tools) and [Runs, approvals, and logs](/runs-approvals-logs).

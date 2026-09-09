@@ -1,0 +1,41 @@
+---
+title: Agent engine comparison
+description: Choose Claude Code, Codex, or pi when creating an Agent.
+---
+
+An Agent engine is the coding CLI that performs work on the execution device. Select it in **Agents → New Agent → Agent engine**, or open an existing Agent's details to inspect its configuration.
+
+## Available engines
+
+| Engine | Selectable for a new Agent | Permission requests | Session resume | Usage reporting |
+| --- | --- | --- | --- | --- |
+| Claude Code | Yes | Supported | Supported | Supported |
+| Codex | Yes | Supported | Supported | Supported |
+| pi | Yes | No interactive approval | Supported | Supported |
+| OpenCode | Disabled option | Not supported | Not supported | Supported |
+
+The OpenCode adapter can still appear in existing device and Agent records, but the creation form does not allow selecting it. Usage comes from each CLI; Parsar does not reconstruct missing values from the provider's billing system.
+
+Codex also has a collaboration mode setting. Select **Plan** when the Agent needs its user-input question tool. Prompt wording alone does not enable tools restricted to that mode.
+
+## Where to install
+
+For a local device, install the CLI on that device using its official instructions and ensure the daemon's operating-system account can find it. Selecting an engine in Parsar does not install the CLI.
+
+For cloud isolation, the deployment's sandbox image supplies the coding tools. The workspace selects an engine and model; deployment administrators maintain the image and provider configuration.
+
+After connecting a device, open **Runtime** to see its reported engines and versions. Follow [Install an Agent Runtime](/install-runtime) for the connection steps.
+
+## Engine, device, and connector
+
+- **Agent engine** identifies the coding tool.
+- **Execution device** identifies the machine running it.
+- The Run's **Connector** column identifies how Parsar delivers the execution. Local devices and cloud isolation use **Agent Daemon**.
+
+**HTTP Agent** delivers work to an external HTTP service; it is not an installable coding CLI. The **External Agent** creation option is currently disabled. Existing HTTP Agent records still appear in Runs. Ordinary users do not need to configure a separate HTTP Agent page.
+
+## A capability is not taking effect
+
+Open **Runs → the record → Steps** to inspect capability resolution and execution errors, then check the Agent's capability version and required credentials. Skill, MCP, and Plugin support varies by engine; a saved binding alone does not prove the tool loaded.
+
+See [Capabilities, Skills, and MCP](/capabilities) and [Runs, approvals, and logs](/runs-approvals-logs).

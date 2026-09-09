@@ -1,0 +1,54 @@
+---
+title: Self-hosting quickstart
+description: Install the Parsar server, database, and default execution environment.
+---
+
+The default installation runs the Parsar server, PostgreSQL, and a local Runtime through Docker Compose.
+
+## Requirements
+
+Install Docker Engine and Docker Compose v2, with working Linux-container support. On Windows, use WSL with a working Linux-container environment. Local-device CLIs must be installed in the environment that actually runs the daemon.
+
+Installation downloads resources from GitHub and the container registry. Model calls still require your own provider account and valid credentials.
+
+## Install
+
+Run in a terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
+```
+
+The installer generates configuration and keys, pulls images, starts services, and checks health. The default installation directory is `~/.parsar/`.
+
+## Create the first account
+
+Open `http://127.0.0.1:18080` and complete the setup form with account and workspace information. The account becomes the owner of the initial workspace.
+
+This loopback address works only on the installation machine. Configure a reachable address before inviting users or connecting other devices; see [Deployment configuration](/configuration).
+
+## Check the services
+
+Run from the installation directory:
+
+```bash
+cd ~/.parsar
+docker compose ps
+docker compose logs --tail=100 parsar-server
+curl -fsS http://127.0.0.1:18080/healthz
+curl -fsS http://127.0.0.1:18080/readyz
+```
+
+`healthz` checks server response; `readyz` checks readiness of dependencies including the database. Once the containers are up, follow [Quickstart](/quickstart) to configure a model and complete a real Run.
+
+## Data and upgrades
+
+The installer keeps database and server data under the installation directory. Back up the data and generated keys together. Replacing the encryption key directly prevents old credentials from being decrypted.
+
+Running the installer again pulls current images and updates services. Back up before upgrading, then verify service health, login, and an Agent Run.
+
+## API reference
+
+The server's `/docs` route is Swagger UI and `/api/v1/openapi.yaml` is its OpenAPI contract. This website is a separate product-documentation app.
+
+See [Deployment configuration](/configuration) and [Troubleshooting](/troubleshooting).

@@ -1,0 +1,47 @@
+---
+title: Runtimes and execution locations
+description: Inspect devices in Runtime and choose between local devices and cloud isolation.
+---
+
+A Runtime is the environment where an Agent performs work. Open **Runtime** in the sidebar to inspect connected devices, engine versions, heartbeat times, and cloud-sandbox status.
+
+## Choose an execution location
+
+Open **Agents → New Agent → Execution mode**:
+
+| Mode | Preparation |
+| --- | --- |
+| Local device | Install a coding CLI on the target machine, connect its daemon, then select the device. |
+| Cloud isolation | A deployment administrator configures the sandbox provider and image; confirm cloud execution is available to the workspace. |
+| External Agent | The creation option is disabled; HTTP Agents cannot be created through this form. |
+
+A local device can be a developer computer, server, or the default deployment's container. The default Compose installation includes a local Runtime with coding CLIs installed. You still need a usable model in Parsar.
+
+## Connect a local device
+
+As a workspace owner or admin, open **Runtime**, click **Connect device**, enter a name, generate the connection command, and run it on the target machine. Confirm that it is online and reports the required engine before binding an Agent to it. See [Install an Agent Runtime](/install-runtime).
+
+One device can serve multiple Agents. After [making the command available](/install-runtime#make-the-command-available), run `parsar-daemon stop` on that machine to stop it temporarily; reconnect with `parsar-daemon connect -b`. To retire it, stop the daemon and have an owner or admin click **Delete** on its Runtime row. The current page has no disable-device control. Use Run details to cancel active executions before retiring a device.
+
+## Device status
+
+| Status | Meaning |
+| --- | --- |
+| Pending pairing | A device record exists, but connection is not complete. |
+| Online | The server is receiving heartbeats. |
+| Offline | Heartbeats stopped; availability cannot be confirmed. |
+| Error | The device reported an error; inspect daemon logs. |
+
+The daemon sends a heartbeat every **15 seconds** by default. The server considers it offline after **60 seconds** without a heartbeat. Device connectivity and model authentication are separate; validate the configuration with a real Run.
+
+## Cloud isolation
+
+The Runtime page shows the cloud provider, workspace E2B key, and running instances. Workspace administrators can enter or replace that key here. Saving a workspace key does not enable the deployment's sandbox executor.
+
+The current deployment requires `AGENT_DAEMON_SANDBOX_TEMPLATE` and a deployment-level `PARSAR_E2B_API_KEY` to initialize the executor. `PARSAR_PUBLIC_URL` must be reachable from inside the sandbox. A deployment administrator must supply missing configuration; selecting cloud isolation in the Agent form alone is insufficient.
+
+Sandboxes are reused per Agent, not destroyed after every Run. Reclaiming an instance stops work inside it; the next request creates a new execution environment.
+
+## Locate one execution
+
+Open **Runs → the Run → Overview** to inspect its recorded Runtime information. Agents use the specified environment and do not automatically switch to another computer after a device failure. For queued or failed Runs, inspect **Steps** and [Troubleshooting](/troubleshooting).

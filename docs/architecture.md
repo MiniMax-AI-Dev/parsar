@@ -15,6 +15,8 @@ Parsar = team collaboration control plane + Agent Connector layer
 - Server: Go + Chi.
 - Database: PostgreSQL only.
 - Web: Vite + React SPA.
+- Product docs: Fumadocs + Next.js MDX app under `apps/docs`, deployed as a
+  separate unit from the Go-served Web SPA.
 - Agent runtime: `parsar-daemon` (Go), paired with a user device or with a
   platform-hosted sandbox.
 - API: OpenAPI-first (contract in [`openapi/openapi.yaml`](openapi/openapi.yaml)).
@@ -77,3 +79,12 @@ Parsar's own web / API behaviour from the user's point of view. Browser
 automation *inside* an Agent runtime is a separate concern: tools like
 `browser-use` may later be evaluated as a browser capability for Agents, but
 they are **not** part of the current core quality gate.
+
+## Product documentation boundary
+
+End-user product documentation is authored as bilingual MDX in
+`apps/docs/content/docs/` and rendered by the Fumadocs app. The repository's
+existing `docs/` directory remains the home for engineering specifications,
+deployment runbooks, and generated OpenAPI artifacts. The Go server's `/docs`
+route remains the Swagger UI; the narrative product guide is a separate
+deployment unit and must not replace that API route implicitly.

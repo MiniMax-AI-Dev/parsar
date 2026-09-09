@@ -1,0 +1,50 @@
+---
+title: Quickstart
+description: Prepare a model and device, create an Agent, and complete your first conversation.
+---
+
+Complete a real Agent Run in Parsar. If you already have a server you can sign in to, start with model configuration.
+
+## 1. Open Parsar
+
+Use [Self-hosting quickstart](/self-host-quickstart) to install a server. The default address is `http://127.0.0.1:18080`; use your administrator's address for a remote deployment.
+
+On a fresh instance, complete the setup form to create an account and workspace. Otherwise, sign in and select the workspace at the upper left.
+
+The configuration steps below require a workspace owner or admin. Members can start with an Agent that an administrator has already configured.
+
+## 2. Configure a model
+
+Open **Models → New model** in the sidebar. Enter the provider, model identifier, and API URL. For this first Run, choose shared-key mode and enter a valid API key. Save, run **Test connection**, and inspect the result. See [Models and credentials](/models-credentials).
+
+## 3. Prepare an execution device
+
+Open **Runtime**. The default Compose deployment includes a local Runtime; confirm it is online and provides the engine you intend to use.
+
+To use your computer, click **Connect device**, enter a name, generate a connection command, and run it on the computer with the CLI installed. See [Install an Agent Runtime](/install-runtime).
+
+## 4. Create an Agent
+
+1. Open **Agents → New Agent** and enter a name.
+2. Choose **Local device**, then Claude Code, Codex, or pi.
+3. Select an online device supporting that engine and the model you configured.
+4. For work in a local project, enter its absolute path, such as `/home/me/projects/demo`. This path belongs to the execution device.
+5. Save the Agent. Add capabilities after the first successful Run.
+
+## 5. Send the first message
+
+Click the Agent's **Chat** action and send: `Reply only with OK. Do not use tools.`
+
+The reply appears in the conversation timeline. Handle any permission or question card in the conversation or **Inbox**.
+
+## 6. Confirm the result
+
+Open **Runs** and click the new record. After it becomes **Completed**, use **Open conversation** at the bottom to inspect the reply. **Steps** contains execution events; **Settings → Usage** contains model consumption.
+
+With no reply, inspect the Run's error and steps, then the device and model. An online device alone does not confirm the entire configuration works.
+
+## Next steps
+
+- [Create and configure an Agent](/create-agent)
+- [Conversations](/conversations)
+- [Scheduled tasks](/scheduled-tasks)

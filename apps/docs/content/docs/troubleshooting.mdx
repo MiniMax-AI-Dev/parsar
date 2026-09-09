@@ -1,0 +1,77 @@
+---
+title: Troubleshooting
+description: Diagnose problems through run records, the inbox, and execution devices.
+---
+
+Open **Runs**, find the Agent and execution time, and inspect status, diagnostics, and **Steps** in the right-hand details. Keep the Run ID to correlate logs with this execution.
+
+## A scheduled task keeps showing Running
+
+1. Refresh **Scheduled tasks** to update its last execution status. The list does not continuously poll.
+2. Open **Runs** and find the Run created by **Run now**.
+3. If the Run is complete but the task still shows Running, reload the task page and use the Run's terminal state.
+4. If the Run remains active, inspect its latest steps and pending requests in **Inbox**.
+5. Check the daemon log on the execution device for model requests, CLI output, and errors.
+
+A successful **Run now** request means execution was created, not that the Agent finished. There is no fixed completion time: it depends on the Agent, model, tools, and Prompt. Use **Cancel run** in Run details to end the current execution.
+
+## Typing @ does not open a menu
+
+The conversation composer currently has no autocomplete. Type a full name or slug, such as `@reviewer Check this change`, then verify the target on **Runs**. Misspelled or disabled targets do not trigger execution. See [Conversations and shared conversations](/conversations).
+
+## Device offline or pairing failed
+
+On **Runtime**, check the device's connection status and last heartbeat. Read its log on the target machine:
+
+```bash
+tail -n 100 ~/.parsar/parsar-daemon/default/connect.log
+```
+
+- Unreachable address: use a Parsar URL reachable from the device. On another computer, `127.0.0.1` refers to that computer.
+- No CLI discovered: install the coding CLI under the same account and environment that runs the daemon, and check `PATH`.
+- `pair_invalid` or HTTP 401 from pairing: generate a new connection command. Tokens expire after 15 minutes and can be used once.
+- Connection process stopped: run `parsar-daemon connect -b` to use the saved profile. Generate another command only if the saved credentials are missing or no longer accepted; the old pairing token cannot be reused.
+
+See [Install Agent Runtime](/install-runtime).
+
+## A Run queues or fails immediately
+
+Queued means execution has not started; Running means an executor has claimed it. Follow diagnostics and the latest Run events to check:
+
+| Check | Entry point |
+| --- | --- |
+| Agent enabled, matching device and engine | **Agents → the Agent**. |
+| Device connection and discovered engines | **Runtime**. |
+| Model URL, protocol, and key | **Models**. |
+| Capability version and missing credentials | Agent **Config** and **Settings → Credentials**. |
+| CLI, working directory permissions, and network errors | Daemon log on the execution device. |
+
+After restoring the device, open the conversation and send a new message to start a new Run. **Retry** queues the same failed Run ID again and resets its start and finish times, but does not dispatch an Agent Daemon Run. If you already clicked Retry, cancel that queued Run before sending the new message. Cancelled and interrupted Runs return HTTP 409 when retried. See [Run controls](/runs-approvals-logs#run-status).
+
+## No approval or question card
+
+Open **Inbox** and refresh the current conversation. Resolved or expired requests cannot be submitted again. The Codex user-input tool requires **Plan** collaboration mode. See [Agent engine comparison](/agent-tools) for engine support.
+
+## Cannot find usage or integration settings
+
+Usage is under **Settings → Usage → Recent calls**. Click a Run ID to return to Run details. Audit in Run details is not the usage view.
+
+Chat integrations are under **Integrations** in the sidebar. See [Integrations and connectors](/integrations) for platform fields, external setup, and current onboarding limitations.
+
+## Self-hosted server unreachable
+
+Run these on the installation machine. The default installation directory is `~/.parsar`:
+
+```bash
+cd ~/.parsar
+docker compose ps
+docker compose logs --tail=100 parsar-server
+curl -i http://127.0.0.1:18080/healthz
+curl -i http://127.0.0.1:18080/readyz
+```
+
+Use your actual installation path and port when customized. `healthz` checks process response and `readyz` checks service readiness. See [Deployment configuration](/configuration) for address settings.
+
+## Report a problem
+
+Include reproduction steps, Parsar version, operating system, deployment mode, Agent engine, Run ID, status, and sanitized logs. Do not attach pairing tokens, API keys, or full environment dumps.

@@ -1,0 +1,33 @@
+---
+title: Repository conventions
+description: Preserve module boundaries and generated contracts when changing Parsar.
+---
+
+See the [contributor guide](https://github.com/MiniMax-AI-Dev/parsar/blob/main/CONTRIBUTING.md) for the full rules. This page covers the main conventions.
+
+## Modules and shared logic
+
+Search for existing formatters, parsers, and error mappers before adding new ones. Keep error responses consistent per API surface. Shared Web logic owns formatting and labels used across pages.
+
+The server and daemon exchange execution data through the shared protocol. CLI process management belongs to the daemon; resource and session persistence belongs to the server. Split complex modules by responsibility instead of appending unrelated behavior to large files.
+
+## Runtime state
+
+Default configuration, logs, state, and caches live under `~/.parsar/`, not the current directory or repository root. User-supplied working directories must be absolute or start with `~/`.
+
+## Generated contracts
+
+| Change | Required action |
+| --- | --- |
+| API handler or interface | Maintain swaggo annotations, run `make openapi`, and inspect the generated contract. |
+| Database query | Run `make sqlc-generate` and inspect generated queries. |
+| Database schema | Add a migration; do not edit migrations already landed on main. |
+| Any change | Run `make check` before completion. |
+
+Maintain generated artifacts with their source changes. Do not hand-edit generated output.
+
+## Product documentation
+
+Describe current behavior and actionable workflows with entry points, fields, actions, and results. Example arguments, state values, and links must match the current version. Unavailable features must not appear as working procedures.
+
+Maintain English and Chinese page pairs. Separate deployment settings from everyday use, and keep development details in the developer section.

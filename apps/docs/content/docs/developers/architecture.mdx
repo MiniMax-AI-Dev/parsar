@@ -1,0 +1,33 @@
+---
+title: Architecture
+description: Parsar's server, frontend, execution, and persistence boundaries.
+---
+
+This page is for contributors and deployment engineers. See [How Parsar works](/how-parsar-works) for the product workflow.
+
+## Components
+
+| Component | Current implementation | Responsibility |
+| --- | --- | --- |
+| Server | Go, Chi, PostgreSQL | Authentication, authorization, resources, dispatch, persistence, and audit. |
+| Product UI | React, Vite | Call APIs, display conversations and runs, and resolve interactions. |
+| Documentation | Next.js, Fumadocs, MDX | Separately deployed English and Chinese product documentation. |
+| Agent Daemon | Go process and coding CLI adapters | Connect devices, discover engines, manage subprocesses, and report events. |
+
+The Go server serves product UI assets; the documentation site is deployed separately. PostgreSQL is the database, with goose migrations and sqlc-generated queries.
+
+## Execution and persistence
+
+The server persists workspaces, Agents, conversations, Runs, capabilities, credentials, interactions, and upstream engine session identifiers. The daemon manages CLI environments, working directories, and processes on its machine; it does not own conversation history persistence.
+
+The Agent connector selects the dispatch protocol, the Runtime binding selects a device, and the engine kind selects a CLI. HTTP Agents execute through external HTTP services. Keep these concepts distinct.
+
+## Interaction requests
+
+Approvals and user-input requests are persisted before appearing in conversations, the inbox, or chat platforms. All surfaces use the same resolution service. The server records a decision's result after Runtime acknowledgment. Terminal runs close outstanding interactions; expired requests are explicitly denied or cancelled.
+
+## Extension boundaries
+
+New engines reuse daemon process management and the shared protocol. Runtime providers own environment creation, renewal, and destruction. Chat connectors receive and return platform messages without introducing independent authorization or approval rules.
+
+Update the [contributor guide](https://github.com/MiniMax-AI-Dev/parsar/blob/main/CONTRIBUTING.md) when introducing or changing architecture boundaries.

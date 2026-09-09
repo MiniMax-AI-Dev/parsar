@@ -1,0 +1,30 @@
+---
+title: Discord
+description: 在集成页面保存 Discord 机器人配置。
+---
+
+入口：**左侧集成 → Discord**。只有工作区所有者和管理员可以编辑右侧的机器人配置。
+
+## 准备应用
+
+在 [Discord Developer Portal](https://discord.com/developers/applications) 创建应用和 Bot，并把 Bot 邀请到目标服务器。
+
+| Parsar 字段 | Discord 中的来源 |
+| --- | --- |
+| Application ID | General Information → Application ID。 |
+| Bot Token | Bot → Token。 |
+| Public Key | General Information → Public Key。 |
+
+通过当前界面启用连接器时，以上三项均为必填；保持停用状态保存草稿时不要求填齐。**Gateway Intents** 区域提供 `GUILDS`、`GUILD_MESSAGES`、`DIRECT_MESSAGES`、`MESSAGE_CONTENT`、`GUILD_MESSAGE_REACTIONS` 复选框；在 Discord 的 Bot 设置中同时开启需要的特权 Intent，尤其是读取正文所需的 Message Content。
+
+## 保存与验证
+
+1. 打开**集成 → Discord**并填写三个字段。
+2. 打开**启用 Discord 机器人**，点击保存。
+3. 确认列表显示**已启用**；停用后保存可暂停连接。
+
+服务端通过 Gateway 连接接收消息，会自动读取已启用的工作区配置，不需要另设 `PARSAR_DISCORD_CONNECTORS`。部署必须配置 `PARSAR_MASTER_KEY` 并允许访问 Discord。
+
+发送者需要平台身份映射和工作区权限。当前没有 Discord 自助账号绑定页面，需先由部署管理员准备映射。配置状态不等于收发消息验证，完成后再从 Discord 发送测试请求，并在 Parsar 的**运行**查看结果。
+
+参见[聊天集成](/zh/integrations)。

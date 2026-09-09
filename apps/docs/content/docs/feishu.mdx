@@ -1,0 +1,59 @@
+---
+title: Feishu bot
+description: Connect a workspace bot or configure a dedicated Feishu bot for an Agent.
+---
+
+Parsar offers a shared workspace bot and dedicated Agent bots. The workspace bot uses scan authorization. A dedicated Agent bot supports both scan authorization and manual credential entry. Both configuration entry points require a workspace owner or admin.
+
+## Connect a workspace bot
+
+1. Select the workspace and open **Integrations** in the sidebar.
+2. Click the **Feishu** row, then **Start QR scan** in its right-hand panel.
+3. Scan the QR code with Feishu and complete authorization. You can also open the authorization link in the panel.
+4. Return to Parsar and wait for the connected status. The panel shows the App ID and Bot, and the list shows **Enabled**.
+
+The scan flow saves credentials automatically; you do not enter an App Secret in this panel. Generate a new code after expiry. An existing connection offers **Scan again**.
+
+## Connect an Agent-specific bot
+
+1. Open **Agents → the Agent → Exposure**.
+2. Click **Configure** in the **Feishu** section to expand the bot panel.
+3. Under **Bot entry**, choose **Dedicated Bot**. The QR area and credential fields appear.
+4. Click **Start QR**, scan with Feishu, and complete authorization.
+5. Wait for the connected confirmation. Parsar saves the credentials and binds the bot to this Agent automatically.
+
+**Default Bot** uses the workspace bot configured in **Integrations**. Choosing **Dedicated Bot** removes the Agent from the default bot's Agent list. To return to the shared bot, select **Default Bot** and save; this clears the Agent's dedicated bot configuration.
+
+### Manual credential fields
+
+For an existing Feishu app, the **Dedicated Bot** panel also accepts:
+
+| Field | Requirement |
+| --- | --- |
+| App ID | Required. Enter the app's identifier. |
+| App Secret | Required unless a saved secret is already referenced. |
+| Verification Token | Required for webhook connections unless already saved. Scan-connected WebSocket bots do not require it. |
+| Encrypt Key | Enter the matching key when event encryption is enabled. |
+| Bot Open ID | Optional identifier of the bot itself. |
+
+Click **Save** after entering the fields. Saved secret inputs remain blank; leaving them blank preserves the saved values.
+
+A new manual configuration uses webhook events. It also requires the deployment administrator to configure Feishu event subscriptions at `https://<your-domain>/api/v1/feishu/events/message` and matching server verification and encryption settings. Saving this form does not configure the Feishu app's subscriptions. The scan flow above establishes a WebSocket connection without this webhook setup.
+
+## Send the first message
+
+Bot setup and Feishu login are separate. The sender needs a linked Feishu identity and membership in the target workspace. Use the deployment's enabled Feishu login to link the identity and confirm workspace membership before sending.
+
+- Direct message: send the request to the bot.
+- Group: add the bot, then use Feishu's mention picker to `@mention` it with your request.
+- Thread continuation: after an inbound conversation exists in that thread, messages without mentions can continue it. Messages containing mentions must still include this bot.
+
+A shared workspace bot supports `/list` to list accessible Agents and `/select <agent-slug>` to select one. Verify the selected Agent and result in Parsar's **Conversations** and **Runs**.
+
+## Self-hosted requirements
+
+The deployment administrator must configure a stable `PARSAR_MASTER_KEY` and allow outbound access to Feishu. Without the key, scan authorization is disabled and the panel reports the missing encryption key. Scan-connected bots receive events over WebSocket; no webhook URL is entered in this panel.
+
+The deployment administrator separately configures the App ID, App Secret, and callback for Feishu login. See [Authentication and sessions](/authentication).
+
+See [Chat integrations](/integrations) and [Conversations](/conversations).

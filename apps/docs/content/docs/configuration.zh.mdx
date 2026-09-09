@@ -1,0 +1,63 @@
+---
+title: 部署配置
+description: 调整自托管服务的地址、端口、密钥和可选服务。
+---
+
+本页面向部署管理员。日常使用的模型、凭据、机器人和设备都有界面入口，无需先填写一份环境变量清单。
+
+## 先选择配置入口
+
+| 要调整什么 | 入口 |
+| --- | --- |
+| 模型地址、协议、模型 Key | 左侧**模型**。 |
+| 个人或组织凭据 | **设置 → 凭据**。 |
+| 飞书、Slack、Discord、Teams | 左侧**集成**。 |
+| 本地设备、工作区 E2B Key | 左侧**执行层**（Runtime）。 |
+| 服务域名、监听端口、数据库和加密密钥 | 部署配置，见下文。 |
+
+## 一键安装后的配置位置
+
+默认安装将 Compose 文件和 .env 放在 `~/.parsar/`，并生成数据库密码、加密主密钥和共享 Runtime 令牌。保留安装器已生成的密钥。
+
+调整安装配置后，从安装目录应用变更：
+
+```bash
+cd ~/.parsar
+docker compose up -d
+docker compose ps
+```
+
+更改过安装目录时，用实际目录替换 `~/.parsar`。
+
+## 地址和端口
+
+| 变量 | 默认安装值 | 用途 |
+| --- | --- | --- |
+| `PARSAR_LOCAL_PORT` | `18080` | 宿主机访问端口。 |
+| `PARSAR_BIND_ADDR` | `127.0.0.1` | 宿主机监听地址。 |
+| `PARSAR_PUBLIC_URL` | `http://127.0.0.1:18080` | 用户和外部设备访问的完整服务地址。 |
+
+使用域名时，将 `PARSAR_PUBLIC_URL` 设为反向代理对外提供的 HTTPS 地址。它会用于登录跳转和设备连接命令；接入其他电脑时不能填只能从服务器自身访问的回环地址。
+
+端口和绑定地址由 Compose 使用，服务进程的 `PARSAR_ADDR` 默认是 `:8080`。它们不是同一个端口设置。
+
+## 数据与密钥
+
+安装器管理 `PARSAR_PG_PASSWORD`、`PARSAR_MASTER_KEY` 和 `PARSAR_SHARED_RUNTIME_TOKEN`。自行部署时使用稳定的随机值；主密钥可用 `openssl rand -hex 32` 生成。备份数据库时一起安全备份密钥，更换主密钥会使旧凭据无法解密。
+
+安装器默认将数据库数据放在 `~/.parsar/postgres`，服务数据放在 `~/.parsar/data`。不要将运行数据或密钥提交到代码仓库。
+
+## 可选服务
+
+- **飞书登录**：配置服务端登录 App ID、App Secret 和回调，见[身份认证](/zh/authentication)。机器人扫码连接在**集成**完成。
+- **Teams**：当前接收端需要部署开关，见[Microsoft Teams](/zh/teams)。
+- **云端沙盒**：部署需要沙盒模板和可用供应商凭据，见[Runtime 与执行位置](/zh/runtimes)。
+- **对象存储**：能力文件默认保存在 PostgreSQL；只有采用 OSS 时才配置 `PARSAR_BLOB_BACKEND=oss` 和对应存储凭据。
+
+额外服务端变量必须由部署平台传入服务进程，或加入 Compose 服务的 `environment`。.env 只为 Compose 中引用的变量提供值，不会自动把所有变量传入容器。
+
+## 直接运行服务进程
+
+直接运行 Go 服务时，生产配置需要 `DATABASE_URL`、`PARSAR_PUBLIC_URL` 和 `PARSAR_MASTER_KEY`。服务端按“内置默认值 → `PARSAR_CONFIG_FILE` 指定的 YAML → 环境变量”读取配置；空环境变量不会清除已有 YAML 值。配置文件路径必须是绝对路径或以 `~/` 开头。
+
+完成调整后检查 `/healthz` 和 `/readyz`，再验证登录、设备连接及一次 Agent 运行。参见[自托管快速上手](/zh/self-host-quickstart)和[故障排查](/zh/troubleshooting)。

@@ -1,0 +1,49 @@
+---
+title: Members and roles
+description: Invite members, process join requests, and manage workspace roles.
+---
+
+Open **Members** in the sidebar. The page lists current members, pending join requests, and pending invitations.
+
+## Roles and permissions
+
+| Action | Owner | Admin | Member | Viewer |
+| --- | --- | --- | --- | --- |
+| View the workspace | Yes | Yes | Yes | Yes |
+| Run permitted Agents and resolve interactions | Yes | Yes | Yes | No |
+| Create invitation links | Yes, with a role choice | Yes, with a role choice | Yes, Member only | No |
+| Add existing users and approve join requests | Yes | Yes | No | No |
+| Change or remove non-owner memberships | Yes | Yes | No | No |
+| Update and archive the workspace | Yes | Yes | No | No |
+
+Invitation and existing-user forms offer Owner, Admin, Member, and Viewer roles. New forms default to Member.
+
+An existing Owner cannot be changed or removed on the Members page. Editing an existing member's role cannot promote them to Owner, and the current UI has no ownership transfer flow. Agent access is separate from membership roles and is also checked for owners and admins starting runs.
+
+## Invite a new member
+
+1. Open **Members → Invite new member**.
+2. On **Invite link**, enter the email and optional name.
+3. Owners and admins choose a role. Invitations created by members use the Member role.
+4. Click **Create invitation**, then **Copy invite link**, and send the link to the recipient.
+
+The link expires after **72 hours** and can be accepted once. The recipient opens it, checks the workspace and email, enters and confirms a password, and clicks **Set password and join**.
+
+The invitation page does not require signing in first. For an existing account, acceptance joins that account and updates its email login password to the supplied password. Use **Existing users** below to add an existing account without changing its password.
+
+## Add existing users
+
+Owners and admins open **Members → Invite new member → Existing users**, search by name or email, select users and a role, and click **Add**. Selected users join immediately without an invitation link.
+
+## Manage invitations and join requests
+
+- **Pending invitations**: copy links, change invitation roles, or revoke invitations. Revocation invalidates the link immediately. Owners and admins manage workspace invitations. Members can view and revoke only their own invitations and cannot change their roles.
+- **Pending**: owners and admins click **Approve** or **Reject** beside a join request. Rejected applicants can apply again.
+
+## Change a role or remove a member
+
+Owners and admins use the role icon on a non-owner member's row to change the role, or click the remove icon and confirm.
+
+Removal revokes membership in the current workspace. It does not delete the account, historical conversations, runs, or audit records, and does not automatically stop the user's Agents or Runtimes. Disable the Agent to prevent new execution requests; follow [Runtimes](/runtimes) to stop or remove a device.
+
+See [Workspaces](/workspace) and [Security model](/security).

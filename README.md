@@ -54,8 +54,10 @@ make docker-build
 ./install.sh --image parsar:dev
 ```
 
-> **Platform.** Docker-managed agent sandboxes require Linux. Non-Linux hosts
-> can start the web control plane with `--no-sandbox`.
+> **Platform.** Docker-managed agent sandboxes require a Linux host. The
+> installer has no `--no-sandbox` option; on a non-Linux workstation, run the
+> control plane on Linux and pair a local `parsar-daemon`, or use an external
+> Runtime.
 
 ## Contributing
 

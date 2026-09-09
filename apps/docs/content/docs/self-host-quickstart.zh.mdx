@@ -1,0 +1,54 @@
+---
+title: 自托管快速上手
+description: 安装 Parsar 服务、数据库和默认执行环境。
+---
+
+默认安装通过 Docker Compose 运行 Parsar 服务、PostgreSQL 和本地 Runtime。
+
+## 环境要求
+
+准备 Docker Engine 与 Docker Compose v2，并确认可以运行 Linux 容器。Windows 使用 WSL 与可用的 Linux 容器环境；本地设备的 CLI 也应安装在实际运行 daemon 的环境中。
+
+安装过程需要从 GitHub 和容器仓库下载资源。模型调用仍需要你自己的服务商账号和有效凭据。
+
+## 安装
+
+在终端执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
+```
+
+安装器会生成配置和密钥，拉取镜像，启动服务，并检查健康状态。默认安装目录是 `~/.parsar/`。
+
+## 创建首个账号
+
+打开 `http://127.0.0.1:18080`，完成初始化表单，填写账号和工作区信息。创建的账号拥有初始工作区的所有者权限。
+
+这条回环地址只适用于安装机器。其他成员或设备访问前，先配置可达地址，见[部署配置](/zh/configuration)。
+
+## 检查服务
+
+从安装目录运行：
+
+```bash
+cd ~/.parsar
+docker compose ps
+docker compose logs --tail=100 parsar-server
+curl -fsS http://127.0.0.1:18080/healthz
+curl -fsS http://127.0.0.1:18080/readyz
+```
+
+`healthz` 检查服务响应，`readyz` 检查数据库等依赖是否就绪。容器启动成功后，继续[快速上手](/zh/quickstart)配置模型并完成一次实际运行。
+
+## 数据和升级
+
+安装器将数据库与服务数据保存在安装目录中。备份这些数据及安装器生成的密钥。直接更换加密主密钥会使旧凭据无法解密。
+
+再次运行安装命令会拉取当前镜像并更新服务。升级前备份数据，升级后检查服务健康、登录和一次 Agent Run。
+
+## API 参考
+
+服务地址下的 `/docs` 是 Swagger UI，`/api/v1/openapi.yaml` 是 OpenAPI 契约；本网站是独立的产品文档站。
+
+参见[部署配置](/zh/configuration)和[故障排查](/zh/troubleshooting)。
