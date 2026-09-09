@@ -299,6 +299,7 @@
     },
     "composer": {
       "readOnly": "当前为只读权限，无法发送消息。",
+      "agentDeleted": "这个 Agent 已删除。你仍可查看历史对话，但无法继续发送消息。",
       "label": "发送消息",
       "placeholder": "和 {{agent}} 聊聊…",
       "send": "发送",
@@ -497,6 +498,7 @@
           "runtime": "检查 daemon 设备、liveness 和最近心跳。",
           "model": "检查模型 provider、model 配置和 opencode_json。",
           "inspect": "查看事件和审计记录定位原因。",
+          "agentDeleted": "Agent 已删除，历史运行记录不能重试。",
           "requeueIfNeeded": "确认上下文仍有效后可重新入队。",
           "waitOrCancel": "可等待调度；不再需要时取消。",
           "inspectRuntime": "打开运行环境状态检查心跳和可用性。",
@@ -979,6 +981,7 @@
     }
   },
   "agents": {
+    "deletedLabel": "Agent 已删除",
     "page": {
       "title": "Agent"
     },

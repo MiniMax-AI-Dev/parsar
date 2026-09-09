@@ -91,7 +91,7 @@ func requeueAgentRun(runtimeStore RuntimeStore) http.HandlerFunc {
 // getAgentRun returns details for a single agent run.
 //
 //	@Summary		Get an agent run
-//	@Description	Returns the full record for a single agent run. Caller must belong to the run's workspace.
+//	@Description	Returns a run, including retained history and agent_deleted state after Agent deletion. Caller must belong to the run's workspace.
 //	@Tags			agent-runs
 //	@ID				getDevAgentRun
 //	@Produce		json
@@ -130,7 +130,7 @@ func getAgentRun(runtimeStore RuntimeStore) http.HandlerFunc {
 // listWorkspaceAgentRuns lists agent runs within a workspace.
 //
 //	@Summary		List workspace agent runs
-//	@Description	Returns agent-run rows for the workspace. Caller must be a workspace member.
+//	@Description	Returns agent-run rows, including retained history and agent_deleted state after Agent deletion. Caller must be a workspace member.
 //	@Tags			agent-runs
 //	@ID				listDevWorkspaceAgentRuns
 //	@Produce		json

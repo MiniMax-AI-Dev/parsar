@@ -299,6 +299,7 @@
     },
     "composer": {
       "readOnly": "Read-only access. You cannot send messages.",
+      "agentDeleted": "This Agent was deleted. You can read this conversation, but cannot send new messages.",
       "label": "Send message",
       "placeholder": "Chat with {{agent}}…",
       "send": "Send",
@@ -497,6 +498,7 @@
           "runtime": "Check daemon device, liveness, and latest heartbeat.",
           "model": "Check model provider, model config, and opencode_json.",
           "inspect": "Inspect events and audit records to locate the cause.",
+          "agentDeleted": "This Agent was deleted. Its historical runs cannot be retried.",
           "requeueIfNeeded": "Requeue after confirming the context is still valid.",
           "waitOrCancel": "Wait for dispatch or cancel if no longer needed.",
           "inspectRuntime": "Open runtime status and check heartbeat and availability.",
@@ -979,6 +981,7 @@
     }
   },
   "agents": {
+    "deletedLabel": "Deleted Agent",
     "page": {
       "title": "Agents"
     },

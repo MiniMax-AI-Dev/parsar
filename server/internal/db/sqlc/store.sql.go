@@ -1616,7 +1616,6 @@ where r.workspace_id = $1::uuid
   and r.workspace_id = c.workspace_id
   and r.workspace_id = a.workspace_id
   and c.deleted_at is null
-  and a.deleted_at is null
   and ($2::text = '' or strpos(lower(concat_ws(' ', a.name, a.slug, r.id::text, r.conversation_id::text)), lower($2::text)) > 0)
   and (cardinality($3::text[]) = 0
        or r.status = ANY($3::text[]))
@@ -4528,6 +4527,7 @@ select
   r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
+  (a.deleted_at is not null)::boolean as agent_deleted,
   r.connector_type,
   r.external_run_id,
   r.status,
@@ -4563,7 +4563,6 @@ where r.id = $1::uuid
   and r.workspace_id = a.workspace_id
   and c.status = 'active'
   and c.deleted_at is null
-  and a.deleted_at is null
 `
 
 type GetAgentRunForReadRow struct {
@@ -4577,6 +4576,7 @@ type GetAgentRunForReadRow struct {
 	RAgentID         string             `json:"r_agent_id"`
 	AgentName        string             `json:"agent_name"`
 	AgentSlug        string             `json:"agent_slug"`
+	AgentDeleted     bool               `json:"agent_deleted"`
 	ConnectorType    string             `json:"connector_type"`
 	ExternalRunID    string             `json:"external_run_id"`
 	Status           string             `json:"status"`
@@ -4614,6 +4614,7 @@ func (q *Queries) GetAgentRunForRead(ctx context.Context, id pgtype.UUID) (GetAg
 		&i.RAgentID,
 		&i.AgentName,
 		&i.AgentSlug,
+		&i.AgentDeleted,
 		&i.ConnectorType,
 		&i.ExternalRunID,
 		&i.Status,
@@ -5095,28 +5096,30 @@ select
   c.created_at,
   c.updated_at,
   coalesce(a.id::text, '')::text as primary_agent_id,
-  coalesce(a.name, '')::text as primary_agent_name
+  coalesce(a.name, '')::text as primary_agent_name,
+  (a.deleted_at is not null)::boolean as primary_agent_deleted
 from conversations c
 left join agents a
   on a.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
-  and a.deleted_at is null
-  and a.status = 'active'
+  and a.workspace_id = c.workspace_id
+  and (a.status = 'active' or a.deleted_at is not null)
 where c.id = $1::uuid
   and c.deleted_at is null
 `
 
 type GetConversationRow struct {
-	ID               string             `json:"id"`
-	WorkspaceID      string             `json:"workspace_id"`
-	Surface          string             `json:"surface"`
-	Form             string             `json:"form"`
-	Title            string             `json:"title"`
-	Status           string             `json:"status"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	PrimaryAgentID   string             `json:"primary_agent_id"`
-	PrimaryAgentName string             `json:"primary_agent_name"`
+	ID                  string             `json:"id"`
+	WorkspaceID         string             `json:"workspace_id"`
+	Surface             string             `json:"surface"`
+	Form                string             `json:"form"`
+	Title               string             `json:"title"`
+	Status              string             `json:"status"`
+	Metadata            []byte             `json:"metadata"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	PrimaryAgentID      string             `json:"primary_agent_id"`
+	PrimaryAgentName    string             `json:"primary_agent_name"`
+	PrimaryAgentDeleted bool               `json:"primary_agent_deleted"`
 }
 
 func (q *Queries) GetConversation(ctx context.Context, id pgtype.UUID) (GetConversationRow, error) {
@@ -5134,6 +5137,7 @@ func (q *Queries) GetConversation(ctx context.Context, id pgtype.UUID) (GetConve
 		&i.UpdatedAt,
 		&i.PrimaryAgentID,
 		&i.PrimaryAgentName,
+		&i.PrimaryAgentDeleted,
 	)
 	return i, err
 }
@@ -7873,6 +7877,7 @@ select
   r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
+  (a.deleted_at is not null)::boolean as agent_deleted,
   r.connector_type,
   r.status,
   r.metadata,
@@ -7887,7 +7892,6 @@ where r.conversation_id = $1::uuid
   and r.workspace_id = a.workspace_id
   and c.status = 'active'
   and c.deleted_at is null
-  and a.deleted_at is null
 order by r.created_at asc, r.id asc
 limit $2
 `
@@ -7906,6 +7910,7 @@ type ListConversationAgentRunsRow struct {
 	RAgentID         string             `json:"r_agent_id"`
 	AgentName        string             `json:"agent_name"`
 	AgentSlug        string             `json:"agent_slug"`
+	AgentDeleted     bool               `json:"agent_deleted"`
 	ConnectorType    string             `json:"connector_type"`
 	Status           string             `json:"status"`
 	Metadata         []byte             `json:"metadata"`
@@ -7932,6 +7937,7 @@ func (q *Queries) ListConversationAgentRuns(ctx context.Context, arg ListConvers
 			&i.RAgentID,
 			&i.AgentName,
 			&i.AgentSlug,
+			&i.AgentDeleted,
 			&i.ConnectorType,
 			&i.Status,
 			&i.Metadata,
@@ -9606,6 +9612,7 @@ select
   r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
+  (a.deleted_at is not null)::boolean as agent_deleted,
   r.connector_type,
   r.status,
   r.metadata,
@@ -9619,7 +9626,6 @@ where r.workspace_id = $1::uuid
   and r.workspace_id = c.workspace_id
   and r.workspace_id = a.workspace_id
   and c.deleted_at is null
-  and a.deleted_at is null
   and ($2::text = '' or strpos(lower(concat_ws(' ', a.name, a.slug, r.id::text, r.conversation_id::text)), lower($2::text)) > 0)
   and (cardinality($3::text[]) = 0
        or r.status = ANY($3::text[]))
@@ -9644,6 +9650,7 @@ type ListWorkspaceAgentRunsPageRow struct {
 	RAgentID         string             `json:"r_agent_id"`
 	AgentName        string             `json:"agent_name"`
 	AgentSlug        string             `json:"agent_slug"`
+	AgentDeleted     bool               `json:"agent_deleted"`
 	ConnectorType    string             `json:"connector_type"`
 	Status           string             `json:"status"`
 	Metadata         []byte             `json:"metadata"`
@@ -9685,6 +9692,7 @@ func (q *Queries) ListWorkspaceAgentRunsPage(ctx context.Context, arg ListWorksp
 			&i.RAgentID,
 			&i.AgentName,
 			&i.AgentSlug,
+			&i.AgentDeleted,
 			&i.ConnectorType,
 			&i.Status,
 			&i.Metadata,
@@ -9894,12 +9902,13 @@ select
     limit 1
   ), '')::text as last_message_sender_type,
   coalesce(a.id::text, '')::text as primary_agent_id,
-  coalesce(a.name, '')::text as primary_agent_name
+  coalesce(a.name, '')::text as primary_agent_name,
+  (a.deleted_at is not null)::boolean as primary_agent_deleted
 from conversations c
 left join agents a
   on a.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
-  and a.deleted_at is null
-  and a.status = 'active'
+  and a.workspace_id = c.workspace_id
+  and (a.status = 'active' or a.deleted_at is not null)
 where c.workspace_id = $1::uuid
   and c.deleted_at is null
   and ($2::text = '' or c.metadata->>'primary_agent_id' = $2::text)
@@ -9935,6 +9944,7 @@ type ListWorkspaceConversationsRow struct {
 	LastMessageSenderType string             `json:"last_message_sender_type"`
 	PrimaryAgentID        string             `json:"primary_agent_id"`
 	PrimaryAgentName      string             `json:"primary_agent_name"`
+	PrimaryAgentDeleted   bool               `json:"primary_agent_deleted"`
 }
 
 func (q *Queries) ListWorkspaceConversations(ctx context.Context, arg ListWorkspaceConversationsParams) ([]ListWorkspaceConversationsRow, error) {
@@ -9962,6 +9972,7 @@ func (q *Queries) ListWorkspaceConversations(ctx context.Context, arg ListWorksp
 			&i.LastMessageSenderType,
 			&i.PrimaryAgentID,
 			&i.PrimaryAgentName,
+			&i.PrimaryAgentDeleted,
 		); err != nil {
 			return nil, err
 		}
@@ -10750,6 +10761,16 @@ set status = 'queued',
     updated_at = $2
 where id = $3::uuid
   and status = 'failed'
+  and exists (
+    select 1 from agents a
+    join conversations c on c.id = agent_runs.conversation_id
+    where a.id = agent_runs.agent_id
+      and a.workspace_id = agent_runs.workspace_id
+      and c.workspace_id = agent_runs.workspace_id
+      and a.deleted_at is null
+      and c.deleted_at is null
+      and c.status = 'active'
+  )
 returning
   id::text,
   workspace_id::text,

@@ -496,10 +496,11 @@ type ConversationRead struct {
 	Metadata    map[string]any `json:"metadata"`
 	// PrimaryAgentID / PrimaryAgentName are derived fields, hydrated from
 	// metadata.primary_agent_id + a JOIN against agents.
-	PrimaryAgentID   string    `json:"primary_agent_id,omitempty"`
-	PrimaryAgentName string    `json:"primary_agent_name,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	PrimaryAgentID      string    `json:"primary_agent_id,omitempty"`
+	PrimaryAgentName    string    `json:"primary_agent_name,omitempty"`
+	PrimaryAgentDeleted bool      `json:"primary_agent_deleted,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 type ConversationListItem struct {
@@ -582,6 +583,7 @@ type AgentRunBriefRead struct {
 	AgentID          string         `json:"agent_id"`
 	AgentName        string         `json:"agent_name"`
 	AgentSlug        string         `json:"agent_slug"`
+	AgentDeleted     bool           `json:"agent_deleted,omitempty"`
 	ConnectorType    string         `json:"connector_type"`
 	Status           string         `json:"status"`
 	UserFacingReason string         `json:"user_facing_reason,omitempty"`
@@ -2806,17 +2808,18 @@ func (s *Store) ListWorkspaceConversations(ctx context.Context, workspaceID stri
 	for _, row := range rows {
 		item := ConversationListItem{
 			ConversationRead: ConversationRead{
-				ID:               row.ID,
-				WorkspaceID:      row.WorkspaceID,
-				Surface:          row.Surface,
-				Form:             row.Form,
-				Title:            row.Title,
-				Status:           row.Status,
-				Metadata:         decodeJSONMap(row.Metadata),
-				PrimaryAgentID:   row.PrimaryAgentID,
-				PrimaryAgentName: row.PrimaryAgentName,
-				CreatedAt:        pgTime(row.CreatedAt),
-				UpdatedAt:        pgTime(row.UpdatedAt),
+				ID:                  row.ID,
+				WorkspaceID:         row.WorkspaceID,
+				Surface:             row.Surface,
+				Form:                row.Form,
+				Title:               row.Title,
+				Status:              row.Status,
+				Metadata:            decodeJSONMap(row.Metadata),
+				PrimaryAgentID:      row.PrimaryAgentID,
+				PrimaryAgentName:    row.PrimaryAgentName,
+				PrimaryAgentDeleted: row.PrimaryAgentDeleted,
+				CreatedAt:           pgTime(row.CreatedAt),
+				UpdatedAt:           pgTime(row.UpdatedAt),
 			},
 			MessageCount:          row.MessageCount,
 			LastMessagePreview:    row.LastMessagePreview,
@@ -2845,17 +2848,18 @@ func (s *Store) GetConversation(ctx context.Context, conversationID string) (Con
 		return ConversationRead{}, err
 	}
 	return ConversationRead{
-		ID:               row.ID,
-		WorkspaceID:      row.WorkspaceID,
-		Surface:          row.Surface,
-		Form:             row.Form,
-		Title:            row.Title,
-		Status:           row.Status,
-		Metadata:         decodeJSONMap(row.Metadata),
-		PrimaryAgentID:   row.PrimaryAgentID,
-		PrimaryAgentName: row.PrimaryAgentName,
-		CreatedAt:        pgTime(row.CreatedAt),
-		UpdatedAt:        pgTime(row.UpdatedAt),
+		ID:                  row.ID,
+		WorkspaceID:         row.WorkspaceID,
+		Surface:             row.Surface,
+		Form:                row.Form,
+		Title:               row.Title,
+		Status:              row.Status,
+		Metadata:            decodeJSONMap(row.Metadata),
+		PrimaryAgentID:      row.PrimaryAgentID,
+		PrimaryAgentName:    row.PrimaryAgentName,
+		PrimaryAgentDeleted: row.PrimaryAgentDeleted,
+		CreatedAt:           pgTime(row.CreatedAt),
+		UpdatedAt:           pgTime(row.UpdatedAt),
 	}, nil
 }
 
@@ -3544,6 +3548,7 @@ func (s *Store) GetAgentRun(ctx context.Context, runID string) (AgentRunDetailRe
 			AgentID:          row.RAgentID,
 			AgentName:        row.AgentName,
 			AgentSlug:        row.AgentSlug,
+			AgentDeleted:     row.AgentDeleted,
 			ConnectorType:    row.ConnectorType,
 			Status:           row.Status,
 			CreatedAt:        pgTime(row.CreatedAt),
@@ -7926,6 +7931,7 @@ func agentRunBriefFromRow(row agentRunBriefRow) AgentRunBriefRead {
 		AgentID:          row.RAgentID,
 		AgentName:        row.AgentName,
 		AgentSlug:        row.AgentSlug,
+		AgentDeleted:     row.AgentDeleted,
 		ConnectorType:    row.ConnectorType,
 		Status:           row.Status,
 		CreatedAt:        pgTime(row.CreatedAt),

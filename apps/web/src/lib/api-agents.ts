@@ -698,6 +698,10 @@ export function useDeleteAgent(workspaceID: string | null) {
     mutationFn: async (agentID: string) => deleteAgentRequest(agentID),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: ["admin", "conversations"] })
+      void qc.invalidateQueries({ queryKey: ["admin", "conversation"] })
+      void qc.invalidateQueries({ queryKey: ["admin", "agentRuns"] })
+      void qc.invalidateQueries({ queryKey: ["admin", "agentRun"] })
     },
   })
 }
