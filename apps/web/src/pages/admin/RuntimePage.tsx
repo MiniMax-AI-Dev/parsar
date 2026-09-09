@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { AlertTriangle, Loader2, Skull, Zap } from "lucide-react"
 
@@ -285,6 +285,11 @@ function CloudInstancesPanel({
   const { t } = useTranslation("admin")
   const fmtAgo = useRelativeTime()
   const checkLabelFor = useConnectivityCheckLabel()
+  const [settledError, setSettledError] = useState<{ workspaceID: string | null; error: unknown } | null>(null)
+  useEffect(() => {
+    if (!loading) setSettledError(error ? { workspaceID, error } : null)
+  }, [workspaceID, loading, error])
+  const displayedError = error || (loading && settledError?.workspaceID === workspaceID ? settledError.error : null)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<{ bindingId: string; result: ConnectivityResult } | null>(null)
   const connTest = useSandboxConnectivityTest()
@@ -362,10 +367,10 @@ function CloudInstancesPanel({
         </div>
       )}
 
-      {loading ? (
+      {displayedError ? (
+        <RuntimeInstancesError error={displayedError} onRetry={onRefresh} />
+      ) : loading ? (
         <LedgerSkeleton />
-      ) : error ? (
-        <RuntimeInstancesError error={error} onRetry={onRefresh} />
       ) : bindings.length === 0 ? (
         <EmptyState
           title={t("runtime.cloud.instances.emptyTitle")}
