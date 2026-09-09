@@ -1354,6 +1354,7 @@ export function CreateAgentDialog({
                           <div className="mt-1.5 flex flex-col gap-2">
                             {sharedSecrets.length > 0 && (
                               <Select
+                                aria-label={t("credentialCheck.modelBindingShared")}
                                 value={"existing_secret_id" in modelBindingChoice ? modelBindingChoice.existing_secret_id : "__new__"}
                                 onValueChange={(nextValue) => {
                                   if (nextValue === "__new__") {
@@ -1558,6 +1559,7 @@ export function CreateAgentDialog({
                                       {!cap.deprecated && !checked && !cap.latestVersion && <span className="shrink-0"><Badge variant="warning" dot>{t("agents.form.noCapabilityVersion")}</Badge></span>}
                                       {!cap.deprecated && checked && cap.id && (
                                         <CapabilityVersionPicker
+                                          label={`${cap.name} · ${t("agents.detail.capabilities.enableDialog.version")}`}
                                           capabilityID={cap.id}
                                           fromMarketplace={sec === "marketplace"}
                                           workspaceID={workspaceID}
@@ -1764,6 +1766,7 @@ function DependencyCard({ title, description, href, cta }: { title: string; desc
  * the dropdown never collapses to empty mid-edit.
  */
 function CapabilityVersionPicker({
+  label,
   capabilityID,
   fromMarketplace,
   workspaceID,
@@ -1772,6 +1775,7 @@ function CapabilityVersionPicker({
   choice,
   onChange,
 }: {
+  label: string
   capabilityID: string
   fromMarketplace: boolean
   workspaceID: string | null
@@ -1803,6 +1807,7 @@ function CapabilityVersionPicker({
 
   return (
     <Select
+      aria-label={label}
       value={selectValue}
       onValueChange={handleChange}
       onClick={(event) => event.stopPropagation()}

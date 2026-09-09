@@ -134,6 +134,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
   return (
     <div className="flex gap-2">
       <Select
+        aria-label={t("agents.form.fields.device")}
         value={value}
         disabled={disabled}
         onValueChange={(nextValue) => onChange(nextValue)}

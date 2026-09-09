@@ -608,6 +608,8 @@ DOM change events. Keep option values, labels and disabled rules in the caller,
 and popup styling, keyboard navigation and focus behavior in the shared control.
 Keep its Radix dismissal and focus dependencies compatible with `Dialog` so
 nested menus share one layer stack.
+Associate each control with its field label through `htmlFor`/`id` or an
+accessible-name attribute; include the item context for repeated selectors.
 
 Persistent execution failures use `ErrorState` with `appearance="panel"` to
 separate recovery guidance from expandable technical detail. Keep raw reasons
