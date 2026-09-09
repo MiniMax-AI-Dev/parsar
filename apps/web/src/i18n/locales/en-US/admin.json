@@ -285,6 +285,11 @@
       "externalUser": "IM user",
       "systemSender": "System"
     },
+    "runFailure": {
+      "title": "The Agent could not finish this request.",
+      "retryErrorTitle": "Could not retry",
+      "retryError": "The request could not be retried. Please try again."
+    },
     "runtime_error": {
       "badge": "Capability unavailable",
       "fallbackCapability": "this capability",

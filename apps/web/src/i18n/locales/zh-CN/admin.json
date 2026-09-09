@@ -285,6 +285,11 @@
       "externalUser": "IM 用户",
       "systemSender": "系统"
     },
+    "runFailure": {
+      "title": "Agent 未能完成这次请求。",
+      "retryErrorTitle": "重新执行失败",
+      "retryError": "重新执行失败，请再试一次。"
+    },
     "runtime_error": {
       "badge": "能力不可用",
       "fallbackCapability": "此能力",
