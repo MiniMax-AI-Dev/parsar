@@ -67,7 +67,7 @@ export function AgentRuntimeCell({ agent, className }: { agent: Agent; className
   }
 
   if (placement === "local" && binding.id) {
-    return <RuntimeLine className={className} tone={runtimeLivenessTone(binding.liveness)} kind="Local" name={binding.name} title={[binding.name, binding.liveness].filter(Boolean).join(" · ")} />
+    return <RuntimeLine className={className} tone={runtimeLivenessTone(binding.liveness)} name={binding.name} title={[binding.name, binding.liveness].filter(Boolean).join(" · ")} />
   }
 
   return <RuntimeLine className={className} tone="pending" name={t("agents.runtimeCell.unbound")} />

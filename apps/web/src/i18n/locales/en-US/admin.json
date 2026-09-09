@@ -578,7 +578,7 @@
       "codex": "Codex",
       "piagent": "Piagent",
       "sandbox": "Sandbox",
-      "local": "Local",
+      "local": "Paired machine",
       "online": "Online",
       "offline": "Offline",
       "degraded": "Degraded",
@@ -1383,7 +1383,7 @@
         "executionMode": "Execution mode",
         "agentEngine": "Agent engine",
         "codexMode": "Codex collaboration mode",
-        "device": "Local device",
+        "device": "Paired machine",
         "sandboxSize": "Sandbox size",
         "sandboxAutoRenew": "Auto-renew sandbox",
         "sandboxImage": "Sandbox image",
@@ -1408,7 +1408,7 @@
       "errors": {
         "modelRequired": "Pick a model first.",
         "modelUnavailable": "The current model is unavailable. Select an active model.",
-        "deviceRequired": "Select a local device.",
+        "deviceRequired": "Select a paired machine.",
         "workDirAbsolute": "Working directory must be an absolute path, or start with `~/`."
       },
       "sandboxSize": {
@@ -1489,7 +1489,7 @@
       "modelProtocolMismatch": "{{engine}} can't use this model's protocol",
       "selected": "Selected",
       "devicePicker": {
-        "hint": "Pick a connected local daemon. Cloud isolation does not need a device; Parsar lazy-starts a sandbox daemon on first run.",
+        "hint": "Choose the machine where this Agent will run. It can be your computer or a shared server. Cloud isolation does not require a paired machine.",
         "addDevice": "Connect device",
         "placeholder": "Pick a device…",
         "emptyTitle": "No agent daemons connected yet",
@@ -1497,7 +1497,7 @@
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
-        "hintLocal": "The directory the agent runs in on your local device — an absolute path, or one starting with `~/`. Leave blank to use a per-conversation scratch dir; created if it does not exist.",
+        "hintLocal": "The directory the agent runs in on the selected machine — an absolute path, or one starting with `~/`. Leave blank to use a per-conversation scratch dir; created if it does not exist.",
         "hintSandbox": "The directory the agent runs in inside the sandbox container (e.g. /workspace/my-app) — an absolute path, or one starting with `~/`. Leave blank to use a per-conversation scratch dir; created if it does not exist."
       }
     },
@@ -1528,8 +1528,8 @@
         "poolEmpty": "Sandbox pool is empty — cold start required after creation"
       },
       "localDevice": {
-        "title": "Local device",
-        "description": "Use a paired local device for local code."
+        "title": "Paired machine",
+        "description": "Run on a connected computer or server."
       },
       "external": {
         "title": "External Agent",
@@ -2230,7 +2230,7 @@
       }
     },
     "placement": {
-      "local_device": "Local device",
+      "local_device": "Paired machine",
       "cloud_sandbox": "Cloud sandbox",
       "external_agent": "External agent"
     },
@@ -2240,7 +2240,7 @@
       "pairingExpired": "Startup timed out",
       "loadError": "Failed to load runtimes",
       "emptyTitle": "No runtime connected yet",
-      "emptyDescription": "Pair a local device with the button above; a cloud sandbox starts on an Agent's first run; an External Agent is chosen when you create the Agent.",
+      "emptyDescription": "Connect a computer or server with the button above; a cloud sandbox starts on an Agent's first run; an External Agent is chosen when you create the Agent.",
       "preparing": "Preparing"
     },
     "tabs": {

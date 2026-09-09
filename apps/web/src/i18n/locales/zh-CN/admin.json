@@ -578,7 +578,7 @@
       "codex": "Codex",
       "piagent": "Piagent",
       "sandbox": "沙盒",
-      "local": "本地",
+      "local": "已接入设备",
       "online": "在线",
       "offline": "离线",
       "degraded": "降级",
@@ -1383,7 +1383,7 @@
         "executionMode": "执行方式",
         "agentEngine": "Agent 引擎",
         "codexMode": "Codex 协作模式",
-        "device": "本地设备",
+        "device": "已接入设备",
         "sandboxSize": "沙盒规格",
         "sandboxAutoRenew": "沙盒自动续期",
         "sandboxImage": "沙盒镜像",
@@ -1408,7 +1408,7 @@
       "errors": {
         "modelRequired": "请选择一个模型",
         "modelUnavailable": "当前模型已不可用，请重新选择一个可用模型。",
-        "deviceRequired": "请选择一台本地设备。",
+        "deviceRequired": "请选择一台已接入设备。",
         "workDirAbsolute": "工作目录必须是绝对路径，或以 ~/ 开头。"
       },
       "sandboxSize": {
@@ -1489,7 +1489,7 @@
       "modelProtocolMismatch": "{{engine}} 无法使用该模型的协议",
       "selected": "已选择",
       "devicePicker": {
-        "hint": "选择一台已连接的本地 daemon。云端隔离不需要选择设备，会在首次运行时自动拉起 sandbox daemon。",
+        "hint": "选择 Agent 实际运行的设备，可以是个人电脑或共享服务器。云端隔离无需选择已接入设备。",
         "addDevice": "接入新设备",
         "placeholder": "选择设备…",
         "emptyTitle": "尚未接入任何 agent daemon",
@@ -1497,7 +1497,7 @@
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
-        "hintLocal": "Agent 在你这台本地设备上运行时的目录，填绝对路径或以 ~/ 开头的路径。留空则每个会话各用一个临时目录；路径不存在时自动创建。",
+        "hintLocal": "Agent 在所选设备上运行时的目录，填绝对路径或以 ~/ 开头的路径。留空则每个会话各用一个临时目录；路径不存在时自动创建。",
         "hintSandbox": "Agent 在沙盒容器内运行时的目录（如 /workspace/my-app），填绝对路径或以 ~/ 开头的路径。留空则每个会话各用一个临时目录；路径不存在时自动创建。"
       }
     },
@@ -1528,8 +1528,8 @@
         "poolEmpty": "沙盒池已空，创建后需要等待冷启动"
       },
       "localDevice": {
-        "title": "本地设备",
-        "description": "使用已配对的本地设备,贴近本机代码。"
+        "title": "已接入设备",
+        "description": "在已接入的电脑或服务器上运行。"
       },
       "external": {
         "title": "外部 Agent",
@@ -2230,7 +2230,7 @@
       }
     },
     "placement": {
-      "local_device": "本地设备",
+      "local_device": "已接入设备",
       "cloud_sandbox": "云端沙盒",
       "external_agent": "外部 Agent"
     },
@@ -2240,7 +2240,7 @@
       "pairingExpired": "启动超时",
       "loadError": "无法加载运行环境列表",
       "emptyTitle": "尚未接入任何运行环境",
-      "emptyDescription": "本地设备用右上角的按钮生成接入命令；云端沙盒在 Agent 首次运行时自动拉起；外部 Agent 在创建 Agent 时选择。",
+      "emptyDescription": "电脑或服务器可通过右上角的按钮生成接入命令；云端沙盒在 Agent 首次运行时自动拉起；外部 Agent 在创建 Agent 时选择。",
       "preparing": "准备中"
     },
     "tabs": {
