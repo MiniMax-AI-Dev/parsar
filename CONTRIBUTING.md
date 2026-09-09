@@ -570,6 +570,13 @@ Pages with a detail rail may opt into wrapping header actions through
 `PageHeader.actionClassName` and an auto-height header. Other pages retain
 the default single-row header layout.
 
+Structured `Ledger` columns own both header and cell alignment: numbers align
+right; text, identifiers, and dates align left. Keep widths and alignment in
+the shared column model, not separate page-specific header rules. Direct cell
+components must forward `className` to their grid item. Fixed icon/action
+tracks, legacy string templates, and rows spanning multiple columns retain
+their existing layout.
+
 ## Typography contract
 
 The type scale has 7 defined steps. Arbitrary pixel sizes (`text-[Npx]`) are

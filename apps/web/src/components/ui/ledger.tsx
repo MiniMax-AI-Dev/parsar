@@ -114,7 +114,7 @@ export function adaptLegacyTemplate(template: string): string {
     .join(" ")
 }
 
-const LedgerContext = React.createContext<{ template: string; trailingActions: boolean }>({ template: "minmax(0,1fr)", trailingActions: false })
+const LedgerContext = React.createContext<{ template: string; trailingActions: boolean; columns?: LedgerColumn[] }>({ template: "minmax(0,1fr)", trailingActions: false })
 
 export function Ledger({
   columns,
@@ -126,6 +126,7 @@ export function Ledger({
     () => ({
       template: typeof columns === "string" ? adaptLegacyTemplate(columns) : ledgerTemplate(columns),
       trailingActions: typeof columns !== "string" && columns[columns.length - 1]?.kind === "actions",
+      columns: typeof columns === "string" ? undefined : columns,
     }),
     [columns],
   )
@@ -142,6 +143,24 @@ function useColumns() {
   return React.useContext(LedgerContext)
 }
 
+function alignCells(children: React.ReactNode, columns?: LedgerColumn[]) {
+  if (!columns) return children
+  const cells = React.Children.toArray(children)
+  // Spanning editors and composed rows retain their own layout.
+  if (cells.length !== columns.length) return children
+  return cells.map((cell, index) => {
+    const kind = columns[index].kind
+    if (
+      !React.isValidElement<{ className?: string }>(cell) ||
+      cell.type === React.Fragment ||
+      ["icon", "check", "tile", "actions", "fixed"].includes(kind)
+    ) return cell
+    return React.cloneElement(cell, {
+      className: cn(cell.props.className, kind === "num" ? "text-right" : "text-left"),
+    })
+  })
+}
+
 /* Rows and the header share one gutter: 24px each side, the topbar's
    padding, so the first and last columns of every ledger sit on the same
    two edges page after page. A trailing (zero-width) actions track still
@@ -151,7 +170,7 @@ function gutterClass(trailingActions: boolean) {
 }
 
 export function LedgerHeader({ children, className }: { children: React.ReactNode; className?: string }) {
-  const { template, trailingActions } = useColumns()
+  const { template, trailingActions, columns } = useColumns()
   return (
     <div
       aria-hidden="true"
@@ -162,7 +181,7 @@ export function LedgerHeader({ children, className }: { children: React.ReactNod
         className,
       )}
     >
-      {children}
+      {alignCells(children, columns)}
     </div>
   )
 }
@@ -265,7 +284,7 @@ export const LedgerRow = React.forwardRef<
   HTMLLIElement,
   React.LiHTMLAttributes<HTMLLIElement> & { selected?: boolean }
 >(({ selected, className, children, ...props }, ref) => {
-  const { template, trailingActions } = useColumns()
+  const { template, trailingActions, columns } = useColumns()
   return (
     <li
       ref={ref}
@@ -281,7 +300,7 @@ export const LedgerRow = React.forwardRef<
       )}
       {...props}
     >
-      {children}
+      {alignCells(children, columns)}
     </li>
   )
 })
