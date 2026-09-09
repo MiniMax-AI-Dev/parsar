@@ -1271,7 +1271,7 @@
           "upgraded": "\"{{cap}}\" upgraded to v{{version}}. Takes effect on the next run."
         },
         "marketplace": {
-          "deprecatedBanner": "The source workspace deprecated this capability. This Agent can keep using v{{version}}, but cannot upgrade.",
+          "deprecatedBanner": "This capability is deprecated. This Agent can keep using v{{version}}. Following latest stops at the last version published before deprecation.",
           "upgradeShort": "New version v{{version}}"
         },
         "state": {

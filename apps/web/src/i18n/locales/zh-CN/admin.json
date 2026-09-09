@@ -1271,7 +1271,7 @@
           "upgraded": "「{{cap}}」已升级到 v{{version}}，下次运行生效。"
         },
         "marketplace": {
-          "deprecatedBanner": "来源工作区已弃用此能力。此 Agent 可以继续使用 v{{version}}，但不能升级。",
+          "deprecatedBanner": "此能力已弃用。此 Agent 可以继续使用 v{{version}}；跟随最新版的绑定会停留在弃用前发布的最后一个版本。",
           "upgradeShort": "有新版本 v{{version}}"
         },
         "state": {

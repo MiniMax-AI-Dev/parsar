@@ -476,8 +476,7 @@ function CapabilityCard({
       }),
     })
   }
-  // Not when deprecated: the note above already says the source was retired
-  // and that this binding cannot move off its pinned version.
+  // Deprecated marketplace sources cannot be upgraded.
   if (upgradable && !deprecated) {
     notes.push({
       key: "upgrade",
@@ -544,7 +543,7 @@ function CapabilityCard({
           />
         ) : binding ? (
           <>
-            {versions.length > 1 && !versionDeleted && !fromMarketplace && (
+            {(versions.length > 1 || (versions.length === 1 && binding.pinning_mode === "latest")) && !versionDeleted && !fromMarketplace && (
               <CapabilityVersionDialog
                 mode="switch"
                 agent={agent}
