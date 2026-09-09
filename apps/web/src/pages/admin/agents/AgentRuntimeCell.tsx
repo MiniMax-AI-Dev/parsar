@@ -27,15 +27,17 @@ function RuntimeLine({
   name,
   mono,
   title,
+  className,
 }: {
   tone: LivenessTone
   kind?: string
   name: string
   mono?: boolean
   title?: string
+  className?: string
 }) {
   return (
-    <span className="flex min-w-0 items-center gap-1.5 text-sm text-fg" title={title}>
+    <span className={cn("flex min-w-0 items-center gap-1.5 text-sm text-fg", className)} title={title}>
       <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", DOT[tone])} aria-hidden="true" />
       {kind && <span className="shrink-0 text-xs text-fg-muted">{kind} ·</span>}
       <span className={cn("min-w-0 truncate", mono && "font-mono text-xs")}>{name}</span>
@@ -43,7 +45,7 @@ function RuntimeLine({
   )
 }
 
-export function AgentRuntimeCell({ agent }: { agent: Agent }) {
+export function AgentRuntimeCell({ agent, className }: { agent: Agent; className?: string }) {
   const { t } = useTranslation("admin")
   const placement = agentExecutionPlacement(agent)
 
@@ -57,17 +59,17 @@ export function AgentRuntimeCell({ agent }: { agent: Agent }) {
           : status === "spawning" || status === "renewing"
             ? "pending"
             : "offline"
-      return <RuntimeLine tone={tone} kind="Sandbox" name={fullId} mono title={[fullId, status].filter(Boolean).join(" · ")} />
+      return <RuntimeLine className={className} tone={tone} kind="Sandbox" name={fullId} mono title={[fullId, status].filter(Boolean).join(" · ")} />
     }
-    return <RuntimeLine tone="offline" kind="Sandbox" name={t("agents.runtimeCell.pending")} />
+    return <RuntimeLine className={className} tone="offline" kind="Sandbox" name={t("agents.runtimeCell.pending")} />
   }
 
   const name = (agent.runtime_name ?? "").trim()
   const runtimeID = (agent.runtime_id ?? "").trim()
   if (placement === "local" && runtimeID && name) {
     const tone = runtimeLivenessTone(agent) ?? "offline"
-    return <RuntimeLine tone={tone} kind="Local" name={name} title={[name, agent.runtime_liveness].filter(Boolean).join(" · ")} />
+    return <RuntimeLine className={className} tone={tone} kind="Local" name={name} title={[name, agent.runtime_liveness].filter(Boolean).join(" · ")} />
   }
 
-  return <RuntimeLine tone="pending" name={t("agents.runtimeCell.unbound")} />
+  return <RuntimeLine className={className} tone="pending" name={t("agents.runtimeCell.unbound")} />
 }

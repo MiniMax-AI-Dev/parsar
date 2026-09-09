@@ -65,7 +65,7 @@ type FreqType = "hourly" | "daily" | "weekly" | "monthly" | "weekday" | "custom"
 const SCHED_PAGE_SIZE = 20
 
 /** status icon · name · schedule · cron · agent · next run · last run · actions */
-const LEDGER_COLUMNS = [col.icon(), col.title(), col.text(160, 1), col.id(104), col.text(140, 1), col.num(120), col.num(120), col.actions(4)]
+const LEDGER_COLUMNS = [col.icon(), col.title(), col.text(160, 1), col.id(104), col.text(140, 1), col.age(120, 0.5), col.age(120, 0.5), col.actions(4)]
 
 const FALLBACK_TZS = [
   "UTC",
