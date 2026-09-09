@@ -422,6 +422,8 @@ description and keep ownership on the side listed here.
 - Skills.sh installed state is read from persisted version provenance within
   the workspace, including older versions and deprecated capabilities. Deleting
   the capability removes that installed state; names are not registry identities.
+  Refresh it on directory entry and after installation; mutation responses do
+  not establish the current installed mapping.
 - Secret disabling is authorized by `secrets.management_workspace_id`, set
   from the creation workspace. This ownership must not restrict shared reads
   or runtime use. Legacy rows inherit unambiguous creation metadata or runtime

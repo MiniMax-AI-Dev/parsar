@@ -137,6 +137,8 @@ export function useInstalledSkills(workspaceID: string | null) {
       ? apiRequest<Record<string, string>>(`/api/v1/workspaces/${encodeURIComponent(workspaceID)}/skills/installed`)
       : Promise.resolve({} as Record<string, string>),
     retry: noUnreachableRetry,
+    // Recheck on entry, including changes made from another page or session.
+    staleTime: 0,
   })
 }
 
@@ -148,12 +150,9 @@ export function useInstallSkill(workspaceID: string | null) {
       return installSkill(workspaceID, skill)
     },
     retry: noUnreachableRetry,
-    onSuccess: async (result, skill) => {
+    onSuccess: async (result) => {
       const installedWorkspaceID = result.capability.workspace_id
       await qc.cancelQueries({ queryKey: KEY_INSTALLED_SKILLS(installedWorkspaceID) })
-      qc.setQueryData<Record<string, string>>(KEY_INSTALLED_SKILLS(installedWorkspaceID), (current) => ({
-        ...current, [skill.id]: result.capability.id,
-      }))
       void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(installedWorkspaceID) })
       void qc.invalidateQueries({ queryKey: ["admin", "capability"] })
       void qc.invalidateQueries({

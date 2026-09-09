@@ -59,7 +59,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
 
   return (
     <div ref={directoryRef} tabIndex={-1} className="flex min-h-0 flex-1 flex-col" data-testid="skills-directory">
-      {success && Object.values(installed).includes(success.capabilityID) ? (
+      {success && !loading && !loadError && Object.values(installed).includes(success.capabilityID) ? (
         <InlineNotice
           tone="success"
           className="border-b border-line px-4 py-2"
