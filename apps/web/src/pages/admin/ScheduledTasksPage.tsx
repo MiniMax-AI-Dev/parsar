@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { AlertTriangle, CalendarClock, Loader2, Pencil, Play, Plus, Power, Trash2 } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, CalendarClock, Loader2, Pencil, Play, Plus, Power, Trash2 } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
@@ -68,7 +68,7 @@ type FreqType = "hourly" | "daily" | "weekly" | "monthly" | "weekday" | "custom"
 const SCHED_PAGE_SIZE = 20
 
 /** status icon · name · schedule · cron · agent · next run · last run · actions */
-const LEDGER_COLUMNS = [col.icon(), col.title(), col.text(160, 1), col.id(104), col.text(140, 1), col.age(120, 0.5), col.age(120, 0.5), col.actions(4)]
+const LEDGER_COLUMNS = [col.icon(), col.title(), col.text(160, 1), col.id(104), col.text(140, 1), col.age(120, 0.5), col.age(120, 0.5), col.actions(5)]
 
 const FALLBACK_TZS = [
   "UTC",
@@ -374,15 +374,14 @@ export function ScheduledTasksPage() {
                       <span className="truncate">{agent}</span>
                     </span>
                     <LedgerNum muted={!task.next_run_at}>{formatScheduledTaskTime(task.next_run_at)}</LedgerNum>
-                    <LedgerNum muted={!task.last_run_at}>
-                      {task.last_run_id ? (
-                        <Button variant="link" className="h-auto p-0 font-mono font-normal" title={t("scheduledTasks.history.openRun")} onClick={() => navigate("runs", { id: task.last_run_id })}>
-                          {formatScheduledTaskTime(task.last_run_at)}
-                        </Button>
-                      ) : formatScheduledTaskTime(task.last_run_at)}
-                    </LedgerNum>
-                    {canManageTasks ? (
+                    <LedgerNum muted={!task.last_run_at}>{formatScheduledTaskTime(task.last_run_at)}</LedgerNum>
+                    {task.last_run_id || canManageTasks ? (
                     <RowActions>
+                      {task.last_run_id && (
+                        <ActionIconButton icon={ArrowUpRight} label={t("scheduledTasks.history.latestRun")} onClick={() => navigate("runs", { id: task.last_run_id })} />
+                      )}
+                      {canManageTasks && (
+                      <>
                       <ActionIconButton
                         icon={Power}
                         label={task.enabled ? tc("actions.disable") : tc("actions.enable")}
@@ -408,6 +407,8 @@ export function ScheduledTasksPage() {
                           setDeleting(task)
                         }}
                       />
+                      </>
+                      )}
                     </RowActions>
                     ) : (
                       <span />

@@ -2493,7 +2493,8 @@
       "emptyDescription": "执行此任务，或等待下一次计划时间。",
       "loadError": "无法加载执行历史",
       "openRun": "查看执行详情",
-      "openConversation": "查看会话"
+      "openConversation": "查看会话",
+      "latestRun": "查看最近运行"
     }
   },
   "shared": {

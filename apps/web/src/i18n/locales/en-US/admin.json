@@ -2493,7 +2493,8 @@
       "emptyDescription": "Run this task or wait for its next scheduled time.",
       "loadError": "Could not load run history",
       "openRun": "View run",
-      "openConversation": "View conversation"
+      "openConversation": "View conversation",
+      "latestRun": "View latest run"
     }
   },
   "shared": {
