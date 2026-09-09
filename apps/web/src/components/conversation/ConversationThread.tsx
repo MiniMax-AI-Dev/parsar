@@ -17,6 +17,7 @@ import { ApprovalBar } from "./ApprovalBar"
 import { ConversationInteractionCards } from "./ConversationInteractionCards"
 import { MessageMarkdown } from "./MessageMarkdown"
 import { WorkTrace, type TraceStep } from "./WorkTrace"
+import { RunFailureNotice } from "./RunFailureNotice"
 import { Button } from "../ui/button"
 import { EmptyState } from "../ui/empty-state"
 import { ErrorState, InlineError } from "../ui/error-state"
@@ -382,7 +383,7 @@ function ChatStream({
   // network error). Server now auto-starts agent_daemon runs, so a
   // /start that returns 200 `already running` is fine; only true
   // network/5xx errors land here.
-  const [chatToast, setChatToast] = useState<{ text: string; detail?: string } | null>(null)
+  const [chatToast, setChatToast] = useState<{ text: string; detail?: string; runID?: string } | null>(null)
   const stream = useAgentRunStream(conversationId, activeRunId, { enabled: !!activeRunId })
   const hasActiveStream = !!activeRunId && stream.status !== "error" && stream.status !== "done"
   // Our sentence and the server's string, kept apart. They used to be one
@@ -452,7 +453,13 @@ function ChatStream({
     }
     return m
   }, [runs])
-  const liveRunAnchored = !!activeRunId && runs.some((r) => r.id === activeRunId)
+  const visibleMessageIDs = new Set(messages.map((message) => message.id))
+  const hasVisibleAnchor = (run: ConversationTimelineRun) => visibleMessageIDs.has(run.trigger_message_id || run.output_message_id || "")
+  const unanchoredFailures = runs.filter((run) =>
+    (run.status === "failed" || run.status === "interrupted") &&
+    !hasVisibleAnchor(run),
+  )
+  const liveRunAnchored = !!activeRunId && runs.some((r) => r.id === activeRunId && hasVisibleAnchor(r))
 
   // Pending permission requests of this conversation, oldest first: they
   // take the composer's slot as the approval bar and open the run's trace.
@@ -501,12 +508,24 @@ function ChatStream({
       }
     />
   )
-  const traceFor = (run: ConversationTimelineRun) =>
-    run.id === activeRunId ? (
-      liveTrace(run)
-    ) : (
-      <RunTrace key={run.id} run={run} live={null} attention={runsAwaitingUser.has(run.id)} />
-    )
+  const traceFor = (run: ConversationTimelineRun) => (
+    <Fragment key={run.id}>
+      {run.id === activeRunId
+        ? liveTrace(run)
+        : <RunTrace run={run} live={null} attention={runsAwaitingUser.has(run.id)} />}
+      {(run.status === "failed" || run.status === "interrupted") && (
+        <RunFailureNotice
+          run={run}
+          workspaceID={convWorkspaceId}
+          canRetry={canWrite && !activeRunId}
+          onRunStarted={(runID) => {
+            startRun(runID)
+            void timelineQ.refetch()
+          }}
+        />
+      )}
+    </Fragment>
+  )
 
   // When the stream finishes, refetch the timeline so the persisted
   // assistant message replaces the in-memory deltaText, then drop the
@@ -525,7 +544,7 @@ function ChatStream({
         // activeRunId is cleared below, which resets the stream hook to idle.
         // Keep a durable, dismissible copy so a fast provider rejection does
         // not disappear before the user can read it and look like a stalled run.
-        setChatToast(streamErrorMessage)
+        setChatToast({ ...streamErrorMessage, runID: activeRunId })
       }
       setActiveRunId(null)
     }, 0)
@@ -582,10 +601,12 @@ function ChatStream({
                 <Fragment key={m.id}>
                   {(orphanRunsByOutput.get(m.id) ?? []).map(traceFor)}
                   {row}
+                  {(runsByTrigger.get(m.id) ?? []).map(traceFor)}
                 </Fragment>
               )
             })
           )}
+          {unanchoredFailures.map(traceFor)}
           {activeRunId && !liveRunAnchored && liveTrace(null)}
           {hasActiveStream && stream.deltaText && (
             <MessageRow
@@ -632,7 +653,9 @@ function ChatStream({
 
       <ComposerFooter>
         <ListSlot slotId="conversation.input.dock" context={{ conversationId }} />
-        {chatToast && <ChatErrorToast message={chatToast} onDismiss={() => setChatToast(null)} />}
+        {chatToast && !runs.some((run) => run.id === chatToast.runID && (run.status === "failed" || run.status === "interrupted")) && (
+          <ChatErrorToast message={chatToast} onDismiss={() => setChatToast(null)} />
+        )}
         {pendingPermissions.length > 0 && convWorkspaceId ? (
           // The approval takes the composer's slot: one control for the
           // decision, none for typing until the agent may continue.
