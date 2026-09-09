@@ -147,7 +147,7 @@ export function WorkspaceSwitcher() {
                   {t(workspaces.length > 0 ? "workspaceSwitcher.refreshFailed" : "workspaceSwitcher.loadFailed")}
                 </InlineNotice>
                 <DropdownMenu.Item
-                  disabled={workspacesQuery.isFetching}
+                  disabled={workspacesQuery.fetchStatus !== "idle"}
                   onSelect={(event) => {
                     event.preventDefault()
                     void workspacesQuery.refetch()
@@ -155,7 +155,7 @@ export function WorkspaceSwitcher() {
                   className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-surface-muted data-[disabled]:opacity-50"
                 >
                   <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
-                  {workspacesQuery.isFetching ? t("states.loading") : t("actions.retry")}
+                  {workspacesQuery.fetchStatus !== "idle" ? t("states.loading") : t("actions.retry")}
                 </DropdownMenu.Item>
               </>
             )}

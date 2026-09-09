@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 import { useTranslation } from "react-i18next"
+import { RefreshCw } from "lucide-react"
 import { AdminRouter } from "./pages/admin/AdminRouter"
 import { LoginPage } from "./pages/LoginPage"
 import { OnboardingPage } from "./pages/OnboardingPage"
@@ -11,6 +12,7 @@ import { AuthProvider, useAuth } from "./lib/auth-context"
 import { ThemeProvider } from "./lib/theme-provider"
 import { ToastProvider } from "./components/ui/toast"
 import { ErrorState } from "./components/ui/error-state"
+import { Button } from "./components/ui/button"
 import { useMyWorkspaces } from "./lib/api-workspaces"
 import { SingleSlot } from "./components/plugin/SlotRenderer"
 import { usePluginClients } from "./lib/use-plugins"
@@ -27,6 +29,7 @@ function LoadingScreen({ message }: { message: string }) {
 function AuthedRoot() {
   const { t } = useTranslation("common")
   const wsQuery = useMyWorkspaces()
+  const retrying = wsQuery.fetchStatus !== "idle"
   const wsId = useWorkspaceId()
   usePluginClients(wsId)
 
@@ -38,7 +41,12 @@ function AuthedRoot() {
       <main className="grid min-h-screen place-items-center bg-surface p-6">
         <ErrorState
           title={t("workspaceSwitcher.loadFailed")}
-          onRetry={() => void wsQuery.refetch()}
+          action={
+            <Button size="sm" variant="outline" disabled={retrying} onClick={() => void wsQuery.refetch()}>
+              <RefreshCw className={retrying ? "animate-spin" : undefined} strokeWidth={1.5} aria-hidden="true" />
+              {retrying ? t("states.loading") : t("actions.retry")}
+            </Button>
+          }
         />
       </main>
     )
