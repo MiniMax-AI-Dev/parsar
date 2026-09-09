@@ -15,7 +15,7 @@ import {
 import { ErrorState } from "../../components/ui/error-state"
 import { Field } from "../../components/ui/label"
 import { Input } from "../../components/ui/input"
-import { Select } from "../../components/ui/select"
+import { Select, SelectOption } from "../../components/ui/select"
 import { StatusIcon } from "../../components/ui/status-icon"
 import { ApiError } from "../../lib/api-client"
 import type { Model, ModelCredentialMode, Secret } from "../../lib/api-types"
@@ -269,19 +269,19 @@ export function BulkImportModelsDialog({
                   <Select
                     id="bulk-model-secret"
                     value={existingSecretID}
-                    onChange={(event) => {
-                      setExistingSecretID(event.target.value)
-                      if (event.target.value !== "") setApiKey("")
+                    onValueChange={(nextValue) => {
+                      setExistingSecretID(nextValue)
+                      if (nextValue !== "") setApiKey("")
                       resetDiscovery()
                     }}
                   >
-                    <option value="">
+                    <SelectOption value="">
                       {t("models.createModel.credentialMode.inlineSecret.reuseNone")}
-                    </option>
+                    </SelectOption>
                     {activeSecrets.map((secret) => (
-                      <option key={secret.id} value={secret.id}>
+                      <SelectOption key={secret.id} value={secret.id}>
                         {secret.name} ({secret.masked})
-                      </option>
+                      </SelectOption>
                     ))}
                   </Select>
                 </Field>

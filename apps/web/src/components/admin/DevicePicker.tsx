@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { Plus } from "lucide-react"
 
 import { Button } from "../ui/button"
-import { Select } from "../ui/select"
+import { Select, SelectOption } from "../ui/select"
 import { Skeleton } from "../ui/skeleton"
 import { InlineError } from "../runtime/InlineError"
 import {
@@ -136,17 +136,17 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
       <Select
         value={value}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
+        onValueChange={(nextValue) => onChange(nextValue)}
         data-testid="agent-daemon-device-picker"
         wrapperClassName="min-w-0 flex-1"
       >
-        <option value="">
+        <SelectOption value="">
           {t("agents.form.devicePicker.placeholder", { defaultValue: "Pick a device…" })}
-        </option>
+        </SelectOption>
         {selectableDevices.map((r) => (
-          <option key={r.id} value={r.id}>
+          <SelectOption key={r.id} value={r.id}>
             {formatDeviceLabel(r)}
-          </option>
+          </SelectOption>
         ))}
       </Select>
       {onAddDevice && (

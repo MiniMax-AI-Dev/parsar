@@ -9,7 +9,7 @@ import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
 import { Input } from "../../../components/ui/input"
 import { Field } from "../../../components/ui/label"
-import { Select } from "../../../components/ui/select"
+import { Select, SelectOption } from "../../../components/ui/select"
 import { Skeleton } from "../../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../../components/ui/status-icon"
 import {
@@ -299,9 +299,9 @@ function MutationError({ error }: { error: unknown }) {
 function VersionSelect({ versions, value, onChange }: { versions: CapabilityVersion[]; value: string; onChange: (value: string) => void }) {
   const { t } = useTranslation("admin")
   return (
-    <Select value={value} onChange={(event) => onChange(event.target.value)}>
+    <Select value={value} onValueChange={(nextValue) => onChange(nextValue)}>
       {versions.map((version, index) => (
-        <option key={version.id} value={version.id}>v{version.version}{index === 0 ? ` · ${t("agents.detail.capabilities.switchDialog.latest")}` : ""}</option>
+        <SelectOption key={version.id} value={version.id}>v{version.version}{index === 0 ? ` · ${t("agents.detail.capabilities.switchDialog.latest")}` : ""}</SelectOption>
       ))}
     </Select>
   )

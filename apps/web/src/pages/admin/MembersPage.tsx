@@ -51,7 +51,7 @@ import {
   LedgerRow,
   col,
 } from "../../components/ui/ledger"
-import { Select } from "../../components/ui/select"
+import { Select, SelectOption } from "../../components/ui/select"
 import { Skeleton } from "../../components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
@@ -635,9 +635,9 @@ function InviteLinkForm({
         </Field>
         <Field label={t("members.invite.roleLabel")} htmlFor="invite-role">
           {canChooseRole ? (
-            <Select id="invite-role" value={role} onChange={(e) => setRole(e.target.value as MemberRole)} disabled={pending}>
+            <Select id="invite-role" value={role} onValueChange={(nextValue) => setRole(nextValue as MemberRole)} disabled={pending}>
               {ROLES.map((r) => (
-                <option key={r} value={r}>{t(`members.role.${r}`)}</option>
+                <SelectOption key={r} value={r}>{t(`members.role.${r}`)}</SelectOption>
               ))}
             </Select>
           ) : (
@@ -723,9 +723,9 @@ function AddExistingForm({
           <UserSearchCombobox excludeWorkspace={wsId} selected={selected} onChange={setSelected} disabled={pending} />
         </Field>
         <Field label={t("members.add.field.role")} htmlFor="add-role">
-          <Select id="add-role" value={role} onChange={(e) => setRole(e.target.value as MemberRole)} disabled={pending}>
+          <Select id="add-role" value={role} onValueChange={(nextValue) => setRole(nextValue as MemberRole)} disabled={pending}>
             {ROLES.map((r) => (
-              <option key={r} value={r}>{t(`members.role.${r}`)}</option>
+              <SelectOption key={r} value={r}>{t(`members.role.${r}`)}</SelectOption>
             ))}
           </Select>
         </Field>

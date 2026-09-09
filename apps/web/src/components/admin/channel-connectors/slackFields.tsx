@@ -11,7 +11,7 @@ import { useCreateSecret } from "../../../lib/api-secrets"
 import type { CreateSecretRequest } from "../../../lib/api-types"
 import { Button } from "../../ui/button"
 import { Input } from "../../ui/input"
-import { Select } from "../../ui/select"
+import { Select, SelectOption } from "../../ui/select"
 import { InlineError } from "../../runtime/InlineError"
 import { EnabledField, Field, FormFooter, FormSection, SecretInput } from "./shared"
 import { randomHex } from "../../../lib/random"
@@ -213,13 +213,13 @@ function SlackConnectorFieldsInner({
         <Select
           id="slack-event-mode"
           value={draft.event_mode}
-          onChange={(e) => setDraft({ ...draft, event_mode: e.target.value === "events" ? "events" : "socket" })}
+          onValueChange={(nextValue) => setDraft({ ...draft, event_mode: nextValue === "events" ? "events" : "socket" })}
           disabled={locked}
         >
           {(["socket", "events"] as const).map((mode) => (
-            <option key={mode} value={mode}>
+            <SelectOption key={mode} value={mode}>
               {t(`connections.connector.slack.fields.eventMode.options.${mode}`)}
-            </option>
+            </SelectOption>
           ))}
         </Select>
       </Field>
@@ -287,7 +287,7 @@ function configKey(config: SlackConnectorInput): string {
     config.app_token_ref,
     config.signing_secret_ref,
     config.event_mode,
-  ].join(" ")
+  ].join("\u0000")
 }
 
 function applyChange(

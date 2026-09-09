@@ -22,7 +22,7 @@ import {
 import { InlineError } from "../ui/error-state"
 import { Input } from "../ui/input"
 import { Field } from "../ui/label"
-import { Select } from "../ui/select"
+import { Select, SelectOption } from "../ui/select"
 import { Textarea } from "../ui/textarea"
 
 type FormMode = "create" | "rename"
@@ -113,12 +113,12 @@ export function WorkspaceFormDialog({
             <Select
               id="ws-visibility"
               value={visibility}
-              onChange={(e) => setVisibility(e.target.value as WorkspaceVisibility)}
+              onValueChange={(nextValue) => setVisibility(nextValue as WorkspaceVisibility)}
             >
               {(["private", "public"] as const).map((v) => (
-                <option key={v} value={v}>
+                <SelectOption key={v} value={v}>
                   {t(`workspaceCrud.visibility.${v}`)}
-                </option>
+                </SelectOption>
               ))}
             </Select>
           </Field>
