@@ -16,16 +16,16 @@ const itemValue = (value: string | number) => `value:${value}`
 
 export const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
   ({ value, defaultValue, onValueChange, disabled, className, wrapperClassName, children, ...props }, ref) => (
-    <SelectPrimitive.Root
-      value={value === undefined ? undefined : itemValue(value)}
-      defaultValue={defaultValue === undefined ? undefined : itemValue(defaultValue)}
-      onValueChange={(next) => {
-        // The native form bridge emits an unencoded empty value while options load.
-        if (next.startsWith("value:")) onValueChange?.(next.slice(6))
-      }}
-      disabled={disabled}
-    >
-      <span className={cn("relative inline-flex min-w-0 w-full", wrapperClassName)}>
+    <span className={cn("relative inline-flex min-w-0 w-full", wrapperClassName)}>
+      <SelectPrimitive.Root
+        value={value === undefined ? undefined : itemValue(value)}
+        defaultValue={defaultValue === undefined ? undefined : itemValue(defaultValue)}
+        onValueChange={(next) => {
+          // The native form bridge emits an unencoded empty value while options load.
+          if (next.startsWith("value:")) onValueChange?.(next.slice(6))
+        }}
+        disabled={disabled}
+      >
         <SelectPrimitive.Trigger
           ref={ref}
           className={cn(
@@ -39,25 +39,25 @@ export const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
           </SelectPrimitive.Icon>
         </SelectPrimitive.Trigger>
-      </span>
-      <SelectPrimitive.Portal>
-        <SelectPrimitive.Content
-          position="popper"
-          sideOffset={4}
-          collisionPadding={8}
-          className={cn(menuContentClass, "w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-content-available-width)] max-h-[min(18rem,var(--radix-select-content-available-height))]")}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <SelectPrimitive.ScrollUpButton className="flex justify-center py-1 text-fg-muted">
-            <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
-          </SelectPrimitive.ScrollUpButton>
-          <SelectPrimitive.Viewport>{children}</SelectPrimitive.Viewport>
-          <SelectPrimitive.ScrollDownButton className="flex justify-center py-1 text-fg-muted">
-            <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-          </SelectPrimitive.ScrollDownButton>
-        </SelectPrimitive.Content>
-      </SelectPrimitive.Portal>
-    </SelectPrimitive.Root>
+        <SelectPrimitive.Portal>
+          <SelectPrimitive.Content
+            position="popper"
+            sideOffset={4}
+            collisionPadding={8}
+            className={cn(menuContentClass, "w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-content-available-width)] max-h-[min(18rem,var(--radix-select-content-available-height))]")}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <SelectPrimitive.ScrollUpButton className="flex justify-center py-1 text-fg-muted">
+              <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+            </SelectPrimitive.ScrollUpButton>
+            <SelectPrimitive.Viewport>{children}</SelectPrimitive.Viewport>
+            <SelectPrimitive.ScrollDownButton className="flex justify-center py-1 text-fg-muted">
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            </SelectPrimitive.ScrollDownButton>
+          </SelectPrimitive.Content>
+        </SelectPrimitive.Portal>
+      </SelectPrimitive.Root>
+    </span>
   ),
 )
 Select.displayName = "Select"
