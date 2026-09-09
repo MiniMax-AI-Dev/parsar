@@ -15,7 +15,7 @@ export function WorkspaceMenuItem({ workspace, active, onRename, onArchive }: {
   const { t } = useTranslation("common")
   const canManage = workspace.role === "owner" || workspace.role === "admin"
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_1.75rem_1.75rem] items-center gap-1">
+    <div className={cn("grid items-center gap-1", canManage ? "grid-cols-[minmax(0,1fr)_1.75rem_1.75rem]" : "grid-cols-1")}>
       <DropdownMenu.Item
         onSelect={() => { if (!active) setWorkspaceId(workspace.id) }}
         aria-current={active ? "true" : undefined}
@@ -25,13 +25,15 @@ export function WorkspaceMenuItem({ workspace, active, onRename, onArchive }: {
           active && "font-medium text-fg",
         )}
       >
-        <span className="min-w-0 flex-1 break-words">
-          {workspace.name}
-          <span className="block break-all font-mono text-xs font-normal text-fg-faint">{workspace.slug}</span>
-        </span>
-        <span className="w-14 shrink-0 text-right text-xs font-medium text-fg-faint">{workspace.role}</span>
         <span className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
           {active && <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={2} />}
+        </span>
+        <span className="min-w-0 flex-1 break-words">
+          {workspace.name}
+          <span className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-2 text-xs font-normal text-fg-faint">
+            <span>{workspace.role}</span>
+            <span className="break-all font-mono">{workspace.slug}</span>
+          </span>
         </span>
       </DropdownMenu.Item>
       {canManage && <>
