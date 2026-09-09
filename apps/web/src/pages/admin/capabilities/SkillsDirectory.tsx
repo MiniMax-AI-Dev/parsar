@@ -8,7 +8,7 @@ import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
 import { Ledger, LedgerHeader, LedgerId, LedgerNum, LedgerRow, col } from "../../../components/ui/ledger"
 import { Skeleton } from "../../../components/ui/skeleton"
-import { useInstallSkill, useSkillsCatalog, type SkillsCatalogItem } from "../../../lib/api-skills"
+import { useInstalledSkills, useInstallSkill, useSkillsCatalog, type SkillsCatalogItem } from "../../../lib/api-skills"
 import { useWorkspaceId } from "../../../lib/workspace"
 import { InlineNotice } from "./notices"
 import { SkillInstallErrorDialog } from "./SkillInstallErrorDialog"
@@ -27,8 +27,11 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
   const workspaceID = useWorkspaceId()
   const directoryRef = useRef<HTMLDivElement>(null)
   const catalogQ = useSkillsCatalog()
+  const installedQ = useInstalledSkills(workspaceID)
   const installMut = useInstallSkill(workspaceID)
-  const [installed, setInstalled] = useState<Record<string, string>>({})
+  const installed = installedQ.data ?? {}
+  const loading = catalogQ.isPending || installedQ.isPending || installedQ.isFetching || installedQ.isPaused
+  const loadError = catalogQ.error ?? installedQ.error
   const [success, setSuccess] = useState<{ name: string; capabilityID: string } | null>(null)
   const numberFormatter = useMemo(() => new Intl.NumberFormat(i18n.language), [i18n.language])
 
@@ -46,10 +49,9 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
   const failedSkill = installMut.error ? installMut.variables : null
 
   const install = (skill: SkillsCatalogItem) => {
-    if (!canImport || installed[skill.id]) return
+    if (!canImport || loading || loadError || installed[skill.id]) return
     installMut.mutate(skill, {
       onSuccess: (result) => {
-        setInstalled((current) => ({ ...current, [skill.id]: result.capability.id }))
         setSuccess({ name: result.capability.name, capabilityID: result.capability.id })
       },
     })
@@ -57,7 +59,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
 
   return (
     <div ref={directoryRef} tabIndex={-1} className="flex min-h-0 flex-1 flex-col" data-testid="skills-directory">
-      {success ? (
+      {success && !loading && !loadError && Object.values(installed).includes(success.capabilityID) ? (
         <InlineNotice
           tone="success"
           className="border-b border-line px-4 py-2"
@@ -72,13 +74,13 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
         </InlineNotice>
       ) : null}
 
-      {catalogQ.error ? (
+      {loadError ? (
         <div className="px-4 pt-4">
           <ErrorState
             title={t("capabilities.skillsDirectory.loadError.title")}
             description={t("capabilities.skillsDirectory.loadError.description")}
-            detail={catalogQ.error instanceof Error ? catalogQ.error.message : undefined}
-            onRetry={() => void catalogQ.refetch()}
+            detail={loadError instanceof Error ? loadError.message : undefined}
+            onRetry={() => { void catalogQ.refetch(); void installedQ.refetch() }}
           />
         </div>
       ) : null}
@@ -96,7 +98,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
         />
       ) : null}
 
-      {catalogQ.isLoading ? (
+      {loading ? (
         <div className="px-4 pt-3" data-testid="skills-directory-loading">
           <div className="mb-3 h-7 border-b border-line" />
           {Array.from({ length: 6 }).map((_, index) => (
@@ -108,13 +110,13 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
             </div>
           ))}
         </div>
-      ) : filtered.length === 0 && !catalogQ.error ? (
+      ) : filtered.length === 0 && !loadError ? (
         <EmptyState
           icon={PackageCheck}
           title={t("capabilities.skillsDirectory.empty.title")}
           description={t("capabilities.skillsDirectory.empty.description")}
         />
-      ) : filtered.length > 0 ? (
+      ) : filtered.length > 0 && !loadError ? (
         <Ledger columns={SKILL_COLUMNS} role="listbox" aria-label={t("capabilities.tabs.skills")} data-testid="skills-marketplace-grid">
           <LedgerHeader>
             <span className="text-right">#</span>

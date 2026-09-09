@@ -39,6 +39,7 @@ export interface InstallSkillResponse {
 }
 
 export const KEY_SKILLS_CATALOG = ["admin", "skillsCatalog", "v2"] as const
+const KEY_INSTALLED_SKILLS = (workspaceID: string) => [...KEY_CAPABILITIES_WORKSPACE(workspaceID), "skillsInstalled"] as const
 
 async function listSkillsCatalog(): Promise<SkillsCatalogResponse> {
   const res = await fetch(SKILLS_CATALOG_URL, { headers: { Accept: "application/json" } })
@@ -129,6 +130,18 @@ export function useSkillsCatalog() {
   })
 }
 
+export function useInstalledSkills(workspaceID: string | null) {
+  return useQuery({
+    queryKey: KEY_INSTALLED_SKILLS(workspaceID ?? "_none"),
+    queryFn: () => workspaceID
+      ? apiRequest<Record<string, string>>(`/api/v1/workspaces/${encodeURIComponent(workspaceID)}/skills/installed`)
+      : Promise.resolve({} as Record<string, string>),
+    retry: noUnreachableRetry,
+    // Recheck on entry, including changes made from another page or session.
+    staleTime: 0,
+  })
+}
+
 export function useInstallSkill(workspaceID: string | null) {
   const qc = useQueryClient()
   return useMutation({
@@ -137,12 +150,13 @@ export function useInstallSkill(workspaceID: string | null) {
       return installSkill(workspaceID, skill)
     },
     retry: noUnreachableRetry,
-    onSuccess: (result) => {
-      if (!workspaceID) return
-      void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID) })
+    onSuccess: async (result) => {
+      const installedWorkspaceID = result.capability.workspace_id
+      await qc.cancelQueries({ queryKey: KEY_INSTALLED_SKILLS(installedWorkspaceID) })
+      void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(installedWorkspaceID) })
       void qc.invalidateQueries({ queryKey: ["admin", "capability"] })
       void qc.invalidateQueries({
-        queryKey: KEY_CAPABILITY_VERSIONS(workspaceID, result.capability.id),
+        queryKey: KEY_CAPABILITY_VERSIONS(installedWorkspaceID, result.capability.id),
       })
     },
   })

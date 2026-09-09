@@ -424,6 +424,11 @@ description and keep ownership on the side listed here.
 - Workspace run search matches run IDs, Agent names/slugs, and conversation IDs
   as case-insensitive literal text before pagination. Page rows and totals use
   the same search, status, and workspace filters.
+- Skills.sh installed state is read from persisted version provenance within
+  the workspace, including older versions and deprecated capabilities. Deleting
+  the capability removes that installed state; names are not registry identities.
+  Refresh it on directory entry and after installation; mutation responses do
+  not establish the current installed mapping.
 - Secret disabling is authorized by `secrets.management_workspace_id`, set
   from the creation workspace. This ownership must not restrict shared reads
   or runtime use. Legacy rows inherit unambiguous creation metadata or runtime
