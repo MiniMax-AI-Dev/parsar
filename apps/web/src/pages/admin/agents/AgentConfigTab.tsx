@@ -40,7 +40,7 @@ import {
 } from "../../../lib/api-capabilities"
 import { useMyCredentials } from "../../../lib/api-credentials"
 import { useSecrets } from "../../../lib/api-secrets"
-import { agentCapabilityVersion } from "../../../lib/agent-capability-version"
+import { agentCapabilityFollowsLatest, agentCapabilityVersion } from "../../../lib/agent-capability-version"
 import { agentExecutionPlacement } from "../../../lib/agent-runtime"
 import { agentEngineLabel, agentEngineOf, agentEngineSupportsCapability, agentEnginesSupportingCapability } from "../../../lib/agent-view-model"
 import { credentialBinding, hasCredentialKind, sharedSecretsForKind } from "../../../lib/credential-bindings"
@@ -411,7 +411,8 @@ function CapabilityCard({
 
   const agentEngine = agentEngineOf(agent)
   const incompatible = !agentEngineSupportsCapability(agentEngine, capability.type)
-  const upgradable = mode === "enabled" && fromMarketplace && !!binding && binding.pinning_mode !== "latest" && !!latest && latest.id !== binding.capability_version_id
+  const followsLatest = agentCapabilityFollowsLatest(binding, capability)
+  const upgradable = mode === "enabled" && fromMarketplace && !!binding && !followsLatest && !!latest && latest.id !== binding.capability_version_id
 
   // One line per credential the capability needs and the reader has not set.
   // A credential that *is* set says nothing: the row's glyph already reports
@@ -423,7 +424,7 @@ function CapabilityCard({
 
   const notes: { key: string; text: React.ReactNode; action?: React.ReactNode }[] = binding ? [{
     key: "version-mode",
-    text: t(`agents.detail.capabilities.bindings.${binding.pinning_mode === "latest" ? "followingLatest" : "pinnedVersion"}`),
+    text: t(`agents.detail.capabilities.bindings.${followsLatest ? "followingLatest" : binding.pinning_mode === "latest" ? "storedVersion" : "pinnedVersion"}`),
   }] : []
   for (const rc of missingKinds) {
     notes.push({

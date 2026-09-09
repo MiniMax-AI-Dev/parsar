@@ -155,8 +155,9 @@ description and keep ownership on the side listed here.
 ### Server versus daemon ownership
 
 - Agent capability reads retain the stored binding version and expose its
-  pinning mode. Displayed current versions follow the runtime-resolved latest
-  metadata (including deprecation cutoffs) or the pinned version accordingly.
+  pinning mode. Displayed current versions match the daemon's resolver:
+  Skill, Plugin, and Bundle can follow latest metadata (including deprecation
+  cutoffs); MCP and System Prompt currently use the stored binding version.
 
 - Cross-workspace installed capabilities remain visible and removable after
   unpublishing. Their installation metadata reports source visibility and only

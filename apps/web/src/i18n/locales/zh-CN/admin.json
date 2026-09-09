@@ -702,7 +702,7 @@
       },
       "add": {
         "title": "{{name}} — 添加新版本",
-        "description": "保存时会自动分配下一个版本号。能力未弃用时，跟随最新版的 Agent 将在下次运行时使用新版本；固定版本的 Agent 保持原版本。",
+        "description": "保存后会自动生成下一个版本。请在各 Agent 的配置页查看实际使用的版本。",
         "prefillFromLatest": "已用上一版（{{version}}）的内容预填。修改后会作为新版本提交。",
         "inlineSecretLostWarning": "上一版的 inline secret（{{keys}}）已隐藏。如需保留，请重新输入明文；或改成已托管的凭据。"
       },
@@ -1209,7 +1209,8 @@
           "versionDeleted": {
             "warning": "版本已下线",
             "switchAction": "请切到可用版本"
-          }
+          },
+          "storedVersion": "使用绑定版本"
         },
         "compatibility": {
           "unsupported": "{{engine}} 不支持 {{type}} 能力。支持的 Agent 引擎：{{engines}}。",
@@ -1271,7 +1272,7 @@
           "upgraded": "「{{cap}}」已升级到 v{{version}}，下次运行生效。"
         },
         "marketplace": {
-          "deprecatedBanner": "此能力已弃用。此 Agent 可以继续使用 v{{version}}；跟随最新版的绑定会停留在弃用前发布的最后一个版本。",
+          "deprecatedBanner": "此能力已弃用。此 Agent 仍可继续使用 v{{version}}。",
           "upgradeShort": "有新版本 v{{version}}"
         },
         "state": {

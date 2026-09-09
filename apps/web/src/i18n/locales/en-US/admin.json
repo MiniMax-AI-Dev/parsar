@@ -702,7 +702,7 @@
       },
       "add": {
         "title": "{{name}} — add version",
-        "description": "Saving assigns the next version automatically. Unless the capability is deprecated, Agents following latest use it on their next run; pinned Agents keep their selected version.",
+        "description": "Saving assigns the next version automatically. Check each Agent’s Config tab for the version it will use.",
         "prefillFromLatest": "Prefilled from the previous version ({{version}}). Edits become the new version on submit.",
         "inlineSecretLostWarning": "Inline secret(s) from the previous version ({{keys}}) are hidden. Re-enter the plaintext to keep them, or switch to a managed credential."
       },
@@ -1209,7 +1209,8 @@
           "versionDeleted": {
             "warning": "Version unavailable",
             "switchAction": "Switch to an available version"
-          }
+          },
+          "storedVersion": "Using bound version"
         },
         "compatibility": {
           "unsupported": "{{engine}} does not support {{type}} capabilities. Supported engines: {{engines}}.",
@@ -1271,7 +1272,7 @@
           "upgraded": "\"{{cap}}\" upgraded to v{{version}}. Takes effect on the next run."
         },
         "marketplace": {
-          "deprecatedBanner": "This capability is deprecated. This Agent can keep using v{{version}}. Following latest stops at the last version published before deprecation.",
+          "deprecatedBanner": "This capability is deprecated. This Agent can keep using v{{version}}.",
           "upgradeShort": "New version v{{version}}"
         },
         "state": {

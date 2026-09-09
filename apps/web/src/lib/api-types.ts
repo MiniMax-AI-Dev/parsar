@@ -335,7 +335,7 @@ export interface AgentCapability {
   latest_version_created_at?: string
   enabled: boolean
   configuration: Record<string, unknown>
-  /** "latest" tracks newest version on every dispatch; "pinned" locks capability_version_id. */
+  /** Stored mode; effective version selection also depends on the capability resolver. */
   pinning_mode?: "latest" | "pinned"
   created_at: string
   updated_at: string
