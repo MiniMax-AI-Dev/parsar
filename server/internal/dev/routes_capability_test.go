@@ -221,7 +221,7 @@ func TestCapabilityEnablePersistsSelectedSharedSecret(t *testing.T) {
 	secretID := "00000000-0000-0000-0000-000000000099"
 	if _, err := db.Exec(context.Background(), `
 		insert into secrets(id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at)
-		values ($1, 'shared-github-test', 'Shared GitHub', 'capability_inline', 'inline', 'literal', '\x01'::bytea, 'v1', 'active', $2::jsonb, $3, now(), now())
+		values ($1, 'shared-github-test', 'Shared GitHub', 'capability_inline', 'inline', 'literal', '{}'::jsonb, 'v1', 'active', $2::jsonb, $3, now(), now())
 	`, secretID, `{"workspace_id":"`+store.DefaultDevFixtureIDs().WorkspaceID+`","credential_kind_code":"github_pat"}`, testUserAID); err != nil {
 		t.Fatalf("insert shared secret: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestCapabilityEnableRejectsOAuthSecretFromDifferentCatalogConnector(t *test
 	}
 	if _, err := db.Exec(context.Background(), `
 		insert into secrets(id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at)
-		values ($1, 'github-oauth-test', 'GitHub OAuth', 'capability_inline', 'github', 'oauth2', '\x01'::bytea, 'v1', 'active', $2::jsonb, $3, now(), now())
+		values ($1, 'github-oauth-test', 'GitHub OAuth', 'capability_inline', 'github', 'oauth2', '{}'::jsonb, 'v1', 'active', $2::jsonb, $3, now(), now())
 	`, secretID, `{"workspace_id":"`+store.DefaultDevFixtureIDs().WorkspaceID+`","credential_kind_code":"mcp_oauth"}`, testUserAID); err != nil {
 		t.Fatalf("insert shared secret: %v", err)
 	}
