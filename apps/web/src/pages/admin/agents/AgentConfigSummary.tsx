@@ -11,6 +11,7 @@ import {
   agentWorkdirOf,
 } from "../../../lib/agent-view-model"
 import type { AgentDetail } from "../../../lib/api-types"
+import { useAgentRuntimeBinding } from "../../../lib/use-agent-runtime-binding"
 import { DetailSection } from "./DetailSection"
 
 /* Config reads in the rail now, so it takes the shared property grid: no
@@ -31,7 +32,7 @@ export function AgentConfigSummary({
   const executionMode = agentExecutionModeOf(agent)
   const agentEngine = agentEngineOf(agent)
   const workdir = agentWorkdirOf(agent)
-  const binding = agent.runtime_name || agent.runtime_id
+  const binding = useAgentRuntimeBinding(agent).name
 
   return (
     <>
