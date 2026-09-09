@@ -577,6 +577,10 @@ components must forward `className` to their grid item. Fixed icon/action
 tracks, legacy string templates, and rows spanning multiple columns retain
 their existing layout.
 
+When a list needs a compact presentation beside a detail rail, use container
+queries against the list width. Keep the same data and row actions, with
+explicit field labels when column headings are hidden.
+
 ## Typography contract
 
 The type scale has 7 defined steps. Arbitrary pixel sizes (`text-[Npx]`) are

@@ -616,10 +616,14 @@
     "table": {
       "name": "Capability",
       "latestVersion": "Latest version",
-      "enabledAgents": "Enabled Agents",
+      "enabledAgents": "Agents",
       "credentials": "Credential requirement",
       "updated": "Updated",
-      "installs": "Installs"
+      "installs": "Installs",
+      "version": "Version",
+      "credentialsShort": "Credentials",
+      "noCredentials": "None",
+      "ownSource": "This workspace"
     },
     "credentials": {
       "none": "No credential required"
