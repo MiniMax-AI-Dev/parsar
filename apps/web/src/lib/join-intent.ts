@@ -14,11 +14,12 @@ const RETURNABLE = ["/join-workspace", "/c/", "/invite/"]
 
 function isReturnable(path: string): boolean {
   if (!path.startsWith("/") || path.startsWith("//")) return false
+  if (path.startsWith("/?") || path.startsWith("/#")) return true
   return RETURNABLE.some((prefix) => path.startsWith(prefix))
 }
 
 /** Remember the current address before handing off to sign-in. */
-export function stashReturnTo(path = window.location.pathname + window.location.search): void {
+export function stashReturnTo(path = window.location.pathname + window.location.search + window.location.hash): void {
   try {
     if (isReturnable(path)) sessionStorage.setItem(JOIN_INTENT_KEY, path)
   } catch {

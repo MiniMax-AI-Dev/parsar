@@ -577,6 +577,9 @@ otherwise long children push the grid track wider instead of wrapping.
 Authentication submission failures use the shared `ErrorDialog`, preserving
 form input and restoring action focus on dismissal. Field validation stays
 inline; sign-in-required invitation guidance stays visible as a guided step.
+The authenticated root owns post-login return navigation for password and SSO
+sign-in. Preserve allowed in-app paths, query parameters and fragments through
+the existing session return intent; login forms must not race that navigation.
 
 Pages with a detail rail may opt into wrapping header actions through
 `PageHeader.actionClassName` and an auto-height header. Other pages retain

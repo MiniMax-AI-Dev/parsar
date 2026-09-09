@@ -112,6 +112,8 @@ export function useLoginWithPassword() {
       // Cookie is set by the 200 response; refresh me-query so AuthProvider
       // flips isAuthenticated -> true and the router mounts AuthedRoot.
       await qc.invalidateQueries({ queryKey: ["me"] })
+      // Retry session bootstrap if the new cookie could not be confirmed.
+      if (!qc.getQueryData(["me"])) window.location.reload()
     },
   })
 }

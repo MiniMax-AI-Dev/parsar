@@ -12,7 +12,6 @@ import { Field } from "../components/ui/label"
 import { ApiError } from "../lib/api-client"
 import { useAuthProviders, useLoginWithPassword } from "../lib/api-auth"
 import { useBootstrapStatus } from "../lib/api-bootstrap"
-import { popPendingJoinIntent } from "../lib/join-intent"
 import { SetupPage } from "./SetupPage"
 
 /**
@@ -71,11 +70,6 @@ function SignInView() {
     if (invalid || submitting) return
     try {
       await loginM.mutateAsync({ email: email.trim(), password })
-      // Cookie set on 200; a full navigation so AuthProvider re-reads /me with
-      // the fresh cookie. Someone who followed a shared link signed in *at*
-      // that link and must land back on it; everyone else goes to the console,
-      // because reloading /login would leave the whole session on that path.
-      window.location.assign(popPendingJoinIntent() ?? afterLoginPath())
     } catch {
       /* mutation state carries the error */
     }
@@ -180,12 +174,6 @@ function SignInView() {
       )}
     </EntryPage>
   )
-}
-
-/** The address to resume at when no return-to was stashed. */
-function afterLoginPath(): string {
-  const here = window.location.pathname
-  return here === "/login" || here === "/" ? "/" : here + window.location.search
 }
 
 /**

@@ -9,7 +9,7 @@ import { Field } from "../components/ui/label"
 import { useInviteInfo, useAcceptInvite } from "../lib/api-invitations"
 import { ApiError } from "../lib/api-client"
 import { useAuth } from "../lib/auth-context"
-import { stashReturnTo } from "../lib/join-intent"
+import { popPendingJoinIntent, stashReturnTo } from "../lib/join-intent"
 import { validateNewPassword } from "../lib/password-policy"
 import { setWorkspaceId } from "../lib/workspace"
 
@@ -78,6 +78,7 @@ export function InviteAcceptPage({ token }: { token: string }) {
     }
     try {
       const res = await acceptMut.mutateAsync({ token, password: isCurrentInvitee ? "" : password })
+      popPendingJoinIntent()
       setWorkspaceId(res.workspace_id)
       window.location.assign("/")
     } catch (err) {
