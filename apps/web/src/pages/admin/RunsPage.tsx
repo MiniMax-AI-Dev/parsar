@@ -57,6 +57,7 @@ import {
 import { VerbatimBlock } from "../../components/ui/verbatim"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
+import { buildRuntimeDiagnosis, type AdminText, type DiagnosisTone } from "../../lib/run-runtime-diagnosis"
 import {
   Dialog,
   DialogContent,
@@ -806,9 +807,6 @@ function shortId(s?: string, n = 8): string {
 }
 
 
-type AdminText = (key: string, options?: Record<string, unknown>) => string
-type DiagnosisTone = "success" | "warning" | "error" | "neutral"
-
 interface RunDiagnosis {
   tone: DiagnosisTone
   title: string
@@ -818,12 +816,6 @@ interface RunDiagnosis {
   latest: string
 }
 
-interface RuntimeDiagnosis {
-  tone: DiagnosisTone
-  health: string
-  heartbeatAge: string
-  action: string
-}
 
 function fmtDateTime(value?: string): string {
   if (!value) return "—"
@@ -838,18 +830,6 @@ function runtimeCapabilityEntries(capabilities?: Record<string, boolean>): [stri
     .sort(([a], [b]) => a.localeCompare(b))
 }
 
-function fmtAge(value: string | undefined, t: AdminText): string {
-  if (!value) return t("runs.detail.diagnostics.age.unknown")
-  const ms = Date.parse(value)
-  if (Number.isNaN(ms)) return t("runs.detail.diagnostics.age.unknown")
-  const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000))
-  if (seconds < 60) return t("runs.detail.diagnostics.age.seconds", { count: seconds })
-  const minutes = Math.round(seconds / 60)
-  if (minutes < 60) return t("runs.detail.diagnostics.age.minutes", { count: minutes })
-  const hours = Math.round(minutes / 60)
-  if (hours < 48) return t("runs.detail.diagnostics.age.hours", { count: hours })
-  return t("runs.detail.diagnostics.age.days", { count: Math.round(hours / 24) })
-}
 
 function valueString(value: unknown): string {
   if (typeof value === "string") return value.trim()
@@ -1018,28 +998,6 @@ function buildRunDiagnosis(run: AgentRunDetail, events: AgentRunEvent[], t: Admi
   }
 }
 
-function buildRuntimeDiagnosis(run: AgentRunDetail, t: AdminText): RuntimeDiagnosis {
-  const runtime = run.runtime
-  if (!runtime) {
-    const needsSnapshot = run.connector_type === "agent_daemon" && ["queued", "running", "failed"].includes(run.status)
-    return {
-      tone: needsSnapshot ? "warning" : "neutral",
-      health: t("runs.detail.diagnostics.runtimeHealth.noSnapshot"),
-      heartbeatAge: t("runs.detail.diagnostics.age.unknown"),
-      action: t("runs.detail.diagnostics.runtimeActions.noSnapshot"),
-    }
-  }
-  const live = (runtime.liveness ?? "").toLowerCase()
-  const heartbeatMs = runtime.last_heartbeat_at ? Date.parse(runtime.last_heartbeat_at) : NaN
-  const staleHeartbeat = run.status === "running" && Number.isFinite(heartbeatMs) && Date.now() - heartbeatMs > 120_000
-  if (/offline|unhealthy|error|degraded/.test(live)) {
-    return { tone: "error", health: t("runs.detail.diagnostics.runtimeHealth.offline"), heartbeatAge: fmtAge(runtime.last_heartbeat_at, t), action: t("runs.detail.diagnostics.runtimeActions.offline") }
-  }
-  if (staleHeartbeat) {
-    return { tone: "warning", health: t("runs.detail.diagnostics.runtimeHealth.stale"), heartbeatAge: fmtAge(runtime.last_heartbeat_at, t), action: t("runs.detail.diagnostics.runtimeActions.stale") }
-  }
-  return { tone: "success", health: t("runs.detail.diagnostics.runtimeHealth.ready"), heartbeatAge: fmtAge(runtime.last_heartbeat_at, t), action: t("runs.detail.diagnostics.runtimeActions.ready") }
-}
 
 function RunCancelDialog({ open, loading, onCancel, onConfirm }: { open: boolean; loading: boolean; onCancel: () => void; onConfirm: () => void }) {
   const { t } = useTranslation("admin")

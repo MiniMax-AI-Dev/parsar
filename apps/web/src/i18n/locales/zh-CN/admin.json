@@ -504,12 +504,14 @@
           "none": "无需处理。"
         },
         "runtimeHealth": {
+          "unknown": "未知",
           "noSnapshot": "无快照",
           "offline": "离线或不健康",
           "stale": "心跳过旧",
           "ready": "可用"
         },
         "runtimeActions": {
+          "unknown": "无法确认运行环境是否可用，请检查连接状态。",
           "noSnapshot": "检查这条 Run 是否绑定了 agent_daemon runtime。",
           "offline": "重连 daemon 或切换到可用设备。",
           "stale": "确认 daemon 仍在运行并上报心跳。",
