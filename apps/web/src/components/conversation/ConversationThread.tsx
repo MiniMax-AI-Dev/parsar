@@ -910,7 +910,7 @@ function runtimeErrorViewModel(
   const kindLabel = credentialKindLabel(
     credentialKind,
     language,
-    t("capabilities.credentials.none"),
+    credentialKind || t("myCredentials.kind.unknown"),
   )
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
   const { credential: href, capability: manageCapabilityHref } = conversationRecoveryLinks(workspaceID, capabilityID, credentialKind, current)

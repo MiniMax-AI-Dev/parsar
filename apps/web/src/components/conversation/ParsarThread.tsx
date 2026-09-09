@@ -299,7 +299,7 @@ function RuntimeErrorCard({ text, metadata }: { text: string; metadata: Record<s
   const capabilityName = stringMeta(metadata, "capability_name") || t("conversations.runtime_error.fallbackCapability")
   const credentialKind = stringMeta(metadata, "credential_kind")
   const capabilityID = stringMeta(metadata, "capability_id")
-  const kindLabel = credentialKindLabel(credentialKind, i18n.language, t("capabilities.credentials.none"))
+  const kindLabel = credentialKindLabel(credentialKind, i18n.language, credentialKind || t("myCredentials.kind.unknown"))
 
   let message = text || t("conversations.runtime_error.generic")
   let action = ""
