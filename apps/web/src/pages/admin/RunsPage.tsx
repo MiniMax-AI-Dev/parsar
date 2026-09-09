@@ -557,7 +557,7 @@ function RunDetailRail({
 
       <PropertyList>
         <Property label={t("runs.detail.connector")}>{connectorLabel(run.connector_type)}</Property>
-        <Property label={t("runs.detail.conversation")} mono>
+        <Property label={t("runs.detail.conversation")} mono className="h-auto min-h-7 whitespace-normal py-1 [overflow-wrap:anywhere]">
           {run.conversation_id ?? "—"}
         </Property>
         <Property label={t("runs.detail.created")} mono>{fmtDateTime(run.created_at)}</Property>
