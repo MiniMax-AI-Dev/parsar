@@ -1,20 +1,33 @@
 ---
 title: Repository conventions
-description: Package boundaries, generated contracts, and quality rules for Parsar changes.
+description: Preserve module boundaries and generated contracts when changing Parsar.
 ---
 
-Parsar follows a “grep before you write” rule: reuse an existing formatter, parser, error mapper, or shared frontend helper before adding a near-duplicate. Shared Web formatting and labels belong in `apps/web/src/lib/` rather than in individual pages.
+See the [contributor guide](https://github.com/MiniMax-AI-Dev/parsar/blob/main/CONTRIBUTING.md) for the full rules. This page covers the main conventions.
 
-## Size and ownership
+## Modules and shared logic
 
-Go files over roughly 500 lines and React components over roughly 400 lines are signals to extract a focused module. `server/internal/dev/routes.go`, `server/internal/store/store.go`, and `apps/web/src/pages/admin/AgentsPage.tsx` are already oversized; do not add more weight to them when touching adjacent behavior.
+Search for existing formatters, parsers, and error mappers before adding new ones. Keep error responses consistent per API surface. Shared Web logic owns formatting and labels used across pages.
+
+The server and daemon exchange execution data through the shared protocol. CLI process management belongs to the daemon; resource and session persistence belongs to the server. Split complex modules by responsibility instead of appending unrelated behavior to large files.
+
+## Runtime state
+
+Default configuration, logs, state, and caches live under `~/.parsar/`, not the current directory or repository root. User-supplied working directories must be absolute or start with `~/`.
 
 ## Generated contracts
 
-- Handler/API changes: add swaggo annotations, run `make openapi`, and review `docs/openapi/openapi.yaml`.
-- Database query changes: run `make sqlc-generate` and review the generated sqlc files.
-- Every change: run `make check` before reporting completion.
+| Change | Required action |
+| --- | --- |
+| API handler or interface | Maintain swaggo annotations, run `make openapi`, and inspect the generated contract. |
+| Database query | Run `make sqlc-generate` and inspect generated queries. |
+| Database schema | Add a migration; do not edit migrations already landed on main. |
+| Any change | Run `make check` before completion. |
 
-Prefer explicit error mapping and one response helper per API surface. Keep docs examples aligned with actual flag names, environment variables, enum values, and file paths.
+Maintain generated artifacts with their source changes. Do not hand-edit generated output.
 
-See [`AGENTS.md`](https://github.com/AllureCurtain/parsar/blob/main/AGENTS.md) for the short agent index and [`CONTRIBUTING.md`](https://github.com/AllureCurtain/parsar/blob/main/CONTRIBUTING.md) for the canonical long form.
+## Product documentation
+
+Describe current behavior and actionable workflows with entry points, fields, actions, and results. Example arguments, state values, and links must match the current version. Unavailable features must not appear as working procedures.
+
+Maintain English and Chinese page pairs. Separate deployment settings from everyday use, and keep development details in the developer section.

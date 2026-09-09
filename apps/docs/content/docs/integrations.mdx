@@ -1,42 +1,39 @@
 ---
-title: Integrations and connectors
-description: Connect Parsar to chat platforms, GitHub, models, and external runtimes.
+title: Chat integrations
+description: Connect Feishu, Slack, Discord, and Microsoft Teams from Integrations.
 ---
 
-Integrations connect a workspace to an identity provider, chat gateway, model provider, or execution service. Availability depends on the server configuration and the connector registry exposed by the deployment.
+Chat integrations let your team send requests to Agents from messaging platforms. Conversation and execution records remain in Parsar.
 
-## Integration categories
+## Where to start
 
-| Category | Parsar capabilities |
+Select a workspace and click **Integrations** in the sidebar. Click one of the four platform rows to open its configuration panel on the right. Only workspace owners and admins can edit it.
+
+| Platform | Current setup |
 | --- | --- |
-| Authentication | Email/password and configured OAuth providers, including GitHub OAuth when enabled |
-| Chat gateways | Feishu/Lark, Slack, Discord, and Microsoft Teams gateway paths in the server |
-| Model providers | Configurable model endpoints and encrypted provider credentials |
-| Agent connectors | Agent Daemon, HTTP Agent, and connector-specific dispatch |
-| Capability sources | MCP directory, Skills, Plugins, system prompts, and marketplace imports |
+| [Feishu](/feishu) | Scan to authorize and save a workspace bot connection automatically. |
+| [Slack](/slack) | Enter an App ID, Bot Token, and App-Level Token for Socket Mode. |
+| [Discord](/discord) | Enter an Application ID, Bot Token, and Public Key. |
+| [Microsoft Teams](/teams) | Enter an App ID and application password; a deployment administrator enables webhook reception. |
 
-The UI shows whether a gateway is `active`, `not_configured`, `degraded`, or `offline`. A listed gateway is not necessarily enabled in your deployment. Read the provider-specific pages for the exact credential fields and process flags: [Feishu](/feishu), [Slack](/slack), [Microsoft Teams](/teams), and [Discord](/discord). For personal GitHub OAuth, see [GitHub integration](/github).
+This page manages **workspace bots**. Feishu also has an Agent-specific bot entry, described in [Feishu](/feishu). Configure models in **Models**, connect devices in **Runtime**, and add MCP servers in **Capabilities**.
 
-## Connect a gateway safely
+## Confirm the setup
 
-1. Confirm that the server has the provider's required environment variables or secret configuration.
-2. Open **Settings → Connections** (or the connector section shown for the current Agent).
-3. Complete the provider authorization or enter the requested token.
-4. Select the workspace and Agent scope where applicable.
-5. Send a test message and verify the resulting Conversation and Run.
+For Slack, Discord, and Teams, turn on the enable switch and save. Saving with the switch off keeps a draft. Successful Feishu scan authorization saves and enables its connection automatically.
 
-Gateway credentials are secrets. Store them through the supported credential form; do not paste them into prompts, issues, logs, or source control.
+The list shows **Enabled**, **Configured**, **Incomplete**, or **Not configured**. These describe saved configuration, not a completed message-delivery test. Verify a message from the platform reaches the intended Agent, then inspect its Run in Parsar.
 
-## Message routing
+## Identity and workspace access
 
-For a chat gateway, Parsar resolves the receiving workspace and Agent, verifies the sender's identity and membership, then creates or resumes a Conversation and starts a Run. Group messages normally require an explicit bot mention. The exact command and thread behavior is connector-specific.
+Incoming messages require a linked Parsar identity, workspace membership, and access to the target Agent. Saving bot credentials does not add everyone on the platform to the workspace.
 
-## GitHub and repositories
+Feishu users can link their identity through configured Feishu login. Slack, Discord, and Teams currently have no user-facing self-service identity-linking page; deployment administrators must prepare the platform identity mappings before use. Saving a connector alone does not complete onboarding for new users on those platforms.
 
-GitHub OAuth is used only when the deployment has configured a client ID, secret, redirect URI, and scope. OAuth connection is separate from a Runtime's local checkout. A successful GitHub login does not grant an Agent permission to modify every repository; the Runtime working directory and Agent policy still apply.
+The chat gateway is Parsar's message-reception and routing service. There is no separate "secure connection gateway" settings page.
 
-## Disconnect and rotate
+## Rotate credentials or disable a connection
 
-Owners and admins should disconnect integrations that are no longer used and rotate provider tokens after a suspected exposure. Disconnecting a gateway stops new deliveries but does not delete existing Conversations, Runs, or audit records.
+For Slack, Discord, and Teams, enter replacement credentials in the same panel and save, or turn off the enable switch and save. Saved secret fields remain blank with a saved indicator; leaving them blank keeps the existing value. The Feishu panel offers **Scan again**, but currently has no separate disconnect button.
 
-For provider-specific deployment details, use the repository's `docs/deploy` runbooks and the generated API reference.
+Changing connector settings does not delete existing conversations or Runs. The deployment needs a stable encryption key; see [Deployment configuration](/configuration).

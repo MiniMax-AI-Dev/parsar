@@ -1,50 +1,43 @@
 ---
 title: How Parsar works
-description: Follow one request from the workspace to the Agent process and back.
+description: Follow a message to its result and understand the server and execution device.
 ---
 
-Parsar records and coordinates work. The connected Runtime executes it. Keeping this boundary explicit explains why a healthy Web console can still show a queued Run when its Runtime is offline.
+Parsar records and coordinates work; the coding CLI on an execution device performs it. The browser, Parsar server, device, and model service must each be available.
 
-## One execution path
+## How a message runs
 
-```text
-Web / IM / API
-      |
-      v
-Parsar server ---- PostgreSQL
-      |
-      | dispatch over the Agent Daemon protocol
-      v
-parsar-daemon or sandbox Runtime
-      |
-      v
-Claude Code / Codex / Pi / OpenCode
-      |
-      v
-events, output, artifacts, usage, terminal status
-      |
-      v
-Conversation, Run history, Audit, and Usage
-```
+1. You send a request in a conversation. Parsar selects the bound Agent or the Agents mentioned in the message.
+2. The server checks access, saves the message, and creates a Run.
+3. The Agent Daemon connector delivers the request to the selected Runtime. The daemon starts the engine with its model, instructions, capabilities, and working directory.
+4. The engine calls the model and tools, returning replies, tool events, and interaction requests to Parsar.
+5. You read replies in the conversation and resolve requests in the inbox. The Run records its final state when execution ends.
 
-## What the server owns
+Existing HTTP Agents execute through an external HTTP service without a local coding CLI. New Agents currently use a local device or cloud isolation. See [Create and configure an Agent](/create-agent).
 
-The server owns authentication, workspaces, Agent records, Runtime bindings, Run records, audit and usage persistence, and upstream engine session identifiers.
+## Responsibilities
 
-## What the daemon owns
+| Component | Responsibility |
+| --- | --- |
+| Browser | Send messages, display progress, resolve requests, and manage configuration. |
+| Parsar server | Authenticate and authorize access, save resources, dispatch runs, and record history and audit events. |
+| Device daemon | Discover coding CLIs, start processes, prepare working directories, and report events. |
+| Coding CLI and model service | Generate answers, invoke tools, and report results and usage. |
 
-`parsar-daemon` discovers local CLIs, starts and stops provider processes, selects a working directory, handles provider-specific environment, and translates CLI streams into the shared daemon protocol. It does not become the source of truth for Conversation or Run history.
+Local devices connect outbound to the server. The server does not access your local directory through the browser. An Agent uses files and networks accessible from its execution device.
 
-## Why a Run can be queued
+## Where results appear
 
-The server creates the Run before execution begins. Dispatch requires the Agent's explicitly bound Runtime to be enabled and reachable. If the Runtime is offline, at its concurrency limit, or missing the selected CLI or credentials, the Run can remain queued or fail with a user-facing reason.
+- **Conversations**: messages, replies, and current interaction requests.
+- **Runs → a record**: status, Steps, Artifacts, Audit, and recorded execution environment details.
+- **Settings → Usage**: token and cost data reported by the engine.
 
-## What is persisted
+Artifacts and usage depend on what execution submits. No artifact records produces an empty state; missing usage does not mean the model incurred no cost.
 
-Run details can include the request, status transitions, streamed events, output message, artifacts, usage records, Runtime snapshot, and transcript. This makes a Run inspectable after the daemon reconnects or the browser is refreshed.
+## When execution stops progressing
 
-## Related pages
+Queued means the Run has been created but execution has not started. Running means an executor has claimed it but has not finished. Neither proves the model has started returning output.
 
-- [Runtime and daemon setup](/quickstart)
-- [Core concepts](/concepts)
-- [Read runs, approvals, and logs](/runs-approvals-logs)
+Check the latest Run events, pending requests in **Inbox**, and device status on **Runtime**. Follow the recorded error to resolve an offline device, missing CLI, model rejection, or missing credentials. A device coming online does not automatically retry failed runs.
+
+The server retains received messages and run records across browser refreshes. Reconnecting a device and starting a new run are separate actions. See [Troubleshooting](/troubleshooting).

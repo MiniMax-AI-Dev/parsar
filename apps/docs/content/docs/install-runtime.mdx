@@ -1,39 +1,81 @@
 ---
 title: Install an Agent Runtime
-description: Install parsar-daemon, pair a machine, and verify its Runtime.
+description: Generate a connection command in Runtime to connect a computer or server.
 ---
 
-An Agent Runtime is a machine where `parsar-daemon` launches the selected Agent CLI. The installer supports macOS and Linux on `amd64` and `arm64`.
+Run `parsar-daemon` on the computer or server the Agent will use. It connects outbound to Parsar and starts the coding CLI installed on that machine.
 
-## Install
+## Before you start
 
-Run this command against the Parsar server that will own the Runtime:
+- Use a workspace owner or admin account to connect the device and create an Agent.
+- Install the CLI you intend to use. New Agents currently offer Claude Code, Codex, or pi; see [Agent engine comparison](/agent-tools).
+- Use the operating-system account that will run the daemon. Confirm the CLI is on its `PATH` and can start.
+- The machine must reach your Parsar server and model provider. Pairing a local device does not require inbound ports.
+- The installation command supports Linux and macOS on x64 and ARM64. On Windows, use WSL and install the CLI and run the connection command in the same WSL environment.
+
+## Connect a device
+
+1. Sign in, select the target workspace, and open **Runtime** in the sidebar.
+2. Click **Connect device** in the upper right.
+3. Enter a **Device name**, such as `my-laptop`, and click **Generate command**.
+4. Click **Copy command** and run it in a terminal on the target machine. It downloads the daemon and connects in the background; no separate binary installation is required.
+5. Return to the dialog, wait for **Device connected**, and click **Done**.
+6. Confirm the device is **Online** in the Runtime list and reports the required Agent engine.
+
+The pairing token in the command expires after **15 minutes** and can be used once. It cannot be recovered after closing the dialog. If pairing has not succeeded and the token expires or is lost, open **Connect device** again to generate a new command.
+
+## Use the device with an Agent
+
+Open **Agents → New Agent**, choose **Local device**, select the engine and the newly connected device, configure a model, and save. The device picker filters by engine: a device with only Codex installed will not appear for Claude Code.
+
+Send a small request, such as "Reply only with OK." Open **Runs**, confirm **Completed**, and inspect the execution environment in the details. An online device confirms the daemon connection; it does not validate model credentials.
+
+## The dialog keeps waiting
+
+The generated command connects in the background and writes errors to the target machine's log:
 
 ```bash
-curl -fsSL https://<your-parsar-server>/api/v1/parsar-daemon/install.sh | bash
+tail -n 100 ~/.parsar/parsar-daemon/default/connect.log
 ```
 
-The script first prefers a server-local binary and falls back to GitHub Releases. Set `PARSAR_DAEMON_VERSION=v0.1.0` to pin a release, or `PARSAR_DAEMON_REPO=owner/repo` to select a release repository. `PARSAR_DAEMON_OUT_DIR` changes the output directory; the default is `${HOME}/Downloads`.
+| Log or symptom | Action |
+| --- | --- |
+| No Agent CLI found | Install a CLI under the same operating-system account, check `PATH`, and rerun the command. A failed CLI preflight does not consume the token. |
+| `401` / `pair_invalid` | Generate a new command: the token expired or was already used. |
+| Server unreachable | Check the server address in the command. Another computer cannot use `127.0.0.1` to reach your Parsar server. |
+| CLI works in your terminal but is not detected | Check that you have not switched users or used `sudo`; installation paths differ between accounts. |
 
-The installer intentionally has no `--no-sandbox` flag. Unsupported operating systems or CPU architectures stop with an error instead of installing an incompatible binary.
+## Make the command available
 
-## Pair the daemon
+The connection command downloads the binary to `~/Downloads` and prints its full path after `Downloaded to`. It starts the daemon, but does not install a command on `PATH`. The filename includes the operating system and architecture, and can also include a release version.
 
-Create a Runtime in the Parsar UI and copy its short-lived pairing token. On the machine where the daemon will run:
+For Linux x64, including x64 WSL, a binary downloaded from your Parsar server is named `parsar-daemon-linux-amd64`. Install it under your own account:
 
 ```bash
-parsar-daemon connect \
-  --url https://<your-parsar-server> \
-  --token rtk_… \
-  --device-name build-runner-01
+mkdir -p ~/.parsar/bin
+install -m 755 ~/Downloads/parsar-daemon-linux-amd64 ~/.parsar/bin/parsar-daemon
+export PATH="$HOME/.parsar/bin:$PATH"
+parsar-daemon version
 ```
 
-Use `-b` to run in the background. The command scrubs the token from the child process arguments and passes it through the environment while pairing. The resulting long-lived runner credential is stored in the profile's `auth.json`.
+Replace the source path in `install` with the actual `Downloaded to` path on macOS, ARM64, or a versioned release download. The `export` applies to the current terminal. Add that same line to `~/.bashrc` for Bash or `~/.zshrc` for zsh to keep it in new terminals. You can also invoke the downloaded binary by its full path without installing it.
 
-The equivalent environment variables are `PARSAR_DAEMON_CONNECT_URL`, `PARSAR_DAEMON_CONNECT_TOKEN`, and `PARSAR_DAEMON_CONNECT_DEVICE_NAME`. Prefer a secret manager or protected shell history when supplying the token.
+## Stop and reconnect
 
-## Verify
+With `parsar-daemon` installed on `PATH`, use:
 
-Confirm that the Runtime is online in the workspace UI, then run a small Agent prompt. Inspect the Runtime snapshot and Run detail for the adapter, version, liveness, events, and usage. If it remains offline, check `connect.log`, the PID file, outbound network access, and the daemon's `PATH`.
+```bash
+parsar-daemon status
+parsar-daemon logs -n 100
+parsar-daemon stop
+```
 
-See [Runtimes and Agent Daemon](/runtimes), [Tokens and credential storage](/authentication-tokens), and [Agent tools](/agent-tools).
+Successful pairing saves the device credentials to `~/.parsar/parsar-daemon/default/auth.json`. After stopping the daemon or restarting the machine, reconnect using the saved credentials:
+
+```bash
+parsar-daemon connect -b
+```
+
+The pairing token cannot be reused, but a valid saved profile does not need another token. For a named profile, use `parsar-daemon connect --profile <name> -b`. Generate a new connection command only when the saved credentials are missing or no longer accepted. See [CLI reference](/cli) for profile management.
+
+See [Runtimes and execution locations](/runtimes) and [Troubleshooting](/troubleshooting).

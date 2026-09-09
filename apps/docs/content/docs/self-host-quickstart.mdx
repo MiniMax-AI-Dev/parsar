@@ -1,63 +1,54 @@
 ---
-title: Self-host quickstart
-description: Run Parsar with Docker Compose and complete the first-owner setup.
+title: Self-hosting quickstart
+description: Install the Parsar server, database, and default execution environment.
 ---
 
-The default self-hosted deployment runs the Parsar server, PostgreSQL, and a local Runtime service through Docker Compose.
+The default installation runs the Parsar server, PostgreSQL, and a local Runtime through Docker Compose.
 
 ## Requirements
 
-- Docker Engine with Docker Compose v2.
-- A Linux host for the Docker-managed Agent sandbox image. On a non-Linux
-  workstation, run the control plane on a Linux host and pair a local
-  `parsar-daemon`, or use an external Runtime. The installer does not expose a
-  `--no-sandbox` flag.
-- A persistent directory for Parsar data and PostgreSQL data.
+Install Docker Engine and Docker Compose v2, with working Linux-container support. On Windows, use WSL with a working Linux-container environment. Local-device CLIs must be installed in the environment that actually runs the daemon.
 
-## 1. Start the stack
+Installation downloads resources from GitHub and the container registry. Model calls still require your own provider account and valid credentials.
 
-For the supported one-command path:
+## Install
+
+Run in a terminal:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
 ```
 
-The installer writes generated configuration and state below `~/.parsar/`, pulls the configured images, starts PostgreSQL, `parsar-server`, and the default local Runtime, then waits for the health check.
+The installer generates configuration and keys, pulls images, starts services, and checks health. The default installation directory is `~/.parsar/`.
 
-For a checked-out repository, the root Compose file is also directly runnable:
+## Create the first account
 
-```bash
-docker compose up -d
-docker compose ps
-```
+Open `http://127.0.0.1:18080` and complete the setup form with account and workspace information. The account becomes the owner of the initial workspace.
 
-## 2. Create the first owner
+This loopback address works only on the installation machine. Configure a reachable address before inviting users or connecting other devices; see [Deployment configuration](/configuration).
 
-Open `http://127.0.0.1:18080` and complete the Web setup flow. The first registered user becomes the administrator and owns the initial Workspace.
+## Check the services
 
-## 3. Check health and logs
+Run from the installation directory:
 
 ```bash
+cd ~/.parsar
 docker compose ps
-docker compose logs -f parsar-server
+docker compose logs --tail=100 parsar-server
+curl -fsS http://127.0.0.1:18080/healthz
+curl -fsS http://127.0.0.1:18080/readyz
 ```
 
-The server exposes liveness and readiness probes. For the deployment smoke procedure, see `docs/deploy/health-and-smoke.md` in the repository.
+`healthz` checks server response; `readyz` checks readiness of dependencies including the database. Once the containers are up, follow [Quickstart](/quickstart) to configure a model and complete a real Run.
 
-## 4. Configure execution
+## Data and upgrades
 
-Open Runtime settings and confirm the default local Runtime, or pair a developer machine with `parsar-daemon`. Configure model credentials and create an Agent before sending work.
+The installer keeps database and server data under the installation directory. Back up the data and generated keys together. Replacing the encryption key directly prevents old credentials from being decrypted.
 
-## Data and secrets
+Running the installer again pulls current images and updates services. Back up before upgrading, then verify service health, login, and an Agent Run.
 
-Do not commit the generated `.env` or credentials. The installer keeps persistent data outside the repository. Production deployments must replace development defaults such as the database password, `PARSAR_MASTER_KEY`, and shared runtime token with stable random values.
+## API reference
 
-## API documentation
+The server's `/docs` route is Swagger UI and `/api/v1/openapi.yaml` is its OpenAPI contract. This website is a separate product-documentation app.
 
-The server also exposes the generated OpenAPI contract at `/api/v1/openapi.yaml` and a Swagger UI at `/docs`. Keep those API reference routes separate from this narrative guide.
-
-## Next steps
-
-- [Quickstart](/quickstart)
-- [How Parsar works](/how-parsar-works)
-- [Troubleshooting](/troubleshooting)
+See [Deployment configuration](/configuration) and [Troubleshooting](/troubleshooting).

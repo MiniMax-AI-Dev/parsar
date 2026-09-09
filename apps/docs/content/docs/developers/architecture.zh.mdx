@@ -1,18 +1,33 @@
 ---
 title: 架构
-description: 贡献者需要保持的服务边界与执行路径。
+description: Parsar 的服务、前端、执行设备和持久化边界。
 ---
 
-Parsar 由 Go 服务和两个前端组成：`server/` 中的 Go API/WebSocket 服务、`apps/web` 中的产品 SPA，以及本独立的 `apps/docs` 文档站。`apps/parsar-daemon` 中的 `parsar-daemon` 二进制负责将执行机器连接到服务端。
+本页面向参与开发和部署的读者。产品操作流程见[Parsar 的工作方式](/zh/how-parsar-works)。
 
-## 请求与执行边界
+## 组成部分
 
-服务端负责认证、工作区授权、Agent、Conversation、Run、能力、凭据、计划任务、审计记录和 Runtime 状态。PostgreSQL 是这些资源的事实来源。HTTP handler 应调用 store 和领域服务，不要直接访问其他包的私有状态。
+| 部分 | 当前实现 | 职责 |
+| --- | --- | --- |
+| 服务端 | Go、Chi、PostgreSQL | 认证、授权、资源管理、运行调度、持久化和审计。 |
+| 产品界面 | React、Vite | 调用 API、展示对话与运行、处理交互请求。 |
+| 文档站 | Next.js、Fumadocs、MDX | 独立部署的中英文产品文档。 |
+| Agent Daemon | Go 进程与编程 CLI 适配器 | 连接设备、发现引擎、管理子进程、回传事件。 |
 
-Web 前端调用 API 并订阅 Run 事件，不执行 Agent 工具。Daemon 维护 Runtime 连接、启动适配器、流式上报事件并报告存活状态。凭据跨越边界时只能通过 Runner 协议传递，不能写入面向用户的消息。
+产品界面由 Go 服务提供静态资源，文档站单独部署。数据库使用 PostgreSQL；迁移由 goose 管理，查询接口由 sqlc 生成。
 
-## 变更边界
+## 执行与持久化
 
-API 或 handler 变更需要 swaggo 注释并重新生成 `docs/openapi/openapi.yaml`。SQL 查询变更需要运行 sqlc 生成并更新生成文件。新增架构规则、所有权边界、必需检查或生成契约时，应写入规范来源 `CONTRIBUTING.md`，不能只写在 Issue 或 PR 描述中。
+服务端保存工作区、Agent、对话、Run、能力、凭据、交互请求及引擎会话标识。Daemon 管理执行机器上的 CLI 环境、工作目录和进程，不承担对话历史的持久化职责。
 
-完整仓库地图请阅读源代码仓库中的 [`docs/architecture.md`](https://github.com/AllureCurtain/parsar/blob/main/docs/architecture.md)。
+Agent 连接器决定派发协议，Runtime 绑定决定目标设备，引擎类型决定调用哪个 CLI。HTTP Agent 使用外部 HTTP 服务执行；这些概念不能合并成同一个执行模式字段。
+
+## 交互请求
+
+审批与用户输入请求先持久化，再展示到对话、收件箱或聊天平台。各入口共用交互处理服务；Runtime 确认收到决定后，服务端才记录处理结果。运行终止会关闭尚未完成的交互，超时请求明确拒绝或取消。
+
+## 扩展边界
+
+新引擎复用 daemon 的进程管理和共享协议。新 Runtime Provider 管理环境的创建、续期与销毁。新聊天连接器处理平台消息和回传，不直接实现独立的权限或审批规则。
+
+新增或调整架构边界时，同步维护[贡献规范](https://github.com/MiniMax-AI-Dev/parsar/blob/main/CONTRIBUTING.md)。

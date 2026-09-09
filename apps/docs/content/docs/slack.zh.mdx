@@ -1,18 +1,35 @@
 ---
 title: Slack
-description: 配置 Slack Socket Mode 和工作区级 Slack 连接器。
+description: 在集成页面配置工作区 Slack 机器人的 Socket 模式连接。
 ---
 
-Slack 连接器保存 `app_id`、`bot_token_ref`、`app_token_ref`、`signing_secret_ref`、`event_mode` 和 `enabled`。`socket` 是规范化默认模式；`events`、`events_api`、`http`、`webhook` 会规范化为 `events`。
+入口：**左侧集成 → Slack**。点击平台行后，在右侧填写配置。只有工作区所有者和管理员可以编辑。
 
-## 启用共享机器人
+## 准备 Slack 应用
 
-设置 `PARSAR_SLACK_SOCKET=true`，并提供 `PARSAR_SLACK_BOT_TOKEN`（`xoxb-…`）和 `PARSAR_SLACK_APP_TOKEN`（`xapp-…`）。`PARSAR_SLACK_APP_ID` 可选。配置 `PARSAR_MASTER_KEY` 后启用卡片操作路由和按团队从数据库解析 Token；没有 master key 时只能确认收到按钮点击。
+在 [Slack 应用管理](https://api.slack.com/apps)中创建应用，启用 Socket Mode，并安装到要使用的 Slack 工作区。准备以下值：
 
-设置 `PARSAR_SLACK_CONNECTORS=true` 启用数据库驱动的多租户 reconciler。工作区连接器需要 App ID、Bot Token 引用，以及 Socket Mode 的 App Token 引用或 Events API 模式的 Signing Secret 引用。
+| Parsar 字段 | Slack 中的来源 |
+| --- | --- |
+| App ID | Basic Information 中的 App ID。 |
+| Bot Token | OAuth & Permissions 中的 Bot User OAuth Token，前缀为 `xoxb-`。 |
+| App-Level Token | Basic Information 中生成的 App-Level Token，授予 `connections:write`，前缀为 `xapp-`。 |
 
-## 路由
+按 Slack 应用设置授予收发消息权限、订阅需要的消息事件，并把机器人加入要使用的频道。
 
-Parsar 将 Slack team/channel 映射到工作区和 Agent，验证发送者后创建或恢复 Conversation。审批和选择卡片的交互会通过连接器回传。凭据泄露后同时轮换 Bot Token 和 App Token，Token 引用不要进入源码管理。
+## 保存连接
 
-参见[集成](/zh/integrations)、[配置](/zh/configuration)和[运行、审批和日志](/zh/runs-approvals-logs)。
+1. 打开**集成 → Slack**。
+2. 填写 App ID 和 Bot Token，**事件模式**选择 **Socket 模式**。
+3. 填写 App-Level Token，打开**启用 Slack 机器人**并保存。
+4. 确认列表显示**已启用**。关闭启用开关时，按钮为**保存草稿**。
+
+当前接收端只为 Socket 模式启动连接。表单虽有 **Events API** 选项，但当前服务没有对应的 Slack HTTP 事件接收入口，不要选用它配置可运行的集成。
+
+## 验证与限制
+
+服务端会自动读取已启用的工作区连接，不需要再设置 `PARSAR_SLACK_CONNECTORS`。部署必须已有 `PARSAR_MASTER_KEY`，且允许出站连接 Slack。
+
+发送者还需要平台身份映射和工作区访问权限。当前没有 Slack 自助账号绑定入口，需先由部署管理员准备映射，再在 Slack 中验证消息，最后到 Parsar 的**运行**检查结果。
+
+令牌更换或暂停使用时，回到同一面板更新后保存。参见[聊天集成](/zh/integrations)。

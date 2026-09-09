@@ -1,39 +1,49 @@
 ---
 title: Scheduled tasks
-description: Run an Agent on a cron schedule and inspect each execution.
+description: Schedule Agent work with frequency, time, and timezone controls, then inspect the result.
 ---
 
-Scheduled Tasks trigger an Agent Run at a defined time. They are workspace resources anchored to one Agent; they are not a replacement for a one-off conversation.
+A scheduled task sends its saved Prompt to one Agent. Each trigger creates a separate conversation and Run. Results remain available in **Conversations** and **Runs**.
 
-## Create a schedule
+## Create a task
 
-1. Open **Scheduled tasks** for the current workspace.
-2. Choose an active Agent with a valid Runtime.
-3. Enter the task prompt, a five-field cron expression, and an IANA timezone.
-4. Choose whether the task is enabled and configure an optional Feishu delivery target when supported.
-5. Save and review the next scheduled time.
+Owners, admins, and members can manage scheduled tasks. Viewers can only read them.
 
-The server calculates the next fire time in UTC while interpreting the expression in the selected timezone.
+1. Open **Scheduled Tasks** in the sidebar and click **New task**.
+2. Enter a **Task name** and choose an enabled **Agent**.
+3. Enter the **Prompt** describing the work to perform each time.
+4. Select the **Frequency** and time. Preset schedules use form controls, without requiring cron text.
+5. Choose a **Timezone**, review the schedule preview, and click **Save**.
 
-## Manage and test
+| Frequency | Time controls |
+| --- | --- |
+| Daily / Weekdays | Time of day; weekdays means Monday through Friday. |
+| Weekly | Day of week and time. |
+| Monthly | Day of month and time. |
+| Hourly | Minute. |
+| Custom | A five-field cron expression: minute, hour, day, month, weekday. |
 
-Use the task row to edit or delete a schedule, disable it temporarily, or choose **Run now**. A manual run still creates a normal Agent Run with its own conversation and audit trail.
+For a daily run at 09:00 Beijing time, choose **Daily**, **09:00**, and **Asia/Shanghai**. The list's `0 9 * * *` is the generated representation of that schedule.
 
-Each scheduled task records the most recent Run, consecutive failures, and the next run time. A task can be listed from the workspace or from its Agent detail page.
+New tasks are enabled when saved, and the list shows **Next run**. The timezone initially comes from the browser; verify it before saving. Editing changes the name, Prompt, and schedule, but not the execution Agent.
 
-## Failure behavior
+## Run now and inspect results
 
-The scheduler tracks consecutive terminal failures per task. `failed`, `cancelled`, and `interrupted` increment the counter; `completed` resets it to zero. After **5 consecutive failures**, Parsar disables the task and records `last_status=auto_disabled`. A manual **Run now** does not change this counter. If a fire overlaps an existing execution, it is recorded as `skipped_overlap` rather than starting a duplicate Run.
+1. Click the play icon on the task row, labeled **Run now** on hover.
+2. The confirmation means an execution request was created; it does not mean the Agent has finished.
+3. Open **Runs** in the sidebar, find the new record by Agent and time, and open **Steps** in its right-hand details.
+4. When execution ends, the Run shows **Completed**, **Failed**, **Cancelled**, or **Interrupted**. Click **Open conversation** to read the reply.
 
-An automatically disabled task should be treated as an operational signal. Check Runtime liveness, credentials, Agent configuration, and the original error before re-enabling it.
+The scheduled-task list currently does not continuously poll execution results. While it stays open, its status icon retains the last loaded value. Reload the page to fetch the latest status. A stale Running icon alone does not establish that execution is stuck.
 
-Scheduled Runs use `trigger_source=scheduled_task`. Runs created by an inbound platform message use `trigger_source=message`; the database also reserves `webhook` for an external-event trigger source, but Parsar does not currently expose a generic user-configurable webhook endpoint. Feishu, Slack, Teams, and Discord inbound events are documented under [Integrations](/integrations).
+## Manage the schedule
 
-## Safe scheduling
+Each row offers **Edit**, **Run now**, enable or disable, and **Delete**. Disabling stops future automatic triggers but still allows a manual run. Deleting preserves historical Runs. The creation form has no disabled-state option; save the task first, then disable it.
 
-- Start with a disabled schedule and use **Run now** to validate the prompt.
-- Use an explicit timezone instead of relying on the server's local timezone.
-- Keep prompts idempotent when the same schedule may be retried.
-- Review the Agent's Access and capability credentials before enabling delivery to a chat platform.
+Both automatic scheduling and **Run now** prevent overlap while the previous Run is queued or running. A repeated manual trigger returns `a run is already active for this task` and creates no new Run. Wait for the active Run to finish, or cancel it in Run details, before triggering again. Manual execution does not change the next scheduled time.
 
-See [Runtimes and Agent Daemon](/runtimes) and [View Runs, approvals, and logs](/runs-approvals-logs).
+At the next due time, the scheduler inspects the previous result. Failure, cancellation, or interruption increments the consecutive-failure count; completion resets it. After **five** failures, the task is disabled automatically. A manual trigger does not immediately change that counter. Fix the error before re-enabling the schedule.
+
+## Investigate a long-running task
+
+Check the Run's latest steps, pending Inbox requests, and device status. A real Agent waits for model and tool work; a test Agent's fixed reply does not establish the duration of a real task. With no new events, start with the Run checks in [Troubleshooting](/troubleshooting).

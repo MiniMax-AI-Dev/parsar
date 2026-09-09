@@ -1,20 +1,33 @@
 ---
 title: 仓库约定
-description: Parsar 变更中的包边界、生成契约与质量规则。
+description: 修改 Parsar 时需要保持的模块边界与生成契约。
 ---
 
-Parsar 遵循“先搜索再编写”：新增近似实现前，先复用已有 formatter、parser、错误映射器或共享前端 helper。Web 的共享格式化和标签逻辑应放在 `apps/web/src/lib/`，不要复制到各个页面。
+完整规范见[贡献指南](https://github.com/MiniMax-AI-Dev/parsar/blob/main/CONTRIBUTING.md)。本页列出开发时需要遵守的主要约定。
 
-## 文件大小与所有权
+## 模块与共享逻辑
 
-Go 文件超过约 500 行、React 组件超过约 400 行时，应考虑拆出聚焦模块。`server/internal/dev/routes.go`、`server/internal/store/store.go` 和 `apps/web/src/pages/admin/AgentsPage.tsx` 已经偏大，修改相邻行为时不要继续堆积代码。
+先搜索并复用已有的格式化、解析和错误映射工具。每个 API 面使用一致的错误响应；跨页面的格式化和标签由 Web 共享层维护。
+
+服务端和 daemon 只通过共享协议交换执行数据。CLI 的进程管理留在 daemon，资源与会话的持久化留在服务端。复杂模块按职责拆分，不持续向大文件追加无关逻辑。
+
+## 运行状态
+
+默认配置、日志、状态和缓存保存在 `~/.parsar/`，不写入当前工作目录或代码仓库根目录。用户指定的工作目录必须是绝对路径或以 `~/` 开头。
 
 ## 生成契约
 
-- Handler/API 变更：添加 swaggo 注释，运行 `make openapi`，检查 `docs/openapi/openapi.yaml`。
-- 数据库查询变更：运行 `make sqlc-generate`，检查生成的 sqlc 文件。
-- 每次变更：在报告完成前运行 `make check`。
+| 修改 | 必需操作 |
+| --- | --- |
+| API Handler 或接口定义 | 维护 swaggo 注释，运行 `make openapi` 并检查生成契约。 |
+| 数据库查询 | 运行 `make sqlc-generate` 并检查生成查询代码。 |
+| 数据库结构 | 新增迁移，不修改已进入 main 的旧迁移。 |
+| 任意修改 | 完成前运行 `make check`。 |
 
-优先使用明确的错误映射，并为每个 API 面保留一个响应 helper。文档示例必须与真实 flag、环境变量、枚举值和文件路径保持一致。
+生成文件随源变更一起维护，不手工编辑生成结果。
 
-简要 Agent 索引见 [`AGENTS.md`](https://github.com/AllureCurtain/parsar/blob/main/AGENTS.md)，完整规范见 [`CONTRIBUTING.md`](https://github.com/AllureCurtain/parsar/blob/main/CONTRIBUTING.md)。
+## 产品文档
+
+文档应说明当前实现与可操作流程：给出入口、字段、动作和结果。示例参数、状态值与链接必须与当前版本一致；未开放的功能不能写成已可用的操作步骤。
+
+中英文页成对维护。部署参数与日常使用步骤分开，开发细节集中在开发者章节。

@@ -1,47 +1,47 @@
 ---
 title: Workspaces
-description: Understand the workspace boundary, membership, and lifecycle in Parsar.
+description: Create, switch, and manage your team's shared workspace.
 ---
 
-A workspace is Parsar's tenant boundary. Agents, conversations, runs, runtimes, capabilities, credentials, scheduled tasks, and audit records are scoped to a workspace.
+A workspace holds team members, Agents, conversations, runs, capabilities, devices, and integrations. The **Parsar / workspace name** control at the top left is the workspace switcher.
 
-## What belongs to a workspace
-
-| Area | Workspace-scoped data |
-| --- | --- |
-| Team | Members, roles, invitations, and join requests |
-| Agents | Agent identity, connector, visibility, capabilities, and runtime binding |
-| Execution | Conversations, runs, approvals, artifacts, and usage records |
-| Operations | Runtimes, daemon pairings, scheduled tasks, and audit events |
-| Configuration | Models, credentials, secrets, connectors, and imported capabilities |
-
-The workspace boundary is also the first permission check on API requests. Selecting another workspace changes the active scope; it does not move or copy data.
+The [model catalog](/models-credentials) is shared across the Parsar instance. Switching workspaces does not create a separate model catalog.
 
 ## Create a workspace
 
-1. Sign in to Parsar.
-2. If your account has no memberships, complete the onboarding form to create the first workspace.
-3. Otherwise open the workspace switcher and choose **Create workspace**.
-4. Enter a display name and choose `private` or `public` visibility.
+1. Click the workspace name at the top left.
+2. Choose **New workspace**.
+3. Enter a **Name** and choose **Private** or **Public** visibility.
+4. Click **Create**.
 
-The creator becomes the initial `owner`. A private workspace is invitation-only. A public workspace can appear in discovery and accept join requests, subject to the server's registration policy.
+The creator becomes the workspace's `owner`. An account with no workspace membership first sees an onboarding page after signing in. That page asks only for a workspace name and creates a private workspace. Use the workspace switcher afterward to change its visibility.
 
-## Switch, join, or leave
+Private workspaces accept members through invitations or an administrator adding them. Public workspaces also appear in discovery for signed-in users. Public visibility does not expose conversations or runs; an applicant still needs approval to join.
 
-The workspace switcher lists workspaces in which your account has an active membership. A public workspace can be discovered and joined through a request flow; an owner or admin approves or rejects pending requests.
+## Switch or request access
 
-Leaving a workspace removes your active membership. Before leaving, move ownership of any runtime or agent configuration that the team still needs. The final owner cannot leave until another member is promoted.
+The switcher lists workspaces you have joined. Click a name to switch. This changes the current scope without moving or copying data.
 
-## Update or archive
+Choose a public workspace in the discovery area and submit a join request. A reason is optional. Use **Withdraw** while the request is pending. Owners and admins process requests in the **Pending** section of **Members** in the sidebar.
 
-Owners and admins can update workspace metadata. Archiving is a soft lifecycle operation: it removes the workspace from normal active use while preserving server-side records according to the retention policy. It is different from deleting a resource in the UI; always verify the current confirmation dialog before destructive actions.
+## Change the name or visibility
 
-## Permission boundaries
+Owners and admins open the workspace switcher and click the pencil icon (**Rename workspace**) beside a workspace. Update the name or visibility and save.
 
-Workspace membership is necessary but not sufficient to run an Agent. The Agent's own visibility and Access policy, the selected Runtime, and the required credentials are checked independently. See [Members and roles](/members-roles), [Create and configure an Agent](/create-agent), and [Capabilities](/capabilities).
+## Archive a workspace
+
+Owners and admins click the archive icon (**Archive workspace**) on the same row and confirm.
+
+Archiving removes the workspace from the switcher and discovery, closes normal access, and preserves historical data. The current UI has no restore action. The server rejects archiving when other workspaces depend on its marketplace capabilities.
+
+## Membership and resource access
+
+Workspace membership and Agent access are checked separately. Members must meet an Agent's access settings to use it. Viewers can read but cannot start runs or resolve approvals.
+
+The workspace menu currently has no leave action. Member removal is available on **Members**; see [Members and roles](/members-roles) for permissions.
 
 ## Next steps
 
 - [Members and roles](/members-roles)
 - [Create and configure an Agent](/create-agent)
-- [Self-hosting quickstart](/self-host-quickstart)
+- [Conversations and shared conversations](/conversations)

@@ -1,70 +1,50 @@
 ---
 title: 快速上手
-description: 安装 Parsar、连接执行 Runtime、创建 Agent，并完成第一次运行。
+description: 准备模型和设备，创建 Agent，完成第一次对话。
 ---
 
-这篇指南使用默认的 Docker Compose 安装路径，带你从空环境完成一次 Agent Run。
+这篇指南带你在 Parsar 中完成一次真实的 Agent 运行。已经有可登录的 Parsar 服务时，从配置模型开始。
 
-## 开始前准备
+## 1. 打开 Parsar
 
-- Docker Engine 和 Docker Compose v2。
-- 一台可以运行 Parsar 服务和 PostgreSQL 容器的机器。
-- 在 daemon 或沙盒实际执行的机器上安装 Claude Code、Codex、Pi 或 OpenCode 之一。
+还没有服务时，按[自托管快速上手](/zh/self-host-quickstart)安装。默认访问地址是 `http://127.0.0.1:18080`；远程部署使用管理员提供的地址。
 
-## 1. 安装 Parsar
+首次打开全新实例时，完成初始化表单，创建账号和工作区。已有工作区时，登录并在左上角选择它。
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
-```
+以下配置步骤需要工作区所有者或管理员权限。成员可以直接使用管理员已配置好的 Agent 开始对话。
 
-打开 `http://127.0.0.1:18080`。安装引导中创建的第一个账号会成为工作区 Owner 和管理员。
+## 2. 配置模型
 
-安装器会把生成的配置、密钥、数据库文件和 Runtime 状态放在 `~/.parsar/` 下。
+打开左侧**模型 → 新建模型**，填写服务商、模型标识和 API 地址。首次运行选择共享 Key 模式并填写有效的 API Key。保存后执行模型的**测试连接**，检查测试结果。完整字段说明见[模型与凭据](/zh/models-credentials)。
 
-## 2. 确认 Runtime
+## 3. 准备执行设备
 
-进入管理控制台的 Runtime 页面。默认本地安装会提供一个可直接使用的沙盒 Runtime。如果要连接开发者电脑，可以在 Runtime 页面生成一次性配对 Token，然后执行：
+打开左侧的**执行层**。默认 Compose 部署自带本地 Runtime；确认它在线并提供要使用的引擎。
 
-```bash
-parsar-daemon connect --url https://your-parsar.example --token <pairing-token> -b
-```
+要使用自己的电脑，点击**接入新设备**，输入设备名称，生成连接命令并在已安装 CLI 的电脑上执行。详细步骤见[安装 Agent Runtime](/zh/install-runtime)。
 
-daemon 的 Profile 保存在 `~/.parsar/parsar-daemon/<profile>/`，并持续向服务端上报心跳。
+## 4. 创建 Agent
 
-成功标志：Runtime 列表中出现已启用且 liveness 为 `online` 的运行环境。
+1. 打开 **Agent → 新建 Agent**，填写名称。
+2. 选择**本地设备**，选择 Claude Code、Codex 或 pi。
+3. 选择支持该引擎的在线设备和刚配置的模型。
+4. 本地项目需要指定目录时填写绝对路径，例如 `/home/me/projects/demo`。这是执行设备上的路径。
+5. 保存 Agent。能力可以在首次运行成功后再添加。
 
-## 3. 创建 Agent
+## 5. 发送第一条消息
 
-打开 **Agent**，点击 **新建 Agent**，配置：
+点击 Agent 的**聊一下**操作，发送：`只回复 OK，不使用工具。`
 
-- 名称和可选描述；
-- 支持的连接器和模型；
-- 明确选择 Runtime：本地、沙盒或外部运行环境；
-- 可选的 Skill、MCP、Plugin、System Prompt 或 Bundle 能力。
+回复出现在对话时间线中。需要你确认操作或回答问题时，在请求卡片或左侧**收件箱**完成处理。
 
-成功标志：Agent 出现在工作区列表中，并且没有因为 Runtime 未绑定或离线而被阻塞。
+## 6. 确认结果
 
-## 4. 发送第一条消息
+打开左侧**运行**，点击刚创建的记录。状态为**已完成**后，用底部的**打开对话**检查回复。**Steps**（步骤）查看运行事件，**设置 → 用量**查看模型消耗。
 
-打开 **对话**，创建一个对话，选择 Agent，发送一条简单请求，例如：`介绍一下这个工作区的组织方式。`
-
-Parsar 会创建一次 Agent Run，并把进度、工具事件和最终回复写入对话时间线。
-
-## 5. 验证结果
-
-打开 **运行** 页面或对话时间线。成功运行会从 `queued`、`running` 进入 `completed`。详情中可以查看 Runtime 快照、输出消息、产物、用量和事件历史。
-
-## 常见问题
-
-| 现象 | 优先检查 |
-| --- | --- |
-| 没有可用 Runtime | 确认沙盒健康，或确认 daemon 使用了正确的服务地址完成配对。 |
-| 运行一直排队 | 检查 Agent 是否明确绑定了在线 Runtime，以及是否达到并发上限。 |
-| 运行立即失败 | 检查模型凭据，以及对应 CLI 是否安装并完成登录。 |
-| 请求等待人工决定 | 打开审批页面，处理权限请求或用户选择请求。 |
+没有回复时，先查看 Run 的错误和步骤，再检查执行设备和模型；不要仅凭设备在线判断配置成功。
 
 ## 接下来
 
-- [核心概念](/zh/concepts)
 - [创建和配置 Agent](/zh/create-agent)
-- [查看运行、审批和日志](/zh/runs-approvals-logs)
+- [对话与共享对话](/zh/conversations)
+- [定时任务](/zh/scheduled-tasks)

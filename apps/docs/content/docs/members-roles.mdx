@@ -1,53 +1,49 @@
 ---
 title: Members and roles
-description: Manage workspace members, invitations, join requests, and role boundaries.
+description: Invite members, process join requests, and manage workspace roles.
 ---
 
-Every active workspace membership has one role. Parsar currently supports `owner`, `admin`, `member`, and `viewer`.
+Open **Members** in the sidebar. The page lists current members, pending join requests, and pending invitations.
 
-Role is separate from membership status. A membership can be `pending`, `active`, or `rejected`; only `active` rows participate in access checks. `viewer` is read-only, while `member` can use resources when the Agent's own access policy allows it.
+## Roles and permissions
 
-## Role summary
-
-| Operation | owner | admin | member | viewer |
+| Action | Owner | Admin | Member | Viewer |
 | --- | --- | --- | --- | --- |
 | View the workspace | Yes | Yes | Yes | Yes |
-| Use resources allowed by Agent Access | Yes | Yes | Yes | No |
-| Invite or manage members | Yes | Yes | No | No |
-| Manage workspace settings | Yes | Yes | No | No |
-| Change an owner | Yes | No | No | No |
-| Delete or archive the workspace | Yes | No | No | No |
+| Run permitted Agents and resolve interactions | Yes | Yes | Yes | No |
+| Create invitation links | Yes, with a role choice | Yes, with a role choice | Yes, Member only | No |
+| Add existing users and approve join requests | Yes | Yes | No | No |
+| Change or remove non-owner memberships | Yes | Yes | No | No |
+| Update and archive the workspace | Yes | Yes | No | No |
 
-`viewer` is read-only at the workspace level. Agent Access remains a separate check for every role; an owner or admin cannot use an Agent whose Access policy does not include them.
+Invitation and existing-user forms offer Owner, Admin, Member, and Viewer roles. New forms default to Member.
 
-## Invite a member
+An existing Owner cannot be changed or removed on the Members page. Editing an existing member's role cannot promote them to Owner, and the current UI has no ownership transfer flow. Agent access is separate from membership roles and is also checked for owners and admins starting runs.
 
-1. Open **Settings → Members**.
-2. Choose **Invite member**.
-3. Enter the user's email and optional display name.
-4. Select a role and submit.
+## Invite a new member
 
-Owners and admins can grant `admin`, `member`, or `viewer` roles. Only an owner can promote another owner or remove an owner, and the server preserves at least one owner. Invitations do not directly create an owner membership.
+1. Open **Members → Invite new member**.
+2. On **Invite link**, enter the email and optional name.
+3. Owners and admins choose a role. Invitations created by members use the Member role.
+4. Click **Create invitation**, then **Copy invite link**, and send the link to the recipient.
 
-## Join requests
+The link expires after **72 hours** and can be accepted once. The recipient opens it, checks the workspace and email, enters and confirms a password, and clicks **Set password and join**.
 
-Public workspaces can receive self-service join requests. Owners and admins see pending requests in **Members**, where they can approve or reject them. A requester can withdraw their own pending request. Rejected membership rows are retained for audit and do not block a later request.
+The invitation page does not require signing in first. For an existing account, acceptance joins that account and updates its email login password to the supplied password. Use **Existing users** below to add an existing account without changing its password.
+
+## Add existing users
+
+Owners and admins open **Members → Invite new member → Existing users**, search by name or email, select users and a role, and click **Add**. Selected users join immediately without an invitation link.
+
+## Manage invitations and join requests
+
+- **Pending invitations**: copy links, change invitation roles, or revoke invitations. Revocation invalidates the link immediately. Owners and admins manage workspace invitations. Members can view and revoke only their own invitations and cannot change their roles.
+- **Pending**: owners and admins click **Approve** or **Reject** beside a join request. Rejected applicants can apply again.
 
 ## Change a role or remove a member
 
-Owners and admins can change `admin`, `member`, and `viewer` memberships. Only an owner can promote, demote, or remove another owner. Parsar always preserves at least one owner.
+Owners and admins use the role icon on a non-owner member's row to change the role, or click the remove icon and confirm.
 
-Removing a member immediately revokes workspace access. Their historical conversations, runs, messages, and audit records remain associated with the workspace. Runtime ownership and Agent bindings owned by that member are disabled or detached according to the resource lifecycle rules; review the resulting warnings before confirming.
+Removal revokes membership in the current workspace. It does not delete the account, historical conversations, runs, or audit records, and does not automatically stop the user's Agents or Runtimes. Disable the Agent to prevent new execution requests; follow [Runtimes](/runtimes) to stop or remove a device.
 
-## Troubleshooting invitations
-
-- If the invite action is unavailable, verify that you are an owner or admin and that a workspace is selected.
-- If a user cannot join, check that the invitation email matches the account they use to sign in.
-- If a public workspace does not appear in discovery, check its visibility and the server's registration policy.
-- If a role change appears delayed, refresh the Members page; role changes are enforced by the API immediately.
-
-## Next steps
-
-- [Workspaces](/workspace)
-- [Create and configure an Agent](/create-agent)
-- [Security model](/security)
+See [Workspaces](/workspace) and [Security model](/security).

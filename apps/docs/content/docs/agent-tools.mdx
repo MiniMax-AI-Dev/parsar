@@ -1,45 +1,41 @@
 ---
-title: Agent tools and adapters
-description: Understand the coding tools that a Runtime can launch for an Agent.
+title: Agent engine comparison
+description: Choose Claude Code, Codex, or pi when creating an Agent.
 ---
 
-An Agent connector describes how Parsar dispatches work; an agent kind describes the tool or adapter that runs inside the Runtime. Keeping these concepts separate makes provider failures easier to diagnose.
+An Agent engine is the coding CLI that performs work on the execution device. Select it in **Agents → New Agent → Agent engine**, or open an existing Agent's details to inspect its configuration.
 
-## Agent Daemon adapter kinds
+## Available engines
 
-The four accepted `config.agent_kind` values are `claude_code`, `codex`, `opencode`, and `pi`. Availability and version are discovered when the daemon connects; an Agent configuration alone does not install a tool.
+| Engine | Selectable for a new Agent | Permission requests | Session resume | Usage reporting |
+| --- | --- | --- | --- | --- |
+| Claude Code | Yes | Supported | Supported | Supported |
+| Codex | Yes | Supported | Supported | Supported |
+| pi | Yes | No interactive approval | Supported | Supported |
+| OpenCode | Disabled option | Not supported | Not supported | Supported |
 
-| Adapter | Streaming | Permission requests | Usage | Resume |
-| --- | ---: | ---: | ---: | ---: |
-| `claude_code` | Yes | Yes | Yes | Yes |
-| `codex` | Yes | Yes | Yes | Yes |
-| `opencode` | Yes | No advertised support | Yes | No advertised support |
-| `pi` | Yes | No (`--no-approve`) | Yes | Yes |
+The OpenCode adapter can still appear in existing device and Agent records, but the creation form does not allow selecting it. Usage comes from each CLI; Parsar does not reconstruct missing values from the provider's billing system.
 
-## Install on the execution machine
+Codex also has a collaboration mode setting. Select **Plan** when the Agent needs its user-input question tool. Prompt wording alone does not enable tools restricted to that mode.
 
-1. Install the chosen CLI using its vendor instructions.
-2. Authenticate it as the operating-system user that runs `parsar-daemon`.
-3. Confirm the executable is on `PATH`, or configure an absolute binary path where supported.
-4. Pair the daemon and verify the Runtime is online.
-5. Run a small prompt and inspect the Runtime snapshot for the selected adapter.
+## Where to install
 
-Do not authenticate a shared machine with a personal account unless the team has agreed on that ownership and its audit implications.
+For a local device, install the CLI on that device using its official instructions and ensure the daemon's operating-system account can find it. Selecting an engine in Parsar does not install the CLI.
 
-## Capability compatibility
+For cloud isolation, the deployment's sandbox image supplies the coding tools. The workspace selects an engine and model; deployment administrators maintain the image and provider configuration.
 
-Capabilities are rendered for the target adapter. A Skill, MCP server, Plugin, or System Prompt that is valid for one tool may be unsupported by another. Parsar records disabled or skipped capability notices rather than pretending the tool was available.
+After connecting a device, open **Runtime** to see its reported engines and versions. Follow [Install an Agent Runtime](/install-runtime) for the connection steps.
 
-When an Agent Run reports an unsupported capability, check the adapter kind, capability type, version, and required credentials before changing the Agent prompt.
+## Engine, device, and connector
 
-## Provider error categories
+- **Agent engine** identifies the coding tool.
+- **Execution device** identifies the machine running it.
+- The Run's **Connector** column identifies how Parsar delivers the execution. Local devices and cloud isolation use **Agent Daemon**.
 
-| Category | First check |
-| --- | --- |
-| Missing executable | Installation and `PATH` on the daemon host |
-| Authentication or quota | Tool login and provider account |
-| Unsupported capability | Adapter compatibility and capability version |
-| Network failure | Daemon egress and provider endpoint |
-| Invalid configuration | Agent model, connector, Runtime, and credential bindings |
+**HTTP Agent** delivers work to an external HTTP service; it is not an installable coding CLI. The **External Agent** creation option is currently disabled. Existing HTTP Agent records still appear in Runs. Ordinary users do not need to configure a separate HTTP Agent page.
 
-See [Runtimes and Agent Daemon](/runtimes), [Capabilities](/capabilities), and [Troubleshooting](/troubleshooting).
+## A capability is not taking effect
+
+Open **Runs → the record → Steps** to inspect capability resolution and execution errors, then check the Agent's capability version and required credentials. Skill, MCP, and Plugin support varies by engine; a saved binding alone does not prove the tool loaded.
+
+See [Capabilities, Skills, and MCP](/capabilities) and [Runs, approvals, and logs](/runs-approvals-logs).

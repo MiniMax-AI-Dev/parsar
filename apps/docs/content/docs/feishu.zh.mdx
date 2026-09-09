@@ -1,22 +1,59 @@
 ---
-title: 飞书 / Lark
-description: 配置飞书 SSO、工作区机器人、WebSocket 事件和出站消息。
+title: 飞书机器人
+description: 连接工作区机器人，或为单个 Agent 配置独立飞书机器人。
 ---
 
-Parsar 使用飞书完成登录 OAuth，也使用工作区级机器人连接器收发消息。OAuth 是部署级配置；机器人凭据按工作区保存为加密的 secret 引用。
+Parsar 提供工作区共享机器人和单个 Agent 的独立机器人。工作区机器人通过扫码授权接入，独立机器人既支持扫码，也提供手动填写凭据的表单。两个配置入口都需要工作区所有者或管理员权限。
 
-## 工作区连接器字段
+## 连接工作区机器人
 
-连接器保存 `app_id`、`app_secret_ref`、`verification_token_ref`、可选 `encrypt_key_ref`、`bot_open_id`、`event_mode` 和 `enabled`。启用 webhook 模式需要 App ID、App Secret、Bot Open ID 和 Verification Token；`websocket` 模式通过飞书 WebSocket 客户端接收事件，因此不要求 Verification Token。
+1. 选择工作区，打开左侧的**集成**。
+2. 点击**飞书**行，在右侧配置面板点击**开始扫码**。
+3. 使用飞书扫描二维码，按授权页面完成确认；也可以打开面板中的授权链接。
+4. 返回 Parsar，等待显示**飞书机器人已连接**。面板显示 App ID 和 Bot，列表显示**已启用**。
 
-## 进程开关
+扫码流程自动保存凭据，不需要在该面板填写 App Secret。二维码过期后重新生成；已连接时按钮变为**重新扫码**。
 
-数据库驱动的 WebSocket manager 需要 `PARSAR_MASTER_KEY`；`PARSAR_FEISHU_WS_REFRESH_SECONDS` 控制 reconciler 周期（默认 30，最大 600），`PARSAR_FEISHU_OPENAPI_BASE_URL` 可覆盖 Open API 地址。部署级默认机器人可设置 `PARSAR_FEISHU_DEFAULT_BOT_APP_ID`、`PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET`、`PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID`（App ID 和 Secret 也会回退到 `PARSAR_FEISHU_APP_ID`、`PARSAR_FEISHU_APP_SECRET`）。
+## 连接单个 Agent
 
-出站投递轮询 `PARSAR_FEISHU_OUTBOUND_POLL_SECONDS`（默认 10，最大 600）。旧的 `PARSAR_FEISHU_OUTBOUND_BATCH_LIMIT` 只解析并发出警告，不再是实际调优开关。
+1. 打开 **Agent → 目标 Agent → 暴露**。
+2. 在**飞书**区域点击**配置**，展开机器人面板。
+3. 在 **Bot 接入**中选择**独立 Bot**，显示扫码区域和凭据表单。
+4. 点击**开始扫码**，使用飞书扫描二维码并完成授权。
+5. 等待连接成功提示；Parsar 自动保存凭据并将机器人绑定到该 Agent。
 
-## 路由与安全
+**默认 Bot** 使用在**集成**中配置的工作区机器人。选择**独立 Bot**后，该 Agent 不再出现在默认机器人的 Agent 列表中。需要恢复共享入口时，选择**默认 Bot**并保存，这会清除该 Agent 的独立机器人配置。
 
-收到事件后，Parsar 解析工作区和 Agent，检查发送者身份及成员/可见性，然后创建或恢复 Conversation 并启动 Run。群聊通常需要明确 @Bot。App Secret 和 Verification Token 必须放在密钥保险库中，不要放进 prompt 或能力文件。
+### 手动凭据字段
 
-参见[认证](/zh/authentication)、[配置](/zh/configuration)和[集成](/zh/integrations)。
+已有飞书应用时，**独立 Bot**面板也接受以下字段：
+
+| 字段 | 填写要求 |
+| --- | --- |
+| App ID | 必填，填写应用标识。 |
+| App Secret | 尚未保存对应凭据时必填。 |
+| Verification Token | webhook 连接且尚未保存时必填；扫码接入的 WebSocket 机器人不要求此项。 |
+| Encrypt Key | 启用事件加密时填写对应密钥。 |
+| Bot Open ID | 可选，填写机器人自身的标识。 |
+
+填写后点击**保存**。已保存秘密的输入框保持空白；留空会保留原值。
+
+首次手动配置使用 webhook 接收事件，还需要部署管理员将飞书事件订阅指向 `https://<你的域名>/api/v1/feishu/events/message`，并配置匹配的服务端事件验证和加密设置。保存表单不会自动配置飞书应用的事件订阅。上面的扫码流程会建立 WebSocket 连接，无需这套 webhook 配置。
+
+## 第一次发送消息
+
+机器人配置和飞书登录是两件事。发送者需要关联飞书身份，并拥有目标工作区的成员资格。尚未关联时，先使用部署已启用的飞书登录，再确认已加入工作区。
+
+- 私聊：直接给机器人发送请求。
+- 群聊：先把机器人加入群，再用飞书的提及功能 `@机器人` 并发送请求。
+- 线程续聊：同一线程已有入站对话记录后，不带提及的后续消息可以继续该对话；带提及的消息仍需包含本机器人。
+
+工作区共享机器人支持 `/list` 查看可访问的 Agent、`/select <agent-slug>` 选择 Agent。发送请求后，在 Parsar 的**对话**和**运行**中确认目标和结果。
+
+## 自托管要求
+
+部署管理员必须配置稳定的 `PARSAR_MASTER_KEY`，并允许服务端出站访问飞书。未配置密钥时，扫码按钮不可用，面板会显示缺少加密主密钥的提示。扫码连接使用 WebSocket 接收事件，不需要在此面板填写 webhook 地址。
+
+飞书登录所需的 App ID、App Secret 和登录回调地址由部署管理员配置，入口与机器人扫码分开，见[身份认证与会话](/zh/authentication)。
+
+参见[聊天集成](/zh/integrations)和[对话与共享对话](/zh/conversations)。

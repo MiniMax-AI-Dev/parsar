@@ -1,14 +1,30 @@
 ---
 title: Discord
-description: Configure the Discord Gateway and workspace-scoped bot connectors.
+description: Save a Discord bot configuration in Integrations.
 ---
 
-Discord workspace connectors store `app_id`, `bot_token_ref`, optional `public_key_ref`, optional `intents`, and `enabled`. Enabling requires an app ID and bot token reference.
+Open **Integrations → Discord** in the sidebar. Only workspace owners and admins can edit the bot's right-hand panel.
 
-## Process modes
+## Prepare the app
 
-Set `PARSAR_DISCORD_GATEWAY=true` and provide `PARSAR_DISCORD_BOT_TOKEN`; `PARSAR_DISCORD_APP_ID` is optional for the shared bot. Set `PARSAR_DISCORD_CONNECTORS=true` to enable the database-backed multi-tenant reconciler. With `PARSAR_MASTER_KEY`, interactive action routing is enabled; the gateway folds select-menu interactions into the submit action.
+Create an application and bot in the [Discord Developer Portal](https://discord.com/developers/applications), then invite the bot to the target server.
 
-Inbound messages resolve the workspace and Agent before creating or resuming a Conversation. The sender and Agent visibility are checked before a Run is started. Keep bot tokens in the secret vault and rotate them after exposure.
+| Parsar field | Discord source |
+| --- | --- |
+| Application ID | General Information → Application ID. |
+| Bot Token | Bot → Token. |
+| Public Key | General Information → Public Key. |
 
-See [Integrations](/integrations), [Configuration](/configuration), and [Runs, approvals, and logs](/runs-approvals-logs).
+The current form requires all three fields when enabling the connector; saving a disabled draft does not require them. **Gateway Intents** offers checkboxes for `GUILDS`, `GUILD_MESSAGES`, `DIRECT_MESSAGES`, `MESSAGE_CONTENT`, and `GUILD_MESSAGE_REACTIONS`. Also enable the required privileged intents in Discord's Bot settings, especially Message Content for reading message bodies.
+
+## Save and verify
+
+1. Open **Integrations → Discord** and enter the three fields.
+2. Enable the Discord bot and save.
+3. Confirm **Enabled** in the list. Turn off the switch and save to pause the connection.
+
+The server receives messages through Gateway and automatically reads enabled workspace configurations. No additional `PARSAR_DISCORD_CONNECTORS` flag is needed. The deployment must configure `PARSAR_MASTER_KEY` and allow access to Discord.
+
+Senders need platform identity mappings and workspace access. Discord currently has no self-service account-linking page; deployment administrators must prepare the mappings. Configuration status does not verify delivery. Send a test request from Discord after setup and inspect its **Run** in Parsar.
+
+See [Chat integrations](/integrations).

@@ -1,42 +1,39 @@
 ---
-title: 集成与连接器
-description: 将 Parsar 连接到聊天平台、GitHub、模型服务和外部 Runtime。
+title: 聊天集成
+description: 从集成页面连接飞书、Slack、Discord 和 Microsoft Teams。
 ---
 
-集成用于连接工作区与身份提供商、聊天网关、模型服务或执行服务。是否可用取决于服务端配置和当前部署暴露的连接器注册表。
+聊天集成让团队从消息平台向 Agent 发送请求，执行记录仍保存在 Parsar 的对话和运行中。
 
-## 集成类别
+## 从哪里进入
 
-| 类别 | Parsar 能力 |
+选择工作区，点击左侧的**集成**。页面列出四个平台，点击平台行后，配置面板在右侧展开。只有工作区所有者和管理员可以修改配置。
+
+| 平台 | 当前配置方式 |
 | --- | --- |
-| 身份认证 | 邮箱/密码，以及部署启用的 OAuth（包括可选 GitHub OAuth） |
-| 聊天网关 | 服务端提供飞书/Lark、Slack、Discord 和 Microsoft Teams 路径 |
-| 模型服务 | 可配置的模型端点和加密 Provider 凭据 |
-| Agent 连接器 | Agent Daemon、HTTP Agent 及连接器特定派发 |
-| 能力来源 | MCP 目录、Skills、Plugins、System Prompt 和 Marketplace 导入 |
+| [飞书](/zh/feishu) | 扫码授权，自动保存工作区机器人连接。 |
+| [Slack](/zh/slack) | 填写 App ID、Bot Token 和 App-Level Token，使用 Socket 模式。 |
+| [Discord](/zh/discord) | 填写 Application ID、Bot Token 和 Public Key。 |
+| [Microsoft Teams](/zh/teams) | 填写 App ID、应用密码，部署管理员启用 webhook 接收端。 |
 
-界面会显示网关是 `active`、`not_configured`、`degraded` 还是 `offline`。出现在列表中不代表当前部署一定已经启用。字段和进程开关请查看：[飞书](/zh/feishu)、[Slack](/zh/slack)、[Microsoft Teams](/zh/teams) 和 [Discord](/zh/discord)。个人 GitHub OAuth 见 [GitHub 集成](/zh/github)。
+这里管理的是**工作区机器人**。飞书还提供单个 Agent 的机器人入口，见[飞书](/zh/feishu)。模型在左侧的**模型**配置，设备在**执行层**接入，MCP 在**能力**中添加；这些不属于聊天平台连接器。
 
-## 安全连接网关
+## 如何判断配置完成
 
-1. 确认服务端已经配置 Provider 所需的环境变量或 Secret。
-2. 打开**设置 → 连接**，或进入当前 Agent 显示的连接器区域。
-3. 完成 Provider 授权或输入请求的 Token。
-4. 按页面提示选择工作区和 Agent 范围。
-5. 发送测试消息，确认生成了对应 Conversation 和 Run。
+Slack、Discord 和 Teams 在表单中打开启用开关后保存；关闭开关保存的是草稿。飞书扫码授权成功后自动保存并启用。
 
-网关凭据属于秘密信息。使用产品提供的凭据表单保存，不要把它粘贴到 Prompt、任务、日志或代码仓库。
+列表状态包括**已启用**、**已配置**、**未完整**、**未配置**。这是已保存配置的状态，不是一次真实消息收发的测试结果。完成配置后，还要从聊天平台验证消息能够触发预期 Agent，并在 Parsar 中查看对应 Run。
 
-## 消息路由
+## 身份与工作区
 
-聊天网关收到消息后，Parsar 会解析目标工作区和 Agent，检查发送者身份与成员关系，然后创建或恢复 Conversation 并启动 Run。群聊通常要求明确 @Bot；命令和线程行为取决于具体连接器。
+机器人接收消息后，会检查发送者的 Parsar 身份、工作区成员关系和目标 Agent 的访问权限。保存机器人凭据不会自动把平台里的所有人加入工作区。
 
-## GitHub 与代码仓库
+飞书用户可以通过已配置的飞书登录关联身份。Slack、Discord 和 Teams 当前没有面向用户的自助身份绑定页面；使用前需要部署管理员准备平台身份映射。只有保存连接器配置，尚不能完成这些平台的新用户接入。
 
-只有在部署配置了 Client ID、Secret、Redirect URI 和 Scope 时，GitHub OAuth 才会启用。OAuth 登录与 Runtime 本地 checkout 是两件事；登录成功不代表 Agent 可以修改所有仓库，工作目录和 Agent 策略仍然独立生效。
+聊天网关是 Parsar 服务中的消息接收和路由功能；它由集成面板保存的连接器配置和服务端部署共同提供，没有单独的用户配置页面。
 
-## 断开和轮换
+## 修改凭据或停用
 
-不再使用的集成应由 owner 或 admin 断开；怀疑泄露时应立即轮换 Provider Token。断开网关只会停止新的消息投递，不会删除已有 Conversation、Run 或审计记录。
+Slack、Discord 和 Teams 可以在原配置面板中输入新凭据并保存，或关闭启用开关后保存。已保存秘密的输入框保持空白并显示已保存标记，留空会保留原值。飞书面板提供**重新扫码**，当前没有单独的断开按钮。
 
-Provider 的部署细节请参见仓库 `docs/deploy` 下的运行手册和生成的 API 参考。
+已有对话和 Run 不会因为修改连接器配置而删除。部署需要稳定的加密密钥，见[部署配置](/zh/configuration)。

@@ -1,70 +1,50 @@
 ---
 title: Quickstart
-description: Install Parsar, connect an execution runtime, create an Agent, and complete the first run.
+description: Prepare a model and device, create an Agent, and complete your first conversation.
 ---
 
-This guide uses the default Docker Compose install. It takes you from an empty machine to a completed Agent Run.
+Complete a real Agent Run in Parsar. If you already have a server you can sign in to, start with model configuration.
 
-## Before you start
+## 1. Open Parsar
 
-- Docker Engine with Docker Compose v2.
-- A machine that can run the Parsar server and PostgreSQL container.
-- An AI coding CLI installed where the daemon or sandbox will execute it: Claude Code, Codex, Pi, or OpenCode.
+Use [Self-hosting quickstart](/self-host-quickstart) to install a server. The default address is `http://127.0.0.1:18080`; use your administrator's address for a remote deployment.
 
-## 1. Install Parsar
+On a fresh instance, complete the setup form to create an account and workspace. Otherwise, sign in and select the workspace at the upper left.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
-```
+The configuration steps below require a workspace owner or admin. Members can start with an Agent that an administrator has already configured.
 
-Open `http://127.0.0.1:18080`. The first account created in the setup flow becomes the workspace owner and administrator.
+## 2. Configure a model
 
-The installer keeps generated configuration, secrets, database files, and runtime state under `~/.parsar/`.
+Open **Models → New model** in the sidebar. Enter the provider, model identifier, and API URL. For this first Run, choose shared-key mode and enter a valid API key. Save, run **Test connection**, and inspect the result. See [Models and credentials](/models-credentials).
 
-## 2. Confirm a Runtime
+## 3. Prepare an execution device
 
-Open the Runtime page in the admin console. The default local install includes a ready-to-use sandbox runtime. If you are pairing a developer machine instead, use the Runtime page to generate a one-time pairing token and run:
+Open **Runtime**. The default Compose deployment includes a local Runtime; confirm it is online and provides the engine you intend to use.
 
-```bash
-parsar-daemon connect --url https://your-parsar.example --token <pairing-token> -b
-```
+To use your computer, click **Connect device**, enter a name, generate a connection command, and run it on the computer with the CLI installed. See [Install an Agent Runtime](/install-runtime).
 
-The daemon stores its profile under `~/.parsar/parsar-daemon/<profile>/` and reports heartbeats to the server.
+## 4. Create an Agent
 
-Success check: the Runtime list shows an enabled runtime with `online` liveness.
+1. Open **Agents → New Agent** and enter a name.
+2. Choose **Local device**, then Claude Code, Codex, or pi.
+3. Select an online device supporting that engine and the model you configured.
+4. For work in a local project, enter its absolute path, such as `/home/me/projects/demo`. This path belongs to the execution device.
+5. Save the Agent. Add capabilities after the first successful Run.
 
-## 3. Create an Agent
+## 5. Send the first message
 
-Open **Agents**, choose **New Agent**, and set:
+Click the Agent's **Chat** action and send: `Reply only with OK. Do not use tools.`
 
-- A name and optional description.
-- One supported connector and model.
-- An explicit Runtime: local, sandbox, or external, depending on the available deployment.
-- Optional Capabilities such as Skill, MCP, Plugin, System Prompt, or Bundle.
+The reply appears in the conversation timeline. Handle any permission or question card in the conversation or **Inbox**.
 
-Success check: the Agent appears in the workspace list and is not blocked by an unbound or offline Runtime.
+## 6. Confirm the result
 
-## 4. Send the first message
+Open **Runs** and click the new record. After it becomes **Completed**, use **Open conversation** at the bottom to inspect the reply. **Steps** contains execution events; **Settings → Usage** contains model consumption.
 
-Open **Conversations**, create a conversation, select the Agent, and send a short request such as `Explain how this workspace is organized.`
-
-Parsar creates an Agent Run and streams progress, tool events, and the final response into the conversation timeline.
-
-## 5. Verify the result
-
-Open **Runs** or the conversation timeline. A successful run moves through `queued` and `running` to `completed`. The detail view includes the Runtime snapshot, output message, artifacts, usage, and event history.
-
-## Common problems
-
-| Symptom | Check first |
-| --- | --- |
-| No Runtime is available | Confirm the sandbox is healthy or the daemon was paired with the correct server URL. |
-| The run stays queued | Check that the Agent has an explicit online Runtime and that its concurrency limit is not reached. |
-| The run fails immediately | Verify the selected model credentials and that the required CLI is installed and signed in. |
-| A request waits for a decision | Open Approvals and resolve the permission or user-choice interaction. |
+With no reply, inspect the Run's error and steps, then the device and model. An online device alone does not confirm the entire configuration works.
 
 ## Next steps
 
-- [Core concepts](/concepts)
 - [Create and configure an Agent](/create-agent)
-- [Read runs, approvals, and logs](/runs-approvals-logs)
+- [Conversations](/conversations)
+- [Scheduled tasks](/scheduled-tasks)

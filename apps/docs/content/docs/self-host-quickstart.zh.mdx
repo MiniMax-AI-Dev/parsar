@@ -1,62 +1,54 @@
 ---
 title: 自托管快速上手
-description: 使用 Docker Compose 运行 Parsar，并完成第一个 Owner 配置。
+description: 安装 Parsar 服务、数据库和默认执行环境。
 ---
 
-默认自托管部署通过 Docker Compose 运行 Parsar 服务、PostgreSQL 和本地 Runtime 服务。
+默认安装通过 Docker Compose 运行 Parsar 服务、PostgreSQL 和本地 Runtime。
 
 ## 环境要求
 
-- Docker Engine 和 Docker Compose v2。
-- Docker 管理的 Agent 沙盒镜像需要 Linux 主机。非 Linux 工作站应在
-  Linux 主机上运行控制面并配对本地 `parsar-daemon`，或使用外部
-  Runtime。安装脚本没有 `--no-sandbox` 参数。
-- 为 Parsar 数据和 PostgreSQL 数据准备持久化目录。
+准备 Docker Engine 与 Docker Compose v2，并确认可以运行 Linux 容器。Windows 使用 WSL 与可用的 Linux 容器环境；本地设备的 CLI 也应安装在实际运行 daemon 的环境中。
 
-## 1. 启动服务栈
+安装过程需要从 GitHub 和容器仓库下载资源。模型调用仍需要你自己的服务商账号和有效凭据。
 
-推荐使用一键安装路径：
+## 安装
+
+在终端执行：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
 ```
 
-安装器会把生成的配置和状态放到 `~/.parsar/`，拉取配置的镜像，启动 PostgreSQL、`parsar-server` 和默认本地 Runtime，并等待健康检查通过。
+安装器会生成配置和密钥，拉取镜像，启动服务，并检查健康状态。默认安装目录是 `~/.parsar/`。
 
-如果你已经检出仓库，根目录 Compose 文件也可以直接运行：
+## 创建首个账号
 
-```bash
-docker compose up -d
-docker compose ps
-```
+打开 `http://127.0.0.1:18080`，完成初始化表单，填写账号和工作区信息。创建的账号拥有初始工作区的所有者权限。
 
-## 2. 创建第一个 Owner
+这条回环地址只适用于安装机器。其他成员或设备访问前，先配置可达地址，见[部署配置](/zh/configuration)。
 
-打开 `http://127.0.0.1:18080`，完成 Web 初始化流程。第一个注册用户会成为管理员，并拥有初始 Workspace。
+## 检查服务
 
-## 3. 检查健康状态和日志
+从安装目录运行：
 
 ```bash
+cd ~/.parsar
 docker compose ps
-docker compose logs -f parsar-server
+docker compose logs --tail=100 parsar-server
+curl -fsS http://127.0.0.1:18080/healthz
+curl -fsS http://127.0.0.1:18080/readyz
 ```
 
-服务端提供 liveness 和 readiness 探针。完整的部署冒烟流程见仓库中的 `docs/deploy/health-and-smoke.md`。
+`healthz` 检查服务响应，`readyz` 检查数据库等依赖是否就绪。容器启动成功后，继续[快速上手](/zh/quickstart)配置模型并完成一次实际运行。
 
-## 4. 配置执行环境
+## 数据和升级
 
-打开 Runtime 设置，确认默认本地 Runtime，或使用 `parsar-daemon` 配对开发者电脑。配置模型凭据后，再创建 Agent 并发送工作。
+安装器将数据库与服务数据保存在安装目录中。备份这些数据及安装器生成的密钥。直接更换加密主密钥会使旧凭据无法解密。
 
-## 数据和密钥
+再次运行安装命令会拉取当前镜像并更新服务。升级前备份数据，升级后检查服务健康、登录和一次 Agent Run。
 
-不要提交生成的 `.env` 或凭据。安装器会把持久化数据放在仓库之外。生产部署必须替换数据库密码、`PARSAR_MASTER_KEY` 和共享 Runtime Token 等开发默认值，并使用稳定的随机值。
+## API 参考
 
-## API 文档
+服务地址下的 `/docs` 是 Swagger UI，`/api/v1/openapi.yaml` 是 OpenAPI 契约；本网站是独立的产品文档站。
 
-服务端同时提供生成的 OpenAPI 契约 `/api/v1/openapi.yaml` 和 Swagger UI `/docs`。这两个 API 参考入口应与本产品指南保持分开。
-
-## 接下来
-
-- [快速上手](/zh/quickstart)
-- [Parsar 的工作方式](/zh/how-parsar-works)
-- [故障排查](/zh/troubleshooting)
+参见[部署配置](/zh/configuration)和[故障排查](/zh/troubleshooting)。

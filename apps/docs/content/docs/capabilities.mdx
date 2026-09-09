@@ -1,58 +1,54 @@
 ---
 title: Capabilities, Skills, and MCP
-description: Extend Agents with reusable prompts, tools, plugins, and bundles.
+description: Add reusable Skills and tool services, then bind them to Agents.
 ---
 
-Capabilities are reusable, versioned building blocks attached to Agents. The canonical spec recognizes exactly five kinds: `mcp`, `skill`, `plugin`, `system_prompt`, and `bundle`.
+Capabilities let Agents reuse instructions and tools. Open **Capabilities** in the sidebar; its tabs include the workspace catalog, marketplace, connectors, and Skills.
 
-## Capability kinds
+## Import an MCP
 
-| Kind | Use it for | Canonical payload |
-| --- | --- | --- |
-| `skill` | Markdown guidance, scripts, or assets. | `files[]` containing `markdown`, `script`, or `asset` files |
-| `mcp` | A Model Context Protocol server and its tools. | Server command/URL and environment entries |
-| `plugin` | A packaged extension with server and client pieces. | Plugin manifest and uploaded archive |
-| `system_prompt` | A reusable instruction block. | Prompt text |
-| `bundle` | A composed set of related capabilities. | Bundle metadata and members |
+1. Open **Capabilities → New capability → MCP**.
+2. Enter a name and optional description, then paste JSON or TOML. You can paste a complete configuration or its inner `mcpServers` object.
+3. Inspect the parsed command, URL, and environment variables. For values beginning with `$`, choose an existing credential or create one in the credential picker.
+4. Click **Import**, then bind the capability from the Agent's **Config**.
 
-Every version carries `schema_version` (currently `1`), a kind-specific spec, and an immutable content hash. The fields are validated by the server; a browser form cannot turn one kind into another. Inspect the import preview before saving, especially for plugin archives and required credentials.
+Command-based MCP servers start on the execution device, which must have their commands and dependencies installed. Remote MCP URLs must be reachable from that environment.
 
-## Version binding
+**Capabilities → Connectors** provides the MCP directory. It is separate from messaging bots under the sidebar's **Integrations** entry.
 
-A capability has metadata and one or more versions. An Agent binding is either `latest`, which resolves the newest enabled version at dispatch time, or `pinned`, which keeps one selected version for reproducible runs. Disabling or deprecating a capability prevents new selection according to the server status checks; existing Run snapshots retain the version used by that execution.
+## Import a Skill
 
-## MCP environment values
+Open **Capabilities → New capability → Skill**. On **Paste Markdown**, paste the complete `SKILL.md` with YAML frontmatter, inspect the parsed name, description, and instructions, and click **Import**. The preview is read-only; paste again to edit.
 
-MCP environment entries have three modes: `literal`, `inline_secret`, and `credential_ref`. Prefer `credential_ref`; Parsar resolves it at run time from the workspace secret vault. Credential placeholders use `${PARSAR_CREDENTIAL:<kind>}`. Inline secrets are supported for import compatibility but should not be committed to a manifest.
+On **Upload zip**, drag a `.zip` onto the dropzone or click to choose one. The limit is **8 MiB**. Wait for upload and parsing, inspect the `SKILL.md`, reference files, and scripts in the file tree, then click **Import**. Importing does not execute Skill files.
 
-Skill files are explicitly typed as `markdown`, `script`, or `asset`; scripts and assets are not silently treated as Markdown.
+A Skill is a reusable guide with supporting resources, not an independently running Agent. Bind it to an Agent after installation and verify loading through a real Run.
 
-## Plugin and Bundle behavior
+## Bind and update
 
-Plugins may contain server tools loaded by the plugin host, client slots, Skills, hooks, and credential declarations. Installing a plugin creates or updates a versioned Bundle capability; removing it deletes the capability binding and best-effort local plugin files. Plugin archive upload requires configured object storage. MCP and Skill imports do not require object storage.
+1. Open **Agents → the Agent → Config**.
+2. Add an enabled capability and configure its required credentials.
+3. Choose to follow the latest version or pin a version, then save.
+4. Run a small task involving that capability and inspect loading and execution results in the Run's **Steps**.
 
-## Credentials
+Following latest uses new available versions in subsequent Runs. Pinning preserves a specific version. Binding changes do not rewrite historical Runs.
 
-Capabilities can declare required credential kinds. Configure the corresponding personal or workspace credential before starting an Agent. Parsar stores secret payloads encrypted and returns only metadata or masked previews through the API. If a credential is missing, the capability can remain visible but a Run may degrade or fail at the point where that credential is required.
+## Other capability types
 
-Never put API keys in a Skill file, system prompt, task description, or repository. See [Configuration](/configuration) and [Security model](/security).
+The creation dialog offers only MCP and Skill. Existing records can also include:
 
-## Attach capabilities to an Agent
+| Type | Purpose |
+| --- | --- |
+| Plugin | An engine's plugin package, such as a Claude Code plugin. |
+| System Prompt | Reusable instruction text. |
+| Plugin Bundle | A Parsar extension containing server tools, client UI, and Skills. |
 
-1. Open an Agent and choose **Configuration**.
-2. Add an enabled capability.
-3. Select `latest` or `pinned` where available.
-4. Fill the capability configuration and required credential bindings.
-5. Save, then run a small test conversation.
+These types cannot be created directly with the new-capability type selector. Use version actions in an existing record's details for maintenance. Review source, type, and content before importing from the marketplace. Plugin and Plugin Bundle are different package types.
 
-The effective capability set is captured in the Run's runtime snapshot. If a capability is unavailable, check its status, required credentials, version policy, and Agent binding.
+Capability files can use PostgreSQL storage by default; importing files does not require setting up OSS. See [CLI reference](/cli) for the plugin CLI's current authentication limitation.
 
-## Marketplace and sharing
+## Credentials and compatibility
 
-Public capabilities can be discovered through the marketplace flow and imported into a workspace. A copied capability gets its own workspace binding; updating the source does not grant access to the destination workspace or bypass its policies.
+Keep required secrets in **Settings → Credentials** and use references. Do not put them in Skill files or ordinary MCP environment-variable text. See [Models and credentials](/models-credentials) for personal and organization credentials.
 
-## Next steps
-
-- [Create and configure an Agent](/create-agent)
-- [Runtimes and execution](/runtimes)
-- [View Runs, approvals, and logs](/runs-approvals-logs)
+MCP, Skill, and plugin support varies by engine. Imported or bound does not mean successfully executed. Inspect the Run events for concrete loading errors and missing credentials. See [Agent engine comparison](/agent-tools).

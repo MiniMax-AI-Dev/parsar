@@ -1,18 +1,35 @@
 ---
 title: Slack
-description: Configure Slack Socket Mode and workspace-scoped Slack connectors.
+description: Configure a workspace Slack bot using Socket Mode in Integrations.
 ---
 
-Slack connectors store `app_id`, `bot_token_ref`, `app_token_ref`, `signing_secret_ref`, `event_mode`, and `enabled`. `socket` is the normalized default event mode; `events`, `events_api`, `http`, and `webhook` normalize to `events`.
+Open **Integrations → Slack** in the sidebar. Click the platform row to edit its right-hand panel. Only workspace owners and admins can edit it.
 
-## Enable a shared bot
+## Prepare a Slack app
 
-Set `PARSAR_SLACK_SOCKET=true` and provide `PARSAR_SLACK_BOT_TOKEN` (`xoxb-…`) plus `PARSAR_SLACK_APP_TOKEN` (`xapp-…`). `PARSAR_SLACK_APP_ID` is optional. With `PARSAR_MASTER_KEY`, card-action routing and per-team database token resolution are enabled; without it, button clicks are only acknowledged as received.
+Create an app in [Slack app management](https://api.slack.com/apps), enable Socket Mode, and install it in the Slack workspace you intend to use.
 
-Set `PARSAR_SLACK_CONNECTORS=true` to run the database-backed multi-tenant connector reconciler. Workspace connectors require an app ID, bot token reference, and either an app token reference for Socket Mode or a signing secret reference for Events API mode.
+| Parsar field | Slack source |
+| --- | --- |
+| App ID | App ID under Basic Information. |
+| Bot Token | Bot User OAuth Token under OAuth & Permissions, starting with `xoxb-`. |
+| App-Level Token | Generate under Basic Information with `connections:write`; starts with `xapp-`. |
 
-## Routing
+Grant the app the required message permissions, subscribe to the needed message events, and add the bot to the target channel.
 
-Parsar maps a Slack team/channel to a workspace and Agent, verifies the sender, and creates or resumes a Conversation. Interactive approval and choice cards are routed back through the connector. Rotate both bot and app tokens after exposure and keep token references out of source control.
+## Save the connection
 
-See [Integrations](/integrations), [Configuration](/configuration), and [Runs, approvals, and logs](/runs-approvals-logs).
+1. Open **Integrations → Slack**.
+2. Enter the App ID and Bot Token, and select **Socket Mode** as the event mode.
+3. Enter the App-Level Token, enable the Slack bot, and save.
+4. Confirm **Enabled** in the list. With the enable switch off, the button saves a draft.
+
+The receiver currently starts connections only for Socket Mode. The form also lists **Events API**, but the server has no corresponding Slack HTTP event-reception endpoint. Do not choose it for a working integration.
+
+## Verification and limitations
+
+The server automatically reads enabled workspace connections; no additional `PARSAR_SLACK_CONNECTORS` flag is needed. The deployment must have `PARSAR_MASTER_KEY` and outbound access to Slack.
+
+Senders also need platform identity mappings and workspace access. There is currently no Slack self-service account-linking page. Have a deployment administrator prepare the mappings before testing messages, then inspect the resulting **Runs** in Parsar.
+
+Return to the same panel to rotate tokens or disable the bot and save. See [Chat integrations](/integrations).

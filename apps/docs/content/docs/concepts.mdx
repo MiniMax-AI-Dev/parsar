@@ -1,71 +1,41 @@
 ---
 title: Core concepts
-description: A short map of the objects that make up a Parsar workspace.
+description: Understand how workspaces, Agents, execution devices, conversations, and runs relate.
 ---
 
-Parsar separates coordination from execution. The server stores the team's context and durable records; a Runtime executes the Agent and reports events back. The values below are the values enforced by the current server and database schema.
+Parsar organizes work around conversations and runs. Workspaces retain team configuration and history; Agents use a selected model and execution environment to handle requests.
 
-## Workspace objects
+## Objects you will use
 
-| Object | Responsibility |
-| --- | --- |
-| Workspace | Isolates members, Agents, conversations, settings, credentials, and history. |
-| Agent | Reusable identity and execution configuration: connector, model, instructions, capabilities, visibility, and Runtime binding. |
-| Runtime | Concrete execution environment such as a paired `parsar-daemon`, local sandbox, or external Agent endpoint. |
-| Conversation | Durable context for web, instant-messaging, or API interaction. |
-| Agent Run | One concrete execution triggered from a conversation or another supported entry point. |
-| Capability | A reusable Skill, MCP server, Plugin, System Prompt, or Bundle attached to an Agent. |
-| Connector | The protocol boundary used to deliver work. Agent connectors are `agent_daemon` and `http`; Feishu, Slack, Discord, and Teams are workspace messaging connectors. |
+| Object | Meaning | UI entry point |
+| --- | --- | --- |
+| Workspace | The scope that owns team members, resources, and history. | Workspace switcher at the top left. |
+| Agent | A reusable name, instructions, model, capabilities, and execution configuration. | **Agents**. |
+| Runtime | The device or sandbox environment executing an Agent. | **Runtime**. |
+| Conversation | Continuous context containing messages and replies. | **Conversations**. |
+| Run | The state, events, and results of one execution. | **Runs**. |
+| Capability | Reusable instructions or tools bound to an Agent, such as a Skill or MCP server. | **Capabilities**. |
+| Interaction | A request awaiting human approval or an answer. | **Inbox** and the active conversation. |
+| Scheduled task | A Prompt submitted to an Agent at a configured frequency. | **Scheduled tasks**. |
 
-## The important distinction
+## Agents, Runtimes, and Runs
 
-An Agent is not a daemon process. It is configuration and identity. A Runtime is where execution happens. A Run is one execution record. One Runtime can serve multiple Agents; one Agent can produce many Runs over time.
+For a code review request, you choose a configured Agent. It invokes a coding CLI on its bound device and creates a Run record.
 
-## Parsar's work model
+The Agent is configuration, the Runtime is an execution location, and the Run is one execution. A Runtime can serve multiple Agents, and a conversation can produce multiple runs over time. Completing a Run does not close the conversation.
 
-Parsar currently uses Conversations and Agent Runs as its primary work records. A Conversation keeps the human-facing context; a Run records one attempt to execute that context. Scheduled Tasks provide recurring triggers. This is different from a separate first-class project or issue tracker: a Conversation does not have project fields, issue numbers, or a project resource checkout.
+## Two kinds of connectors
 
-Workspace, Agent, Runtime, Capability, and Scheduled Task records are the stable objects to reference in integrations and automation.
+**Agent Daemon** and **HTTP Agent** on **Runs** describe how execution is delivered. Local devices and cloud isolation use Agent Daemon. HTTP Agent is used by existing external HTTP service records; the external Agent option is currently disabled in the creation form.
 
-## Enumerations you will see in the API
+Feishu, Slack, Discord, and Teams under **Integrations** are chat entry points for receiving messages and sending replies. Chat connectors and execution connectors have separate configuration and purposes. See [Agent engine comparison](/agent-tools) and [Integrations](/integrations).
 
-### Agent kind and connector
+## Run and interaction states
 
-An Agent's `config.agent_kind` selects the command-line engine discovered by the daemon:
+Runs have six states: Queued, Running, Completed, Failed, Cancelled, and Interrupted. The first two are active states; the last four are terminal.
 
-| Agent kind | Streaming | Permission requests | Resume | Usage reporting |
-| --- | --- | --- | --- | --- |
-| `claude_code` | yes | yes | yes | yes |
-| `codex` | yes | yes | yes | yes |
-| `opencode` | yes | no | no | yes |
-| `pi` | yes | no (runs with `--no-approve`) | yes | yes |
+Approvals and questions track their own states. While a Run shows Running, an Agent still waits for unresolved requests before continuing the affected operation. See [Runs, approvals, and logs](/runs-approvals-logs) for states and entry points.
 
-The connector type is `agent_daemon` for a paired or managed daemon and `http` for an external HTTP Agent endpoint. Availability and version are discovered when a daemon connects; they are not hard-coded in the browser.
+## Sharing and permissions
 
-### Visibility, membership, and runtime states
-
-Agent visibility has exactly three values:
-
-| Value | Who can open the Agent |
-| --- | --- |
-| `workspace` | Active members of the owning Workspace |
-| `tenant` | Any registered Parsar user; workspace members are included |
-| `public` | Registered users and unauthenticated guests (guests are prompted to register) |
-
-Workspace visibility is a separate field with `private` and `public`. Membership status is `pending`, `active`, or `rejected`; only `active` members participate in workspace access checks. Runtime liveness is `pending_pairing`, `offline`, `online`, or `error`.
-
-## Run lifecycle
-
-Runs use exactly six statuses: `queued` (waiting to start), `running` (actively executing), `completed` (normal success), `failed` (execution error), `cancelled` (user-initiated cancellation), and `interrupted` (system interruption or runtime failure). The last four are terminal. A completed Run does not automatically mean the Conversation is finished; the Conversation keeps its messages and can trigger another Run.
-
-Do not confuse Run status with an Agent Interaction. Approval and choice interactions have their own lifecycle: `pending`, `resolving`, `approved`, `denied`, `answered`, `cancelled`, or `expired`.
-
-## Human interaction
-
-Permission requests and user-choice prompts are durable interactions. They can be resolved in the Web approval inbox or in a conversation surface, and the same resolution service records the terminal decision.
-
-## Related pages
-
-- [How Parsar works](/how-parsar-works)
-- [Create and configure an Agent](/create-agent)
-- [Read runs, approvals, and logs](/runs-approvals-logs)
+A shared conversation link opens the original conversation. It does not create a copy or grant access. Workspace membership and Agent access settings determine what a user can read and execute. See [Conversations and shared conversations](/conversations) and [Members and roles](/members-roles).

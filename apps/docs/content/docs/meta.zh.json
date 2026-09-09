@@ -24,7 +24,6 @@
     "scheduled-tasks",
     "---集成---",
     "integrations",
-    "github",
     "feishu",
     "slack",
     "teams",

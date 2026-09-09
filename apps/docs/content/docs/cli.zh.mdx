@@ -1,49 +1,63 @@
 ---
 title: CLI 参考
-description: parsar 与 parsar-daemon 的真实子命令和参数。
+description: 管理设备连接，并在执行环境中查看规范与记忆。
 ---
 
-Parsar 有两个 Go 命令行入口。新版本可能增加参数，安装后可用 `--help` 查看最终结果。
+Parsar 提供两个命令：`parsar-daemon` 连接执行设备，`parsar` 是执行环境内使用的辅助 CLI。它们不提供与 Web 相同的用户登录流程。
 
-## `parsar`
+## 连接和管理设备
 
-访问 API 时需要 `PARSAR_SERVER_URL` 和 `PARSAR_RUNNER_TOKEN`。可选上下文变量有 `PARSAR_RUNTIME_ID`、`PARSAR_WORKSPACE_ID`、`PARSAR_USER_ID`、`PARSAR_CONNECTOR`、`PARSAR_AGENT_ID`、`PARSAR_CONVERSATION_ID`。
+先完成[安装 Agent Runtime](/zh/install-runtime)：在**执行层 → 接入新设备**生成命令，并在目标机器执行。
 
-| 命令 | 参数 |
+配对安装器不会将二进制加入 `PATH`。先完成[将命令加入 PATH](/zh/install-runtime#将命令加入-path)，或把下文的 `parsar-daemon` 替换为下载文件的完整路径，然后查看状态和日志：
+
+```bash
+parsar-daemon status
+parsar-daemon logs -n 100
+parsar-daemon logs -f
+```
+
+| 命令 | 作用 |
 | --- | --- |
-| `parsar spec list` | `--tag`（CSV）、`--source`（`manual\|agent\|import\|user\|auto-review`）、`--limit`（0 使用服务端默认值）、`--json` |
-| `parsar spec add` | 必填 `--title`、必填 `--body`（`-` 从 stdin 读取）、`--tag`、`--json` |
-| `parsar spec edit <id>` | `--title`、`--body`（`-` 从 stdin）、`--tag`、`--clear-tags`、`--json`；空值保留原值 |
-| `parsar spec rm <id>` | 无专属参数 |
-| `parsar memory list` | `--scope`（`user\|workspace`，默认 `user`）、`--type`（`user\|feedback\|workspace\|reference`）、`--tag`、`--limit`、`--json` |
-| `parsar memory add` | `--scope`、必填 `--type`、可选 `--title`、必填 `--body`（`-` 从 stdin）、`--why`、`--tag`、`--json` |
-| `parsar memory edit <id>` | `--title`、`--body`、`--why`、`--tag`、`--clear-tags`、`--json` |
-| `parsar memory rm <id>` | 无专属参数 |
-| `parsar inject snapshot` | 无专属参数，输出 JSON |
-| `parsar inject incremental` | 必填 `--since`（RFC3339 时间戳），输出 JSON 增量 |
-| `parsar sync` | 无参数，输出人类可读的注入快照 |
-| `parsar plugin add <path>` | `--json`；路径必须包含 `manifest.json`，需要工作区上下文 |
-| `parsar plugin list` | `--json`；需要工作区上下文 |
-| `parsar plugin remove <name>` | 无专属参数，需要工作区上下文 |
-| `parsar version` | 无专属参数 |
+| `connect --url <服务地址> --token <配对令牌> -b` | 一次性配对并在后台运行。 |
+| `connect -b` | 使用已保存的 profile 在后台重新连接。 |
+| `status` | 查看本地 profile 与后台进程状态。 |
+| `logs -n 100` | 查看最近 100 行日志；`-f` 持续跟踪。 |
+| `stop` | 停止后台连接进程。 |
+| `logout` | 删除本地 profile 已保存的凭据。 |
+| `version` | 查看版本。 |
 
-全局帮助可用 `parsar --help`、`parsar -h` 或 `parsar help`；`--version`/`-v` 输出版本。
+上述 profile 操作支持 `--profile <名称>`，默认为 `default`。配置与日志位于 `~/.parsar/parsar-daemon/<profile>/`。
 
-`plugin add` 将插件安装到 `PARSAR_DATA_DIR`（默认 `~/.parsar`），使用 esbuild 构建可选客户端入口，并通过服务端上传 Bundle。manifest 必须提供 `name` 和 `version`；`server`、`client`、`tools`、`skills`、`hooks`、`credentials` 为可选段。
+配对成功后，运行凭据写入 profile 目录中的 `auth.json`，文件权限为 `0600`。进程停止或机器重启后执行 `parsar-daemon connect -b`；命名 profile 使用 `parsar-daemon connect --profile <名称> -b`。只有已保存凭据丢失或不再被服务端接受时，才需要新的配对令牌。
 
-## `parsar-daemon`
+不再使用某台设备时，先停止其 daemon，再由工作区所有者或管理员在**执行层**删除设备。`logout` 只删除本地已保存的凭据，不会停止正在运行的 daemon，也不会删除服务端设备记录。
 
-配置文件位于 `~/.parsar/parsar-daemon/<profile>/`。
+## 执行环境内的 parsar
 
-| 命令 | 参数 |
+`parsar` 的规范、记忆和注入命令使用 Runtime 接口，需要 `PARSAR_SERVER_URL`、`PARSAR_RUNNER_TOKEN` 以及当前工作区和调用者上下文。这些值由运行环境注入；浏览器登录会话不能替代 Runner 凭据。
+
+| 命令 | 作用 |
 | --- | --- |
-| `parsar-daemon connect` | `--profile`（默认 `default`）、`-b`/`--background`、`--url`、`--token`、`--device-name`（默认主机名） |
-| `parsar-daemon status` | `--profile` |
-| `parsar-daemon stop` | `--profile` |
-| `parsar-daemon logs` | `--profile`、`-f`/`--follow`、`-n`/`--lines`（默认 100） |
-| `parsar-daemon logout` | `--profile` |
-| `parsar-daemon version` | 无参数 |
+| `parsar spec list` | 查看工作区规范片段。 |
+| `parsar spec add`、`edit`、`rm` | 添加、修改、删除规范。 |
+| `parsar memory list` | 查看记忆，`--scope user` 或 `--scope workspace` 选择范围。 |
+| `parsar memory add`、`edit`、`rm` | 添加、修改、删除记忆。 |
+| `parsar inject snapshot` | 输出当前注入快照。 |
+| `parsar inject incremental --since <RFC3339时间>` | 输出指定时间后的增量。 |
+| `parsar sync` | 输出便于阅读的注入快照。 |
+| `parsar version` | 查看版本。 |
 
-`connect --url <server> --token <pairing-token>` 通过 `/api/v1/runtimes/pair` 完成一次性配对。`-b` 写入 `connect.pid` 和 `connect.log`。`stop` 先发送 SIGTERM，3 秒后才升级；`logout` 只删除本地凭据，服务端 Runtime 仍需在管理界面单独禁用。
+带位置参数的命令先写选项，例如：
 
-问题报告不要包含 runner token、配对 token 或完整环境变量。参见 [Runtime](/zh/runtimes) 和[配置](/zh/configuration)。
+```bash
+parsar spec edit --title "Updated title" --json <id>
+```
+
+使用 `parsar spec add --help` 或相应子命令的 `--help` 查看必填字段。
+
+## 插件命令的当前限制
+
+帮助中还列出 `parsar plugin add`、`list` 和 `remove`。当前这些命令的认证方式与服务端插件接口不匹配，正常登录认证开启时返回 HTTP 401，因此不作为可用的插件安装流程。
+
+Skill 和 MCP 使用[能力页面](/zh/capabilities)导入。不要为了运行插件命令而关闭服务端认证。

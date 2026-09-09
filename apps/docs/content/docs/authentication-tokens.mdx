@@ -1,45 +1,44 @@
 ---
-title: Tokens and credential storage
-description: Understand Parsar session cookies, pairing tokens, runner credentials, and provider credentials.
+title: Tokens and credentials
+description: Distinguish login sessions, device pairing tokens, and model or tool credentials.
 ---
 
-Parsar uses different credentials for browser sessions, daemon pairing, runtime execution, and external providers. They are deliberately scoped and have different lifetimes; do not substitute one for another.
+Parsar uses different credentials for sign-in, device connections, and external services. Manage each through its own page; everyday use does not require copying browser cookies into a terminal.
+
+## Where to manage credentials
+
+| Credential | Entry point | Purpose |
+| --- | --- | --- |
+| Login session | Login page; **Sign out** in the user menu | Keep the current browser signed in. |
+| Device pairing token | **Runtime → Connect device → Generate command** | Connect a machine to the current workspace. |
+| Model key | **Models** in the sidebar | Access the selected model service. |
+| Personal and organization credentials | **Settings → Credentials** | Supply external credentials to capabilities, models, and runtimes. |
+| Chat bot credentials | **Integrations** in the sidebar | Connect Feishu, Slack, Discord, or Teams. |
 
 ## Browser sessions
 
-After login, the server sets the `parsar_session` cookie. The value is a 32-byte cryptographically random identifier encoded as 64 hexadecimal characters (256 bits of entropy). The database stores the session record and its expiry; it does not use the cookie as a user-readable token.
+After sign-in, the browser stores the `parsar_session` cookie. It expires after **30 days** by default; using it does not extend its original expiry. Signing out revokes the current server session. Deployment administrators should serve Parsar over HTTPS.
 
-The default session lifetime is 30 days. Parsar updates `last_seen_at` while the session is used, but this is not a sliding expiry: the original expiration still applies. Signing out revokes the server-side session. Keep the cookie `Secure` and `HttpOnly` in production by serving Parsar over HTTPS.
+## Device pairing tokens
 
-## OAuth state
+A generated connection command contains an `rtk_` token. It expires after **15 minutes** and is invalidated after one successful pairing. The server stores only its hash.
 
-OAuth and OIDC callbacks are protected by a short-lived state cookie. The state cookie is valid for 10 minutes and is consumed during callback validation. A stale or reused state value must be discarded and the flow restarted; never turn off state validation to work around a callback error.
+Pairing gives the daemon an `rtc_` runner credential to maintain the device connection. Neither the pairing token nor the runner credential replaces user sign-in.
 
-## Runtime pairing and runner credentials
+Successful pairing saves the runner credential in `~/.parsar/parsar-daemon/<profile>/auth.json` with file permissions `0600`; the default profile is `default`. Background logs and PID files use the same directory, as `connect.log` and `connect.pid`. Setting `PARSAR_HOME` replaces the `~/.parsar` base directory.
 
-The **Connect** flow uses a one-time pairing token:
+After stopping the daemon or rebooting, run `parsar-daemon connect -b` to reuse valid saved credentials. These commands require [adding the binary to PATH](/install-runtime#make-the-command-available), or using its full download path. For a retired device, stop the daemon, then have an owner or admin delete the device on **Runtime**. `parsar-daemon logout` removes local credentials only.
 
-- Prefix: `rtk_`.
-- Lifetime: 15 minutes.
-- Encoding: 32 random bytes represented as hexadecimal text after the prefix.
-- Storage: only a SHA-256 hash is stored in the database.
-- Consumption: one successful pairing invalidates the token.
+## Model and tool credentials
 
-Pairing exchanges the short-lived token for a long-lived runner credential with the `rtc_` prefix. Parsar stores only the hash of this credential in the Runtime configuration. The daemon sends the original value as `Authorization: Bearer <credential>` when connecting and when making runner-authenticated requests. The same bearer is exposed to in-sandbox CLI processes as `PARSAR_RUNNER_TOKEN`; treat it as a secret.
+Model keys, organization credentials, personal credentials, and chat bot secrets are encrypted on the server. The UI shows names, status, and masked values; it has no action to retrieve saved plaintext.
 
-On the daemon host, the credential is written to `~/.parsar/parsar-daemon/<profile>/auth.json` with filesystem mode `0600` and written atomically. The file also records the server URL and Runtime identity. The default profile log and PID files are `connect.log` and `connect.pid` in that profile directory. Remove or rotate the profile when the machine is decommissioned, and never commit `auth.json` or copy its bearer into a ticket.
+After replacing an external service token, update the corresponding model, credential, or integration and run a related task again. Personal credentials are resolved for the caller; organization credentials are referenced by workspace configuration. See [Models and credentials](/models-credentials) for the steps.
 
-## Provider credentials
+`PARSAR_MASTER_KEY` is the deployment's encryption key, not a user API key. Back it up securely with the database; replacing it directly makes existing encrypted credentials unreadable.
 
-Provider credentials are encrypted with `PARSAR_MASTER_KEY` before being persisted. The built-in GitHub personal credential kind is `github_pat`; accepted token formats include `ghp_…`, `github_pat_…`, and `gho_…`. Other built-in kinds include `slack_bot_token`, `postgres_dsn`, `notion_integration`, and `jira_api_token`. A credential reference is resolved at run time; its plaintext is not included in ordinary conversation or audit output.
+## Secret answers in interactions
 
-Rotate a provider token at the provider, update the Parsar credential, and rerun the affected Agent. Rotating `PARSAR_MASTER_KEY` is a deployment migration rather than a per-user token rotation because existing encrypted credentials must be re-encrypted deliberately.
+When an Agent marks a question as sensitive, the free-text input in the conversation or inbox masks the answer. The answer is sent to the waiting Agent, while Parsar redacts stored interaction responses and related run and audit events. This does not change the value received by the Agent and its tools. See [Interaction requests](/conversations).
 
-## Operational checklist
-
-- Use HTTPS and secure cookie settings in production.
-- Deliver pairing tokens only through a private channel and complete pairing before the 15-minute TTL.
-- Restrict `auth.json` permissions and back it up only through an approved secret-management process.
-- Revoke sessions, pairing material, runner credentials, and provider tokens independently during an incident.
-
-See [Authentication and sessions](/authentication), [Runtimes and Agent Daemon](/runtimes), and [GitHub integration](/github).
+Keep pairing tokens and API keys out of ordinary messages, run artifacts, and issue screenshots.

@@ -1,30 +1,34 @@
 ---
 title: Audit and usage
-description: Inspect administrative changes, execution events, artifacts, and model usage.
+description: Inspect audit events and model usage in Settings, then open the related Run.
 ---
 
-Parsar separates the human-readable conversation from the evidence of execution. Audit records explain who changed a resource; Run events, artifacts, and usage explain what happened during one execution.
+Audit records track operations. Usage records track reported model consumption. Both are tabs at the top of **Settings**, visible to all active workspace members, including viewers.
 
-## Audit records
+## Inspect audit events
 
-Use the **Audit** page to investigate workspace administration, Agent and capability changes, connector operations, Runtime actions, and other security-sensitive events. Filter by workspace and time before comparing an event with the related Run.
+1. Open **Settings → Audit**.
+2. Inspect the time, actor, event, and target resource, using the available filters to locate a record.
+3. For one execution, open **Runs → the record → Audit** to see events associated with that Run.
 
-Audit data is append-oriented evidence. Do not treat a UI label or a current resource state as a complete history of who changed it.
+Audit records preserve events as they occurred; changing a resource's current name or status does not rewrite those events.
 
-## Usage records
+## Inspect usage
 
-Usage is associated with Agent Runs and can include provider, model, token, and timing information. Totals are useful for operational review, but the Run detail remains the best place to understand a single unexpected charge or long execution.
+Open **Settings → Usage**:
 
-## Artifacts and retention
+| Area | Contents |
+| --- | --- |
+| Summary | Run count, input tokens, output tokens, and total cost. |
+| By model | Calls, input, output, and cost for each provider and model. |
+| Recent calls | Time, Run, provider, model, input, output, and cost for each call. |
 
-Run artifacts can include tool output, screenshots, attachments, or other provider-generated data. Treat artifacts as potentially sensitive. Use the visibility and storage metadata shown by the server, and avoid copying them into public issues or chat channels.
+IDs in **Recent calls → Run** are clickable. Clicking one opens Runs with that Run expanded on the right. Records without a related Run show a dash. Run details have no Usage tab.
 
-## Investigation flow
+Values come from executor and model-provider reports. Unreported token counts or costs show zero; that does not establish that the provider charged nothing. Use the provider's records for final billing.
 
-1. Identify the workspace and the affected Agent.
-2. Open the Run and record its status, requester, connector, and Runtime snapshot.
-3. Inspect ordered events for tool calls, permission decisions, provider changes, and errors.
-4. Compare the event timeline with Audit records and Usage details.
-5. Redact secrets before sharing a diagnostic report.
+## Inspect artifacts
 
-See [View Runs, approvals, and logs](/runs-approvals-logs), [Security model](/security), and [Troubleshooting](/troubleshooting).
+Open **Runs → the record → Artifacts** to see recorded names, types, and addresses. This is an artifact inventory, not usage detail. Check artifacts and diagnostics for secrets, private code, and personal information before sharing them.
+
+See [Runs, approvals, and logs](/runs-approvals-logs) and [Security model](/security).

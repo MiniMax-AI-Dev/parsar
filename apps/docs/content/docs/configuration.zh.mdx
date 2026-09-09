@@ -1,54 +1,63 @@
 ---
-title: 配置与环境变量
-description: 通过 YAML、环境变量和部署模板配置 Parsar。
+title: 部署配置
+description: 调整自托管服务的地址、端口、密钥和可选服务。
 ---
 
-Parsar 按以下顺序加载配置：内置默认值、`PARSAR_CONFIG_FILE` 指向的 YAML、环境变量。环境变量为空时不会清除 YAML 中已有的非空值。配置路径必须是绝对路径或以 `~/` 开头；服务端不会回退到当前工作目录。
+本页面向部署管理员。日常使用的模型、凭据、机器人和设备都有界面入口，无需先填写一份环境变量清单。
 
-## 服务端配置
+## 先选择配置入口
 
-当前服务端支持的进程变量如下：
-
-| 分组 | 变量 |
+| 要调整什么 | 入口 |
 | --- | --- |
-| 服务端 | `PARSAR_CONFIG_FILE`、`PARSAR_ADDR`（默认 `:8080`）、`PARSAR_PUBLIC_URL`、`PARSAR_DATA_DIR`（默认 `~/.parsar`） |
-| 数据库与密钥 | `DATABASE_URL`、`PARSAR_MASTER_KEY` |
-| 开发与认证 | `PARSAR_DEV_AUTH`、`PARSAR_PLATFORM_ADMIN_USER_IDS`、`PARSAR_LOGIN_REDIRECT_URL` |
-| Agent 执行 | `PARSAR_OPENCODE_BIN`、`PARSAR_OPENCODE_RUNNER`、`PARSAR_PLUGIN_HOST_PATH` |
-| 飞书 | `PARSAR_FEISHU_MOCK`、`PARSAR_FEISHU_APP_ID`、`PARSAR_FEISHU_APP_SECRET`、`PARSAR_FEISHU_REDIRECT_URI`、`PARSAR_FEISHU_SCOPE`、`PARSAR_FEISHU_AUTHORIZE_BASE`、`PARSAR_FEISHU_API_BASE`、`PARSAR_FEISHU_VERIFICATION_TOKEN`、`PARSAR_FEISHU_ENCRYPT_KEY` |
-| 审计 | `PARSAR_AUDIT_OTLP_ENABLED`、`PARSAR_AUDIT_OTLP_ADDR`（默认 `:4318`）、`PARSAR_AUDIT_OTLP_SIGNING_KEY`、`PARSAR_AUDIT_OTLP_EXTERNAL_ENDPOINT`、`PARSAR_AUDIT_OTLP_FANOUT_ENDPOINT` |
-| 存储 | `PARSAR_BLOB_BACKEND`（`pg` 或 `oss`）、`PARSAR_OSS_REGION`、`PARSAR_OSS_ENDPOINT`、`PARSAR_OSS_BUCKET`、`PARSAR_OSS_ACCESS_KEY_ID`、`PARSAR_OSS_ACCESS_KEY_SECRET`、`PARSAR_OSS_BASE_URL` |
+| 模型地址、协议、模型 Key | 左侧**模型**。 |
+| 个人或组织凭据 | **设置 → 凭据**。 |
+| 飞书、Slack、Discord、Teams | 左侧**集成**。 |
+| 本地设备、工作区 E2B Key | 左侧**执行层**（Runtime）。 |
+| 服务域名、监听端口、数据库和加密密钥 | 部署配置，见下文。 |
 
-YAML 对应字段见 [`docs/deploy/config.example.yaml`](https://github.com/MiniMax-AI-Dev/parsar/blob/main/docs/deploy/config.example.yaml)：`server`、`database`、`auth`、`secret`、`gateway.feishu`、`model`、`storage`、`audit.otlp`。密钥应放在环境变量或密钥管理器中。生产校验要求 public URL、Postgres URL、master key 和安全 Cookie；开发模式必须显式使用受支持的开发开关。
+## 一键安装后的配置位置
 
-示例中的具体键包括：`server.addr`、`server.public_url`、`server.data_dir`、`server.plugin_host_path`、`database.url`、`auth.dev_auth`、`auth.cookie.secure`、`auth.platform_admin_user_ids`、`secret.master_key`、`gateway.feishu.mock`、`gateway.feishu.app_id`、`gateway.feishu.app_secret`、`gateway.feishu.redirect_uri`、`gateway.feishu.scope`、`gateway.feishu.authorize_base`、`gateway.feishu.api_base`、`gateway.feishu.verification_token`、`gateway.feishu.encrypt_key`、`gateway.feishu.login_redirect_url`、`model.opencode_bin`、`sandbox.runner`、`storage.blob_backend`、`storage.oss.region`、`storage.oss.endpoint`、`storage.oss.bucket`、`storage.oss.access_key_id`、`storage.oss.access_key_secret`、`storage.oss.base_url`、`audit.otlp.enabled`、`audit.otlp.addr`、`audit.otlp.signing_key`、`audit.otlp.external_endpoint` 和 `audit.otlp.fanout_endpoint`。部分版本的渲染示例会省略 `server.plugin_host_path`，但 loader 仍支持该键。
+默认安装将 Compose 文件和 .env 放在 `~/.parsar/`，并生成数据库密码、加密主密钥和共享 Runtime 令牌。保留安装器已生成的密钥。
 
-## 仓库中的环境模板
+调整安装配置后，从安装目录应用变更：
 
-仓库根目录 `.env.example` 当前有 26 个赋值项：
+```bash
+cd ~/.parsar
+docker compose up -d
+docker compose ps
+```
 
-`PARSAR_FEISHU_MOCK`、`PARSAR_FEISHU_APP_ID`、`PARSAR_FEISHU_APP_SECRET`、`PARSAR_FEISHU_REDIRECT_URI`、`PARSAR_FEISHU_VERIFICATION_TOKEN`、`PARSAR_FEISHU_ENCRYPT_KEY`、`DATABASE_URL`、`PARSAR_MASTER_KEY`、`PARSAR_LOCAL_PORT`、`PARSAR_PG_PORT`、`PARSAR_HOST_IP`、`PARSAR_SERVER_IMAGE`、`PARSAR_SHARED_RUNTIME_TOKEN`、`PARSAR_AGENT_DAEMON_WS_URL`、`PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID`、`AGENT_DAEMON_SANDBOX_TEMPLATE`、`PARSAR_E2B_API_KEY`、`AGENT_DAEMON_SANDBOX_TEMPLATE_XL`、`AGENT_DAEMON_SANDBOX_TTL`、`AGENT_DAEMON_SANDBOX_AUTO_RENEW`、`AGENT_DAEMON_SANDBOX_TTL_HOURS`（已弃用兼容项）、`PARSAR_E2B_API_BASE_URL`、`PARSAR_E2B_SANDBOX_HOST`、`PARSAR_E2B_CA_CERT`、`HTTP_PROXY`、`HTTPS_PROXY`。
+更改过安装目录时，用实际目录替换 `~/.parsar`。
 
-自托管 Compose 模板 `deploy/compose/.env.example` 当前有 44 个赋值项：
+## 地址和端口
 
-- 镜像、端口和数据库：`PARSAR_SERVER_IMAGE`、`PARSAR_HOST_PORT`、`PARSAR_PG_HOST_PORT`、`PARSAR_PG_USER`、`PARSAR_PG_PASSWORD`、`PARSAR_PG_DB`、`PARSAR_PUBLIC_URL`、`PARSAR_MASTER_KEY`；
-- 飞书：`PARSAR_FEISHU_MOCK`、`PARSAR_FEISHU_APP_ID`、`PARSAR_FEISHU_APP_SECRET`、`PARSAR_FEISHU_REDIRECT_URI`、`PARSAR_FEISHU_VERIFICATION_TOKEN`、`PARSAR_FEISHU_ENCRYPT_KEY`、`PARSAR_LOGIN_REDIRECT_URL`、`PARSAR_FEISHU_AUTHORIZE_BASE`、`PARSAR_FEISHU_API_BASE`；
-- GitHub OAuth：`PARSAR_GITHUB_CLIENT_ID`、`PARSAR_GITHUB_CLIENT_SECRET`、`PARSAR_GITHUB_REDIRECT_URI`、`PARSAR_GITHUB_SCOPE`；
-- daemon 与沙盒：`PARSAR_DAEMON_REPO`、`PARSAR_AGENT_DAEMON_OWNER_URL`、`PARSAR_E2B_API_KEY`、`AGENT_DAEMON_SANDBOX_TEMPLATE`、`AGENT_DAEMON_SANDBOX_TEMPLATE_XL`、`AGENT_DAEMON_SANDBOX_TTL`、`AGENT_DAEMON_SANDBOX_AUTO_RENEW`、`PARSAR_E2B_API_BASE_URL`、`PARSAR_E2B_SANDBOX_HOST`、`PARSAR_E2B_CA_CERT`；
-- 对象存储：`PARSAR_OSS_REGION`、`PARSAR_OSS_BUCKET`、`PARSAR_OSS_ACCESS_KEY_ID`、`PARSAR_OSS_ACCESS_KEY_SECRET`、`PARSAR_OSS_BASE_URL`、`PARSAR_OSS_ENDPOINT`；
-- 审计与挂载：`PARSAR_AUDIT_OTLP_ENABLED`、`PARSAR_AUDIT_OTLP_ADDR`、`PARSAR_AUDIT_OTLP_SIGNING_KEY`、`PARSAR_AUDIT_OTLP_EXTERNAL_ENDPOINT`、`PARSAR_AUDIT_OTLP_FANOUT_ENDPOINT`、`PARSAR_CONFIG_HOST_PATH`、`PARSAR_DATA_HOST_PATH`。
+| 变量 | 默认安装值 | 用途 |
+| --- | --- | --- |
+| `PARSAR_LOCAL_PORT` | `18080` | 宿主机访问端口。 |
+| `PARSAR_BIND_ADDR` | `127.0.0.1` | 宿主机监听地址。 |
+| `PARSAR_PUBLIC_URL` | `http://127.0.0.1:18080` | 用户和外部设备访问的完整服务地址。 |
 
-模板变量是 Compose 接线，不是 Agent 字段。复制为 `.env` 后替换占位符，绝不提交生成的文件。
+使用域名时，将 `PARSAR_PUBLIC_URL` 设为反向代理对外提供的 HTTPS 地址。它会用于登录跳转和设备连接命令；接入其他电脑时不能填只能从服务器自身访问的回环地址。
 
-## 连接器进程开关
+端口和绑定地址由 Compose 使用，服务进程的 `PARSAR_ADDR` 默认是 `:8080`。它们不是同一个端口设置。
 
-即时通讯 worker 通过进程开关启用：飞书使用 `PARSAR_FEISHU_WS_REFRESH_SECONDS` 和 `PARSAR_FEISHU_OUTBOUND_POLL_SECONDS`；Slack Socket Mode 使用 `PARSAR_SLACK_SOCKET=true`、`PARSAR_SLACK_BOT_TOKEN`、`PARSAR_SLACK_APP_TOKEN`；Discord Gateway 使用 `PARSAR_DISCORD_GATEWAY=true`、`PARSAR_DISCORD_BOT_TOKEN`；Teams webhook 使用 `PARSAR_TEAMS_WEBHOOK=true`、`PARSAR_TEAMS_APP_ID`、`PARSAR_TEAMS_APP_PASSWORD`。数据库多租户 reconciler 通过 `PARSAR_SLACK_CONNECTORS`、`PARSAR_DISCORD_CONNECTORS`、`PARSAR_TEAMS_CONNECTORS` 启用，具体 master key 要求见各集成页。
+## 数据与密钥
 
-## 安全变更
+安装器管理 `PARSAR_PG_PASSWORD`、`PARSAR_MASTER_KEY` 和 `PARSAR_SHARED_RUNTIME_TOKEN`。自行部署时使用稳定的随机值；主密钥可用 `openssl rand -hex 32` 生成。备份数据库时一起安全备份密钥，更换主密钥会使旧凭据无法解密。
 
-- 更换 master key 前备份数据库；旧密文无法用新密钥解密。
-- public URL 必须与反向代理和 OAuth 回调一致。
-- 生产挂载路径使用仓库之外的绝对路径。
-- 修改启动时 Provider 开关后重启服务，并检查 `/healthz` 与 `/readyz`。
+安装器默认将数据库数据放在 `~/.parsar/postgres`，服务数据放在 `~/.parsar/data`。不要将运行数据或密钥提交到代码仓库。
 
-参见[自托管快速上手](/zh/self-host-quickstart)、[安全模型](/zh/security)和[故障排查](/zh/troubleshooting)。
+## 可选服务
+
+- **飞书登录**：配置服务端登录 App ID、App Secret 和回调，见[身份认证](/zh/authentication)。机器人扫码连接在**集成**完成。
+- **Teams**：当前接收端需要部署开关，见[Microsoft Teams](/zh/teams)。
+- **云端沙盒**：部署需要沙盒模板和可用供应商凭据，见[Runtime 与执行位置](/zh/runtimes)。
+- **对象存储**：能力文件默认保存在 PostgreSQL；只有采用 OSS 时才配置 `PARSAR_BLOB_BACKEND=oss` 和对应存储凭据。
+
+额外服务端变量必须由部署平台传入服务进程，或加入 Compose 服务的 `environment`。.env 只为 Compose 中引用的变量提供值，不会自动把所有变量传入容器。
+
+## 直接运行服务进程
+
+直接运行 Go 服务时，生产配置需要 `DATABASE_URL`、`PARSAR_PUBLIC_URL` 和 `PARSAR_MASTER_KEY`。服务端按“内置默认值 → `PARSAR_CONFIG_FILE` 指定的 YAML → 环境变量”读取配置；空环境变量不会清除已有 YAML 值。配置文件路径必须是绝对路径或以 `~/` 开头。
+
+完成调整后检查 `/healthz` 和 `/readyz`，再验证登录、设备连接及一次 Agent 运行。参见[自托管快速上手](/zh/self-host-quickstart)和[故障排查](/zh/troubleshooting)。

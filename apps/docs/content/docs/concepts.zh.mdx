@@ -1,71 +1,41 @@
 ---
 title: 核心概念
-description: 用一页了解 Parsar 工作区中的核心对象。
+description: 了解工作区、Agent、执行设备、对话和运行之间的关系。
 ---
 
-Parsar 把协作和执行分开：服务端保存团队上下文与持久化记录，Runtime 实际执行 Agent，并把事件回传。下面的值均来自当前服务端和数据库约束。
+Parsar 以对话和运行组织工作。工作区保存团队配置与历史，Agent 使用选定的模型和执行环境完成请求。
 
-## 工作区对象
+## 你会用到的对象
 
-| 对象 | 职责 |
-| --- | --- |
-| Workspace | 隔离成员、Agent、对话、设置、凭据和历史。 |
-| Agent | 可复用的身份与执行配置，包括连接器、模型、指令、能力、可见性和 Runtime 绑定。 |
-| Runtime | 具体执行环境，例如配对的 `parsar-daemon`、本地沙盒或外部 Agent 地址。 |
-| Conversation | 面向 Web、即时通讯或 API 的持久化交互上下文。 |
-| Agent Run | 由对话或其他入口触发的一次具体执行。 |
-| Capability | 可以挂载到 Agent 的 Skill、MCP、Plugin、System Prompt 或 Bundle。 |
-| Connector | 工作交付所经过的协议边界。Agent 连接器是 `agent_daemon` 和 `http`；飞书、Slack、Discord、Teams 是工作区即时通讯连接器。 |
+| 对象 | 含义 | 界面入口 |
+| --- | --- | --- |
+| 工作区（Workspace） | 团队成员、资源和历史的归属范围。 | 左上角工作区切换器。 |
+| Agent | 可复用的名称、指令、模型、能力和执行配置。 | **Agent**。 |
+| 执行环境（Runtime） | 运行 Agent 的设备或沙盒环境。 | **执行层**。 |
+| 对话（Conversation） | 保存消息和回复的连续上下文。 | **对话**。 |
+| 运行（Run） | 一次执行的状态、事件和结果。 | **运行**。 |
+| 能力（Capability） | 绑定到 Agent 的可复用指令或工具，如 Skill 和 MCP。 | **能力**。 |
+| 交互请求（Interaction） | Agent 等待人类批准或回答的问题。 | **收件箱**及当前对话。 |
+| 定时任务（Scheduled Task） | 按设定频率向 Agent 提交 Prompt。 | **定时任务**。 |
 
-## 最容易混淆的区别
+## Agent、Runtime 与 Run
 
-Agent 不是常驻 daemon 进程，而是身份和配置。Runtime 决定在哪里执行。Run 是一次执行记录。同一个 Runtime 可以服务多个 Agent，同一个 Agent 也可以持续产生多次 Run。
+以“检查代码”为例：你选择一个已配置好的 Agent，它在绑定的执行设备上调用编程 CLI，并生成一条 Run 记录。
 
-## Parsar 的工作模型
+Agent 是配置，Runtime 是执行位置，Run 是一次执行。一个 Runtime 可以服务多个 Agent；同一条对话也可以先后产生多个 Run。一次 Run 完成后，对话仍可继续。
 
-Parsar 当前以 Conversation 和 Agent Run 作为主要工作记录。Conversation 保存面向人的上下文，Run 记录一次具体执行；Scheduled Task 提供周期性触发。这与独立的 first-class 项目或 Issue 管理器不同：Conversation 没有项目字段、Issue 编号或项目资源 checkout。
+## 两类连接器
 
-在集成和自动化中，应引用 Workspace、Agent、Runtime、Capability 和 Scheduled Task 这些稳定对象。
+**运行**页面中的 **Agent Daemon** 和 **HTTP Agent** 描述执行的交付方式。本地设备和云端隔离使用 Agent Daemon。HTTP Agent 用于已有外部 HTTP 服务记录，当前新建表单中的外部 Agent 选项已禁用。
 
-## API 中会看到的枚举
+左侧**集成**中的飞书、Slack、Discord 和 Teams 是聊天入口，用来接收消息和返回回复。聊天连接器与 Run 的执行连接器分别配置，不能互相替代。详见[Agent 引擎对照](/zh/agent-tools)和[集成](/zh/integrations)。
 
-### Agent 类型与连接器
+## 运行状态与交互状态
 
-Agent 的 `config.agent_kind` 选择 daemon 发现到的命令行引擎：
+Run 有六种状态：排队中、运行中、已完成、失败、已取消、已中断。前两种尚未结束，后四种是终态。
 
-| Agent 类型 | 流式输出 | 权限请求 | 恢复运行 | 用量上报 |
-| --- | --- | --- | --- | --- |
-| `claude_code` | 是 | 是 | 是 | 是 |
-| `codex` | 是 | 是 | 是 | 是 |
-| `opencode` | 是 | 否 | 否 | 是 |
-| `pi` | 是 | 否（使用 `--no-approve`） | 是 | 是 |
+审批和提问单独记录状态。Run 显示运行中时，Agent 仍会等待尚未处理的请求；回答或批准后才能继续相应操作。具体状态及入口见[查看运行、审批和日志](/zh/runs-approvals-logs)。
 
-配对 daemon 或托管 daemon 使用 `agent_daemon` 连接器，外部 HTTP Agent 使用 `http`。daemon 连接时才会发现可用性和版本，浏览器端不会假设固定版本。
+## 共享与权限
 
-### 可见性、成员和 Runtime 状态
-
-Agent 可见性只有三种：
-
-| 值 | 可以打开 Agent 的人 |
-| --- | --- |
-| `workspace` | 所属工作区的 active 成员 |
-| `tenant` | 任意已注册 Parsar 用户（包含工作区成员） |
-| `public` | 已注册用户和未登录访客（访客会看到注册提示） |
-
-工作区可见性是另一个字段，只有 `private` 和 `public`。成员状态是 `pending`、`active`、`rejected`；只有 `active` 成员参与工作区访问检查。Runtime 存活状态是 `pending_pairing`、`offline`、`online`、`error`。
-
-## Run 生命周期
-
-Run 恰好有六种状态：`queued`（等待启动）、`running`（正在执行）、`completed`（正常完成）、`failed`（执行错误）、`cancelled`（用户取消）和 `interrupted`（系统中断或 Runtime 失败）。后四种是终态。Run 完成不等于 Conversation 结束；对话会保留消息，并可以再次触发运行。
-
-不要把 Run 状态和 Agent Interaction 混淆。审批和选择交互有自己的状态：`pending`、`resolving`、`approved`、`denied`、`answered`、`cancelled`、`expired`。
-
-## 人工交互
-
-权限请求和用户选择请求都会持久化为 Interaction。它们可以在 Web 审批收件箱或对话界面中处理，并由同一套服务记录最终决定。
-
-## 相关页面
-
-- [Parsar 的工作方式](/zh/how-parsar-works)
-- [创建和配置 Agent](/zh/create-agent)
-- [查看运行、审批和日志](/zh/runs-approvals-logs)
+共享对话链接打开的是原对话，不会创建副本，也不会给访问者增加权限。工作区成员关系和 Agent 访问设置分别决定能查看和执行的内容。详见[对话与共享对话](/zh/conversations)和[成员与角色](/zh/members-roles)。

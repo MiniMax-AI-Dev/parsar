@@ -1,63 +1,77 @@
 ---
 title: 故障排查
-description: 按 Parsar 服务端、Runtime、daemon 和 Agent Provider 分层定位常见问题。
+description: 从运行记录、收件箱和执行设备定位问题。
 ---
 
-先确定问题属于哪一层。Parsar 控制面、Runtime、`parsar-daemon` 和选定的 AI 编程 CLI 各自负责不同部分。
+先打开**运行**，找到对应 Agent 和时间的 Run，查看右侧详情的状态、诊断和 **Steps**（步骤）。保留 Run ID，后续日志都围绕这次执行核对。
 
-## 第一轮检查
+## 定时任务一直显示运行中
+
+1. 刷新**定时任务**页面，更新上次执行状态。当前列表不会持续轮询。
+2. 打开**运行**，找到这次立即运行产生的 Run。
+3. Run 已完成而定时任务页仍显示运行中：重新加载定时任务页，以 Run 的终态为准。
+4. Run 仍在运行中：查看最新步骤，并打开**收件箱**检查待处理请求。
+5. 在执行设备查看 daemon 日志，核对模型请求、CLI 输出和错误。
+
+**立即运行**成功表示已创建执行请求，不表示 Agent 已完成工作。没有统一的成功耗时；任务完成依赖所选 Agent、模型、工具和 Prompt。需要结束当前执行时，在 Run 详情点击**取消运行**。
+
+## 输入 @ 没有菜单
+
+当前对话输入框没有自动补全。手动输入完整名称或 slug，例如 `@reviewer 检查这次修改`，发送后在**运行**核对目标 Agent。拼写错误或已停用的目标不会触发执行，规则见[对话与共享对话](/zh/conversations)。
+
+## 设备离线或配对失败
+
+打开**执行层**，检查设备连接状态和最后心跳。在目标机器查看：
 
 ```bash
-docker compose ps
-docker compose logs --tail=100 parsar-server
-parsar-daemon status
-parsar-daemon logs -n 100
+tail -n 100 ~/.parsar/parsar-daemon/default/connect.log
 ```
 
-自托管部署还可以直接检查服务地址：
+- 地址不可达：使用目标机器可访问的 Parsar 地址；另一台电脑上的 `127.0.0.1` 指向它自己。
+- 没有发现 CLI：在运行 daemon 的同一账号和环境中安装编程 CLI，并检查 `PATH`。
+- `pair_invalid` 或配对接口返回 401：重新生成连接命令，令牌有效期为 15 分钟且仅能使用一次。
+- 连接进程已停止：执行 `parsar-daemon connect -b` 使用已保存的 profile。只有已保存凭据丢失或不再被服务端接受时才重新生成命令，旧配对令牌不能重复使用。
+
+完整步骤见[安装 Agent Runtime](/zh/install-runtime)。
+
+## Run 排队或立即失败
+
+排队中表示执行尚未开始，运行中表示执行器已接管。按 Run 的诊断和最新事件检查：
+
+| 检查项 | 入口 |
+| --- | --- |
+| Agent 是否启用、设备和引擎是否匹配 | **Agent → 目标 Agent**。 |
+| 设备在线状态及已发现的引擎 | **执行层**。 |
+| 模型地址、协议和 Key | **模型**。 |
+| 能力版本与缺失凭据 | Agent 的**配置**，以及**设置 → 凭据**。 |
+| CLI、工作目录权限与网络错误 | 目标执行设备的 daemon 日志。 |
+
+设备恢复后，打开对话并发送新消息，发起新的 Run。**重试**会将同一个失败的 Run ID 重新排队并重置开始、结束时间，但不会主动派发 Agent Daemon Run。如果已经点击重试，先取消那条排队中的 Run，再发送新消息。已取消或已中断的 Run 点击重试会返回 HTTP 409，详见[运行操作](/zh/runs-approvals-logs#run-状态)。
+
+## 没有审批或提问卡片
+
+打开左侧**收件箱**，并刷新当前对话。已处理或已过期的请求不能再次提交。Codex 的用户输入工具要求 Agent 使用 **Plan** 协作模式；各引擎支持情况见[Agent 引擎对照](/zh/agent-tools)。
+
+## 找不到用量或集成入口
+
+用量在**设置 → 用量 → 最近调用**，点击 Run ID 回到运行详情。Run 详情中的 Audit 是审计，不是用量。
+
+聊天集成在左侧**集成**。每个平台的配置字段、外部平台准备和当前接入限制见[集成与连接器](/zh/integrations)。
+
+## 自托管服务无法访问
+
+以下命令在安装机器上执行，默认安装目录为 `~/.parsar`：
 
 ```bash
+cd ~/.parsar
+docker compose ps
+docker compose logs --tail=100 parsar-server
 curl -i http://127.0.0.1:18080/healthz
 curl -i http://127.0.0.1:18080/readyz
 ```
 
-`healthz` 表示 API 进程能够响应，`readyz` 还会包含数据库等依赖的就绪检查。
+更改过安装目录或端口时使用实际值。`healthz` 检查进程响应，`readyz` 检查服务就绪状态。地址设置见[部署配置](/zh/configuration)。
 
-## Runtime 离线
+## 报告问题
 
-1. 确认管理控制台中 Runtime 处于启用状态。
-2. 确认 daemon 进程正在运行，并且 Profile 配对的是目标服务地址。
-3. 查看最近一次心跳和 daemon 日志。
-4. 如果 Runtime 已删除或配对已过期，重新生成配对 Token 并连接。
-
-## Run 一直排队
-
-服务端会等 Agent 明确绑定的 Runtime 可以接收任务后才执行。检查 Agent 的 Runtime 绑定、Runtime liveness 和并发上限。不要假设 Parsar 会静默切换到其他 Runtime。
-
-## Run 立即失败
-
-按顺序检查：
-
-1. 选定的连接器和 Agent kind；
-2. 模型凭据和 endpoint 配置；
-3. Capability 所需凭据；
-4. 执行机器上的 Provider CLI 是否安装并完成登录；
-5. 工作目录和文件系统权限。
-
-## 没有出现审批或用户选择卡片
-
-打开 **审批** 页面并刷新当前 Conversation。Interaction 会先在服务端持久化，再投递到 Web 或 IM。如果它已经过期，服务端已完成拒绝或取消，需要重新运行 Agent。
-
-## API 文档和产品文档不是一回事
-
-`/docs` 是生成的 Swagger UI，`/api/v1/openapi.yaml` 是机器可读的 API 契约，本网站是面向用户的操作指南。如果界面行为和页面描述不一致，请先核对部署版本，再从当前代码更新页面。
-
-## 提交可复现问题
-
-请提供 Parsar 版本、操作系统、部署方式、Runtime 类型、Run ID、相关状态和经过脱敏的日志片段。分享前移除 Token、API Key、邮箱地址和私有仓库内容。
-
-## 相关页面
-
-- [自托管快速上手](/zh/self-host-quickstart)
-- [Parsar 的工作方式](/zh/how-parsar-works)
-- [查看运行、审批和日志](/zh/runs-approvals-logs)
+提供操作步骤、Parsar 版本、操作系统、部署方式、Agent 引擎、Run ID、状态和脱敏日志。不要附带配对命令中的令牌、API Key 或完整环境变量。

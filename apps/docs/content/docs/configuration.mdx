@@ -1,53 +1,63 @@
 ---
-title: Configuration and environment variables
-description: Configure Parsar from YAML, environment variables, and deployment templates.
+title: Deployment configuration
+description: Set the self-hosted server address, ports, keys, and optional services.
 ---
 
-Parsar loads configuration in this order: built-in defaults, the YAML file named by `PARSAR_CONFIG_FILE`, then environment variables. An empty environment variable does not erase a non-empty YAML value. The config path must be absolute or begin with `~/`; Parsar never falls back to the current directory.
+This page is for deployment administrators. Models, credentials, bots, and devices have their own UI entry points; everyday use does not require filling out an environment-variable inventory.
 
-## Server configuration
+## Choose the configuration entry
 
-The supported process variables are:
-
-| Group | Variables |
+| Setting | Entry |
 | --- | --- |
-| Server | `PARSAR_CONFIG_FILE`, `PARSAR_ADDR` (default `:8080`), `PARSAR_PUBLIC_URL`, `PARSAR_DATA_DIR` (default `~/.parsar`) |
-| Database and secrets | `DATABASE_URL`, `PARSAR_MASTER_KEY` |
-| Development and auth | `PARSAR_DEV_AUTH`, `PARSAR_PLATFORM_ADMIN_USER_IDS`, `PARSAR_LOGIN_REDIRECT_URL` |
-| Agent execution | `PARSAR_OPENCODE_BIN`, `PARSAR_OPENCODE_RUNNER`, `PARSAR_PLUGIN_HOST_PATH` |
-| Feishu | `PARSAR_FEISHU_MOCK`, `PARSAR_FEISHU_APP_ID`, `PARSAR_FEISHU_APP_SECRET`, `PARSAR_FEISHU_REDIRECT_URI`, `PARSAR_FEISHU_SCOPE`, `PARSAR_FEISHU_AUTHORIZE_BASE`, `PARSAR_FEISHU_API_BASE`, `PARSAR_FEISHU_VERIFICATION_TOKEN`, `PARSAR_FEISHU_ENCRYPT_KEY` |
-| Audit | `PARSAR_AUDIT_OTLP_ENABLED`, `PARSAR_AUDIT_OTLP_ADDR` (default `:4318`), `PARSAR_AUDIT_OTLP_SIGNING_KEY`, `PARSAR_AUDIT_OTLP_EXTERNAL_ENDPOINT`, `PARSAR_AUDIT_OTLP_FANOUT_ENDPOINT` |
-| Storage | `PARSAR_BLOB_BACKEND` (`pg` or `oss`), `PARSAR_OSS_REGION`, `PARSAR_OSS_ENDPOINT`, `PARSAR_OSS_BUCKET`, `PARSAR_OSS_ACCESS_KEY_ID`, `PARSAR_OSS_ACCESS_KEY_SECRET`, `PARSAR_OSS_BASE_URL` |
+| Model URL, protocol, and model key | **Models** in the sidebar. |
+| Personal or organization credentials | **Settings → Credentials**. |
+| Feishu, Slack, Discord, or Teams | **Integrations** in the sidebar. |
+| Local devices and workspace E2B key | **Runtime** in the sidebar. |
+| Domain, listening port, database, and encryption keys | Deployment configuration below. |
 
-The YAML equivalent is documented in [`docs/deploy/config.example.yaml`](https://github.com/MiniMax-AI-Dev/parsar/blob/main/docs/deploy/config.example.yaml): `server`, `database`, `auth`, `secret`, `gateway.feishu`, `model`, `storage`, and `audit.otlp`. Keep secrets in environment variables or a secret manager. Production validation requires a public URL, Postgres URL, master key, and secure cookies; development mode is explicitly enabled with the supported dev switches.
+## After a one-command install
 
-The example's concrete keys are `server.addr`, `server.public_url`, `server.data_dir`, `server.plugin_host_path`, `database.url`, `auth.dev_auth`, `auth.cookie.secure`, `auth.platform_admin_user_ids`, `secret.master_key`, `gateway.feishu.mock`, `gateway.feishu.app_id`, `gateway.feishu.app_secret`, `gateway.feishu.redirect_uri`, `gateway.feishu.scope`, `gateway.feishu.authorize_base`, `gateway.feishu.api_base`, `gateway.feishu.verification_token`, `gateway.feishu.encrypt_key`, `gateway.feishu.login_redirect_url`, `model.opencode_bin`, `sandbox.runner`, `storage.blob_backend`, `storage.oss.region`, `storage.oss.endpoint`, `storage.oss.bucket`, `storage.oss.access_key_id`, `storage.oss.access_key_secret`, `storage.oss.base_url`, `audit.otlp.enabled`, `audit.otlp.addr`, `audit.otlp.signing_key`, `audit.otlp.external_endpoint`, and `audit.otlp.fanout_endpoint`. The example intentionally leaves `server.plugin_host_path` out of the rendered sample in some releases; the loader still supports it.
+The default installation stores Compose configuration and .env in `~/.parsar/` and generates a database password, encryption key, and shared Runtime token. Preserve those generated keys.
 
-## Current repository templates
+Apply installation configuration changes from that directory:
 
-The committed root `.env.example` contains 26 assignments for local development and LAN Compose. They are:
+```bash
+cd ~/.parsar
+docker compose up -d
+docker compose ps
+```
 
-`PARSAR_FEISHU_MOCK`, `PARSAR_FEISHU_APP_ID`, `PARSAR_FEISHU_APP_SECRET`, `PARSAR_FEISHU_REDIRECT_URI`, `PARSAR_FEISHU_VERIFICATION_TOKEN`, `PARSAR_FEISHU_ENCRYPT_KEY`, `DATABASE_URL`, `PARSAR_MASTER_KEY`, `PARSAR_LOCAL_PORT`, `PARSAR_PG_PORT`, `PARSAR_HOST_IP`, `PARSAR_SERVER_IMAGE`, `PARSAR_SHARED_RUNTIME_TOKEN`, `PARSAR_AGENT_DAEMON_WS_URL`, `PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID`, `AGENT_DAEMON_SANDBOX_TEMPLATE`, `PARSAR_E2B_API_KEY`, `AGENT_DAEMON_SANDBOX_TEMPLATE_XL`, `AGENT_DAEMON_SANDBOX_TTL`, `AGENT_DAEMON_SANDBOX_AUTO_RENEW`, `AGENT_DAEMON_SANDBOX_TTL_HOURS` (deprecated compatibility), `PARSAR_E2B_API_BASE_URL`, `PARSAR_E2B_SANDBOX_HOST`, `PARSAR_E2B_CA_CERT`, `HTTP_PROXY`, and `HTTPS_PROXY`.
+Substitute the actual installation directory if you changed it.
 
-The self-hosted Compose template at `deploy/compose/.env.example` contains 44 assignments. In addition to the groups above, it defines:
+## Address and ports
 
-- host/image/database: `PARSAR_SERVER_IMAGE`, `PARSAR_HOST_PORT`, `PARSAR_PG_HOST_PORT`, `PARSAR_PG_USER`, `PARSAR_PG_PASSWORD`, `PARSAR_PG_DB`, `PARSAR_PUBLIC_URL`;
-- OAuth: `PARSAR_LOGIN_REDIRECT_URL`, `PARSAR_FEISHU_AUTHORIZE_BASE`, `PARSAR_FEISHU_API_BASE`, `PARSAR_GITHUB_CLIENT_ID`, `PARSAR_GITHUB_CLIENT_SECRET`, `PARSAR_GITHUB_REDIRECT_URI`, `PARSAR_GITHUB_SCOPE`;
-- daemon/sandbox: `PARSAR_DAEMON_REPO`, `PARSAR_AGENT_DAEMON_OWNER_URL`, `PARSAR_E2B_API_KEY`, `AGENT_DAEMON_SANDBOX_TEMPLATE`, `AGENT_DAEMON_SANDBOX_TEMPLATE_XL`, `AGENT_DAEMON_SANDBOX_TTL`, `AGENT_DAEMON_SANDBOX_AUTO_RENEW`, `PARSAR_E2B_API_BASE_URL`, `PARSAR_E2B_SANDBOX_HOST`, `PARSAR_E2B_CA_CERT`;
-- object storage: `PARSAR_OSS_REGION`, `PARSAR_OSS_BUCKET`, `PARSAR_OSS_ACCESS_KEY_ID`, `PARSAR_OSS_ACCESS_KEY_SECRET`, `PARSAR_OSS_BASE_URL`, `PARSAR_OSS_ENDPOINT`;
-- audit and mounts: `PARSAR_AUDIT_OTLP_ENABLED`, `PARSAR_AUDIT_OTLP_ADDR`, `PARSAR_AUDIT_OTLP_SIGNING_KEY`, `PARSAR_AUDIT_OTLP_EXTERNAL_ENDPOINT`, `PARSAR_AUDIT_OTLP_FANOUT_ENDPOINT`, `PARSAR_CONFIG_HOST_PATH`, `PARSAR_DATA_HOST_PATH`.
+| Variable | Default installation value | Purpose |
+| --- | --- | --- |
+| `PARSAR_LOCAL_PORT` | `18080` | Host port exposed to users. |
+| `PARSAR_BIND_ADDR` | `127.0.0.1` | Host listening address. |
+| `PARSAR_PUBLIC_URL` | `http://127.0.0.1:18080` | Full server address for users and external devices. |
 
-Template variables are Compose wiring; they are not additional Agent fields. Copy the relevant template to `.env`, replace placeholders, and never commit the resulting file.
+With a domain, set `PARSAR_PUBLIC_URL` to the reverse proxy's public HTTPS address. It is used for login redirects and device connection commands. A loopback address cannot connect another computer to this server.
 
-## Connector-specific runtime flags
+Compose uses the host port and bind address. The server process's `PARSAR_ADDR` defaults to `:8080`; it is a separate setting.
 
-Messaging workers are opt-in process flags. Feishu uses `PARSAR_FEISHU_WS_REFRESH_SECONDS` and `PARSAR_FEISHU_OUTBOUND_POLL_SECONDS`; Slack Socket Mode uses `PARSAR_SLACK_SOCKET=true` with `PARSAR_SLACK_BOT_TOKEN` and `PARSAR_SLACK_APP_TOKEN`; Discord Gateway uses `PARSAR_DISCORD_GATEWAY=true` with `PARSAR_DISCORD_BOT_TOKEN`; Teams webhook uses `PARSAR_TEAMS_WEBHOOK=true` with `PARSAR_TEAMS_APP_ID` and `PARSAR_TEAMS_APP_PASSWORD`. DB-backed multi-tenant reconcilers are enabled with `PARSAR_SLACK_CONNECTORS`, `PARSAR_DISCORD_CONNECTORS`, or `PARSAR_TEAMS_CONNECTORS` and require the master key where noted on the integration pages.
+## Data and keys
 
-## Safe changes
+The installer manages `PARSAR_PG_PASSWORD`, `PARSAR_MASTER_KEY`, and `PARSAR_SHARED_RUNTIME_TOKEN`. For a manual deployment, use stable random values; generate a master key with `openssl rand -hex 32`. Securely back up the keys with the database. Replacing the master key prevents existing credentials from being decrypted.
 
-- Back up the database before changing the master key; existing ciphertext cannot be decrypted with a different key.
-- Keep public URLs and OAuth redirect URIs aligned with the reverse proxy.
-- Use absolute host paths outside the repository for production bind mounts.
-- Restart the server after changing startup-time provider flags and inspect `/healthz` and `/readyz`.
+The installer places database data in `~/.parsar/postgres` and server data in `~/.parsar/data` by default. Keep runtime data and secrets out of source control.
 
-See [Self-hosting quickstart](/self-host-quickstart), [Security model](/security), and [Troubleshooting](/troubleshooting).
+## Optional services
+
+- **Feishu login**: configure the server's login App ID, App Secret, and callback. See [Authentication](/authentication). Bot scan authorization is in **Integrations**.
+- **Teams**: the current receiver requires a deployment flag. See [Microsoft Teams](/teams).
+- **Cloud sandboxes**: the deployment needs a sandbox template and usable provider credentials. See [Runtimes and execution locations](/runtimes).
+- **Object storage**: capability files use PostgreSQL by default. Configure `PARSAR_BLOB_BACKEND=oss` and storage credentials only when adopting OSS.
+
+Additional server variables must be supplied to the process by the deployment platform or wired into the Compose service's `environment`. .env only supplies values referenced by Compose; it does not automatically pass every variable into containers.
+
+## Running the server process directly
+
+A direct production deployment requires `DATABASE_URL`, `PARSAR_PUBLIC_URL`, and `PARSAR_MASTER_KEY`. The server loads built-in defaults, then YAML from `PARSAR_CONFIG_FILE`, then environment overrides. Empty environment variables do not clear existing YAML values. Configuration paths must be absolute or start with `~/`.
+
+After applying changes, check `/healthz` and `/readyz`, then verify login, device connection, and one Agent Run. See [Self-hosting quickstart](/self-host-quickstart) and [Troubleshooting](/troubleshooting).

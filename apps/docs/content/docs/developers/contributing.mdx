@@ -1,17 +1,42 @@
 ---
 title: Contributing
-description: Prepare a clean worktree, make focused changes, and run the required checks.
+description: Prepare a development branch, verify changes, and complete independent review.
 ---
 
-Work in a dedicated Git worktree and branch. Keep unrelated user changes intact, read the root `CONTRIBUTING.md` before substantial implementation, and write comments and documentation in English unless the text is intentionally localized copy.
+The [contributor guide](https://github.com/MiniMax-AI-Dev/parsar/blob/main/CONTRIBUTING.md) is the source of development rules. These steps prepare a change.
 
-## Before opening a PR
+## Prepare a worktree
 
-1. Rebase the feature branch on the latest `upstream/main` so the PR has a linear, reviewable history.
-2. Keep commits focused and do not commit secrets, daemon `auth.json`, generated local state, or build output.
-3. Run `make check` from WSL/Linux. For this docs package, also run `pnpm --filter @parsar/docs typecheck` and `pnpm --filter @parsar/docs build`.
-4. Describe the implementation, verification, and any intentionally deferred deployment work in the PR.
+Create a branch and Git worktree from the latest `origin/main` under `.worktrees/`. Make all changes in that worktree and preserve unrelated existing changes.
 
-If a check fails, include the exact command and failure in the PR rather than marking it as passed. Resolve rebase conflicts deliberately; do not use a hard reset to discard work.
+```bash
+git fetch origin main
+git worktree add .worktrees/my-change -b feature/my-change origin/main
+```
 
-The canonical rules and generated-artifact contracts live in [`CONTRIBUTING.md`](https://github.com/AllureCurtain/parsar/blob/main/CONTRIBUTING.md).
+Read the contributor guide before substantial implementation. Update it in the same branch when changing architecture rules, ownership, required checks, or generated contracts.
+
+## Verify the change
+
+Run from the worktree root:
+
+```bash
+make check
+```
+
+This gate includes checks for Go, the database, Web, documentation, and CLI. The documentation package can also be checked separately:
+
+```bash
+pnpm --filter @parsar/docs typecheck
+pnpm --filter @parsar/docs build
+```
+
+For API or database query changes, regenerate contracts and queries as described in [Repository conventions](/developers/conventions). Record the exact command and error when a check fails; do not mark it passed.
+
+## Review and delivery
+
+Substantial changes require two independent reviews after implementation and verification. Reviewers inspect the requirements, acceptance criteria, project rules, and full diff. Repeat review after material fixes.
+
+Keep commits focused and exclude secrets, runtime state, and build caches. Target PRs at `main`, explain the problem, final behavior, and validation, and complete PR review before merging.
+
+Update English and Chinese product documentation together. Use root paths for English links and `/zh/` paths for Chinese links. Other comments and documentation use English.

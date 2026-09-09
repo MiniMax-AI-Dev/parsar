@@ -1,41 +1,33 @@
 ---
 title: Welcome
-description: Parsar is a self-hosted control plane for dispatching, managing, and auditing AI coding agents as a team.
+description: Connect execution devices and work with Agents as a team in Parsar.
 ---
 
-Parsar turns your team's intent into an observable agent run. People create a conversation or task, choose an Agent, and receive progress and results back in the same workspace.
+Parsar is a shared Agent workspace for teams. Configure models and execution devices, talk to Agents, respond to approvals, and inspect each run's results.
 
-## What Parsar provides
+## Get started
 
-| Capability | What it means |
+- Already have a Parsar workspace? Follow the [quickstart](/quickstart) to configure a model, connect a device, and start your first conversation.
+- Need to deploy the server? Use the [self-host quickstart](/self-host-quickstart) to install with Docker Compose.
+- Want to understand the workflow first? Read [Core concepts](/concepts) and [How Parsar works](/how-parsar-works).
+
+## Find documentation by page
+
+| UI entry point | Guide |
 | --- | --- |
-| Team control plane | Workspaces, members, permissions, conversations, and durable history live together. |
-| Pluggable execution | Agents run through a paired `parsar-daemon`, a sandbox, or an HTTP Agent connector. |
-| Auditable runs | Every run records status, events, output, artifacts, usage, and failures. |
-| Self-hosted operation | Your code, credentials, database, and runtime can stay on infrastructure you control. |
+| Workspace name at the top left, Members | [Workspaces](/workspace), [Members and roles](/members-roles) |
+| Agents | [Create and configure an Agent](/create-agent) |
+| Conversations | [Conversations and shared conversations](/conversations) |
+| Inbox, Runs | [Runs, approvals, and logs](/runs-approvals-logs) |
+| Models, Credentials in Settings | [Models and credentials](/models-credentials) |
+| Capabilities | [Capabilities, Skills, and MCP](/capabilities) |
+| Runtime | [Install Agent Runtime](/install-runtime), [Execution placement](/runtimes) |
+| Scheduled tasks | [Scheduled tasks](/scheduled-tasks) |
+| Integrations | [Chat integrations](/integrations) |
+| Usage and Audit in Settings | [Audit and usage](/audit-usage) |
 
-## Start here
+## Deployment and maintenance
 
-- [Quickstart](/quickstart) — install Parsar, connect a runtime, create an Agent, and complete the first run.
-- [Core concepts](/concepts) — understand Workspace, Agent, Runtime, Conversation, Run, Capability, and Connector.
-- [How Parsar works](/how-parsar-works) — see the server-to-daemon execution boundary.
-- [Self-host quickstart](/self-host-quickstart) — deploy with Docker Compose.
+Deployment administrators can read [Deployment configuration](/configuration), [Login and registration](/authentication), and [Security model](/security). Start with [Troubleshooting](/troubleshooting) for execution problems.
 
-## Explore Parsar
-
-- [Workspaces](/workspace) — understand tenant boundaries and lifecycle.
-- [Members and roles](/members-roles) — invite people and manage access.
-- [Capabilities](/capabilities) — add Skills, MCP servers, Plugins, and prompts.
-- [Conversations](/conversations) — preserve context and share a conversation safely.
-- [Runtimes](/runtimes) — connect daemons, sandboxes, and external Agents.
-- [Scheduled tasks](/scheduled-tasks) — trigger recurring Agent Runs.
-- [Integrations](/integrations) — connect chat gateways and external providers.
-- [CLI reference](/cli) — operate Parsar and its daemon from a terminal.
-
-## Product status
-
-Parsar is alpha software. APIs, schemas, and configuration can change between releases. Treat the repository and the generated OpenAPI contract as the source of truth for the version you deploy.
-
-## Next steps
-
-Once your first run completes, continue with [creating and configuring Agents](/create-agent) or learn how to [read runs, approvals, and logs](/runs-approvals-logs).
+Parsar is currently in Alpha. This guide follows current product entry points and identifies creation options that are not yet available on their respective pages. The API reference is at `/docs` on your Parsar server.

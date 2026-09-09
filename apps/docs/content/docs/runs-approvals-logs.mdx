@@ -1,46 +1,55 @@
 ---
 title: Runs, approvals, and logs
-description: Understand Run states, inspect execution evidence, and resolve deferred human decisions.
+description: Inspect Run details, steps, and errors, and handle requests in Inbox.
 ---
 
-An Agent Run is one execution record. The Conversation timeline shows the user-facing result; the Run detail view shows the operational evidence behind it.
+A Run records one Agent execution. Conversations let you read replies and continue the discussion; Runs let you inspect execution status, steps, and results.
 
-## Run states
+## Open Run details
 
-| State | Meaning |
+1. Click **Runs** in the sidebar.
+2. Find the Agent and execution time, then click its Run. The search field filters the current page by Run ID, Agent, and conversation ID.
+3. A detail panel opens on the right. Its header shows status, Agent, connector, conversation ID, creation time, start time, finish time, and duration.
+4. Use **Open conversation** at the bottom to return to that execution's conversation.
+
+## The four detail tabs
+
+| Tab | Contents |
 | --- | --- |
-| `queued` | The server accepted the request and is waiting for the bound Runtime. |
-| `running` | The Runtime has started the Agent process. |
-| `completed` | The Agent finished and the server persisted the result. |
-| `failed` | Execution ended with an error or provider failure. |
-| `cancelled` | A user-initiated cancellation ended the Run. |
-| `interrupted` | A system interrupt or Runtime failure stopped execution before a normal terminal result. |
+| **Overview** | Run diagnosis, reason, source, suggested action, and Runtime health. |
+| **Steps** | Ordered execution and tool events. This is the default tab; raw events can be expanded. |
+| **Artifacts** | Recorded artifact names, types, and addresses; an empty state appears when no artifacts were recorded. |
+| **Audit** | Audit events associated with this Run. |
 
-## Read a Run
+Runs carrying a Runtime snapshot also show the engine, mode, model, working directory, and heartbeat information. Without a snapshot, Overview reports missing Runtime information. HTTP Agents do not supply a local device's engine or working-directory fields.
 
-Open **Runs** and select a record. Depending on the Run, the detail view can include:
+**Usage is not one of these tabs.** Open **Settings → Usage → Recent calls** and click an ID in the **Run** column to return here with that Run expanded. The detail panel's **Audit** tab is not a usage view. See [Audit and usage](/audit-usage).
 
-- request and requester;
-- Agent and connector;
-- Runtime snapshot and heartbeat information;
-- status events and streamed tool calls;
-- output message and transcript;
-- artifacts such as screenshots or tool output;
-- model usage and token counts;
-- error summary and user-facing reason.
+## Run status
 
-## Approvals and user choices
+| Status | Value | Meaning |
+| --- | --- | --- |
+| Queued | `queued` | Created and waiting for dispatch. |
+| Running | `running` | Claimed by an executor and not yet finished; this status alone does not prove that the CLI has begun generating a reply. |
+| Completed | `completed` | Execution ended normally. |
+| Failed | `failed` | Execution ended with an error; inspect the reason and steps. |
+| Cancelled | `cancelled` | Execution was cancelled. |
+| Interrupted | `interrupted` | Execution was interrupted by the system. |
 
-Some providers pause for permission or ask the user to choose an option. Parsar persists these as Interactions with a bounded lifetime. Resolve them in **Approvals** or in the active Conversation. The decision is applied only after the runtime acknowledges it.
+Workspace owners, admins, and members can **Cancel run** for queued or running Runs at the bottom of the detail panel. They can **Retry** a failed Run: the same Run ID is queued again, and its start and finish times are reset.
 
-Interaction status is separate from Run status: `pending`, `resolving`, `approved`, `denied`, `answered`, `cancelled`, and `expired`. Never paste secrets into a non-secret answer field. Secret answers are redacted from durable interaction responses, audit events, logs, API reads, and rendered receipts.
+An active HTTP Agent executor picks up requeued HTTP Runs. **Retry** currently does not dispatch Agent Daemon Runs: they remain queued until another dispatch trigger occurs. For local-device and cloud-isolation recovery, send a new message in the conversation. If you already clicked Retry, cancel the requeued Run first to avoid a later duplicate execution.
 
-## When a Run is queued or failed
+The current UI also shows **Retry** for cancelled and interrupted Runs, but those requests fail with HTTP 409. To start again, open the conversation and send a new message. Completed means execution ended; inspect the reply to judge whether it fulfills your request.
 
-Start with the Runtime snapshot, then check the Agent's connector, model credentials, required Capabilities, and daemon logs. The [Troubleshooting](/troubleshooting) page follows the same server → daemon → provider order.
+## Agent Daemon and HTTP Agent
 
-## Related pages
+The Agent's execution mode determines the connector; it cannot be changed on a Run. Local devices and cloud isolation show **Agent Daemon**. Existing Agents backed by an external HTTP service show **HTTP Agent**. The External Agent option is currently disabled when creating an Agent; for everyday use, choose the device and engine. See [Agent engine comparison](/agent-tools).
 
-- [How Parsar works](/how-parsar-works)
-- [Create and configure an Agent](/create-agent)
-- [Troubleshooting](/troubleshooting)
+## Approvals and questions
+
+Open **Inbox** in the sidebar, or respond to a request card in the active conversation. Review the operation or answer the question, then submit. The request finishes after the Runtime acknowledges the response. An expired request can no longer be approved.
+
+Request statuses are separate from Run statuses: `pending`, `resolving`, `approved`, `denied`, `answered`, `cancelled`, and `expired`. See [Conversations](/conversations) for secret answers.
+
+When a Run stops making progress, inspect its latest **Steps** event, pending Inbox requests, and the execution device's logs. See [Troubleshooting](/troubleshooting).

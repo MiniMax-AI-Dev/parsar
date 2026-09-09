@@ -1,41 +1,33 @@
 ---
 title: 欢迎
-description: Parsar 是面向团队的、自托管的 AI 编程 Agent 调度、管理与审计控制面。
+description: 使用 Parsar 连接执行设备，让团队通过 Agent 完成工作。
 ---
 
-Parsar 把团队的意图转成可观察的 Agent 运行。成员在工作区里创建对话或任务，选择 Agent，并在同一个上下文中收到进度和结果。
+Parsar 是团队共享的 Agent 工作台。你可以配置模型和执行设备，与 Agent 对话，处理审批，并查看每次运行的结果。
 
-## Parsar 能做什么
+## 开始使用
 
-| 能力 | 含义 |
+- 已有 Parsar 工作区：[快速上手](/zh/quickstart)，配置模型、连接设备并完成第一次对话。
+- 需要部署服务：[自托管快速上手](/zh/self-host-quickstart)，通过 Docker Compose 安装。
+- 想先了解工作流程：[核心概念](/zh/concepts)和[Parsar 的工作方式](/zh/how-parsar-works)。
+
+## 按界面查找文档
+
+| 界面入口 | 操作指南 |
 | --- | --- |
-| 团队控制面 | 工作区、成员、权限、对话和持久化历史集中管理。 |
-| 可插拔执行 | Agent 可以通过配对的 `parsar-daemon`、沙盒或 HTTP Agent 连接器运行。 |
-| 可审计运行 | 每次运行都记录状态、事件、输出、产物、用量和失败原因。 |
-| 自托管 | 代码、凭据、数据库和运行环境可以保留在你控制的基础设施中。 |
+| 左上角工作区名称、成员 | [工作区](/zh/workspace)、[成员与角色](/zh/members-roles) |
+| Agent | [创建和配置 Agent](/zh/create-agent) |
+| 对话 | [对话与共享对话](/zh/conversations) |
+| 收件箱、运行 | [查看运行、审批和日志](/zh/runs-approvals-logs) |
+| 模型、设置中的凭据 | [模型与凭据](/zh/models-credentials) |
+| 能力 | [能力、Skill 与 MCP](/zh/capabilities) |
+| 执行层 | [安装 Agent Runtime](/zh/install-runtime)、[执行位置](/zh/runtimes) |
+| 定时任务 | [定时任务](/zh/scheduled-tasks) |
+| 集成 | [聊天集成](/zh/integrations) |
+| 设置中的用量和审计 | [审计与用量](/zh/audit-usage) |
 
-## 从这里开始
+## 部署与维护
 
-- [快速上手](/zh/quickstart) —— 安装 Parsar、连接 Runtime、创建 Agent 并完成第一次运行。
-- [核心概念](/zh/concepts) —— 了解 Workspace、Agent、Runtime、Conversation、Run、Capability 和 Connector。
-- [Parsar 的工作方式](/zh/how-parsar-works) —— 查看服务端到 daemon 的执行边界。
-- [自托管快速上手](/zh/self-host-quickstart) —— 使用 Docker Compose 部署。
+部署管理员可以阅读[部署配置](/zh/configuration)、[登录与注册](/zh/authentication)和[安全模型](/zh/security)。遇到运行问题时，从[故障排查](/zh/troubleshooting)开始。
 
-## 探索 Parsar
-
-- [工作区](/zh/workspace) —— 了解租户边界和生命周期。
-- [成员与角色](/zh/members-roles) —— 邀请成员并管理访问权限。
-- [能力、Skills 与 MCP](/zh/capabilities) —— 添加 Skill、MCP、Plugin 和提示词。
-- [对话与共享对话](/zh/conversations) —— 保留上下文并安全共享对话。
-- [Runtime 与 Agent Daemon](/zh/runtimes) —— 连接 daemon、沙盒和外部 Agent。
-- [定时任务](/zh/scheduled-tasks) —— 周期性触发 Agent Run。
-- [集成与连接器](/zh/integrations) —— 连接聊天网关和外部 Provider。
-- [CLI 参考](/zh/cli) —— 在终端操作 Parsar 和 daemon。
-
-## 产品状态
-
-Parsar 当前处于 Alpha 阶段。不同版本之间的 API、Schema 和配置可能变化。部署哪个版本，就以该版本仓库和生成的 OpenAPI 契约为准。
-
-## 接下来
-
-第一次运行成功后，可以继续阅读[创建和配置 Agent](/zh/create-agent)，或了解如何[查看运行、审批和日志](/zh/runs-approvals-logs)。
+Parsar 当前处于 Alpha 阶段。本指南按当前产品入口组织，尚未开放的创建选项会在对应页面明确标注。API 参考位于 Parsar 服务地址下的 `/docs`。

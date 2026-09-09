@@ -1,45 +1,43 @@
 ---
 title: Security model
-description: Understand Parsar's workspace, credential, runtime, and audit boundaries.
+description: Understand access, execution devices, credentials, and shared records.
 ---
 
-Parsar separates authorization, execution, and secret storage. Treat every workspace, Agent, Runtime, connector, and credential as an independent security boundary.
+Before using an Agent, establish who can call it, where it executes, and which tools and credentials it can access.
 
-## Authorization layers
+## Workspace and Agent access
 
-1. **Authentication** identifies the user or service.
-2. **Workspace membership** determines which tenant data can be read.
-3. **Workspace role** controls team and workspace administration.
-4. **Agent visibility and Access** controls whether a member may invoke a particular Agent.
-5. **Runtime binding** controls where an authorized Run executes.
-6. **Capability and credential checks** control which tools and providers are available during execution.
+Sign-in establishes account identity. Workspace membership controls workspace access, and roles control administration and writes. Viewers cannot send messages, start runs, or resolve interactions.
 
-Passing one layer never bypasses the next one. For example, an owner can manage an Agent but still cannot invoke it if its Access policy excludes the caller.
+Agent visibility and access are checked separately. Owners and admins can manage configuration but must still meet the Agent's access settings when running it. See [Create and configure an Agent](/create-agent).
 
-## Secret handling
+Workspace members can read workspace conversations. Sharing a link provides another way to open the original conversation; it does not relax access or create a private-message boundary. See [Conversations and shared conversations](/conversations).
 
-Provider keys, connector tokens, Runtime pairing credentials, and model credentials are secrets. Parsar encrypts server-managed secret payloads and exposes metadata or masked previews instead of plaintext. Secret answers to interactions are omitted from ordinary logs and API read responses.
+## Execution placement
 
-Use environment variables or the supported credential forms. Do not commit `.env` files, paste tokens into prompts, or include secrets in screenshots and Run artifacts.
+A local daemon executes coding CLIs as the operating-system account that started it. File and network access are bounded by that account and its environment. Setting a working directory does not create a filesystem sandbox.
 
-## Runtime isolation
+Cloud isolation uses a separate sandbox environment; external HTTP Agents use their service's environment. Confirm placement and engine in Agent details before binding capabilities and credentials.
 
-Runs execute only on their bound Runtime. Local daemons, sandbox providers, and external HTTP agents have different trust and network boundaries; document which one an Agent uses before granting it access to a repository or external service.
+Approvals originate from engines that support them. The absence of an approval card does not mean every engine blocks tool operations. See [Agent engine comparison](/agent-tools).
 
-Keep daemon pairing tokens private and rotate them after a suspected exposure. A Runtime being online does not grant it access to every workspace or Agent.
+## Credentials and secret answers
 
-## Audit and recovery
+Manage model and tool credentials on **Models** and **Settings → Credentials**, and bot credentials on **Integrations**. The server encrypts these secrets. Device pairing and runner credentials are stored as hashes for verification.
 
-Administrative changes, Agent operations, interactions, and Run events are recorded as audit or execution records. Use the Audit and Run views to investigate who initiated an action, which Agent and Runtime were selected, and what the provider returned.
+Secret answers are delivered to the waiting Agent, with stored interaction responses and related run and audit events redacted. Ordinary conversation messages are not secret inputs; inspect any text or files the Agent later produces. See [Tokens and credentials](/authentication-tokens).
 
-Deletion and removal operations may cancel active work or disable owned resources. Prefer archive/disable controls when the goal is to stop new work while preserving evidence.
+## Disabling and removing resources
 
-## Deployment baseline
+- Disable an Agent: stop accepting new run requests while retaining history.
+- Remove a member: revoke workspace membership while retaining the account and history, without automatically disabling Agents or Runtimes.
+- Archive a workspace: close normal access and retain history. There is currently no UI restore action.
+- Stop a device temporarily: run `parsar-daemon stop` on the device. To retire it, stop the daemon and have an owner or admin delete the device on **Runtime**.
 
-- Use HTTPS and a restricted network path for production deployments.
-- Replace all Compose development defaults.
-- Keep PostgreSQL and persistent data outside the repository checkout.
-- Restrict access to `PARSAR_MASTER_KEY` and shared Runtime tokens.
-- Back up encrypted data and keys together; losing the key makes ciphertext unrecoverable.
+To cancel active execution, open **Runs → the record → Cancel run** and confirm the terminal status. Removing a member is not a run cancellation action.
 
-See [Configuration](/configuration), [Members and roles](/members-roles), and [Troubleshooting](/troubleshooting).
+## Audit and deployment
+
+Use **Settings → Audit** for workspace operations, **Runs** for individual execution events, and **Settings → Usage** for reported usage.
+
+Serve self-hosted deployments over HTTPS, retain stable installer-generated keys, and securely back up the database and encryption key. Losing the key makes existing encrypted credentials unreadable. See [Deployment configuration](/configuration).

@@ -1,18 +1,33 @@
 ---
 title: Architecture
-description: The service boundaries and execution path that contributors must preserve.
+description: Parsar's server, frontend, execution, and persistence boundaries.
 ---
 
-Parsar is a Go service plus two frontends: the Go API and WebSocket server in `server/`, the product SPA in `apps/web`, and this independent documentation app in `apps/docs`. The `parsar-daemon` binary in `apps/parsar-daemon` connects execution machines to the server.
+This page is for contributors and deployment engineers. See [How Parsar works](/how-parsar-works) for the product workflow.
 
-## Request and execution boundaries
+## Components
 
-The server owns authentication, workspace authorization, Agents, Conversations, Runs, capabilities, credentials, schedules, audit records, and Runtime state. PostgreSQL is the source of truth for these resources. HTTP handlers should call the store and domain services rather than reaching into another package's private state.
+| Component | Current implementation | Responsibility |
+| --- | --- | --- |
+| Server | Go, Chi, PostgreSQL | Authentication, authorization, resources, dispatch, persistence, and audit. |
+| Product UI | React, Vite | Call APIs, display conversations and runs, and resolve interactions. |
+| Documentation | Next.js, Fumadocs, MDX | Separately deployed English and Chinese product documentation. |
+| Agent Daemon | Go process and coding CLI adapters | Connect devices, discover engines, manage subprocesses, and report events. |
 
-The Web frontend calls the API and subscribes to Run events; it does not execute Agent tools. The daemon maintains the Runtime connection, launches the selected adapter, streams events, and reports liveness. Credentials cross this boundary only through the runner protocol and are never put in user-facing messages.
+The Go server serves product UI assets; the documentation site is deployed separately. PostgreSQL is the database, with goose migrations and sqlc-generated queries.
 
-## Change boundaries
+## Execution and persistence
 
-API or handler changes require swaggo annotations and regenerated `docs/openapi/openapi.yaml`. SQL query changes require sqlc generation and regenerated files. A new architecture rule, ownership boundary, required check, or generated contract belongs in the canonical `CONTRIBUTING.md`, not only in an issue or PR description.
+The server persists workspaces, Agents, conversations, Runs, capabilities, credentials, interactions, and upstream engine session identifiers. The daemon manages CLI environments, working directories, and processes on its machine; it does not own conversation history persistence.
 
-For a more detailed repository map, read [`docs/architecture.md`](https://github.com/AllureCurtain/parsar/blob/main/docs/architecture.md) in the source repository.
+The Agent connector selects the dispatch protocol, the Runtime binding selects a device, and the engine kind selects a CLI. HTTP Agents execute through external HTTP services. Keep these concepts distinct.
+
+## Interaction requests
+
+Approvals and user-input requests are persisted before appearing in conversations, the inbox, or chat platforms. All surfaces use the same resolution service. The server records a decision's result after Runtime acknowledgment. Terminal runs close outstanding interactions; expired requests are explicitly denied or cancelled.
+
+## Extension boundaries
+
+New engines reuse daemon process management and the shared protocol. Runtime providers own environment creation, renewal, and destruction. Chat connectors receive and return platform messages without introducing independent authorization or approval rules.
+
+Update the [contributor guide](https://github.com/MiniMax-AI-Dev/parsar/blob/main/CONTRIBUTING.md) when introducing or changing architecture boundaries.

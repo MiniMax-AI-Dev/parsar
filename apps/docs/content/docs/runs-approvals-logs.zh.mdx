@@ -1,46 +1,57 @@
 ---
 title: 查看运行、审批和日志
-description: 了解 Run 状态，检查执行证据，并处理需要人工决定的请求。
+description: 打开 Run 详情，查看步骤和错误，并在收件箱处理请求。
 ---
 
-Agent Run 是一次具体执行记录。Conversation 时间线展示用户看到的结果，Run 详情展示背后的运行证据。
+Run 是 Agent 的一次执行记录。对话用于查看和继续交流，运行页面用于检查这次执行的状态、步骤和结果。
+
+## 打开运行详情
+
+1. 在左侧导航点击**运行**。
+2. 找到相应的 Agent 和执行时间，点击该条 Run。顶部搜索框筛选当前页中的 Run ID、Agent 和对话 ID。
+3. 详情在右侧展开，顶部显示状态、Agent、连接器、对话 ID、创建时间、开始时间、结束时间和耗时。
+4. 通过底部的**打开对话**返回该次执行的对话。
+
+## 右侧详情中的四个标签
+
+这些标签在当前中文界面中也使用英文名称：
+
+| 标签 | 查看内容 |
+| --- | --- |
+| **Overview**（概览） | 运行诊断、原因、来源、建议操作和 Runtime 健康情况。 |
+| **Steps**（步骤） | 按顺序排列的运行与工具事件，默认打开此标签；可展开原始事件。 |
+| **Artifacts**（产物） | 该 Run 已记录的产物名称、类型和地址；无记录时显示空状态。 |
+| **Audit**（审计） | 与该 Run 关联的审计事件。 |
+
+携带 Runtime 快照的 Run 还会展示其引擎、运行模式、模型、工作目录和心跳信息；没有快照时，概览显示缺少 Runtime 信息。HTTP Agent 不提供本地设备的引擎和工作目录字段。
+
+**用量不在这四个标签中。** 打开**设置 → 用量 → 最近调用**，点击 **Run** 列的 ID，会跳回这里并展开对应 Run。右侧的 **Audit**（审计）不是用量入口。详见[审计与用量](/zh/audit-usage)。
 
 ## Run 状态
 
-| 状态 | 含义 |
-| --- | --- |
-| `queued` | 服务端已接受请求，正在等待绑定的 Runtime。 |
-| `running` | Runtime 已启动 Agent 进程。 |
-| `completed` | Agent 完成工作，服务端已持久化结果。 |
-| `failed` | 执行以错误或 Provider 失败结束。 |
-| `cancelled` | 用户发起的取消结束 Run。 |
-| `interrupted` | 系统中断或 Runtime 失败，执行未产生正常终态。 |
+| 页面状态 | 值 | 含义 |
+| --- | --- | --- |
+| 排队中 | `queued` | 已创建，等待执行调度。 |
+| 运行中 | `running` | 已被执行器接管，尚未结束；此状态本身不证明 CLI 已开始生成回复。 |
+| 已完成 | `completed` | 执行已正常结束。 |
+| 失败 | `failed` | 执行以错误结束，查看详情中的原因和步骤。 |
+| 已取消 | `cancelled` | 此次执行已取消。 |
+| 已中断 | `interrupted` | 执行被系统中断。 |
 
-## 查看 Run
+工作区所有者、管理员和成员可以对排队中或运行中的 Run 点击详情底部的**取消运行**，也可对失败的 Run 点击**重试**。重试会将同一个 Run ID 重新排队，并重置开始和结束时间。
 
-打开 **运行** 页面并选择一条记录。根据具体 Run，详情可能包含：
+已启动的 HTTP Agent 执行器会领取重新排队的 HTTP Run。当前**重试**不会主动派发 Agent Daemon Run，它会保留在队列中，等待其他派发触发。恢复本地设备或云端隔离的执行时，在对话中发送新消息；如果已经点击重试，先取消那条重新排队的 Run，避免之后重复执行。
 
-- 请求和请求者；
-- Agent 和连接器；
-- Runtime 快照与心跳信息；
-- 状态事件和流式工具调用；
-- 输出消息和 transcript；
-- 截图、工具输出等产物；
-- 模型用量和 Token 数；
-- 错误摘要和面向用户的原因。
+当前界面也会给已取消和已中断的 Run 显示**重试**按钮，但接口会返回 HTTP 409。需要重新执行时，打开对话并发送新消息。已完成表示执行结束，仍需检查回复是否满足你的任务要求。
 
-## 审批和用户选择
+## Agent Daemon 和 HTTP Agent
 
-部分 Provider 会暂停等待权限，或者要求用户选择选项。Parsar 会将它们持久化为有生命周期的 Interaction。可以在 **审批** 页面或当前 Conversation 中处理。只有 Runtime 返回确认后，决定才会应用。
+连接器由 Agent 的执行方式决定，不能在 Run 页面修改。本地设备与云端隔离显示 **Agent Daemon**；已有的外部 HTTP 服务 Agent 显示 **HTTP Agent**。当前新建 Agent 中的外部 Agent 选项已禁用，日常使用选择设备和引擎即可。参见[Agent 引擎对照](/zh/agent-tools)。
 
-Interaction 状态与 Run 状态分开：`pending`、`resolving`、`approved`、`denied`、`answered`、`cancelled`、`expired`。不要把秘密填入普通回答字段。秘密回答不会写入持久化 Interaction 响应、审计事件、日志、API 读取结果或渲染后的回执。
+## 审批和提问
 
-## Run 排队或失败时
+请求入口是左侧的**收件箱**，也会出现在当前对话的时间线中。打开请求，确认操作或回答问题并提交。请求在 Runtime 确认后结束；超时后状态变为已过期，不能继续批准该请求。
 
-先查看 Runtime 快照，再检查 Agent 的连接器、模型凭据、必需 Capability 和 daemon 日志。[故障排查](/zh/troubleshooting)也按服务端 → daemon → Provider 的顺序组织。
+请求状态与 Run 状态分开：`pending`、`resolving`、`approved`、`denied`、`answered`、`cancelled`、`expired`。秘密回答的输入方式见[对话与共享对话](/zh/conversations)。
 
-## 相关页面
-
-- [Parsar 的工作方式](/zh/how-parsar-works)
-- [创建和配置 Agent](/zh/create-agent)
-- [故障排查](/zh/troubleshooting)
+运行长期没有进展时，检查 **Steps**（步骤）的最新事件、收件箱中的待处理请求和执行设备的日志。参见[故障排查](/zh/troubleshooting)。
