@@ -388,6 +388,8 @@ description and keep ownership on the side listed here.
   keyed by `supported_endpoint_types` values such as `anthropic`, `openai`, and
   `openai-response`. Runtime injectors must consult the endpoint map before
   falling back to `models.base_url`.
+- The model catalog is instance-wide, not workspace-owned. Workspace selection
+  must not imply that model records or edits are isolated to that workspace.
 - Generated files (`docs/openapi/openapi.yaml`, `server/internal/db/sqlc/*`)
   are committed artifacts, but never the source of truth. Change annotations
   or SQL first, then regenerate.
@@ -403,6 +405,8 @@ description and keep ownership on the side listed here.
 - Because the default locale is hidden from URLs, links in English pages use
   the root path (`/quickstart`), while links in Chinese pages must include the
   `/zh/` prefix (`/zh/quickstart`).
+- Fumadocs navigation must receive that same public path during server and
+  client rendering; normalize internal locale rewrites at its provider boundary.
 - The docs app is a separate deployment unit in the first phase. Do not add
   docs assets or a Next.js server to the Parsar Go image until the deployment
   boundary is explicitly revisited.
