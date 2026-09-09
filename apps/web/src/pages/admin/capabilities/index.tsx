@@ -856,9 +856,9 @@ function CapabilityRowMoreMenu({
 /* ------------------------------------------------------------------ */
 
 /** version · created · agents using it */
-const VERSION_COLUMNS = [col.id(160, 0.7), col.id(160, 2), col.num(96)]
+const VERSION_COLUMNS = [col.id(0, 1), col.age(80, 1.2), col.num(72)]
 /** agent · version · open */
-const AGENT_COLUMNS = [col.title(), col.id(120), col.icon()]
+const AGENT_COLUMNS = [col.title(0), col.id(80), col.icon()]
 
 /**
  * A workspace capability, read in the rail beside the list. Identity in the
@@ -1147,12 +1147,12 @@ function VersionRow({ version, latestLabel, count, onOpen }: { version: Capabili
     }
   }
   return (
-    <LedgerRow onClick={onOpen} onKeyDown={onKeyDown}>
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="truncate font-mono text-xs text-fg">{version.version}</span>
+    <LedgerRow onClick={onOpen} onKeyDown={onKeyDown} className="h-auto min-h-9 py-1">
+      <span className="flex min-w-0 flex-wrap items-center gap-x-2">
+        <span className="min-w-0 break-all font-mono text-xs text-fg">{version.version}</span>
         {latestLabel && <span className="shrink-0 text-xs text-fg-muted">{latestLabel}</span>}
       </span>
-      <span className="truncate font-mono text-xs text-fg">{formatDate(version.created_at)}</span>
+      <span className="break-words font-mono text-xs text-fg">{formatDate(version.created_at)}</span>
       <LedgerNum muted={count === 0}>{count}</LedgerNum>
     </LedgerRow>
   )
@@ -1166,13 +1166,13 @@ function AgentInstallRow({ name, version, oldLabel, onOpen }: { name: string; ve
     }
   }
   return (
-    <LedgerRow onClick={onOpen} onKeyDown={onKeyDown}>
+    <LedgerRow onClick={onOpen} onKeyDown={onKeyDown} className="h-auto min-h-9 py-1">
       <span className="flex min-w-0 items-center gap-1.5">
-        <InitialTile name={name} />
-        <span className="truncate font-medium">{name}</span>
+        <InitialTile name={name} className="shrink-0" />
+        <span className="min-w-0 break-words font-medium">{name}</span>
       </span>
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="truncate font-mono text-xs text-fg">{version}</span>
+      <span className="flex min-w-0 flex-wrap items-center gap-x-2">
+        <span className="min-w-0 break-all font-mono text-xs text-fg">{version}</span>
         {oldLabel && <span className="shrink-0 text-xs text-fg-muted">{oldLabel}</span>}
       </span>
       <ArrowUpRight className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />

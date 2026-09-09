@@ -702,7 +702,7 @@
       "table": {
         "version": "Version",
         "createdAt": "Created",
-        "enabledAgents": "Agents using it"
+        "enabledAgents": "Agents"
       },
       "add": {
         "title": "{{name}} — add version",
