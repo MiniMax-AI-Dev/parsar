@@ -170,7 +170,7 @@ export function SandboxPanel({
           <EmptyState
             icon={Box}
             title={t("agents.detail.sandbox.empty.title")}
-            className="py-8"
+            size="compact"
             action={
               <Button size="sm" variant="outline" disabled={acquireMut.isPending} onClick={triggerAcquire}>
                 {acquireMut.isPending && <Loader2 className="animate-spin" />}

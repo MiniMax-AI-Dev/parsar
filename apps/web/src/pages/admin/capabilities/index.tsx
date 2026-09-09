@@ -956,7 +956,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
         {versionsQ.isLoading ? (
           <div className="space-y-2 pt-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-3 w-full max-w-lg" />)}</div>
         ) : versions.length === 0 ? (
-          <EmptyState icon={PackageCheck} title={t("capabilities.versions.empty.title")} description={t("capabilities.versions.empty.description")} className="py-8" />
+          <EmptyState icon={PackageCheck} title={t("capabilities.versions.empty.title")} description={t("capabilities.versions.empty.description")} size="compact" />
         ) : (
           <Ledger columns={VERSION_COLUMNS} className="-mx-4" role="listbox" aria-label={t("capabilities.versions.title")}>
             <LedgerHeader className="static">
@@ -983,7 +983,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
         {installationSummary.isLoading ? (
           <Skeleton className="mt-2 h-3 w-full max-w-lg" />
         ) : enabledCount === 0 ? (
-          <p className="pt-1 text-sm text-fg-muted">{t("capabilities.detail.enabledAgents.empty")}</p>
+          <EmptyState size="compact" title={t("capabilities.detail.enabledAgents.empty")} />
         ) : (
           <Ledger columns={AGENT_COLUMNS} className="-mx-4" role="listbox" aria-label={t("capabilities.detail.enabledAgents.title", { count: enabledCount })}>
             <ul className="m-0 list-none p-0">

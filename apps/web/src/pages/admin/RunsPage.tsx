@@ -405,7 +405,6 @@ function RunDetailRail({
   onClosed: () => void
 }) {
   const { t } = useTranslation("admin")
-  const { t: tc } = useTranslation("common")
   const { navigate } = useAdminView()
 
   // The rail is not remounted between runs (that would replay its
@@ -667,7 +666,7 @@ function RunDetailRail({
               ))}
             </ul>
           ) : (
-            <p className="py-6 text-center text-sm text-fg-muted">{tc("states.emptyTitle")}</p>
+            <EmptyState size="compact" title={t("runs.detail.artifactsEmpty")} />
           )}
         </TabsContent>
 
@@ -716,7 +715,7 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
     )
   }
   if (steps.length === 0) {
-    return <p className="pt-2 text-sm text-fg-muted">{t("runs.detail.steps.empty")}</p>
+    return <EmptyState size="compact" title={t("runs.detail.steps.emptyTitle")} description={t("runs.detail.steps.empty")} />
   }
 
   return (

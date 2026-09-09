@@ -8,6 +8,7 @@ import {
   LedgerRow,
   col,
 } from "../../../components/ui/ledger"
+import { EmptyState } from "../../../components/ui/empty-state"
 import { PropertyList, Property } from "../../../components/ui/property-list"
 import { Skeleton } from "../../../components/ui/skeleton"
 import { StatusIcon } from "../../../components/ui/status-icon"
@@ -84,7 +85,7 @@ function RunsLedger({ runs, loading, emptyLabel }: { runs: AgentRunSummary[]; lo
     )
   }
   if (runs.length === 0) {
-    return <p className="text-sm text-fg-muted">{emptyLabel}</p>
+    return <EmptyState size="compact" title={emptyLabel} />
   }
 
   return (
@@ -130,7 +131,7 @@ function MetricsList({ metrics, loading }: { metrics?: AgentMetrics; loading: bo
     )
   }
   if (!metrics || metrics.completed_count + metrics.failed_count === 0) {
-    return <p className="text-sm text-fg-muted">{t("agents.detail.dynamics.metrics.empty")}</p>
+    return <EmptyState size="compact" title={t("agents.detail.dynamics.metrics.empty")} />
   }
   return (
     <PropertyList>
