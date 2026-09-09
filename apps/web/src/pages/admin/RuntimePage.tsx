@@ -185,7 +185,7 @@ export function RuntimePage() {
           </TabsList>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10">
-        <TabsContent value="environments" className="mt-0 pt-4">
+        <TabsContent value="environments" className="mt-0">
           {workspaceID && <RuntimeLedger workspaceID={workspaceID} />}
         </TabsContent>
 
