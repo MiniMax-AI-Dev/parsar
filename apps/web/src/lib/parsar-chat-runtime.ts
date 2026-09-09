@@ -23,6 +23,7 @@ import type {
   ToolStep,
 } from "./api-types"
 import { startAgentRun } from "./api-conversations"
+import { isUserMessageSender } from "./message-sender"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -106,7 +107,7 @@ export function convertTimelineMessage(
   msg: ConversationTimelineMessage,
   runs: ConversationTimelineRun[],
 ): ThreadMessageLike {
-  if (msg.sender_type === "user") {
+  if (isUserMessageSender(msg.sender_type)) {
     return {
       id: msg.id,
       role: "user",

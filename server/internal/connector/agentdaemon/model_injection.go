@@ -330,6 +330,7 @@ func injectOpenCodeManagedModel(opts map[string]any, modelID string, mr store.Mo
 	if providerSlug == "" || modelKey == "" || adapter == "" {
 		return fmt.Errorf("%w: model_id=%s provider_slug=%q model_key=%q adapter=%q", ErrManagedModelConfigInvalid, modelID, mr.ProviderType, mr.ModelKey, mr.Adapter)
 	}
+	mr.BaseURL = openCodeEndpointBaseURL(mr)
 	configJSON, err := runtimeopencode.RenderConfig(mr, apiKey, runtimeopencode.RenderInput{})
 	if err != nil {
 		return fmt.Errorf("agent_daemon: render opencode config for model %s: %w", modelID, err)
@@ -338,7 +339,7 @@ func injectOpenCodeManagedModel(opts map[string]any, modelID string, mr store.Mo
 		return fmt.Errorf("%w: model_id=%s provider_slug=%q model_key=%q adapter=%q", ErrManagedModelConfigInvalid, modelID, mr.ProviderType, mr.ModelKey, mr.Adapter)
 	}
 	opts["model"] = modelKey
-	opts["model_selector"] = modelKey
+	opts["model_selector"] = providerSlug + "/" + modelKey
 	opts["opencode_json"] = string(configJSON)
 	return nil
 }
@@ -747,25 +748,10 @@ func modelConfigEndpointTypes(config map[string]any) []string {
 }
 
 func modelEndpointBaseURL(mr store.ModelRuntime, endpointType string) string {
-	want := normalizeModelEndpointType(endpointType)
-	switch raw := mr.ProviderConfig["endpoint_base_urls"].(type) {
-	case map[string]any:
-		for k, v := range raw {
-			if normalizeModelEndpointType(k) != want {
-				continue
-			}
-			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-				return inferModelEndpointBaseURL(want, s)
-			}
-		}
-	case map[string]string:
-		for k, s := range raw {
-			if normalizeModelEndpointType(k) == want && strings.TrimSpace(s) != "" {
-				return inferModelEndpointBaseURL(want, s)
-			}
-		}
+	if base, ok := configuredModelEndpointBaseURL(mr, endpointType); ok {
+		return inferModelEndpointBaseURL(normalizeModelEndpointType(endpointType), base)
 	}
-	return inferModelEndpointBaseURL(want, mr.BaseURL)
+	return inferModelEndpointBaseURL(normalizeModelEndpointType(endpointType), mr.BaseURL)
 }
 
 func inferModelEndpointBaseURL(endpointType, fallback string) string {

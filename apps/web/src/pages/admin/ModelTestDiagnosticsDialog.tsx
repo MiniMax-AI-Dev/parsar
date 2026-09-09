@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog"
 import { StatusIcon } from "../../components/ui/status-icon"
+import { VerbatimBlock } from "../../components/ui/verbatim"
 import type {
   ModelConnectivityEndpointResult,
   ModelConnectivityResult,
@@ -173,9 +174,9 @@ function DiagnosticsBlock({
           <Copy strokeWidth={1.5} />
         </Button>
       </div>
-      <pre className="m-0 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+      <VerbatimBlock className="max-h-72">
         {value}
-      </pre>
+      </VerbatimBlock>
     </div>
   )
 }

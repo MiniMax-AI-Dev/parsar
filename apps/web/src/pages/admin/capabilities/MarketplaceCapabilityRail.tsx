@@ -19,7 +19,7 @@ import { InlineNotice } from "./notices"
 import { UninstallMarketplaceDialog } from "./UninstallMarketplaceDialog"
 
 /** agent · version · open */
-const AGENT_COLUMNS = [col.title(), col.id(120), col.icon()]
+const AGENT_COLUMNS = [col.title(0), col.id(64), col.icon()]
 
 /**
  * A capability installed from another workspace, read in the rail beside the
@@ -62,7 +62,8 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
         ) : installsQ.error ? (
           <ErrorState
             title={t("capabilities.marketplaceDetail.loadError.title")}
-            description={installsQ.error instanceof Error ? installsQ.error.message : t("capabilities.marketplaceDetail.loadError.description")}
+            description={t("capabilities.marketplaceDetail.loadError.description")}
+            detail={installsQ.error instanceof Error ? installsQ.error.message : undefined}
             onRetry={() => void installsQ.refetch()}
           />
         ) : (
@@ -78,6 +79,7 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
 
   const source = marketplaceSourceName(capability)
   const deprecated = !!capability.deprecated_at
+  const unpublished = capability.visibility === "workspace"
   const latest = capability.latest_version ?? capability.latest_published_version
   const agentCount = agents.length || capability.enabled_agent_count
 
@@ -88,28 +90,24 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
       onClosed={onClosed}
       closeLabel={closeLabel}
       aria-label={capability.name}
-      header={
-        <>
-          <span className="min-w-0 truncate text-sm font-medium text-fg">{capability.name}</span>
-          <CapabilityTypeBadge type={capability.type} />
-          {deprecated ? (
-            <Badge variant="neutral" dot>{t("capabilities.deprecated.badgeTarget")}</Badge>
-          ) : (
-            <Badge variant="neutral" dot>{t("capabilities.marketplaceDetail.badge")}</Badge>
-          )}
-        </>
-      }
+      header={<span className="min-w-0 flex-1 line-clamp-2 break-words text-base font-medium text-fg" title={capability.name}>{capability.name}</span>}
       footer={<Button variant="outline" onClick={() => setUninstallOpen(true)}>{t("capabilities.uninstall.action")}</Button>}
     >
       <>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <CapabilityTypeBadge type={capability.type} />
+          {deprecated && <Badge variant="neutral" dot>{t("capabilities.deprecated.badgeSource")}</Badge>}
+          {unpublished && <Badge variant="neutral" dot>{t("capabilities.unpublished.badge")}</Badge>}
+        </div>
         {deprecated && <InlineNotice tone="warning" className="mb-4">{t("capabilities.deprecated.bannerTarget")}</InlineNotice>}
+        {unpublished && <InlineNotice tone="warning" className="mb-4">{t("capabilities.unpublished.bannerTarget")}</InlineNotice>}
         {capability.description && <p className="mb-4 text-sm text-fg">{capability.description}</p>}
 
         <RailSection title={t("capabilities.marketplaceDetail.source.title")}>
           <PropertyList>
             <Property label={t("capabilities.marketplaceDetail.source.workspace")}>{source || t("capabilities.none")}</Property>
             <Property label={t("capabilities.marketplaceDetail.source.pinnedVersion")} mono>{capability.pinned_version ? `v${capability.pinned_version}` : t("capabilities.none")}</Property>
-            <Property label={t("capabilities.marketplaceDetail.source.latestVersion")} mono>{latest ? `v${latest}` : t("capabilities.none")}</Property>
+            {!unpublished && <Property label={t("capabilities.marketplaceDetail.source.latestVersion")} mono>{latest ? `v${latest}` : t("capabilities.none")}</Property>}
             <Property label={t("capabilities.table.credentials")}>{requiredCredentialsLabel(capability.required_credentials, i18n.language, t("capabilities.credentials.none"))}</Property>
           </PropertyList>
         </RailSection>
@@ -125,7 +123,8 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
                 {agents.map((agent) => {
                   const agentID = agent.agent_id ?? agent.id
                   const name = agent.name ?? agent.agent_name ?? "—"
-                  const openAgent = () => agentID && navigateAdmin("agents", { id: agentID, tab: "capabilities" })
+                  const version = `v${agent.version ?? capability.pinned_version ?? "—"}`
+                  const openAgent = () => agentID && navigateAdmin("agents", { id: agentID, tab: "config" })
                   const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault()
@@ -136,9 +135,9 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
                     <LedgerRow key={agentID ?? name} onClick={openAgent} onKeyDown={onKeyDown}>
                       <span className="flex min-w-0 items-center gap-1.5">
                         <InitialTile name={name} />
-                        <span className="truncate font-medium">{name}</span>
+                        <span className="truncate font-medium" title={name}>{name}</span>
                       </span>
-                      <span className="truncate font-mono text-xs text-fg">v{agent.version ?? capability.pinned_version ?? "—"}</span>
+                      <span className="truncate font-mono text-xs text-fg" title={version}>{version}</span>
                       <ArrowUpRight className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
                     </LedgerRow>
                   )

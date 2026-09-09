@@ -14,6 +14,7 @@ import {
 import { Field } from "../ui/label"
 import { Input } from "../ui/input"
 import { StatusIcon } from "../ui/status-icon"
+import { VerbatimBlock } from "../ui/verbatim"
 import { InlineError } from "../runtime/InlineError"
 import { useCreateRuntimePairing, useWorkspaceRuntimes } from "../../lib/api-runtimes"
 import { useBootstrapStatus } from "../../lib/api-bootstrap"
@@ -144,6 +145,11 @@ export function PairDaemonDialog({ open, onClose, workspaceID, onPaired }: PairD
                   })}
                 </li>
                 <li>
+                  {t("runtime.agentDaemon.pair.safetyState", {
+                    defaultValue: "Config, logs, state and cache are written under ~/.parsar/ — never into the repository the agent is working in.",
+                  })}
+                </li>
+                <li>
                   {t("runtime.agentDaemon.pair.safetyOnce", {
                     defaultValue: "The token is shown once — it cannot be recovered after this dialog closes.",
                   })}
@@ -254,9 +260,9 @@ function DaemonCommandBlock({
               : t("runtime.agentDaemon.pair.copy", { defaultValue: "Copy" })}
         </Button>
       </div>
-      <pre className="m-0 mt-1 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+      <VerbatimBlock className="mt-1">
         {command}
-      </pre>
+      </VerbatimBlock>
       <p className="mt-1 text-xs text-fg-muted">{description}</p>
     </div>
   )

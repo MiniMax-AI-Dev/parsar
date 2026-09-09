@@ -17,6 +17,7 @@ import {
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Select } from "../../components/ui/select"
+import { AgentInstructionsField } from "./agents/AgentInstructionsField"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
 import { cn } from "../../lib/utils"
@@ -45,6 +46,7 @@ import type {
   UpdateAgentRequest,
   UserWorkspace,
 } from "../../lib/api-types"
+import { StatusIcon } from "../../components/ui/status-icon"
 
 const DEFAULT_WORK_DIR = "/workspace"
 
@@ -190,6 +192,17 @@ function runtimeFromAgent(a?: Agent | null): RuntimeChoice {
   // Legacy rows predating the per-agent runtime field default to "sandbox",
   // matching the migration backfill so server and UI agree.
   return a?.runtime ?? "sandbox"
+}
+
+/**
+ * What the daemon and the server both accept: an absolute path, or one under
+ * the operating user's home. The form used to demand a leading `/`, which was
+ * stricter than either — `codex/options.go` and `claudecode/session.go` expand
+ * `~/` themselves, and the server's own check reads "must be absolute or start
+ * with ~".
+ */
+function isUsableWorkDir(path: string): boolean {
+  return path.startsWith("/") || path.startsWith("~/")
 }
 
 function deviceIDFromAgent(a?: Agent | null): string {
@@ -349,7 +362,7 @@ export function CreateAgentDialog({
       requiredCredentials: RequiredCredential[]
     }
     const ownCaps = capabilitiesQ.data?.capabilities ?? []
-    const installedCaps = capabilitiesQ.data?.marketplace_installs ?? []
+    const installedCaps = (capabilitiesQ.data?.marketplace_installs ?? []).filter((cap) => cap.visibility !== "workspace")
     const availableCaps = capabilitiesQ.data?.marketplace_available ?? []
     const workspace: PickerOption[] = [...ownCaps, ...installedCaps].map((cap) => ({
       id: cap.id,
@@ -449,7 +462,7 @@ export function CreateAgentDialog({
   const allCapabilitiesPool = useMemo<Capability[]>(() => {
     const data = allCapabilitiesQ.data
     const own = data?.capabilities ?? []
-    const installed = data?.marketplace_installs ?? []
+    const installed = (data?.marketplace_installs ?? []).filter((cap) => cap.visibility !== "workspace")
     // Map MarketplaceCapability into the minimum Capability shape
     // aggregate/required-credentials helpers and submit lookup expect.
     const available: Capability[] = (data?.marketplace_available ?? []).map((cap) => ({
@@ -545,7 +558,7 @@ export function CreateAgentDialog({
       setModelSearch("")
       setModelDropdownOpen(false)
       setHighlightedModelID(null)
-      setSystemPrompt(promptFromAgent(agent, defaultSystemPrompt))
+      setSystemPrompt(promptFromAgent(agent, ""))
       setCapabilities(capabilitiesFromAgent(agent))
       setSelectedCapabilityIDs([])
       // capabilityVersionChoices for edit mode is hydrated by a separate
@@ -789,7 +802,7 @@ export function CreateAgentDialog({
     if (!name.trim() || !hasConnector) return
     if (connector === "agent_daemon" && executionMode === "local_device" && !deviceID) return
     const trimmedWorkDir = workDir.trim()
-    if (connector === "agent_daemon" && trimmedWorkDir !== "" && !trimmedWorkDir.startsWith("/")) {
+    if (connector === "agent_daemon" && trimmedWorkDir !== "" && !isUsableWorkDir(trimmedWorkDir)) {
       // The daemon also enforces absolute paths, but failing fast here gives
       // the user a clearer error tied to the input instead of a stream error.
       return
@@ -883,6 +896,7 @@ export function CreateAgentDialog({
     const body = {
       name: name.trim(),
       description: description.trim() || undefined,
+      system_prompt: systemPrompt.trim(),
       connector_type: connector,
       ...(requiresModel ? { default_model_id: selectedModelID } : {}),
       capabilities: capabilityNames,
@@ -968,7 +982,7 @@ export function CreateAgentDialog({
   }
 
   const workDirTrimmed = workDir.trim()
-  const workDirValid = connector !== "agent_daemon" || workDirTrimmed === "" || workDirTrimmed.startsWith("/")
+  const workDirValid = connector !== "agent_daemon" || workDirTrimmed === "" || isUsableWorkDir(workDirTrimmed)
   const canSubmit =
     !pending &&
     name.trim() !== "" &&
@@ -1056,6 +1070,7 @@ export function CreateAgentDialog({
                 <Field label={t("agents.form.fields.description")}>
                   <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("agents.form.placeholders.description")} />
                 </Field>
+                <AgentInstructionsField value={systemPrompt} onChange={setSystemPrompt} disabled={pending} />
               </section>
               <section className="flex flex-col gap-3">
               {showExecutionChoices ? (
@@ -1194,7 +1209,7 @@ export function CreateAgentDialog({
                 <Field
                   label={t("agents.form.fields.workDir")}
                   hint={t(executionMode === "sandbox" ? "agents.form.workDir.hintSandbox" : "agents.form.workDir.hintLocal")}
-                  error={submitAttempted && workDir.trim() !== "" && !workDir.trim().startsWith("/") ? t("agents.form.errors.workDirAbsolute") : undefined}
+                  error={submitAttempted && workDir.trim() !== "" && !isUsableWorkDir(workDir.trim()) ? t("agents.form.errors.workDirAbsolute") : undefined}
                 >
                   <Input
                     value={workDir}
@@ -1380,7 +1395,9 @@ export function CreateAgentDialog({
                             )}
                             {"new_secret" in modelBindingChoice && !modelNewSecretExpanded && (
                               <div className="flex items-center gap-1.5 text-xs text-fg">
-                                <Check className="h-3.5 w-3.5 shrink-0 text-status-completed" strokeWidth={1.5} aria-hidden="true" />
+                                {/* Queued, not done: this secret is created on
+                                    save. A green tick said it already existed. */}
+                                <StatusIcon status="queued" />
                                 <span className="flex-1 truncate">
                                   {t("credentialCheck.sharedNewQueued", { name: modelBindingChoice.new_secret.display_name || t("credentialCheck.modelBindingTitle") })}
                                 </span>

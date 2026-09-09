@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/modelendpoint"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -648,7 +649,7 @@ func endpointProbeRequest(ctx context.Context, baseURL, modelKey, apiKey, endpoi
 	url := ""
 	switch normalizeEndpointType(endpointType) {
 	case "anthropic":
-		url = anthropicMessagesURL(endpointBaseURLFromConfig(config, "anthropic", baseURL))
+		url = modelendpoint.AnthropicMessagesURL(endpointBaseURLFromConfig(config, "anthropic", baseURL))
 		body = map[string]any{
 			"model":      modelKey,
 			"messages":   []map[string]any{{"role": "user", "content": "ping"}},

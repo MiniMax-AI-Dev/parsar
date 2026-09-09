@@ -1,7 +1,7 @@
 [
   {
     "view": "conversations",
-    "rows": 14,
+    "rows": 29,
     "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
@@ -40,7 +40,7 @@
   {
     "view": "agents",
     "rows": 2,
-    "rowsAfterClicks": 15,
+    "rowsAfterClicks": 30,
     "dialogsOpened": [
       "新建 Agent"
     ],
@@ -61,17 +61,24 @@
   },
   {
     "view": "models",
-    "rows": 0,
-    "rowsAfterClicks": 0,
-    "dialogsOpened": [],
+    "rows": 1,
+    "rowsAfterClicks": 1,
+    "dialogsOpened": [
+      "导入模型",
+      "新建模型",
+      "测试连接",
+      "编辑",
+      "复制为新模型",
+      "删除"
+    ],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
   },
   {
     "view": "connections",
-    "rows": 0,
-    "rowsAfterClicks": 0,
+    "rows": 4,
+    "rowsAfterClicks": 4,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
@@ -79,8 +86,8 @@
   },
   {
     "view": "members",
-    "rows": 3,
-    "rowsAfterClicks": 3,
+    "rows": 4,
+    "rowsAfterClicks": 4,
     "dialogsOpened": [
       "邀请新成员",
       "取消邀请"
@@ -91,8 +98,8 @@
   },
   {
     "view": "settings",
-    "rows": 0,
-    "rowsAfterClicks": 0,
+    "rows": 2,
+    "rowsAfterClicks": 2,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
@@ -101,8 +108,10 @@
   {
     "view": "secrets",
     "rows": 0,
-    "rowsAfterClicks": 14,
-    "dialogsOpened": [],
+    "rowsAfterClicks": 1,
+    "dialogsOpened": [
+      "添加凭据"
+    ],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
@@ -112,20 +121,18 @@
     "rows": 0,
     "rowsAfterClicks": 0,
     "dialogsOpened": [
-      "接入新设备",
-      "录入 E2B API Key"
+      "接入新设备"
     ],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": [
-      "runtime/load: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes",
-      "runtime/click:重试: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
+      "runtime/load: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
     ]
   },
   {
     "view": "usage",
     "rows": 13,
-    "rowsAfterClicks": 14,
+    "rowsAfterClicks": 2,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],

@@ -23,6 +23,7 @@ import {
 import { Property, PropertyList } from "../../components/ui/property-list"
 import { Skeleton } from "../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
+import { VerbatimBlock } from "../../components/ui/verbatim"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useAgentInteractions, useResolveAgentInteraction } from "../../lib/api-interactions"
@@ -98,14 +99,10 @@ export function ApprovalsPage() {
   const unreachable = error instanceof ApiError && error.envelope.unreachable
   const loading = pendingQ.isLoading || decidedQ.isLoading || expiredQ.isLoading
 
-  // The newest pending request is the thing to act on; it is selected
-  // until the user picks something else.
-  // Closing the rail must not re-select the default row; `dismissed`
-  // holds the rail shut until the user picks a row or the route changes.
-  const [dismissed, setDismissed] = useState(false)
-  const selected =
-    (entityId ? rows.find((r) => r.id === entityId) : undefined) ??
-    (entityId || dismissed ? undefined : rows.find((r) => r.status === "pending"))
+  // Nothing opens on arrival. The inbox used to select the newest pending
+  // request for you, which made it the one list that opened a rail you had not
+  // asked for — every other ledger waits to be clicked, and so does this.
+  const selected = entityId ? rows.find((r) => r.id === entityId) : undefined
 
   // The rail outlives the selection by one animation so it can play its
   // exit, whether the X, the open row, or the route closed it.
@@ -114,13 +111,8 @@ export function ApprovalsPage() {
 
   // The row is a toggle: clicking the open one closes the rail.
   const select = (id: string | null) => {
-    if (id && id !== selected?.id) {
-      setDismissed(false)
-      navigate("approvals", { id })
-    } else {
-      setDismissed(true)
-      navigate("approvals")
-    }
+    if (id && id !== selected?.id) navigate("approvals", { id })
+    else navigate("approvals")
   }
 
   // The page is titled exactly as the nav item names it (common:nav.items.approvals).
@@ -141,13 +133,8 @@ export function ApprovalsPage() {
             <div className="px-6 pt-6">
               <ErrorState
                 title={unreachable ? t("approvals.loadError.unreachable.title") : t("approvals.loadError.title")}
-                description={
-                  unreachable
-                    ? t("approvals.loadError.unreachable.description")
-                    : error instanceof Error
-                      ? error.message
-                      : t("approvals.loadError.description")
-                }
+                description={unreachable ? t("approvals.loadError.unreachable.description") : t("approvals.loadError.description")}
+                detail={!unreachable && error instanceof Error ? error.message : undefined}
                 hint={unreachable ? t("approvals.loadError.unreachable.hint") : t("approvals.loadError.hint")}
                 onRetry={() => {
                   void pendingQ.refetch()
@@ -344,7 +331,7 @@ function InteractionRail({
       header={
         <>
           <StatusIcon status={STATUS_ICON[interaction.status]} />
-          <span className="shrink-0 text-sm font-medium text-fg">{t(`approvals.status.${interaction.status}`)}</span>
+          <span className="shrink-0 text-base font-medium text-fg">{t(`approvals.status.${interaction.status}`)}</span>
           <LedgerId className="min-w-0 flex-1">{interaction.request_id || interaction.id}</LedgerId>
         </>
       }
@@ -413,22 +400,19 @@ function InteractionRail({
         </Property>
         <Property label={t("approvals.detail.createdAt")}>{fmtAgo(interaction.created_at)}</Property>
         {pending && <Property label={t("approvals.detail.expiresIn")}>{fmtUntil(interaction.expires_at)}</Property>}
-        {!pending && (
-          <Property label={t("approvals.detail.decision")}>
-            <StatusIcon status={STATUS_ICON[interaction.status]} />
-            <span className="truncate">
-              {t(`approvals.status.${interaction.status}`)}
-              {interaction.resolved_by && <span className="text-fg-muted"> · {interaction.resolved_by}</span>}
-            </span>
-          </Property>
+        {/* Who decided — not what was decided. The rail's header already
+            carries the status glyph and the same word; this property used to
+            repeat both, so the reader saw "⊗ 已拒绝" twice, once per pane. */}
+        {!pending && interaction.resolved_by && (
+          <Property label={t("approvals.detail.decidedBy")}>{interaction.resolved_by}</Property>
         )}
       </PropertyList>
 
       {isPermission ? (
         <RailSection title={t("approvals.detail.payload")}>
-          <pre className="m-0 mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+          <VerbatimBlock className="mt-1.5 max-h-60">
             {JSON.stringify(interaction.request.payload ?? {}, null, 2)}
-          </pre>
+          </VerbatimBlock>
         </RailSection>
       ) : (
         questions.map((question, index) => {

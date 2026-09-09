@@ -228,6 +228,22 @@ definitions:
       type:
         type: string
     type: object
+  dev.acceptInvitationRequest:
+    properties:
+      password:
+        type: string
+      token:
+        type: string
+    type: object
+  dev.acceptInvitationResponse:
+    properties:
+      email:
+        type: string
+      user_id:
+        type: string
+      workspace_id:
+        type: string
+    type: object
   dev.addWorkspaceMemberRequest:
     properties:
       email:
@@ -398,6 +414,15 @@ definitions:
       plaintext:
         type: string
     type: object
+  dev.createConversationUserMessageBody:
+    properties:
+      content:
+        type: string
+      mentioned_agent_ids:
+        items:
+          type: string
+        type: array
+    type: object
   dev.createCredentialKindBody:
     properties:
       code:
@@ -411,6 +436,28 @@ definitions:
       value_schema:
         additionalProperties: {}
         type: object
+    type: object
+  dev.createInvitationRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      role:
+        type: string
+    type: object
+  dev.createInvitationResponse:
+    properties:
+      email:
+        type: string
+      expires_at:
+        type: string
+      invitation_id:
+        type: string
+      invite_link:
+        type: string
+      role:
+        type: string
     type: object
   dev.createModelBody:
     properties:
@@ -1684,6 +1731,36 @@ definitions:
         type: string
       required:
         type: boolean
+    type: object
+  store.SecretRead:
+    properties:
+      auth_type:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      key_version:
+        type: string
+      kind:
+        type: string
+      management_workspace_id:
+        type: string
+      masked:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      provider:
+        type: string
+      slug:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
     type: object
 info:
   contact: {}
@@ -3365,6 +3442,71 @@ paths:
       summary: Configure a conversation's external reference
       tags:
       - conversations
+  /api/v1/conversations/{conversationID}/messages:
+    post:
+      consumes:
+      - application/json
+      description: Accepts 1-32000 Unicode code points after trimming surrounding
+        whitespace.
+      parameters:
+      - description: Conversation UUID
+        in: path
+        name: conversationID
+        required: true
+        type: string
+      - description: Message and optional Agent mentions
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dev.createConversationUserMessageBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Message and dispatched Agent run
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid body or UUID
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Workspace membership required
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Conversation not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Invalid content or Agent mention
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Message could not be sent
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Conversation messages unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Send a conversation message
+      tags:
+      - conversations
   /api/v1/conversations/{conversationID}/runs/{runID}/start:
     post:
       description: Marks the run as running (or reports "queued" if a sibling run
@@ -3576,6 +3718,54 @@ paths:
       summary: Health check
       tags:
       - health
+  /api/v1/invite/accept:
+    post:
+      consumes:
+      - application/json
+      description: New accounts supply a password and use the saved invitation name
+        when provided. Existing accounts must be signed in as the invited user; their
+        name and password are never changed.
+      parameters:
+      - description: Invitation and optional new-account password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dev.acceptInvitationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dev.acceptInvitationResponse'
+        "400":
+          description: Invalid request or new-account password
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Sign in as the invited account
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "410":
+          description: Invitation invalid, expired, or already used
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Acceptance or session creation failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Accept a workspace invitation
+      tags:
+      - invitations
   /api/v1/me:
     get:
       description: Returns the profile of the caller resolved from the session cookie.
@@ -4741,6 +4931,7 @@ paths:
       - application/json
       description: Toggles a runtime-injected built-in on/off for one agent. Workspace
         owners, admins, and members may change it. The key must be a known built-in.
+        Successful requests appear in Agent audit.
       operationId: setDevAgentBuiltinCapability
       parameters:
       - description: Workspace UUID
@@ -4857,7 +5048,7 @@ paths:
       - application/json
       description: Swaps the agent's binding to a new version of the same capability,
         optionally flipping the pinning mode at the same time. Workspace owner, admin,
-        or member only.
+        or member only. Successful requests appear in Agent audit.
       operationId: upgradeDevAgentCapability
       parameters:
       - description: Workspace UUID
@@ -4925,7 +5116,7 @@ paths:
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}:
     delete:
       description: Removes the given capability version from the agent. Workspace
-        owner, admin, or member only.
+        owner, admin, or member only. Successful requests appear in Agent audit.
       operationId: deleteDevAgentCapability
       parameters:
       - description: Workspace UUID
@@ -4981,7 +5172,7 @@ paths:
       - application/json
       description: Enables (installs) a capability version on the agent. Cross-workspace
         enable requires the source capability to be public and non-deprecated. Workspace
-        owner, admin, or member only.
+        owner, admin, or member only. Successful requests appear in Agent audit.
       operationId: enableDevAgentCapability
       parameters:
       - description: Workspace UUID
@@ -6302,10 +6493,11 @@ paths:
       consumes:
       - application/json
       description: Adds a new version to an existing capability, sharing the parse/rebuild
-        pipeline with capability import commit. When version is omitted, the server
-        advances the latest version automatically. Spec.kind must match capability.type.
-        When oss_key is omitted for plugin or skill-zip kinds, the previous version's
-        bytes are reused. Owner/admin only.
+        pipeline with capability import commit. Skill Markdown is packaged into a
+        stored ZIP. When version is omitted, the server advances the latest version
+        automatically. Spec.kind must match capability.type. When oss_key is omitted
+        for plugin or skill-zip kinds, the previous version's bytes are reused. Owner/admin
+        only.
       operationId: commitDevCapabilityVersionImport
       parameters:
       - description: Workspace UUID
@@ -6351,6 +6543,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "422":
+          description: Invalid Skill content or capability kind mismatch
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Secrets service unavailable
           schema:
@@ -6358,7 +6556,7 @@ paths:
               type: string
             type: object
         "502":
-          description: Failed to fetch uploaded zip from object storage
+          description: Failed to read or store Skill ZIP
           schema:
             additionalProperties:
               type: string
@@ -6377,8 +6575,9 @@ paths:
       consumes:
       - application/json
       description: Encrypts inline_secrets then runs the whole MCP or Skill import
-        (capability + capability_version + secrets) in a single transaction. For Skill
-        zip imports the canonical_spec is rebuilt from OSS bytes. Owner/admin only.
+        (capability + capability_version + secrets) in a single transaction. Skill
+        Markdown is packaged into a stored ZIP before commit; uploaded Skill ZIPs
+        rebuild canonical_spec from stored bytes. Owner/admin only.
       operationId: commitDevCapabilityImport
       parameters:
       - description: Workspace UUID
@@ -6413,6 +6612,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "422":
+          description: Invalid Skill content
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Secrets service unavailable
           schema:
@@ -6420,7 +6625,7 @@ paths:
               type: string
             type: object
         "502":
-          description: Failed to fetch uploaded zip from object storage
+          description: Failed to read or store Skill ZIP
           schema:
             additionalProperties:
               type: string
@@ -6491,8 +6696,9 @@ paths:
       - capabilities
   /api/v1/workspaces/{workspaceID}/capabilities/marketplace-installs:
     get:
-      description: Returns the marketplace capabilities the workspace has installed
-        (as opposed to authored).
+      description: Returns installed capabilities, including unpublished sources,
+        with visibility and bound version metadata. Unpublished sources do not expose
+        later private versions.
       operationId: listDevWorkspaceMarketplaceInstalls
       parameters:
       - description: Workspace UUID
@@ -7103,6 +7309,64 @@ paths:
       summary: Resolve a pending approval or user question
       tags:
       - interactions
+  /api/v1/workspaces/{workspaceID}/invitations:
+    post:
+      consumes:
+      - application/json
+      description: Stores the optional name for new-account creation. Existing account
+        names are preserved.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Invitation details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dev.createInvitationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dev.createInvitationResponse'
+        "400":
+          description: Invalid invitation details
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Authentication required
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Invitation not allowed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Invitation already pending
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Invitation creation failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a workspace invitation
+      tags:
+      - invitations
   /api/v1/workspaces/{workspaceID}/mcp-directory:
     get:
       parameters:
@@ -8328,7 +8592,10 @@ paths:
         "200":
           description: Secret list
           schema:
-            additionalProperties: true
+            additionalProperties:
+              items:
+                $ref: '#/definitions/store.SecretRead'
+              type: array
             type: object
         "400":
           description: Invalid UUID
@@ -8368,8 +8635,7 @@ paths:
         "201":
           description: Created secret
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/store.SecretRead'
         "400":
           description: Invalid body or UUID
           schema:
@@ -8387,8 +8653,9 @@ paths:
       - secrets
   /api/v1/workspaces/{workspaceID}/secrets/{secretID}/disable:
     post:
-      description: Marks the secret as disabled so agents can no longer bind to it.
-        Owner/admin only.
+      description: Marks the secret as disabled. Caller must be owner/admin of the
+        secret's recorded management workspace. Shared use does not grant management
+        rights; legacy secrets without recorded ownership cannot be disabled.
       operationId: disableDevSecret
       parameters:
       - description: Workspace UUID
@@ -8407,8 +8674,7 @@ paths:
         "200":
           description: Disabled secret
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/store.SecretRead'
         "400":
           description: Invalid UUID
           schema:
@@ -8422,7 +8688,7 @@ paths:
               type: string
             type: object
         "404":
-          description: Secret not found
+          description: Secret not found in this management workspace
           schema:
             additionalProperties:
               type: string

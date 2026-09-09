@@ -298,8 +298,15 @@ func (c *JSONRPCClient) Request(ctx context.Context, method string, params any) 
 		return nil, fmt.Errorf("codex rpc: write %s: %w", method, err)
 	}
 
+	c.pendingMu.Lock()
 	timer := time.NewTimer(c.cfg.RequestTimeout)
-	pending.timer = timer
+	if c.pending[id] == pending {
+		pending.timer = timer
+	} else {
+		// A response or client shutdown already removed this request.
+		timer.Stop()
+	}
+	c.pendingMu.Unlock()
 	defer timer.Stop()
 
 	select {

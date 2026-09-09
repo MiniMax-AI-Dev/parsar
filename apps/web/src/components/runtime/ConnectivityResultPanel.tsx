@@ -4,6 +4,7 @@ import { ChevronDown, X } from "lucide-react"
 
 import { Button } from "../ui/button"
 import { StatusIcon, type StatusKind } from "../ui/status-icon"
+import { VerbatimBlock } from "../ui/verbatim"
 import type {
   ConnectivityCheck,
   ConnectivityCheckCategory,
@@ -108,9 +109,9 @@ export function ConnectivityResultPanel({ result, checkLabelFor, onDismiss }: Co
             </p>
           )}
           {rawDetails.length > 0 && (
-            <pre className="mt-2 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+            <VerbatimBlock className="mt-2">
               {rawDetails.join("\n")}
-            </pre>
+            </VerbatimBlock>
           )}
         </div>
       )}

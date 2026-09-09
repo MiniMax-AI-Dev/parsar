@@ -9,6 +9,7 @@ import type { Agent, Model, UserWorkspace } from "../../../lib/api-types"
 import { useAdminView } from "../../../lib/admin-router"
 import { CreateAgentDialog } from "../CreateAgentDialog"
 import { DeleteAgentDialog } from "./DeleteAgentDialog"
+import type { ShowToast } from "../../../components/ui/toast"
 
 export function AgentDetailActions({
   agent,
@@ -23,7 +24,7 @@ export function AgentDetailActions({
   workspaceName?: string
   workspaceRole?: UserWorkspace["role"]
   models: Model[]
-  onToast: (message: string) => void
+  onToast: ShowToast
 }) {
   const { t, i18n } = useTranslation("admin")
   const { navigate } = useAdminView()

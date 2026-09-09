@@ -87,7 +87,7 @@ dev-db:
 # Backward-compatible alias. Prefer `make dev-db` for the DB-only dev stack.
 dev: dev-db
 
-check: check-go check-store check-web check-docs check-cli check-hygiene
+check: check-go check-store check-web check-cli check-hygiene check-installer
 	@printf 'Parsar harness checks passed.\n'
 
 check-setup:
@@ -118,6 +118,10 @@ check-docs: check-setup node-deps
 check-cli: check-setup node-deps
 	pnpm --filter @parsar/cli typecheck
 	pnpm --filter @parsar/opencode-plugin typecheck
+
+.PHONY: check-installer
+check-installer:
+	bash scripts/check-installer.sh
 
 check-hygiene: check-setup
 	@for polluted in .parsar logs state cache config; do \

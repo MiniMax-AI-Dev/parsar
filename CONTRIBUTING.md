@@ -51,17 +51,23 @@ Direct development on `main` is not allowed. Every session honours this rule.
 
 ## Independent blind review
 
-Substantial changes require two independent reviews after implementation and
-verification. Give each reviewer the requirements, acceptance criteria,
-project rules, and scope boundaries, but no implementation summary, suspected
-defects, or findings from the other reviewer. Each reviewer inspects the full
-diff.
+Fix one issue per PR. State the expected behavior, acceptance criteria, and
+explicit scope exclusions before implementation. Keep unrelated refactors,
+features, formatting, and dependency updates in separate PRs.
 
-After material fixes, repeat the two independent reviews. Once only small
-convergence fixes remain, one independent reviewer is enough. If the same
-review-and-fix cycle keeps repeating, stop patching and reassess the design. If
-the design still does not converge, report the problem instead of expanding
-the change.
+After implementation and required checks, ask one fresh subagent to review
+the entire diff. Give it the requirements, acceptance criteria, project rules,
+and scope boundaries. Do not share the developer's conversation, implementation
+summary, suspected defects, or previous review findings.
+
+Address blocking findings within the same scope, rerun the relevant checks,
+and repeat the blind review with a fresh subagent after each revision. Merge
+only after checks pass and the review has no unresolved blocking findings.
+Record verification and the PR outcome in the linked issue.
+
+If review and fixes keep cycling, stop patching and reassess the design. If
+the design still does not converge, document the unresolved problem and defer
+that issue instead of expanding the PR. Continue with independent issues.
 
 ## Architecture baseline
 
@@ -97,6 +103,9 @@ description and keep ownership on the side listed here.
 - The one-command installer is both install and upgrade path. Default GHCR
   images must be pulled before `docker compose up` so `:latest` does not
   silently reuse a stale local image after `main` changes.
+- After pulling, the installer prepares its server data mount for the image's
+  actual UID/GID and verifies writability before starting services. Only the
+  preparation container runs as root; the server retains its configured user.
 - `install.sh` may still write stable random overrides such as
   `PARSAR_MASTER_KEY` and `PARSAR_SHARED_RUNTIME_TOKEN` for safer local
   installs, but raw Compose/Dokploy deployments must not depend on those
@@ -130,6 +139,9 @@ description and keep ownership on the side listed here.
 
 ### Runtime and execution concepts
 
+- The daemon resolves loopback Postgres capability-download URLs through its
+  paired server address before calling an adapter. Preserve the signed query
+  and resource path; external storage URLs and browser upload URLs are unchanged.
 - `connector_type` chooses the protocol Parsar uses to run an agent
   (`agent_daemon`, `http_agent`, ...). It does not say where the process
   runs.
@@ -144,8 +156,19 @@ description and keep ownership on the side listed here.
 
 ### Server versus daemon ownership
 
+- Cross-workspace installed capabilities remain visible and removable after
+  unpublishing. Their installation metadata reports source visibility and only
+  bound versions while private; marketplace discovery and new installs still
+  require a published source.
+- Conversation user-message limits count Unicode code points after trimming
+  surrounding whitespace, not UTF-8 bytes. Keep route and store validation aligned.
+- Agent capability upgrades accept private capabilities from the Agent's own
+  workspace; cross-workspace upgrades still require a public, available source.
 - The server owns auth, workspaces, agent records, runtime bindings, run
   records, audit/usage persistence, and upstream engine session ids.
+- Successful explicit Agent capability enable, upgrade, removal, and built-in
+  toggle requests emit Agent-targeted audit events with the authenticated actor
+  and capability identifiers. Never include configuration or credential values.
 - `parsar-daemon` owns CLI discovery, process spawning, CLI-specific env,
   cwd selection inside its host/container, permission prompts, and translating
   CLI streams into Parsar daemon protocol frames.
@@ -162,6 +185,16 @@ description and keep ownership on the side listed here.
 
 ### Agent CLI adapter contract
 
+- Agent creation and editing store behavior instructions in `system_prompt`.
+  Preserve saved text when opening the form; clearing it sends an empty string.
+- OpenCode model selectors use `provider/model`. Its Anthropic SDK base URL
+  derives from the same endpoint resolver as model probes. OpenAI-compatible
+  and OpenAI SDK adapters use the `openai` and `openai-response` endpoint maps,
+  respectively, preserving explicit base paths; absent mappings preserve their
+  legacy base URL. Explicit provider SDK options retain precedence over generated
+  defaults.
+- Claude Code streaming deltas and their per-block assistant copies must be
+  emitted once; preserve separate text blocks even when their content matches.
 - Every daemon-side agent adapter must use a shared process runner for CLI
   subprocesses. New adapters must not hand-roll separate `Start`, stdin,
   cancellation, timeout, and `Wait` loops.
@@ -187,6 +220,14 @@ description and keep ownership on the side listed here.
 - Keep uploaded Skill archives engine-neutral. Materialize adapter-managed
   copies below the `AgentStateKey` runtime directory, then register that root
   through the engine's native CLI, config, or RPC surface.
+- Markdown Skill imports and new versions must store an engine-neutral ZIP
+  containing `SKILL.md`, with its storage reference and SHA-256 persisted before
+  reporting success. Existing versions without archives require a new import.
+- Skill ZIP preview and commit must reject duplicate paths, including
+  normalized separator/dot-segment and case aliases, so approved file contents
+  cannot differ because an extractor chooses a different duplicate entry.
+  Reject filenames outside Unicode stream-safe normalization rather than
+  adding a separate unbounded normalizer.
 
 ### Plugin Bundle (KindBundle) architecture
 
@@ -261,6 +302,9 @@ description and keep ownership on the side listed here.
   protocol request and defer the engine response until
   `SubmitPermission` / `SubmitPromptForUserChoice` arrives. Adapters must not
   silently approve, deny, or synthesize empty answers as a fallback.
+- Codex MCP empty-form confirmations use the same permission lifecycle and
+  reply with MCP action/content fields. Decisions grant only that call; structured
+  forms and URL elicitations remain unsupported rather than implicitly approved.
 - Codex agents that may call `request_user_input` use `config.mode=plan`.
   Prompt wording cannot unlock the tool in default mode; the daemon must pass
   the configured mode through app-server `turn/start.collaborationMode`.
@@ -374,6 +418,20 @@ description and keep ownership on the side listed here.
 
 ### API, DB, and generated surfaces
 
+- Secret disabling is authorized by `secrets.management_workspace_id`, set
+  from the creation workspace. This ownership must not restrict shared reads
+  or runtime use. Legacy rows inherit unambiguous creation metadata or runtime
+  registration ownership. Rows without it remain usable but cannot be disabled until
+  an operator assigns a verified management workspace in the database.
+  Never infer ownership from the workspace supplied in a disable request.
+  The database smoke gate also runs the cross-workspace secret-disable HTTP
+  regression so it cannot silently skip in CI without a test database.
+- Accepting an invitation may set a password only for a newly created user.
+  The saved invitation name initializes that user's name; an empty name keeps
+  the email-prefix fallback. Existing account names are never overwritten.
+  Existing users must authenticate as the invited account; acceptance must
+  preserve their identities and passwords, and rejected attempts must leave
+  the invitation available for its recipient.
 - New persistent state starts with a migration and sqlc query. Avoid direct
   SQL embedded in route handlers or connector code unless the package already
   owns that persistence boundary and tests cover it.
@@ -467,6 +525,9 @@ split relevant pieces out first rather than growing the file further.
 
 ### Frontend shared logic
 
+- Inbound messages with `sender_type=external` are user turns. Web conversation
+  presenters must not assign them the Agent identity or imply they are from the
+  current viewer.
 - Cross-page utilities (date/time/duration formatting, status labels,
   etc.) live once in `apps/web/src/lib/`. Do not reimplement inside a page
   component "because it's just a few lines" — that is how
@@ -509,6 +570,10 @@ Three concrete rules:
 
 When a dialog uses a multi-column grid, give every column `min-w-0` —
 otherwise long children push the grid track wider instead of wrapping.
+
+Pages with a detail rail may opt into wrapping header actions through
+`PageHeader.actionClassName` and an auto-height header. Other pages retain
+the default single-row header layout.
 
 ## Typography contract
 
@@ -589,8 +654,12 @@ make check
 CI may run independently based on the changed paths: `make check-go` for sqlc
 drift plus non-store Go tests, `make check-store` for migration/store
 integration tests, `make check-web` for web typecheck plus design lint, and
-`make check-cli` for CLI/plugin typechecks. Keep the subtargets aligned with
+`make check-cli` for CLI/plugin typechecks, and `make check-installer` for
+Docker-free installer lifecycle checks. Keep the subtargets aligned with
 the full gate whenever the required checks change.
+
+Pin the CI vulnerability scanner to a version compatible with the workflow's
+Go toolchain; do not use `@latest` for that build-time tool.
 
 - Any DB change must ship with a migration. Migrations are immutable
   the moment they land on `main` — prod has already applied them, so
@@ -611,6 +680,10 @@ the full gate whenever the required checks change.
   the build on any drift. See `server/internal/api/health.go:livenessHandler`
   and `server/internal/dev/routes.go:listWorkspaceEnabledAgents` for
   the reference style.
+- Feishu WebSocket SDK and lifecycle logs must redact connection URL query
+  strings before writing them, without changing the URLs used to connect.
+  Omit each field's tail after its first `?`, without requiring a valid URL
+  prefix; preserve separate SDK correlation fields and structured route context.
 - Use `internal/obs/log` for all logging — never `slog.Default()`,
   `log.Println`, `fmt.Println`, or a hand-rolled `*slog.Logger`. The
   linter (`forbidigo`) rejects direct `slog.Default()` outside

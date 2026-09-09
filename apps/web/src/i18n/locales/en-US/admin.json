@@ -9,8 +9,7 @@
   },
   "models": {
     "page": {
-      "title": "Models",
-      "description": "Org-shared model catalog. Anyone can add a model; only the creator (or an admin) can edit or delete it."
+      "title": "Models"
     },
     "actions": {
       "addModel": "Add model",
@@ -18,11 +17,8 @@
       "test": "Test",
       "edit": "Edit",
       "copy": "Duplicate",
-      "disable": "Disable",
       "delete": "Delete",
-      "menu": "More actions",
       "editForbidden": "Only the creator or an admin can edit this model.",
-      "disableForbidden": "Only the creator or an admin can disable this model.",
       "deleteForbidden": "Only the creator or an admin can delete this model."
     },
     "copy": {
@@ -30,7 +26,6 @@
       "secretInaccessible": "The original Secret isn't visible to you. Pick another Secret or paste a fresh key."
     },
     "status": {
-      "active": "Available",
       "pending": "Pending credential",
       "disabled": "Disabled"
     },
@@ -39,19 +34,13 @@
       "personal": "Personal key"
     },
     "ownershipFilter": {
-      "all": "All ({{count}})",
-      "mine": "Mine ({{count}})",
-      "others": "Others ({{count}})"
+      "label": "Filter"
     },
     "table": {
       "model": "Model",
       "modelKey": "Model key",
-      "compatibility": "Compatibility",
       "baseURL": "Base URL",
       "credentialMode": "Credential mode",
-      "status": "Status",
-      "health": "Health",
-      "actions": "Actions",
       "lastTested": "Last test"
     },
     "loadError": {
@@ -69,16 +58,11 @@
       "description": "Register a model so agents (and your teammates) can use it. Pick a credential mode based on whether you want to share one key with the whole org, or have each user provide their own.",
       "descriptionShort": "No models match the current filter."
     },
-    "disable": {
-      "title": "Disable model \"{{name}}\"?",
-      "description": "Disabling marks the model unusable for new requests. In-flight runs continue. Re-enable from the catalog later."
-    },
     "delete": {
       "title": "Delete model \"{{name}}\"?",
       "description": "This permanently deletes the model. Models still referenced by active agents will be rejected by the server."
     },
     "bulkDelete": {
-      "selectAll": "Select all visible models",
       "selectOne": "Select {{name}}",
       "selectedCount": "{{count}} selected",
       "deleteSelected": "Delete selected",
@@ -101,8 +85,6 @@
       "unsupported": "Connectivity test only supports OpenAI / Anthropic-compatible providers",
       "details": {
         "title": "Model test diagnostics",
-        "open": "Details",
-        "summary": "{{healthy}}/{{total}} endpoints healthy",
         "primaryEndpoint": "Primary result: {{endpoint}} · {{ms}}ms",
         "noEndpoint": "No endpoint was tested",
         "unknownEndpoint": "unknown",
@@ -133,7 +115,6 @@
         "openai": "OpenAI",
         "anthropic": "Anthropic Claude",
         "anthropicCompatible": "Custom gateway (Anthropic-compatible)",
-        "google": "Google Gemini",
         "openaiCompatible": "Custom gateway (OpenAI-compatible)"
       }
     },
@@ -144,7 +125,6 @@
         "namePlaceholder": "e.g. Claude Opus 4.5",
         "modelKey": "Model key",
         "modelKeyPlaceholder": "claude-3-5-sonnet-20241022",
-        "modelKeyCatalogHint": "Pick from this provider's known models, or type any model id.",
         "modelKeySearch": "Search or type a model id…",
         "modelKeyUse": "Use",
         "modelKeyEmpty": "No matching models — type any id",
@@ -153,23 +133,18 @@
       "credentialMode": {
         "inlineSecret": {
           "title": "Shared key (org-wide)",
-          "apiKeyHint": "We'll encrypt the key into a Secret behind the scenes. You can reuse an existing Secret instead.",
           "reuseSecret": "Or reuse an existing Secret",
           "reuseNone": "(paste a fresh key above)"
         },
         "credentialRef": {
           "title": "Personal key (per user)",
-          "kindLabel": "Credential kind",
-          "kindHint": "Users will fill in their key from \"My Credentials\" using this kind code."
+          "kindLabel": "Credential kind"
         }
       },
       "submit": "Create model"
     },
     "bulkImport": {
       "title": "Import models from /v1/models",
-      "description": "Enter a provider Base URL and API key, then select discovered models to import.",
-      "apiKeyHintInline": "Used to discover models and stored as one shared Secret for all imported models unless you reuse an existing Secret.",
-      "apiKeyHintPersonal": "Used only to discover models. Imported models will use the selected personal credential kind.",
       "discover": "Discover models",
       "discovering": "Discovering",
       "search": "Search discovered models…",
@@ -194,17 +169,14 @@
         "customHeaders": "Custom HTTP headers"
       },
       "endpointBaseURLs": {
-        "title": "Endpoint base URLs",
-        "description": "Final per-protocol base URL saved for runtime calls and model tests."
+        "title": "Endpoint base URLs"
       },
       "credentialBinding": {
         "boundSecret": "Bound Secret",
         "boundSecretNone": "(no Secret bound — model is unusable)",
         "rotateNewKey": "Rotate to a new key",
         "rotateHint": "Leave blank to keep the current Secret. Pasting a value creates a fresh Secret behind the scenes.",
-        "rotateExplain": "We'll encrypt the new key into a Secret and re-point the model at it. The old Secret stays around so audit / rollback is still possible.",
-        "kindCode": "Credential kind",
-        "kindCodeHint": "Each user supplies their own credential from \"My Credentials\" under this kind."
+        "kindCode": "Credential kind"
       }
     },
     "ownership": {
@@ -223,20 +195,6 @@
     "interrupted": "Interrupted"
   },
   "approvals": {
-    "page": {
-      "title": "Inbox / Approvals",
-      "description": "Where Agent actions that need human judgment land. Keeps risky moves out of IM threads and into a place you can audit."
-    },
-    "tabs": {
-      "pending": "Pending",
-      "decided": "Decided",
-      "expired": "Expired / Cancelled"
-    },
-    "risk": {
-      "high": "High risk",
-      "medium": "Medium risk",
-      "low": "Low risk"
-    },
     "actions": {
       "allowOnce": "Allow once",
       "deny": "Deny",
@@ -262,21 +220,14 @@
     "detail": {
       "agent": "Agent",
       "conversation": "Conversation",
-      "requestedBy": "Requested by",
-      "resource": "Target resource",
       "payload": "Payload preview",
       "createdAt": "Created",
       "expiresIn": "Expires in",
-      "decision": "Decision",
-      "allow": "Allowed",
-      "deny": "Denied",
       "alreadyDecided": "This approval has been handled — actions are no longer available.",
       "readOnly": "Read-only access. Workspace owners, admins, and members can respond.",
-      "relatedLinks": "Related",
       "openRun": "Open Run Detail",
       "openConversation": "Open Conversation",
-      "openIM": "Open in IM thread",
-      "empty": "Select an approval to see details"
+      "decidedBy": "Decided by"
     },
     "empty": {
       "title": "No approvals",
@@ -292,29 +243,21 @@
         "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
       }
     },
-    "mockBanner": {
-      "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace in the header."
-    },
     "table": {
       "request": "Request"
     }
   },
   "conversations": {
     "page": {
-      "title": "Conversations",
-      "description": "Chat with your team's Agents here."
+      "title": "Conversations"
     },
     "sidebar": {
       "allAgentsHint": "Choose an Agent",
       "newConversation": "New conversation",
-      "recents": "Recents",
       "foldAria": "Fold conversation list",
       "expandAria": "Expand conversation list",
-      "currentAgentDesc": "Current Agent",
       "switchAgent": "Switch Agent",
       "emptyForAgent": "No conversations yet. Click + New above to start one.",
-      "youLabel": "You",
       "renameAria": "Rename conversation",
       "renameCommit": "Save",
       "renameCancel": "Cancel",
@@ -332,33 +275,14 @@
     },
     "empty": {
       "greet": "What would you like to talk about?",
-      "mode": "Web conversation",
       "placeholderWithAgent": "Chat with {{agent}}…",
       "placeholderNoAgent": "Pick an Agent to start chatting"
     },
-    "create": {
-      "title": "New conversation",
-      "description": "Create a 1:1 conversation.",
-      "fields": {
-        "title": "Title (optional)",
-        "titlePlaceholder": "Leave blank to auto-name from the first 30 chars of your first message",
-        "agent": "Agent",
-        "agentPlaceholder": "Pick an Agent",
-        "agentRequired": "Please pick an Agent"
-      },
-      "cancel": "Cancel",
-      "submit": "Start chatting",
-      "submitting": "Creating…"
-    },
     "detail": {
-      "kind": "CONVERSATION",
       "unnamed": "Untitled conversation",
       "emptyTimeline": "No messages yet",
-      "agentTyping": "Agent is replying…",
-      "stamp": "{{time}} · {{agent}}",
       "viewRunLink": "View run details",
-      "cancelAll": "Cancel all",
-      "cancelAllAria": "Cancel all in-flight tasks in this conversation"
+      "externalUser": "IM user"
     },
     "runtime_error": {
       "badge": "Run failed",
@@ -377,7 +301,6 @@
       "readOnly": "Read-only access. You cannot send messages.",
       "label": "Send message",
       "placeholder": "Chat with {{agent}}…",
-      "addContext": "Add attachment / context",
       "send": "Send",
       "sending": "Sending…",
       "stopAria": "Stop generating",
@@ -403,39 +326,19 @@
     "stream": {
       "caretHint": "Generating…",
       "thinking": "Thinking…",
-      "ready": "Ready",
-      "error": "Streaming interrupted: {{error}}",
+      "error": "Streaming interrupted",
       "contextRejected": "The upstream model rejected the current conversation context. The task has stopped and is not still running. Try again later; if it happens again, start a new conversation and restate the task.",
-      "retry": "Retry",
       "queued": "Queued",
       "queuedWithPosition": "Queued (position {{position}})",
-      "waitingForHuman": "The Agent is waiting for your approval or answer.",
-      "openInbox": "Open Inbox",
       "interactionTitle": "Agent needs your input",
-      "interactionDescription": "Review this request here to let the run continue.",
-      "viewAllInteractions": "View all in Inbox",
       "loadingInteraction": "Loading the approval request…",
       "interactionLoadError": "The request could not be loaded here. Open Inbox to retry."
     },
     "permission": {
-      "header": "Agent requests approval",
-      "headerWithAgent": "{{agent}} requests approval",
-      "toolLabel": "Tool:",
-      "unknownTool": "(unspecified)",
-      "defaultTitle": "Wants to run {{tool}}",
-      "payloadToggle": "Show full payload",
-      "allowOnce": "Allow once",
-      "alwaysAllow": "Always allow",
-      "deny": "Deny",
-      "deciding": "Submitting…",
-      "decided": "{{decision}}",
-      "allow_once": "Allowed (once)",
-      "always_allow": "Allowed (always)",
-      "decideFailed": "Submit failed: {{error}}"
+      "unknownTool": "(unspecified)"
     },
     "steps": {
       "working": "Working…",
-      "completedCount": "{{count}} steps completed",
       "totalLabel": "{{count}} steps",
       "doneInline": "{{count}} done",
       "completedInline": "{{count}} completed",
@@ -481,8 +384,7 @@
   },
   "runs": {
     "page": {
-      "title": "Runs",
-      "description": "Each Agent execution is a Run. Pinpoint what's running, stuck, failed, or waiting for approval."
+      "title": "Runs"
     },
     "tabs": {
       "all": "All",
@@ -494,17 +396,8 @@
     },
     "table": {
       "run": "Run",
-      "status": "Status",
       "conversation": "Conversation",
-      "model": "Model",
       "duration": "Duration",
-      "cost": "Cost",
-      "pagination": {
-        "prev": "Previous",
-        "next": "Next",
-        "range": "Showing {{from}}-{{to}} of {{total}}",
-        "empty": "No runs"
-      },
       "agent": "Agent",
       "connector": "Connector",
       "age": "Time"
@@ -528,31 +421,21 @@
         "hint": "Check that the backend is running on port 18080: `make server` or `make dev`. Retrying just sends the request again; it does not fix the server."
       }
     },
-    "mockBanner": {
-      "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace in the header."
-    },
     "empty": {
       "title": "No agent runs yet",
       "description": "@Agent in IM groups or Web conversations and runs will appear here."
     },
     "detail": {
       "duration": "Duration",
-      "cost": "Cost",
       "conversation": "Conversation",
-      "errorTitle": "Run failed",
-      "errorHint": "See the Steps tab below for the actual error.",
       "tabs": {
         "overview": "Overview",
-        "events": "Events",
         "steps": "Steps",
         "artifacts": "Artifacts",
-        "permissions": "Permissions",
         "audit": "Audit"
       },
       "overview": {
         "runtime": "Runtime",
-        "lifecycle": "Lifecycle",
         "diagnostics": "Diagnostics"
       },
       "runtime": {
@@ -560,7 +443,6 @@
         "state": "State",
         "provider": "Provider",
         "type": "Type",
-        "connector": "Connector",
         "agentKind": "Agent engine",
         "mode": "Runtime mode",
         "executionPlace": "Execution place",
@@ -575,14 +457,12 @@
         "lastHeartbeat": "Last heartbeat",
         "capturedAt": "Snapshot captured",
         "health": "Health",
-        "heartbeatAge": "Heartbeat age",
         "action": "Action",
         "empty": "No runtime snapshot was recorded for this run."
       },
       "diagnostics": {
         "noEvents": "No events yet",
         "fields": {
-          "status": "Status",
           "latestEvent": "Latest event",
           "result": "Result",
           "reason": "Reason",
@@ -625,14 +505,12 @@
         },
         "runtimeHealth": {
           "noSnapshot": "No snapshot",
-          "adminDisabled": "Admin state issue",
           "offline": "Offline or unhealthy",
           "stale": "Stale heartbeat",
           "ready": "Ready"
         },
         "runtimeActions": {
           "noSnapshot": "Check whether this run is bound to an agent_daemon runtime.",
-          "adminDisabled": "Enable or repair the runtime before retrying.",
           "offline": "Reconnect the daemon or switch to an available device.",
           "stale": "Confirm the daemon is running and reporting heartbeats.",
           "ready": "Runtime state looks healthy."
@@ -646,12 +524,9 @@
         }
       },
       "steps": {
-        "title": "Steps timeline",
         "empty": "No persisted events yet. New runs will show token generation, tools, approvals, and completion here.",
         "viewRaw": "View raw events",
         "hideRaw": "Hide raw events",
-        "viewAllRaw": "Expand all",
-        "hideAllRaw": "Collapse all",
         "generated": "Generated {{count}} characters",
         "started": "Run started",
         "messageComplete": "Message completed",
@@ -672,13 +547,10 @@
       },
       "close": "Close",
       "openConversation": "Open conversation",
-      "agent": "Agent",
       "connector": "Connector",
       "created": "Created",
       "started": "Started",
       "finished": "Finished",
-      "runId": "Run id",
-      "rawEvents": "Raw",
       "notFound": {
         "title": "This run is no longer available",
         "description": "It may have been removed, or its agent was deleted."
@@ -724,40 +596,26 @@
     },
     "actions": {
       "create": "New capability",
-      "createSubmit": "Add",
       "edit": "Edit",
       "save": "Save",
       "cancel": "Cancel",
       "close": "Close",
       "addVersion": "Submit new version",
-      "disable": "Disable",
-      "enable": "Enable",
-      "delete": "Delete capability",
-      "browse": "Browse market"
+      "enable": "Enable"
     },
     "permission": {
       "adminOnly": "Owner / admin only"
     },
     "status": {
-      "active": "Available",
       "deprecated": "Deprecated"
     },
     "table": {
       "name": "Capability",
-      "type": "Type",
       "latestVersion": "Latest version",
       "enabledAgents": "Enabled Agents",
       "credentials": "Credential requirement",
-      "actions": "Actions",
       "updated": "Updated",
       "installs": "Installs"
-    },
-    "pagination": {
-      "perPage": "Per page",
-      "range": "{{start}}–{{end}} of {{total}}",
-      "page": "Page {{page}} / {{totalPages}}",
-      "prev": "Previous",
-      "next": "Next"
     },
     "credentials": {
       "none": "No credential required"
@@ -773,16 +631,10 @@
       "reset": "Clear filters"
     },
     "rowActions": {
-      "view": "View details",
       "edit": "Edit / new version",
-      "addVersion": "Edit / new version",
       "more": "More actions",
-      "disable": "Disable",
-      "enable": "Enable",
       "publish": "Publish to market",
       "unpublish": "Cancel publishing",
-      "deprecate": "Mark deprecated",
-      "undeprecate": "Clear deprecated",
       "delete": "Delete",
       "uninstall": "Remove from workspace"
     },
@@ -796,16 +648,9 @@
         "success": "\"{{name}}\" deleted."
       }
     },
-    "create": {
-      "title": "New capability",
-      "typeHelp": {
-        "skill": "Load a Skill package from a public GitHub repo when the Agent sandbox starts."
-      }
-    },
     "edit": {
       "title": "Edit capability",
-      "description": "Type and version content cannot be changed here; add a new version to upgrade.",
-      "credentialWarning": "Changing the credential type can make existing user credentials stop matching; runs using this capability will ask users to set credentials again."
+      "description": "Type and version content cannot be changed here; add a new version to upgrade."
     },
     "fields": {
       "name": {
@@ -817,27 +662,18 @@
         "label": "One-line description",
         "placeholder": "What can Agents do with this capability?"
       },
-      "version": {
-        "label": "Version",
-        "help": "Display version; 1.0.0 is a good first version."
-      },
       "gitRepoUrl": {
-        "label": "GitHub repository URL",
-        "help": "Public GitHub repositories only; private repos / SSH / GitLab are not supported yet."
+        "label": "GitHub repository URL"
       },
       "gitRef": {
-        "label": "Version",
-        "placeholder": "e.g. v1.2.3, main, commit SHA",
-        "help": "Prefer a pinned tag or commit SHA; main follows the latest code."
+        "label": "Version"
       },
       "path": {
-        "label": "Subpath (optional)",
-        "help": "Directory inside the repo; leave blank when the Skill package is at repo root."
+        "label": "Subpath (optional)"
       }
     },
     "detail": {
       "backToList": "Capabilities",
-      "noDescription": "(No description)",
       "notFound": {
         "title": "This capability does not exist or was deleted",
         "description": "It may have been deleted, or this workspace cannot access it."
@@ -855,7 +691,6 @@
     "versions": {
       "title": "Version history",
       "latest": "Latest",
-      "delete": "Delete",
       "empty": {
         "title": "This capability has no versions",
         "description": "Add a version before Agents can enable it."
@@ -863,8 +698,7 @@
       "table": {
         "version": "Version",
         "createdAt": "Created",
-        "enabledAgents": "Agents using it",
-        "actions": "Actions"
+        "enabledAgents": "Agents using it"
       },
       "add": {
         "title": "{{name}} — add version",
@@ -873,37 +707,10 @@
         "inlineSecretLostWarning": "Inline secret(s) from the previous version ({{keys}}) are hidden. Re-enter the plaintext to keep them, or switch to a managed credential."
       },
       "viewContent": {
-        "action": "View content",
         "title": "View {{version}} content",
         "description": "Read-only content used by this version at runtime."
-      },
-      "deleteDialog": {
-        "title": "Delete {{version}} from \"{{name}}\"?",
-        "description": "This version will disappear from history.",
-        "notAvailable": "Deleting a single version isn't supported yet; to remove the entire capability use the Danger zone below."
       }
     },
-    "danger": {
-      "title": "Danger zone",
-      "description": "Disabling or deleting affects Agents using this capability.",
-      "deleteDisabled": "Disable this capability on all Agents first (currently used by {{count}} Agent(s)).",
-      "disable": {
-        "title": "Disable \"{{name}}\"?",
-        "description": "After disabling: {{count}} Agent(s) using it will fail on their next run; runs already in flight fail after their current turn; credentials are kept and this can be re-enabled later.",
-        "confirm": "Disable"
-      },
-      "enable": {
-        "title": "Enable \"{{name}}\"?",
-        "description": "After enabling, Agents can use this capability again on their next run.",
-        "confirm": "Enable"
-      },
-      "delete": {
-        "title": "Permanently delete \"{{name}}\"?",
-        "description": "After deletion: this capability disappears from the workspace list, all versions are deleted together, and this cannot be undone. Current installations: {{count}}.",
-        "confirm": "Permanently delete"
-      }
-    },
-    "deleteBlocked": "Remove this capability from those Agents before deleting it.",
     "errors": {
       "nameRequired": "Enter a capability name.",
       "nameTooLong": "Capability name must be at most 50 characters.",
@@ -911,16 +718,13 @@
     },
     "toast": {
       "created": "{{name}} was added. Enable it from Agent detail to use it.",
-      "createdWithCredential": "{{name}} was added. Next: enable it from Agent detail, or set {{kind}} once under My Credentials.",
       "updated": "{{name}} was updated.",
       "versionAdded": "Added a new version for {{name}}.",
-      "disabled": "{{name}} is disabled.",
       "enabled": "{{name}} is enabled."
     },
     "none": "—",
     "empty": {
       "title": "No capabilities have been added to this workspace yet.",
-      "descriptionAdmin": "Capabilities live in the workspace capability pool. They are external tools (MCP) or loadable Skill packages that Agents in this workspace can enable as needed.",
       "descriptionMember": "This workspace capability pool has no capabilities yet. Ask an owner / admin to add one."
     },
     "loadError": {
@@ -934,27 +738,11 @@
       }
     },
     "marketplace": {
-      "actions": {
-        "browse": "Browse market"
-      },
-      "sourceLine": "From {{source}} · v{{version}}",
-      "drawer": {
-        "breadcrumb": "Agent Management / Capabilities",
-        "title": "Capability market",
-        "description": "Browse capabilities published by every workspace. Pick one, then enable it on a specific Agent from Agent detail."
-      },
       "filters": {
-        "all": "All",
-        "search": "Search capability name / description",
         "hideInstalled": "Hide already added"
       },
       "card": {
-        "source": "▷ From: {{source}}",
-        "latest": "Latest v{{version}}",
-        "added": "{{count}} workspace(s) added",
-        "credential": "Credential: {{kind}}",
         "install": "+ Add to my Agent",
-        "installed": "Enabled on {{count}} Agent(s)",
         "installedBadge": "Added",
         "selfPublished": "Published by you"
       },
@@ -962,7 +750,6 @@
         "back": "Back to market list",
         "addedCount": "Workspaces added",
         "contentTitle": "Capability contents",
-        "contentDescription": "Review the exact Skill files or MCP launch configuration before adding it to an Agent.",
         "loadErrorTitle": "Failed to load capability contents",
         "loadErrorDescription": "The latest published version could not be loaded.",
         "contentUnavailable": "This older version does not contain previewable Skill or MCP content.",
@@ -970,7 +757,6 @@
         "sourceCommit": "Source commit",
         "sourcePath": "Source path",
         "skillBadge": "Skill files",
-        "files": "Files",
         "command": "Launch command",
         "environment": "Environment variables",
         "noEnvironment": "No environment variables required.",
@@ -987,7 +773,6 @@
       }
     },
     "skillsDirectory": {
-      "installs": "{{count}} installs",
       "loadError": {
         "title": "Couldn't load the Skills catalog",
         "description": "Retry without leaving the Capability Marketplace."
@@ -1001,19 +786,22 @@
         "installing": "Installing...",
         "installed": "Installed",
         "success": "{{name}} was imported as a workspace Skill Capability.",
-        "failed": "The Skill could not be installed."
+        "failed": "The Skill could not be installed.",
+        "failureDescription": "Installation of \"{{name}}\" failed. Retry, or share the technical details with your administrator if it keeps failing.",
+        "details": "Technical details",
+        "copy": "Copy details",
+        "copied": "Details copied.",
+        "copyFailed": "Copy failed. Select and copy the details above."
       }
     },
     "mcpDirectory": {
       "title": "Connectors",
-      "description": "Browse curated connectors and MCP capabilities published by workspaces in one marketplace.",
       "verified": "Verified",
       "securityNotice": "Import only saves the configuration and does not run it immediately. The MCP can execute in a Runtime only after you enable it and bind it to an Agent.",
       "filters": {
         "category": "Connector categories",
         "allCategories": "All categories",
-        "verified": "Verified only",
-        "sort": "Sort connectors"
+        "verified": "Verified only"
       },
       "sort": {
         "featured": "Featured",
@@ -1041,7 +829,6 @@
       },
       "detail": {
         "loadError": "Failed to load connector details",
-        "notFound": "Connector not found",
         "version": "Version",
         "transport": "Transport",
         "endpoint": "Remote endpoint",
@@ -1062,7 +849,6 @@
       }
     },
     "marketplaceDetail": {
-      "badge": "From market",
       "notFound": {
         "title": "This market capability is not in the current workspace list",
         "description": "Only market capabilities enabled on at least one Agent appear here."
@@ -1087,11 +873,14 @@
       "badgeSource": "Deprecated",
       "bannerTarget": "The source workspace marked this capability deprecated. Agents already using it can keep using the pinned version, but cannot upgrade to a newer version."
     },
+    "unpublished": {
+      "badge": "Unpublished",
+      "bannerTarget": "The source workspace unpublished this capability. Existing Agent bindings remain. You can view them or remove the capability from this workspace."
+    },
     "marketStatus": {
       "title": "Market status",
       "published": "Published to market",
       "unpublished": "Not published",
-      "installCount": "{{count}} workspace(s) added",
       "actions": {
         "publish": "Publish to market",
         "unpublish": "Cancel publishing",
@@ -1127,23 +916,21 @@
           "description": "The capability appears in the market again, migration hints disappear, and existing workspaces can upgrade again.",
           "confirm": "Clear deprecated"
         }
-      }
+      },
+      "state": "Publication"
     },
     "uninstall": {
-      "sectionTitle": "Remove from my workspace",
-      "sectionDescription": "Removal disables this capability on every Agent in the current workspace.",
       "action": "Remove from my workspace",
       "title": "Remove \"{{name}}\" from my workspace?",
-      "description": "After removal, this capability disappears from your capability list and will be disabled on {{count}} Agent(s):",
-      "credentialNote": "Existing my credentials are kept. Only the current workspace is affected.",
+      "description": "Remove this capability from the workspace and from the following {{count}} Agent(s). The Agents and their other capabilities remain available.",
+      "credentialNote": "Your existing credentials are kept. Only the current workspace is affected.",
       "unknownAgent": "Affected Agent",
-      "confirm": "Remove and disable {{count}} Agent(s)",
+      "confirm": "Remove capability",
       "toast": "{{name}} was removed from this workspace."
     },
     "import": {
       "envMode": {
         "label": "Credential source",
-        "literal": "Keep original value",
         "inlineSecret": "Team shared secret",
         "credentialRef": "Personal credential"
       },
@@ -1151,14 +938,9 @@
         "credential": "Credential"
       },
       "envValue": {
-        "configPlaceholder": "Config value",
-        "literalSecretPlaceholder": "Keep the original placeholder",
         "inlineSecretPlaceholder": "Paste a team-shared token; import saves it encrypted",
         "inlineSecretNote": "For a team-shared service token. After submit, the config keeps only a secret reference, not plaintext.",
         "credentialRefNote": "For personal tokens such as GitLab PATs. Runtime uses the value bound by the caller under My Credentials."
-      },
-      "envHint": {
-        "placeholderValue": "This env placeholder needs a team shared secret or a personal credential."
       },
       "envEmpty": {
         "noCredentialPlaceholders": "No credential placeholders to handle"
@@ -1166,7 +948,6 @@
       "dialog": {
         "description": "Paste a third-party MCP config (JSON / TOML) to parse and preview it. Ordinary env values are imported as-is; only env values that start with $ need a credential source.",
         "descriptionSkill": "Paste a SKILL.md or upload a zip bundle. The Skill's name and description come from its frontmatter; the body is injected into the model as instruction.",
-        "descriptionPlugin": "Upload a packaged .claude-plugin zip; the server validates the manifest and parses it.",
         "descriptionPlaceholder": "One sentence about what this capability does — Claude uses it to decide when to invoke."
       },
       "skill": {
@@ -1197,23 +978,15 @@
   },
   "agents": {
     "page": {
-      "title": "Agents",
-      "description": "Manage your digital teammates: identity, capabilities, default model, where they run."
+      "title": "Agents"
     },
     "actions": {
       "create": "New Agent",
       "chat": "Chat",
       "edit": "Edit",
       "clone": "Clone",
-      "disable": "Disable",
-      "enable": "Enable",
       "delete": "Delete",
       "more": "More actions"
-    },
-    "tabs": {
-      "all": "All",
-      "active": "Active",
-      "issues": "With issues"
     },
     "search": {
       "placeholder": "Search name, description, slug, engine, or model…"
@@ -1221,27 +994,16 @@
     "table": {
       "agent": "Agent",
       "engine": "Engine",
-      "execution": "Execution",
       "updated": "Last enabled",
-      "status": "Status",
       "connector": "Connector",
-      "sandbox": "Sandbox",
       "model": "Default model",
-      "runtime": "Runtime",
-      "visibility": "Visibility",
-      "creator": "Creator",
-      "lastRun": "Last run",
-      "recentFailures": "Failures (7d)",
-      "actions": "Actions"
+      "runtime": "Runtime"
     },
     "runtimeCell": {
       "unbound": "No runtime bound",
       "pending": "Not allocated"
     },
     "modelUnavailable": "Unavailable model",
-    "sandbox": {
-      "running": "Running"
-    },
     "status": {
       "active": "Active",
       "disabled": "Disabled",
@@ -1264,7 +1026,6 @@
     },
     "feishuConnector": {
       "title": "Feishu Bot binding",
-      "description": "Bind this Agent to a Feishu self-built app so users can @mention it in chats and groups. Credentials (App Secret / Verification Token / Encrypt Key) must live in Secrets — this form only stores references.",
       "ownerOnly": "Owner / admin only",
       "saved": "Feishu Bot configuration saved",
       "diagnostics": {
@@ -1301,7 +1062,6 @@
       },
       "provision": {
         "title": "Create Bot by QR",
-        "subtitle": "Admin consent stores credentials automatically",
         "start": "Start QR",
         "qrAlt": "QR code for Feishu Bot creation",
         "openLink": "Open authorization page",
@@ -1316,10 +1076,6 @@
           "stopped": "Stopped",
           "waiting": "Waiting"
         }
-      },
-      "enabled": {
-        "label": "Enable Feishu Bot binding",
-        "hint": "When off, this Bot app no longer receives inbound messages and outbound messages are not sent"
       },
       "fields": {
         "appId": {
@@ -1364,14 +1120,6 @@
         "reset": "Discard changes"
       }
     },
-    "runtime": {
-      "label": "Runtime",
-      "local": "Local connection",
-      "sandbox": "Cloud sandbox (recommended)",
-      "localHint": "The agent runs directly in this machine's process, sharing your file system.",
-      "sandboxHint": "The agent runs in an isolated cloud sandbox. Doesn't touch your local files.",
-      "followWorkspace": "Follow workspace default (recommended)"
-    },
     "loadError": {
       "title": "Failed to load agents",
       "description": "Backend returned an error.",
@@ -1382,38 +1130,24 @@
         "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
       }
     },
-    "mockBanner": {
-      "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace in the header."
-    },
     "empty": {
       "title": "No agents yet",
       "description": "Create the first Agent so it can work alongside the team in Feishu / Slack / Web."
     },
     "detail": {
       "tabs": {
-        "overview": "Overview",
-        "prompt": "Prompt & Profile",
-        "connector": "Connector",
-        "model": "Model",
-        "capabilities": "Capabilities",
-        "sandbox": "Sandbox",
-        "runs": "Runs",
         "audit": "Audit",
         "dynamics": "Activity",
         "config": "Config",
-        "scheduled": "Scheduled",
         "exposure": "Exposure"
       },
       "dynamics": {
         "current": {
           "title": "Current",
-          "subtitle": "in-flight work",
           "empty": "This agent has no task running right now."
         },
         "metrics": {
           "title": "Last 30 days",
-          "subtitle": "performance",
           "completed": "Completed",
           "successRate": "Success rate",
           "avgDuration": "Avg duration",
@@ -1421,9 +1155,7 @@
         },
         "recent": {
           "title": "Recent work",
-          "subtitle": "last {{count}}",
-          "empty": "No run history yet.",
-          "untitled": "(untitled)"
+          "empty": "No run history yet."
         }
       },
       "config": {
@@ -1445,7 +1177,6 @@
         "runtime": {
           "title": "Runtime",
           "model": "Model",
-          "runtime": "Runtime",
           "execution": "Execution",
           "connector": "Connector",
           "workdir": "Working directory",
@@ -1466,48 +1197,11 @@
         "title": "Failed to load Agent",
         "description": "The Agent may not exist or you may not have access."
       },
-      "overview": {
-        "summary": "Basics",
-        "runs7d": "Runs (7d)",
-        "successRate": "Success rate",
-        "failures7d": "Failures (7d)",
-        "approvals7d": "Approvals (7d)",
-        "tags": "Tags"
-      },
-      "fields": {
-        "slug": "Internal ID",
-        "runtimeType": "Runtime type",
-        "visibility": "Visibility"
-      },
-      "prompt": {
-        "system": "System prompt",
-        "profile": "Agent profile",
-        "tone": "Tone",
-        "persona": "Persona"
-      },
-      "model": {
-        "default": "Default"
-      },
       "capabilities": {
-        "sections": {
-          "enabled": "Enabled ({{count}})",
-          "available": "Available in workspace ({{count}})",
-          "unregistered": "Capabilities not registered in this workspace"
-        },
-        "empty": {
-          "title": "No capabilities are enabled for this Agent yet.",
-          "description": "The Agent can only use general chat for now. Pick one from Available in workspace below."
-        },
-        "emptyEnabled": "No capabilities are enabled for this Agent yet. Pick one from Available in workspace below.",
         "emptyAvailable": "No more workspace capabilities are available.",
-        "credentialsLoadError": "Could not load my credential status; actions remain visible and the backend will still enforce permissions.",
         "credential": {
-          "none": "No credential required",
-          "present": "Requires {{kind}} · ✓ you have set it ({{name}})",
-          "missing": "Requires {{kind}} · ✗ not set — calls will fail",
-          "missingBadge": "Credential missing",
           "addCta": "Add credential",
-          "defaultName": "default"
+          "missingShort": "Requires {{kind}}, not set"
         },
         "bindings": {
           "versionDeleted": {
@@ -1516,7 +1210,6 @@
           }
         },
         "compatibility": {
-          "badge": "Not supported",
           "unsupported": "{{engine}} does not support {{type}} capabilities. Supported engines: {{engines}}.",
           "types": {
             "mcp": "MCP",
@@ -1530,7 +1223,9 @@
           "badge": "Built-in",
           "on": "On",
           "off": "Off",
-          "toggleError": "Toggle failed: {{message}}"
+          "toggleError": "Toggle failed",
+          "enable": "Enable",
+          "disable": "Disable"
         },
         "actions": {
           "enable": "+ Enable",
@@ -1540,17 +1235,13 @@
           "remove": "Remove",
           "removeConfirm": "Remove",
           "cancel": "Cancel",
-          "upgrade": "Upgrade to new version"
+          "upgrade": "Upgrade"
         },
         "enableDialog": {
           "title": "Enable \"{{cap}}\" on \"{{agent}}\"",
           "description": "Once enabled, this Agent can call this capability during runs.",
           "version": "Version",
-          "noCredential": "This capability does not need an external account.",
-          "credentialReady": "✓ Found your {{kind}} credential. It can be used immediately after enabling.",
-          "credentialMissing": "✗ This capability requires {{kind}}, which you have not set yet.",
-          "addCredential": "Set it now",
-          "ackMissingCredential": "I understand this capability needs a credential to work, and it will show as \"Credential missing\" after enabling"
+          "noCredential": "This capability does not need an external account."
         },
         "switchDialog": {
           "title": "Switch \"{{cap}}\" version",
@@ -1566,11 +1257,6 @@
           "impactCapability": "The capability stays registered in the workspace and can be re-enabled later.",
           "impactCredential": "Existing my credentials are not deleted."
         },
-        "unregistered": {
-          "description": "If the capability you need is not registered in the workspace, contact an owner / admin to add it.",
-          "adminCta": "Add in Capabilities",
-          "memberHint": "Contact an owner / admin if you need a new capability."
-        },
         "deletedCapability": {
           "title": "This capability was deleted from the workspace",
           "description": "Runs will fail. Ask an admin to register it again or remove it here.",
@@ -1578,47 +1264,30 @@
         },
         "toast": {
           "enabled": "\"{{cap}}\" is enabled on \"{{agent}}\" at v{{version}}.",
-          "enabledMissingCredential": "\"{{cap}}\" is enabled, but you must set {{kind}} in My Credentials before it can work.",
           "switched": "\"{{cap}}\" switched to v{{version}}. Takes effect on the next run.",
           "removed": "Removed \"{{cap}}\" from \"{{agent}}\". Takes effect on the next run.",
           "upgraded": "\"{{cap}}\" upgraded to v{{version}}. Takes effect on the next run."
         },
-        "loadError": {
-          "title": "Failed to load Agent capabilities",
-          "description": "Backend returned an error."
-        },
         "marketplace": {
-          "badge": "From market",
-          "source": "From {{source}} · current v{{version}}",
           "deprecatedBanner": "The source workspace marked this capability deprecated. This Agent can keep using pinned v{{version}}, but cannot upgrade.",
-          "upgradeAvailable": "The source workspace published v{{version}}.",
-          "upgradeBlocked": "Source capability is deprecated; upgrade is unavailable."
+          "upgradeShort": "New version v{{version}}"
+        },
+        "state": {
+          "ready": "Ready",
+          "attention": "Update available",
+          "blocked": "Not usable",
+          "deprecated": "Deprecated"
         }
-      },
-      "runs": {
-        "hint": "Agent detail shows a run summary; for the full table go to Runs filtered by agent.",
-        "view": "Go to Runs"
       },
       "sandbox": {
         "title": "Persistent Sandbox",
         "errorTitle": "Failed to load sandbox status",
-        "killError": "Kill failed",
         "rebuildError": "Rebuild failed",
         "renewError": "Renew failed",
         "notLiveHint": "Sandbox is no longer live. Kill and Rebuild are disabled — the next prompt will lift a fresh sandbox automatically.",
-        "tabBadge": {
-          "live": "A live sandbox is bound to this agent",
-          "terminal": "Sandbox killed or terminal — the next prompt will lift a new one"
-        },
         "empty": {
-          "title": "No active sandbox",
-          "description": "No long-lived sandbox is bound to this agent right now. The next prompt will lift a fresh one (or the runtime is in local mode and never spawns one)."
+          "title": "No active sandbox"
         },
-        "local": {
-          "title": "This Agent runs locally",
-          "description": "Local mode does not need a long-lived sandbox. Switch to Sandbox to show status, Kill, and Rebuild actions here."
-        },
-        "configHint": "If Sandbox is selected, make sure this workspace has a sandbox runtime configured; otherwise startup will fail.",
         "fields": {
           "sandboxId": "E2B sandbox id",
           "templateId": "Template",
@@ -1631,8 +1300,6 @@
           "cacheKey": "Cache key"
         },
         "actions": {
-          "kill": "Kill sandbox",
-          "killing": "Killing…",
           "rebuild": "Rebuild",
           "rebuilding": "Rebuilding…",
           "renew": "Renew",
@@ -1642,16 +1309,12 @@
         },
         "expires": {
           "remaining": "{{value}} remaining",
-          "expired": "Expired",
-          "fresh": "Just renewed"
+          "expired": "Expired"
         },
         "renewedToast": "Renewed until {{expiresAt}}",
         "provisionError": "Provisioning failed",
-        "provisioningHint": "Sandbox is being provisioned. A warm start usually takes 10-30 seconds; the first local Docker startup can take longer while the sandbox image is pulled.",
         "preparing": {
           "title": "Preparing sandbox",
-          "body": "Starting the sandbox and waiting for parsar-daemon to pair.",
-          "coldStartBody": "A warm start usually takes 10-30 seconds. The first local Docker startup can take longer while the sandbox image is pulled.",
           "runtimeId": "Runtime id",
           "started": "Started",
           "steps": {
@@ -1671,11 +1334,6 @@
           "body": "The sandbox did not pair before the startup token expired. This often happens when the first local Docker startup is still pulling the sandbox image."
         },
         "confirm": {
-          "kill": {
-            "title": "Kill this sandbox?",
-            "description": "The long-lived E2B sandbox bound to this agent will be torn down immediately. In-flight work in this sandbox is lost; the next prompt will lift a fresh sandbox from the base template (10-20s cold start). If you recently changed the agent's sandbox size, the next cold start picks up the new size.",
-            "confirmLabel": "Kill sandbox"
-          },
           "rebuild": {
             "title": "Rebuild this sandbox?",
             "description": "The current sandbox is torn down so the next prompt re-spawns from a clean base template. Use this when the sandbox has accumulated bad state (cached dependencies, stale clone, etc.). In-flight work is lost.",
@@ -1695,20 +1353,12 @@
         "edit": "Edit Agent"
       },
       "sections": {
-        "basic": "Basics",
-        "main": "Main",
-        "advanced": "Advanced",
-        "capabilities": "Capabilities",
         "credentials": "Required Credentials"
       },
       "fields": {
         "name": "Name",
         "description": "Description",
-        "connector": "Connector",
         "model": "Model",
-        "systemPrompt": "System prompt (optional)",
-        "tags": "Tags",
-        "slug": "Internal ID",
         "executionMode": "Execution mode",
         "agentEngine": "Agent engine",
         "codexMode": "Codex collaboration mode",
@@ -1722,8 +1372,11 @@
         "name": "e.g. Data analyst assistant",
         "description": "One-line description of what this Agent is good at",
         "modelSearch": "Search models in this Workspace",
-        "capabilitySearch": "Search capabilities",
-        "systemPrompt": "Leave blank to use the default assistant prompt"
+        "capabilitySearch": "Search capabilities"
+      },
+      "instructions": {
+        "label": "Instructions",
+        "hint": "Describe what this Agent should do, how it should respond, and when it should ask for clarification."
       },
       "defaults": {
         "workspaceName": "My Workspace",
@@ -1732,14 +1385,10 @@
         "systemPrompt": "You are a helpful AI assistant for this team. Be concise and accurate."
       },
       "errors": {
-        "nameConflict": "An Agent with this name already exists. Pick another name.",
-        "slugConflict": "The internal identifier is already taken. Pick another name.",
         "modelRequired": "Pick a model first.",
         "modelUnavailable": "The current model is unavailable. Select an active model.",
-        "generatedIdConflict": "This name generates an internal identifier that is already taken. Pick another name.",
-        "generatedIdInvalid": "Name needs at least one letter, number, or Chinese character.",
         "deviceRequired": "Select a local device.",
-        "workDirAbsolute": "Working directory must be an absolute path (starting with /)."
+        "workDirAbsolute": "Working directory must be an absolute path, or start with `~/`."
       },
       "sandboxSize": {
         "hint": "Changes take effect after the current sandbox is released.",
@@ -1763,16 +1412,8 @@
         "description": "Go to Models to onboard one. The fields you typed here will be carried over so you can come back.",
         "cta": "Configure Model"
       },
-      "emptyConnector": {
-        "title": "No usable Connector yet",
-        "description": "Configure a Connector first so the Agent knows where to run.",
-        "cta": "Configure Connector"
-      },
-      "runtimeHint": "Runtime is part of an agent's identity and cannot be changed after creation. To switch, recreate the agent. Cloud Sandbox requires the deployment to have cloud runtime enabled; open-source/self-hosted deployments may also need a workspace runtime credential.",
-      "runtimeLocked": "Runtime is set at creation and cannot be changed",
       "noTagsAdmin": "This workspace has no reusable capability tags yet.",
       "noTagsMember": "This workspace has no reusable capability tags yet.",
-      "goCapabilities": "Go to Capabilities →",
       "noCapabilityVersion": "No version",
       "deprecatedCapabilityBadge": "Deprecated",
       "deprecatedCapabilityTooltip": "This capability has been deprecated. Existing bindings keep working; once you uncheck it you cannot re-add it.",
@@ -1835,8 +1476,8 @@
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
-        "hintLocal": "Directory the agent runs in on your local device. Leave blank to use a per-conversation scratch dir. Created if it does not exist.",
-        "hintSandbox": "Directory inside the sandbox container (e.g. /workspace/my-app). Leave blank to use a per-conversation scratch dir. Created if it does not exist."
+        "hintLocal": "The directory the agent runs in on your local device — an absolute path, or one starting with `~/`. Leave blank to use a per-conversation scratch dir; created if it does not exist.",
+        "hintSandbox": "The directory the agent runs in inside the sandbox container (e.g. /workspace/my-app) — an absolute path, or one starting with `~/`. Leave blank to use a per-conversation scratch dir; created if it does not exist."
       }
     },
     "pendingCapability": {
@@ -1847,17 +1488,11 @@
     },
     "listActions": {
       "cancel": "Cancel",
-      "disableConfirmTitle": "Disable \"{{name}}\"?",
-      "disableConfirmDescription": "This Agent will stop receiving new run requests. Historical conversations, runs, and audit records are preserved, and you can enable it again later.",
-      "disableConfirm": "Disable",
-      "disabledToast": "Disabled {{name}}",
-      "enabledToast": "Enabled {{name}}",
       "clonedToast": "Cloned as \"{{name}}\""
     },
     "delete": {
       "title": "Delete \"{{name}}\"?",
       "description": "This permanently removes the Agent from the workspace. Historical conversations, runs, and audit records are preserved.",
-      "confirmNameLabel": "Type {{name}} to confirm.",
       "confirmNamePrefix": "Type",
       "confirmNameSuffix": "to confirm.",
       "copyName": "Copy Agent name",
@@ -1882,20 +1517,16 @@
     },
     "engine": {
       "claudeCode": {
-        "title": "Claude Code",
-        "description": "Run Claude Code CLI through parsar-daemon."
+        "title": "Claude Code"
       },
       "codex": {
-        "title": "Codex",
-        "description": "Run OpenAI Codex (codex-rs) via the app-server protocol."
+        "title": "Codex"
       },
       "pi": {
-        "title": "Pi",
-        "description": "Run the pi coding agent CLI through parsar-daemon."
+        "title": "Pi"
       },
       "opencode": {
-        "title": "OpenCode",
-        "description": "Run OpenCode CLI through parsar-daemon for local or sandbox daemon workflows."
+        "title": "OpenCode"
       }
     },
     "filters": {
@@ -1929,38 +1560,21 @@
     }
   },
   "secrets": {
-    "page": {
-      "title": "Credentials",
-      "description": "Review, rotate, and disable API keys and OAuth credentials Parsar uses to access external services. Credentials are usually created automatically by product flows (Models, Runtime, Connections)."
-    },
     "none": "Not set",
     "sections": {
       "modelKeys": "Model API Keys",
-      "modelKeysDescription": "Usually saved and bound automatically when creating Providers from Models.",
       "runtimeKeys": "Runtime credentials",
-      "runtimeKeysDescription": "Used by cloud runtime providers such as E2B.",
-      "otherKeys": "Other API Keys",
-      "otherKeysDescription": "Fallback credentials for custom services."
-    },
-    "usage": {
-      "modelProvider": "Used by a model Provider; normally bound from Models.",
-      "runtime": "Used by cloud runtime infrastructure.",
-      "feishu": "Used by Feishu entry points or Agent bots.",
-      "custom": "Custom API key; bind it from the relevant capability or configuration."
+      "otherKeys": "Other API Keys"
     },
     "status": {
       "active": "Active",
       "disabled": "Disabled"
     },
     "actions": {
-      "disable": "Disable",
-      "alreadyDisabled": "Disabled"
+      "disableUnavailable": "Disable is only available in the recorded management workspace. Contact your administrator if ownership is missing.",
+      "disable": "Disable"
     },
     "create": {
-      "cta": "Add API Key",
-      "title": "Add API Key",
-      "description": "Fallback entry. Prefer creating model, runtime, and OAuth credentials from their product flows. API keys are encrypted by the server.",
-      "requiresWorkspace": "Choose a Workspace first",
       "field": {
         "purpose": "Purpose",
         "name": "Name",
@@ -1968,7 +1582,6 @@
         "apiKey": "API Key"
       },
       "purpose": {
-        "modelProvider": "Model service",
         "runtime": "Runtime",
         "custom": "Custom API"
       },
@@ -2002,6 +1615,9 @@
         "description": "The frontend cannot reach the backend API.",
         "hint": "Check that the backend is running on port 18080."
       }
+    },
+    "table": {
+      "status": "Status"
     }
   },
   "members": {
@@ -2013,10 +1629,6 @@
       "pending": "Pending requests"
     },
     "pendingRequests": {
-      "tabLabel": "Pending requests",
-      "empty": "No pending join requests",
-      "requestedAt": "Requested",
-      "reason": "Reason",
       "noReason": "(none)",
       "confirmRejectTitle": "Reject request?",
       "confirmRejectBody": "Reject the join request from \"{{name}}\"? They can submit a new request anytime.",
@@ -2028,9 +1640,7 @@
     "table": {
       "user": "User",
       "role": "Role",
-      "userStatus": "Account status",
-      "joinedAt": "Joined",
-      "actions": "Actions"
+      "joinedAt": "Joined"
     },
     "role": {
       "owner": "Owner",
@@ -2039,13 +1649,9 @@
       "viewer": "Viewer"
     },
     "userStatus": {
-      "active": "Active",
       "disabled": "Disabled"
     },
     "add": {
-      "cta": "Add member",
-      "title": "Add workspace member",
-      "requiresWorkspace": "Choose a Workspace first",
       "field": {
         "user": "Choose users",
         "role": "Role"
@@ -2063,15 +1669,11 @@
       "submitting": "Adding ({{done}}/{{total}})…",
       "partialError": {
         "title": "Added {{success}}, failed {{failed}}"
-      },
-      "error": {
-        "title": "Failed to add member"
       }
     },
     "invite": {
       "cta": "Invite",
       "title": "Invite a new teammate",
-      "description": "Creates a secure invitation link for this email and role. The link expires after 72 hours.",
       "emailLabel": "Email",
       "emailPlaceholder": "teammate@company.com",
       "nameLabel": "Name",
@@ -2083,11 +1685,8 @@
       "close": "Close",
       "resultTitle": "Invitation ready",
       "resultBody": "Send this invitation link to {{email}}. It expires in 72 hours.",
-      "existingUserNotice": "If this email already belongs to a Parsar user, accepting the invitation adds their existing account to the workspace.",
       "copyAll": "Copy invitation",
       "copied": "Copied!",
-      "pendingTitle": "Pending invitations ({{count}})",
-      "pendingStatus": "Pending",
       "expiresAt": "Expires {{value}}",
       "copyLink": "Copy invitation link",
       "copyError": "Failed to copy invitation link",
@@ -2106,9 +1705,7 @@
         "error": "Failed to cancel invitation"
       },
       "credential": {
-        "url": "URL",
-        "email": "Email",
-        "password": "Password"
+        "url": "URL"
       },
       "tabs": {
         "link": "Invite link",
@@ -2122,9 +1719,6 @@
       "description": "Soft-deletes the user's workspace membership. The user record itself is preserved and can be re-added later.",
       "cancel": "Cancel",
       "confirm": "Remove"
-    },
-    "mutation": {
-      "errorTitle": "Action failed"
     },
     "empty": {
       "ws": {
@@ -2143,153 +1737,33 @@
         "description": "The frontend can't reach the backend API (/api/v1/...). The server may be down, the port occupied, or the Vite proxy misconfigured.",
         "hint": "Make sure the backend is up on port 18080: `make server` or `make dev`."
       }
-    },
-    "mockBanner": {
-      "title": "{{scope}}",
-      "ws": "Choose a Workspace in the header first."
     }
   },
   "settings": {
     "page": {
       "title": "Settings"
     },
-    "actions": {
-      "saved": "Saved"
-    },
-    "tabs": {
-      "workspace": "Workspace",
-      "gatewayDefaults": "Gateway defaults",
-      "security": "Security",
-      "runtime": "Runtime policy",
-      "advanced": "Advanced",
-      "basic": "Basic settings"
-    },
     "workspace": {
       "title": "Basic settings",
-      "description": "Only workspace identity settings with a clear current effect live here.",
       "name": "Workspace name",
-      "nameHint": "Current workspace display name; rename it from the workspace switcher in the header.",
-      "slug": "Internal ID",
-      "slugHint": "Stable system identifier generated automatically.",
-      "region": "Data region",
-      "runtimeRoot": "Local runtime root",
-      "runtimeRootHint": "Config, logs, state, and cache live here instead of the repository root."
+      "slug": "Internal ID"
     },
     "authentication": {
       "title": "Authentication",
-      "description": "Read-only login provider status from deployment configuration. Secrets stay in env or your secret manager.",
-      "loading": "Loading auth provider status...",
       "error": "Could not load auth provider status.",
       "callbackUrl": "Callback URL",
-      "requiredEnv": "Required env",
       "missingEnv": "Missing env",
-      "noneMissing": "No required env is missing.",
       "docsHint": "Deployment guide:",
       "status": {
         "enabled": "Enabled",
         "configured": "Configured",
         "missing": "Not configured"
       }
-    },
-    "gatewayDefaults": {
-      "title": "Gateway defaults",
-      "description": "Defaults applied when a new gateway is wired up. Existing gateways aren't affected.",
-      "defaultVisibility": "New conversation visibility",
-      "defaultVisibilityHint": "Who can see new conversations from this gateway by default.",
-      "dedupWindow": "Event dedupe window",
-      "dedupWindowHint": "Same external event_id is processed only once within this window.",
-      "replayProtection": "Replay protection",
-      "replayProtectionHint": "Reject webhook events with stale timestamps to mitigate replay attacks."
-    },
-    "security": {
-      "session": {
-        "title": "Session policy",
-        "description": "Login lifetime + MFA requirements.",
-        "idleTimeout": "Idle timeout",
-        "maxLifetime": "Max lifetime",
-        "requireMFA": "Require MFA for admins",
-        "requireMFAHint": "Force MFA on admin accounts."
-      },
-      "pat": {
-        "title": "Personal Access Tokens",
-        "description": "Policy for tokens members issue manually.",
-        "maxLifetime": "Max PAT lifetime",
-        "allowExpand": "Allow self-service permission expansion",
-        "allowExpandHint": "Off means only admins can grant new scopes to a PAT."
-      },
-      "oidc": {
-        "title": "OIDC SSO",
-        "description": "Connect to your enterprise IdP (Okta / Azure AD / Auth0).",
-        "issuer": "Issuer",
-        "clientId": "Client ID",
-        "note": "OIDC is optional; without it, members log in via local accounts."
-      }
-    },
-    "runtime": {
-      "capability": {
-        "title": "Capability management",
-        "description": "Workspace runtime capability management has moved to Agent Management → Capabilities.",
-        "migratedHint": "Capability management has moved to Agent Management → Capabilities.",
-        "requireApprovalHigh": "Require approval for high-risk actions",
-        "requireApprovalHighHint": "filesystem.write, secret.read, external_api.call etc. cannot be self-approved by Agents."
-      },
-      "workingDir": {
-        "title": "Working directory policy",
-        "description": "Boundaries the Agent runtime is allowed to touch.",
-        "allowedRoots": "Allowed roots",
-        "absolutePathsOnly": "Absolute paths only",
-        "absolutePathsOnlyHint": "Reject relative paths to avoid cwd drift writing to the wrong place."
-      },
-      "policy": {
-        "title": "Current runtime policy",
-        "description": "These are the rules that currently take effect or have a clear product boundary. Backend-less controls are no longer shown as editable settings.",
-        "workdirs": {
-          "title": "Working directory input",
-          "body": "User-provided working directories must be absolute paths or start with ~/. Relative paths are rejected."
-        },
-        "runtimeState": {
-          "title": "Runtime state location",
-          "body": "Config, logs, state, and cache must be written under the Parsar runtime root, not the current repository."
-        },
-        "agentRuntime": {
-          "title": "Agent execution mode",
-          "body": "Runtime is selected explicitly when an Agent is created and is immutable afterward; workspace settings no longer store a default execution mode.",
-          "value": "Agent config"
-        },
-        "capabilities": {
-          "title": "Capability boundary",
-          "body": "Tool permissions, capability toggles, and credentials belong in Capabilities and Connectors instead of fake Settings controls.",
-          "value": "Capabilities / Connectors"
-        }
-      }
-    },
-    "advanced": {
-      "dataRetention": {
-        "title": "Data retention",
-        "description": "How long run history and audit logs are kept.",
-        "runs": "Run retention",
-        "audit": "Audit log retention"
-      },
-      "experimental": {
-        "title": "Experimental features",
-        "description": "Unstable capabilities. Evaluate risk before enabling.",
-        "agentToAgent": "Allow agent → agent calls",
-        "agentToAgentHint": "Agents can @-mention each other. Chain depth controlled per workspace.",
-        "memoryProposal": "Memory write proposal review",
-        "memoryProposalHint": "Agent memory writes need human approval first."
-      },
-      "danger": {
-        "title": "Danger zone",
-        "description": "Irreversible. Confirm impact before proceeding.",
-        "deleteWorkspace": "Delete workspace",
-        "deleteWorkspaceHint": "Permanently deletes all conversations, runs, artifacts, and audit logs. Cannot be undone."
-      }
     }
   },
   "audit": {
     "page": {
-      "title": "Audit log",
-      "description": "Every traceable action in Parsar. Identity, configuration, runtime, approval, and data-access events are grouped under 5 source categories, newest first."
+      "title": "Audit log"
     },
     "tabs": {
       "all": "All",
@@ -2308,8 +1782,7 @@
     },
     "filters": {
       "targetType": "Target type",
-      "targetTypeAll": "All target types",
-      "targetTypeNone": "No target types in this source"
+      "targetTypeAll": "All target types"
     },
     "targetType": {
       "agent_run": "Agent run",
@@ -2330,14 +1803,9 @@
       "source": "Source",
       "actor": "Actor",
       "event": "Event",
-      "target": "Target",
-      "payload": "Payload",
-      "payloadFields": "{{count}} fields"
+      "target": "Target"
     },
     "detail": {
-      "recordId": "Record ID",
-      "actorType": "Actor type",
-      "target": "Target",
       "payload": "Payload",
       "openRun": "Open run",
       "openConversation": "Open conversation"
@@ -2354,10 +1822,6 @@
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
         "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
       }
-    },
-    "mockBanner": {
-      "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace in the header."
     },
     "empty": {
       "title": "No audit records",
@@ -2415,10 +1879,6 @@
         "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
       }
     },
-    "mockBanner": {
-      "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace in the header."
-    },
     "empty": {
       "title": "No usage data yet",
       "description": "Usage rows are written automatically after agents run."
@@ -2426,35 +1886,26 @@
   },
   "myCredentials": {
     "page": {
-      "title": "My Credentials",
-      "description": "Set up the external accounts you use across all workspaces. Each credential type is set once and shared across workspaces; only you can see it, and collaborators on the same Agent use their own credentials."
+      "title": "My Credentials"
     },
     "actions": {
-      "add": "+ Add credential",
       "edit": "Edit",
       "delete": "Delete"
     },
     "returnBanner": {
-      "description": "After finishing setup, return to where you came from.",
       "action": "Return"
     },
     "search": {
       "placeholder": "Search by type or display name"
     },
     "table": {
-      "displayName": "Display name",
       "kind": "Credential type",
       "lastUsed": "Last used",
-      "actions": "Actions",
-      "unnamed": "(unnamed)",
-      "createdAt": "Created {{date}}"
+      "kindCode": "Kind code",
+      "addedAt": "Added"
     },
     "kind": {
       "unknown": "Unknown credential"
-    },
-    "empty": {
-      "title": "You have not added any credentials yet",
-      "description": "When a capability you enable, or a teammate's Agent acting for you, needs GitHub, Slack, a database, or another external account, add it here once and reuse it across workspaces."
     },
     "emptyFiltered": {
       "title": "No matching credentials",
@@ -2474,7 +1925,6 @@
     "dialog": {
       "createTitle": "Add credential",
       "editTitle": "Edit credential",
-      "description": "Only you can see this credential. Parsar stores it encrypted.",
       "openProvider": "Open provider setup page →",
       "tokenSet": "Credential value is set; Parsar will not display the plaintext again.",
       "replaceToken": "Replace token",
@@ -2485,44 +1935,27 @@
       "submit": "Save",
       "fields": {
         "kind": "Credential type",
-        "kindHint": "Need another type? Contact an owner or admin. Custom types are planned for a later version.",
-        "displayName": "Display name (optional)",
-        "displayNamePlaceholder": "e.g. My GitHub PAT (work)",
-        "displayNameHint": "Only you see this. It helps you recognize the credential and does not affect Agent calls.",
-        "value": "Credential value",
-        "valueHint": "Used only while saving the encrypted value; it will not be shown again."
+        "value": "Credential value"
       }
     },
     "delete": {
       "title": "Delete the {{kind}} credential?",
       "description": "After deletion, capabilities that need {{kind}} can no longer be triggered by you. Agents with those capabilities enabled will fail the next time you start a conversation and ask you to set the credential again. The encrypted value is destroyed and cannot be recovered.",
       "impactTitle": "Capabilities currently using this credential type",
-      "loadingImpact": "Checking impact…",
       "noImpact": "No capability currently uses this credential type.",
       "hasImpact": "{{count}} capabilities across {{workspaceCount}} workspaces use this credential type.",
       "cancel": "Cancel",
       "confirm": "Permanently delete"
-    },
-    "security": {
-      "title": "How credentials are used",
-      "encrypted": "Credential values are encrypted at rest, and Parsar never displays plaintext to anyone.",
-      "crossWorkspace": "Credentials are user-level and shared across workspaces, so you do not need to set the same type repeatedly.",
-      "sandbox": "When an Agent calls a capability that needs a credential, v0.2 injects your credential when you initiate the conversation; calls by others in that same conversation also use your credential. A later version will inject credentials per action requester."
     }
   },
   "credentialsPage": {
     "title": "Credentials",
-    "description": "Credentials come in two kinds. \"Mine\" are your external accounts (GitHub, Notion, etc.) — shared across workspaces, visible only to you. \"Org-shared\" are workspace-admin credentials (model API keys, runtime keys, …).",
     "tabs": {
       "personal": "Mine",
       "org": "Org-shared"
     },
     "personal": {
       "add": "Add credential",
-      "banner": {
-        "title": "{{count}} credential(s) still needed",
-        "description": "Agents, capabilities, or models in your workspaces require these. The runtime will block calls until they're set — adding them now avoids interruptions later."
-      },
       "pending": {
         "title": "Pending",
         "refCount": "Referenced in {{count}} place(s)",
@@ -2538,27 +1971,20 @@
       }
     },
     "org": {
-      "scopeNote": "Manages org-shared service credentials (model API keys, runtime keys, …). Visible and editable to workspace admins only.",
       "add": "Add API Key",
       "openModels": "Open Models",
       "create": {
-        "title": "Add an org-shared credential",
-        "description": "Used for runtime (e.g. E2B) or custom service API keys. Model API keys are saved automatically when you create a Provider on the Models page."
+        "title": "Add an org-shared credential"
       }
     }
   },
   "credentialCheck": {
-    "present": "{{kind}} is ready ({{name}})",
-    "missing": "{{kind}} required — not configured yet",
-    "addAction": "Add credential",
     "requiredBadge": "Required",
     "sourcePersonal": "Each caller uses their own token",
     "sourceShared": "Use a shared secret",
-    "sourceSharedExisting": "Use an existing shared secret",
-    "sourceSharedNew": "Create a new shared secret (paste once)",
     "createNewShared": "+ Create a new shared secret",
     "personalDisabledHint": "Public agents cannot use personal credentials (callers may not be platform users)",
-    "personalYouHaveIt": "You have configured this ✓ (other callers must configure their own)",
+    "personalYouHaveIt": "You have configured this (other callers must configure their own)",
     "personalYouMissing": "You haven't configured this yet — calls will be disabled",
     "sharedNoneAvailable": "No shared secrets available in this workspace",
     "sharedPlaceholder": "Pick a shared secret…",
@@ -2567,7 +1993,6 @@
     "modelBindingTitle": "Model credential",
     "modelBindingPersonal": "Each caller's own API key",
     "modelBindingShared": "Use a shared API key",
-    "modelBindingNew": "Create a new shared API key (paste once)",
     "form": {
       "displayName": "Name (optional)",
       "value": "Credential value",
@@ -2578,8 +2003,7 @@
   },
   "runtime": {
     "page": {
-      "title": "Runtime",
-      "description": ""
+      "title": "Runtime"
     },
     "capability": {
       "local": {
@@ -2596,7 +2020,6 @@
     },
     "credential": {
       "title": "E2B API Key",
-      "description": "Agents using Cloud Sandbox use this key. Once saved, only the masked form is shown.",
       "state": {
         "hasCredential": "Saved",
         "noCredential": "Not entered yet."
@@ -2604,8 +2027,6 @@
       "actions": {
         "save": "Enter E2B API Key",
         "reset": "Change Key",
-        "manageSaved": "E2B Key · {{value}}",
-        "manageMissing": "Add E2B Key",
         "delete": "Delete",
         "cancel": "Cancel"
       },
@@ -2631,20 +2052,13 @@
     },
     "status": {
       "cloudReady": "Cloud runtime ready",
-      "cloudReadyHint": "Agents in this workspace can run inside isolated cloud environments.",
-      "cloudReadyManaged": "Runtime is managed by Parsar — no setup required.",
-      "cloudReadyOps": "Cloud runtime ready · configured by your administrator. Contact ops to adjust quotas.",
       "cloudOff": "No cloud credential registered for this workspace",
-      "cloudOffHint": "Agents can still run locally or in external environments. To use cloud isolation, register a credential in the Workspace credential card below.",
-      "cloudOffActionDocs": "Open deployment docs",
       "cloudMisconfigured": "Cloud runtime configuration is incomplete — check the workspace credential or contact the operator.",
       "unreachable": "Cannot reach the Parsar backend; runtime status is unknown.",
       "retry": "Retry",
-      "cloudRunnerUnavailable": "Cloud Sandbox is not enabled",
-      "cloudRunnerUnavailableHint": "This deployment has not enabled Cloud Sandbox yet. Contact the deployment administrator."
+      "cloudRunnerUnavailable": "Cloud Sandbox is not enabled"
     },
     "list": {
-      "summary": "{{count}} runtime instance(s)",
       "sort": {
         "label": "Sort by",
         "lastActive": "Last active (newest)",
@@ -2654,64 +2068,23 @@
       "table": {
         "selectAll": "Select all runtime instances",
         "selectOne": "Select runtime instance {{id}}",
-        "rowLabel": "Open runtime detail for agent {{agent}}",
+        "rowLabel": "Instance {{id}}",
         "instance": "Instance",
         "agent": "Agent",
         "image": "Image",
         "status": "Status",
         "lastActive": "Last active",
         "createdAt": "Created",
-        "actions": "Actions"
+        "state": {
+          "live": "Running",
+          "transient": "Starting",
+          "terminal": "Ended"
+        }
       },
       "actions": {
-        "refresh": "Refresh",
         "bulkKill": "Reclaim selected ({{count}})",
         "killN": "Reclaim {{count}} runtime instance(s)",
         "killingPending": "Reclaiming {{count}}…"
-      },
-      "empty": {
-        "newDeployment": {
-          "title": "Waiting for the first agent to spin up a cloud runtime",
-          "description": "Any Agent switched to \"cloud\" runtime mode will boot an isolated environment on its next message and appear here.",
-          "tryCta": "Want to verify cloud runtime is wired before any Agent uses it? Click the button below — a test sandbox runs the health checks and is auto-reclaimed. It does not affect any Agent.",
-          "tryCtaInline": "🚀 Try a cloud run"
-        },
-        "localOss": {
-          "title": "No cloud credential registered for this workspace",
-          "description": "Agents can still run locally or externally. To run an Agent inside an isolated cloud environment, register the sandbox provider's API key in the Workspace credential card above.",
-          "afterSnippet": "Once registered, every runtime=sandbox Agent in this workspace shares the credential. Full setup at ",
-          "docsLink": "deployment docs",
-          "e2bSignup": "No E2B account yet? Create one at E2B"
-        },
-        "localManaged": {
-          "title": "Cloud runtime is not enabled",
-          "description": "This workspace currently has no cloud runtime quota. Contact the Parsar team or your workspace owner to enable it.",
-          "fallback": "Agents can still run locally / externally — open Agent detail → Runtime tab and pick any option other than \"Follow workspace\"."
-        },
-        "localSelfhost": {
-          "title": "No workspace runtime credential yet",
-          "description": "This private deployment is running in local mode. Workspace admins can register a cloud sandbox credential in the \"Workspace credential\" card above; if your company centrally manages credentials, ask ops or IT for help.",
-          "afterSnippet": "Until a credential is registered, Agents only run locally or in external environments."
-        },
-        "misconfiguredOss": {
-          "title": "Cloud runtime configuration is incomplete",
-          "description": "The cloud runtime credential saved for this workspace cannot connect. Try:",
-          "step1": "Verify the workspace E2B credential is still valid;",
-          "step2": "Search server logs for entries starting with sandbox-runner / e2b-client;",
-          "step3": "After fixing the credential, click [ 🔁 Recheck cloud reachability ] or [ Edit E2B credential ] in the top-right to verify.",
-          "docsLink": "View deployment docs"
-        },
-        "misconfiguredManaged": {
-          "title": "Cloud runtime is temporarily unavailable",
-          "description": "We have received the runtime alert for this workspace and the Parsar team is investigating. Affected Agents will automatically fall back to local or external mode.",
-          "statusLink": "Open status page"
-        },
-        "misconfiguredSelfhost": {
-          "title": "Cloud runtime is misconfigured",
-          "description": "The backend detected that cloud runtime credentials cannot connect. Ask your company's ops team to check the deployment logs:",
-          "step1": "Look for sandbox-runner / e2b-client entries in the server log;",
-          "step2": "Verify the egress firewall allows the Parsar server to reach the E2B endpoint."
-        }
       },
       "errors": {
         "loadFailed": "Failed to load runtime instances",
@@ -2726,37 +2099,13 @@
     },
     "detail": {
       "placeholderTitle": "Runtime instance detail",
-      "placeholderDescription": "Full detail view (connectivity test, overview, technical details) lands in a follow-up PR.",
       "placeholderBody": "Detail page in progress — Agent ID: {{id}}",
-      "title": "Runtime instance · {{agentName}}",
-      "subtitle": "Isolated cloud environment · started lazily on the Agent's next message; auto-reclaimed past the idle threshold.",
-      "sections": {
-        "overview": "Overview",
-        "connectivity": "Connectivity test",
-        "runtime": "Runtime details",
-        "technical": "Technical details"
-      },
       "fields": {
-        "boundAgent": "Bound agent",
-        "status": "Status",
-        "lastActive": "Last active",
-        "createdAt": "Created",
-        "killedAt": "Stopped at",
-        "image": "Image",
-        "mode": "Runtime mode",
-        "region": "Region / host",
-        "sandboxId": "Sandbox ID",
-        "bindingId": "Binding ID",
-        "cacheKey": "Cache key",
-        "metadata": "Metadata"
-      },
-      "jumpToAgent": "Open agent detail →",
-      "jumpToRuns": "Recent runs →",
-      "jumpToAudit": "Audit log →"
+        "status": "Status"
+      }
     },
     "managedBoundary": {
       "title": "Management boundary",
-      "description": "Parsar can only govern behavior it registers and delivers. Anything placed or run manually in the sandbox is outside direct audit coverage.",
       "managedTitle": "Managed (Parsar-controlled)",
       "unmanagedTitle": "Unmanaged (outside audit coverage)",
       "managed": {
@@ -2771,14 +2120,8 @@
       }
     },
     "connectivity": {
-      "action": "Connectivity test",
-      "actionPending": "Testing…",
-      "actionDisabled": "Runtime instance is not ready",
       "testButton": "Test connection",
       "testing": "Testing…",
-      "lastRun": "Last run: {{ago}}",
-      "emptyHint": "No connectivity test has been run yet. Click [ Connectivity test ] in the header to try one.",
-      "emptyHintSecondary": "(The test is read-only and does not affect Agent work.)",
       "summary": {
         "pass": "✅ Connectivity OK · {{seconds}}s",
         "partial": "⚠ Partial failure · {{seconds}}s",
@@ -2808,80 +2151,27 @@
         "promptTimeout": "Try Rebuild on this instance; ask your administrator if it persists.",
         "unknown": "Ask your administrator to inspect server logs."
       },
-      "details": "Check details",
       "collapse": "Collapse",
       "suggestionLabel": "Suggestion",
       "notRunAfter": "Subsequent checks were not run (prerequisite failed)."
     },
     "cloud": {
-      "state": {
-        "loading": {
-          "label": "Loading",
-          "body": "Reading runtime status."
-        },
-        "deploymentOff": {
-          "label": "Not enabled",
-          "body": "Cloud Sandbox is not enabled for this deployment yet. No workspace setup is needed until it is enabled.",
-          "bodyWithCredential": "The E2B API Key is saved, but Cloud Sandbox is not enabled for this deployment yet."
-        },
-        "notConfigured": {
-          "label": "Not configured",
-          "body": "Enter an E2B API Key before Agents can use Cloud Sandbox."
-        },
-        "ready": {
-          "label": "Ready",
-          "body": "Cloud Sandbox is ready. {{count}} Agent(s) currently use Cloud Sandbox."
-        },
-        "error": {
-          "label": "Error",
-          "body": "Cloud Sandbox is temporarily unavailable. Check workspace configuration and validate again.",
-          "managedBody": "Cloud Sandbox is managed by the deployment but is temporarily unavailable. Contact the deployment administrator to check the sandbox service.",
-          "bodyWithCredential": "{{value}} is saved, but connection validation did not pass. Re-enter the E2B API Key and validate again."
-        },
-        "unknown": {
-          "label": "Unknown",
-          "body": "Runtime status is temporarily unavailable. Refresh and try again."
-        }
-      },
-      "savedCredential": "Saved: {{value}}",
-      "stats": {
-        "deployment": "Deployment",
-        "workspace": "Workspace",
-        "agents": "Agents using Cloud Sandbox",
-        "enabled": "Enabled",
-        "disabled": "Disabled",
-        "configured": "Configured",
-        "unconfigured": "Not configured"
-      },
-      "managed": {
-        "title": "Managed by organization",
-        "body": "This workspace does not need its own E2B API Key."
-      },
       "instances": {
         "title": "Active Cloud Sandboxes",
         "emptyTitle": "No active Cloud Sandbox yet",
         "emptyBody": "Agents using Cloud Sandbox start an isolated environment on their next message and appear here."
-      },
-      "provider": {
-        "title": "Cloud sandbox provider"
       }
     },
     "agentDaemon": {
-      "intro": "Local devices connect back to Parsar through parsar-daemon so Agents can use Claude Code / OpenCode CLIs on that machine.",
-      "errors": {},
       "actions": {
         "pair": "Connect device",
-        "enable": "Enable",
-        "disable": "Disable",
         "delete": "Delete device"
       },
       "table": {
         "name": "Name",
         "version": "Version",
         "agentEngines": "Agent engines",
-        "status": "Status",
-        "heartbeat": "Last heartbeat",
-        "actions": "Actions"
+        "heartbeat": "Last heartbeat"
       },
       "status": {
         "online": "Online",
@@ -2891,51 +2181,26 @@
         "offline": "Offline"
       },
       "load": {
-        "idle": "Idle",
         "active": "{{count}} running"
-      },
-      "agentKind": {
-        "available": "available",
-        "unavailable": "unavailable",
-        "notDetected": "{{label}} not detected",
-        "usable": "{{label}} available"
-      },
-      "capabilities": {
-        "streaming": "Streaming",
-        "permissions": "Permissions",
-        "usage": "Usage",
-        "resume": "Resume"
-      },
-      "detail": {
-        "disabled": "Scheduling is paused by an admin; the daemon can still report heartbeats.",
-        "pendingPairing": "Waiting for parsar-daemon connect to finish pairing.",
-        "offlineNoSnapshot": "No capability snapshot yet; confirm parsar-daemon is connected on the device.",
-        "offlineWithSnapshot": "Heartbeat is interrupted; run parsar-daemon status or parsar-daemon logs on the device.",
-        "error": "The daemon reported an error; run parsar-daemon logs on the device.",
-        "onlineNoCli": "WebSocket is online, but no Agent CLI is available on this machine.",
-        "onlineActive": "{{count}} run is currently executing.",
-        "onlineIdle": "Online and waiting for new requests."
       },
       "pair": {
         "title": "Connect device",
         "description": "Generate a one-time token, then run parsar-daemon connect on the target machine. The daemon connects back to Parsar over WebSocket.",
         "nameLabel": "Device name",
-        "safetyTitle": "Connection notes",
         "safetyOutbound": "The machine connects outbound; no inbound port is required",
         "safetyOnce": "The token is shown only once, so copy it right after generation",
         "mint": "Generate command",
         "minting": "Generating…",
         "success": "Connection command generated. Run this command on the target machine:",
-        "connectLabel": "Connect daemon",
         "copy": "Copy",
         "copyCommand": "Copy command",
-        "tokenOnlyToggle": "Show token only",
         "connected": "Device connected",
         "copied": "Copied",
         "copyFailed": "Select the command below",
         "oneLineLabel": "Copy and run on the target machine",
         "safetyClaude": "Agent CLI, files, and secrets stay on this machine.",
-        "waitingConnection": "Waiting for the device to connect…"
+        "waitingConnection": "Waiting for the device to connect…",
+        "safetyState": "Config, logs, state and cache are written under ~/.parsar/ — never into the repository the agent is working in."
       },
       "delete": {
         "confirm": "Delete"
@@ -2954,12 +2219,15 @@
       "emptyTitle": "No runtime connected yet",
       "emptyDescription": "Pair a local device with the button above; a cloud sandbox starts on an Agent's first run; an External Agent is chosen when you create the Agent.",
       "preparing": "Preparing"
+    },
+    "tabs": {
+      "environments": "Environments",
+      "instances": "Instances"
     }
   },
   "scopeRequired": {
     "workspace": {
       "title": "Choose a Workspace to view {{resource}}",
-      "description": "This data is managed by Workspace. Choose a Workspace in the header first.",
       "pick": "Choose a workspace"
     }
   },
@@ -2967,64 +2235,23 @@
     "page": {
       "title": "Integrations"
     },
-    "providers": {
-      "github": "For GitHub PR, issue, and repository capabilities.",
-      "slack": "For Slack messages, channels, and workflow capabilities.",
-      "feishu": "For Feishu apps, message delivery, and event verification."
-    },
-    "connected": "Connected",
-    "loading": "Loading",
-    "comingSoon": "Coming soon",
     "connect": "Connect account",
-    "reconnect": "Reconnect",
-    "oauth": {
-      "title": "Third-party accounts",
-      "empty": "No third-party accounts are available to connect yet."
-    },
-    "model": {
-      "title": "Model API keys",
-      "addAction": "Add model API key type",
-      "linkAction": "Link key",
-      "configured": "Configured",
-      "reconfigure": "Re-link",
-      "remove": "Remove",
-      "empty": "No model API key types are available yet."
-    },
-    "createKind": {
-      "title": "Add a model API key type",
-      "code": "Code",
-      "codePlaceholder": "mistral_api_key",
-      "codeHint": "Lowercase letters, digits, underscores; cannot be changed later",
-      "displayName": "Display name",
-      "displayNamePlaceholder": "Mistral API Key",
-      "descriptionField": "Description (optional)",
-      "descriptionPlaceholder": "Personal Mistral API key",
-      "submit": "Create",
-      "cancel": "Cancel",
-      "errorGeneric": "Failed to create, please try again later"
-    },
     "connector": {
       "adminOnly": "Only workspace owners and admins can edit connector settings.",
       "savedBadge": "Saved",
       "actions": {
         "save": "Save",
-        "saveDraft": "Save draft",
-        "reset": "Reset"
-      },
-      "status": {
-        "enabled": "Enabled",
-        "disabled": "Disabled"
+        "saveDraft": "Save draft"
       },
       "platformList": {
         "title": "Messaging platforms",
-        "description": "Pick a platform, fill its credentials, then enable it when the config is complete.",
-        "noAppId": "No App ID",
         "status": {
           "enabled": "Enabled",
           "configured": "Configured",
           "incomplete": "Incomplete",
           "notConfigured": "Not configured"
-        }
+        },
+        "updatedAt": "Updated"
       },
       "platformSelect": {
         "label": "Platform",
@@ -3037,18 +2264,14 @@
       },
       "feishu": {
         "title": "Feishu connector",
-        "description": "Authorize with Feishu using the QR code; the bot will be created and bound automatically.",
         "masterKeyMissing": "The server has not completed the required security configuration, so Feishu cannot be connected yet. Contact an administrator and try again.",
         "provision": {
           "title": "Connect Feishu by QR",
-          "subtitle": "Click “Start QR scan” and authorize with Feishu; the bot will be created and bound automatically.",
-          "connectedSubtitle": "The bot is bound. Click “Scan again” if you need to replace it.",
           "connected": "Feishu bot connected",
           "start": "Start QR scan",
           "reconnect": "Scan again",
           "qrAlt": "QR code for connecting Feishu",
           "openLink": "Open authorization page",
-          "pending": "Waiting for Feishu confirmation…",
           "success": "Feishu Bot connected",
           "successWithName": "Connected {{name}}",
           "saved": "Feishu connector bound.",
@@ -3063,7 +2286,6 @@
       },
       "slack": {
         "title": "Slack connector",
-        "description": "Bind one Slack bot for this workspace. All agents reachable from this workspace share this bot.",
         "saved": "Slack connector saved.",
         "docLink": {
           "label": "Create a Slack app at api.slack.com/apps",
@@ -3071,32 +2293,22 @@
         },
         "fields": {
           "enabled": {
-            "label": "Enabled",
-            "hint": "Turn on to route Slack messages through this bot.",
             "toggle": "Enable Slack bot"
           },
           "appId": {
-            "label": "App ID",
-            "hint": "Basic Information page → App Credentials → App ID (starts with A)."
+            "label": "App ID"
           },
           "botToken": {
-            "label": "Bot token",
-            "hint": "OAuth & Permissions tab → Bot User OAuth Token (xoxb-…). Install the app to your workspace first. Stored encrypted.",
-            "savedHint": "A saved bot token is in place (OAuth & Permissions → Bot User OAuth Token). Enter a new xoxb token to replace it."
+            "label": "Bot token"
           },
           "appToken": {
-            "label": "App-level token",
-            "hint": "Basic Information → App-Level Tokens → Generate Token with the connections:write scope (xapp-…). Required for socket mode. Stored encrypted.",
-            "savedHint": "A saved app-level token is in place (Basic Information → App-Level Tokens). Enter a new xapp token to replace it."
+            "label": "App-level token"
           },
           "signingSecret": {
-            "label": "Signing secret",
-            "hint": "Basic Information → App Credentials → Signing Secret. Required for events mode. Stored encrypted.",
-            "savedHint": "A saved signing secret is in place (Basic Information → App Credentials → Signing Secret). Enter a new value to replace it."
+            "label": "Signing secret"
           },
           "eventMode": {
             "label": "Event mode",
-            "hint": "Socket opens a long-lived connection (works on localhost, needs an xapp token); events receives HTTP callbacks (needs a signing secret).",
             "options": {
               "socket": "Socket mode",
               "events": "Events API"
@@ -3111,7 +2323,6 @@
       },
       "discord": {
         "title": "Discord connector",
-        "description": "Bind one Discord bot for this workspace. All agents reachable from this workspace share this bot.",
         "saved": "Discord connector saved.",
         "docLink": {
           "label": "Create a Discord app in the Developer Portal",
@@ -3119,27 +2330,19 @@
         },
         "fields": {
           "enabled": {
-            "label": "Enabled",
-            "hint": "Turn on to route Discord messages through this bot.",
             "toggle": "Enable Discord bot"
           },
           "appId": {
-            "label": "Application ID",
-            "hint": "General Information page → Application ID."
+            "label": "Application ID"
           },
           "botToken": {
-            "label": "Bot token",
-            "hint": "Bot tab → Reset Token to reveal the bot token. Stored encrypted.",
-            "savedHint": "A saved bot token is in place (Bot tab → Token). Enter a new value to replace it."
+            "label": "Bot token"
           },
           "publicKey": {
-            "label": "Public key",
-            "hint": "General Information page → Public Key. Verifies interaction signatures. Stored encrypted.",
-            "savedHint": "A saved public key is in place (General Information → Public Key). Enter a new value to replace it."
+            "label": "Public key"
           },
           "intents": {
-            "label": "Gateway intents",
-            "hint": "Enable matching intents under Bot → Privileged Gateway Intents (e.g. MESSAGE CONTENT) or message bodies arrive empty."
+            "label": "Gateway intents"
           }
         },
         "errors": {
@@ -3150,7 +2353,6 @@
       },
       "teams": {
         "title": "Microsoft Teams connector",
-        "description": "Bind one Teams bot for this workspace. All agents reachable from this workspace share this bot.",
         "saved": "Teams connector saved.",
         "docLink": {
           "label": "Register a bot in the Azure Bot / App registrations portal",
@@ -3158,22 +2360,16 @@
         },
         "fields": {
           "enabled": {
-            "label": "Enabled",
-            "hint": "Turn on to route Teams messages through this bot.",
             "toggle": "Enable Teams bot"
           },
           "appId": {
-            "label": "App ID",
-            "hint": "Azure App registrations → your app → Application (client) ID."
+            "label": "App ID"
           },
           "appPassword": {
-            "label": "App password",
-            "hint": "Azure App registrations → Certificates & secrets → Client secret value. Stored encrypted.",
-            "savedHint": "A saved app password is in place (Certificates & secrets → Client secret). Enter a new value to replace it."
+            "label": "App password"
           },
           "tenantId": {
-            "label": "Tenant ID",
-            "hint": "Optional. Directory (tenant) ID for a single-tenant bot; leave empty for a multi-tenant (botframework.com) bot."
+            "label": "Tenant ID"
           }
         },
         "errors": {
@@ -3189,21 +2385,16 @@
   },
   "scheduledTasks": {
     "title": "Scheduled tasks",
-    "subtitle": "At each fire time, runs the agent once in a clean session; results land in run history.",
     "new": "New task",
     "empty": "No scheduled tasks yet — create one from the top right.",
     "emptyReadOnly": "No scheduled tasks yet.",
     "loadError": "Failed to load scheduled tasks",
     "noAgents": "This project has no available agents yet — create and enable an agent before configuring scheduled tasks.",
-    "never": "—",
-    "enabled": "Enabled",
     "disabled": "Disabled",
     "col": {
       "name": "Name",
       "frequency": "Frequency",
-      "status": "Status",
       "nextRun": "Next run",
-      "actions": "Actions",
       "lastRun": "Last run"
     },
     "action": {
@@ -3225,11 +2416,6 @@
       "auto_disabled": "Auto-disabled",
       "none": "Not run yet"
     },
-    "pagination": {
-      "prev": "Previous",
-      "next": "Next",
-      "range": "Showing {{from}}-{{to}} of {{total}}"
-    },
     "freq": {
       "hourly": "Hourly",
       "daily": "Daily",
@@ -3244,7 +2430,6 @@
       "weekly": "Weekly on {{day}} at {{time}}",
       "monthly": "Monthly on day {{dom}} at {{time}}",
       "weekday": "Weekdays at {{time}}",
-      "custom": "cron: {{cron}}",
       "withTz": "{{desc}} ({{tz}})"
     },
     "weekdays": [

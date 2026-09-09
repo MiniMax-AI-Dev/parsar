@@ -19,6 +19,7 @@ interface PageHeaderProps {
    */
   description?: ReactNode
   action?: ReactNode
+  actionClassName?: string
   backLink?: ReactNode
   className?: string
 }
@@ -28,7 +29,7 @@ interface PageHeaderProps {
  * (the only 600 weight on the screen), actions on the right. Sticks to
  * the top of the scrolling main column and spans its full width.
  */
-export function PageHeader({ title, subtitle, subtitleFor, action, backLink, className }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, subtitleFor, action, actionClassName, backLink, className }: PageHeaderProps) {
   const { t } = useTranslation("admin")
   const english = subtitleFor ? (t(subtitleFor as never, { lng: "en-US" }) as unknown as string) : undefined
   const resolvedSubtitle = subtitle ?? (english && english !== title && english !== subtitleFor ? english : undefined)
@@ -40,15 +41,19 @@ export function PageHeader({ title, subtitle, subtitleFor, action, backLink, cla
       )}
     >
       {backLink && <div className="shrink-0 text-xs text-fg-muted">{backLink}</div>}
+      {/* No `leading-none` on the title: a 20px line box around a 20px face has
+          no room below the baseline, and the title truncates, so
+          `overflow: hidden` sliced the tail off every descender — "Settings"
+          lost the foot of its g. The scale's own 24px line is the fix. */}
       {title && (
-        <h1 className="font-display flex min-w-0 items-baseline gap-2 text-xl leading-none text-fg">
+        <h1 className="font-display flex min-w-0 items-baseline gap-2 text-xl text-fg">
           <span className="truncate">{title}</span>
           {resolvedSubtitle && (
             <span className="shrink-0 text-xs font-normal tracking-normal text-fg-muted">{resolvedSubtitle}</span>
           )}
         </h1>
       )}
-      {action && <div className="ml-auto flex shrink-0 items-center gap-2">{action}</div>}
+      {action && <div className={cn("ml-auto flex shrink-0 items-center gap-2", actionClassName)}>{action}</div>}
     </header>
   )
 }

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 import { ChevronDown, ChevronRight, FileText, Search, TerminalSquare, Wrench, type LucideIcon } from "lucide-react"
 
 import { StatusIcon, type StatusKind } from "../ui/status-icon"
+import { VerbatimBlock } from "../ui/verbatim"
 import { cn } from "../../lib/utils"
 
 /**
@@ -239,17 +240,17 @@ function StepRow({ step, now }: { step: TraceStep; now: number }) {
               {hasArgs && (
                 <div>
                   <p className="m-0 mb-1 text-xs text-fg-muted">{t("conversations.trace.args")}</p>
-                  <pre className="m-0 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                  <VerbatimBlock className="max-h-40">
                     {stringify(step.args)}
-                  </pre>
+                  </VerbatimBlock>
                 </div>
               )}
               {hasResult && (
                 <div>
                   <p className="m-0 mb-1 text-xs text-fg-muted">{t("conversations.trace.result")}</p>
-                  <pre className="m-0 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                  <VerbatimBlock className="max-h-40">
                     {stringify(step.result)}
-                  </pre>
+                  </VerbatimBlock>
                 </div>
               )}
             </div>

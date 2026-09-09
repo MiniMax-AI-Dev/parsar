@@ -80,6 +80,10 @@ func isUUID(value string) bool {
 
 func writeReadError(w http.ResponseWriter, err error, fallback string) {
 	switch {
+	case errors.Is(err, store.ErrInvitationSignInRequired):
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invitation_sign_in_required", "message": err.Error()})
+	case errors.Is(err, store.ErrInvitationInvalid):
+		writeJSON(w, http.StatusGone, map[string]string{"error": err.Error()})
 	case errors.Is(err, store.ErrUnknownWorkspace), errors.Is(err, store.ErrUnknownConversationForRead), errors.Is(err, store.ErrUnknownAgentRun), errors.Is(err, store.ErrUnknownConversation):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, store.ErrDuplicateWorkspaceSlug):

@@ -37,11 +37,11 @@ export function AgentConfigSummary({
     <>
       <DetailSection title={t("agents.detail.config.identity.title")}>
         <PropertyList className={CONFIG_PROPERTY_LIST}>
-          <Property label={t("agents.detail.config.identity.slug")} mono>{agent.slug}</Property>
+          <Property label={t("agents.detail.config.identity.slug")} mono className="block h-auto min-h-7 break-all whitespace-normal py-1">{agent.slug}</Property>
           <Property label={t("agents.detail.config.identity.visibility")}>
             {t(`agents.visibility.${agent.visibility ?? "workspace"}`)}
           </Property>
-          <Property label={t("agents.detail.config.identity.agentId")} mono>{agent.id}</Property>
+          <Property label={t("agents.detail.config.identity.agentId")} mono className="block h-auto min-h-7 break-all whitespace-normal py-1">{agent.id}</Property>
           <Property label={t("agents.detail.config.identity.created")} mono>
             {formatDate(agent.created_at, i18n.language)}
           </Property>
@@ -78,7 +78,12 @@ export function AgentConfigSummary({
           </Property>
           <Property label={t("agents.detail.config.runtime.connector")}>
             <span className="truncate">{agentConnectorLabel(agent.connector_type)}</span>
-            <span className="truncate font-mono text-xs text-fg-muted">{agent.connector_type}</span>
+            {/* The raw type only when the label is not already it —
+                `agentConnectorLabel` falls back to the value itself, so an
+                unknown connector printed the same word twice. */}
+            {agentConnectorLabel(agent.connector_type) !== agent.connector_type && (
+              <span className="truncate font-mono text-xs text-fg-muted">{agent.connector_type}</span>
+            )}
           </Property>
           <Property label={t("agents.detail.config.runtime.workdir")} mono className={workdir ? undefined : "text-fg-muted"}>
             {workdir || "—"}

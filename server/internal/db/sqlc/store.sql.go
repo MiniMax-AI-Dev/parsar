@@ -2715,40 +2715,42 @@ func (q *Queries) CreateScheduledTask(ctx context.Context, arg CreateScheduledTa
 
 const createSecret = `-- name: CreateSecret :one
 insert into secrets(
-  id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at
+  id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, management_workspace_id, created_at, updated_at
 )
 values (
-  $1::uuid, $2, $3, $4, $5, $6, $7::jsonb, $8, 'active', $9::jsonb, $10::uuid, $11, $11
+  $1::uuid, $2, $3, $4, $5, $6, $7::jsonb, $8, 'active', $9::jsonb, $10::uuid, $11::uuid, $12, $12
 )
-returning id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at
+returning id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 `
 
 type CreateSecretParams struct {
-	ID               pgtype.UUID        `json:"id"`
-	Slug             string             `json:"slug"`
-	Name             string             `json:"name"`
-	Kind             string             `json:"kind"`
-	Provider         string             `json:"provider"`
-	AuthType         string             `json:"auth_type"`
-	EncryptedPayload []byte             `json:"encrypted_payload"`
-	KeyVersion       string             `json:"key_version"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedBy        pgtype.UUID        `json:"created_by"`
-	Now              pgtype.Timestamptz `json:"now"`
+	ID                    pgtype.UUID        `json:"id"`
+	Slug                  string             `json:"slug"`
+	Name                  string             `json:"name"`
+	Kind                  string             `json:"kind"`
+	Provider              string             `json:"provider"`
+	AuthType              string             `json:"auth_type"`
+	EncryptedPayload      []byte             `json:"encrypted_payload"`
+	KeyVersion            string             `json:"key_version"`
+	Metadata              []byte             `json:"metadata"`
+	CreatedBy             pgtype.UUID        `json:"created_by"`
+	ManagementWorkspaceID pgtype.UUID        `json:"management_workspace_id"`
+	Now                   pgtype.Timestamptz `json:"now"`
 }
 
 type CreateSecretRow struct {
-	ID         string             `json:"id"`
-	Slug       string             `json:"slug"`
-	Name       string             `json:"name"`
-	Kind       string             `json:"kind"`
-	Provider   string             `json:"provider"`
-	AuthType   string             `json:"auth_type"`
-	KeyVersion string             `json:"key_version"`
-	Status     string             `json:"status"`
-	Metadata   []byte             `json:"metadata"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ID                    string             `json:"id"`
+	Slug                  string             `json:"slug"`
+	Name                  string             `json:"name"`
+	Kind                  string             `json:"kind"`
+	Provider              string             `json:"provider"`
+	AuthType              string             `json:"auth_type"`
+	KeyVersion            string             `json:"key_version"`
+	Status                string             `json:"status"`
+	Metadata              []byte             `json:"metadata"`
+	ManagementWorkspaceID string             `json:"management_workspace_id"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Organization-level shared secret. slug is supplied by the caller
@@ -2766,6 +2768,7 @@ func (q *Queries) CreateSecret(ctx context.Context, arg CreateSecretParams) (Cre
 		arg.KeyVersion,
 		arg.Metadata,
 		arg.CreatedBy,
+		arg.ManagementWorkspaceID,
 		arg.Now,
 	)
 	var i CreateSecretRow
@@ -2779,6 +2782,7 @@ func (q *Queries) CreateSecret(ctx context.Context, arg CreateSecretParams) (Cre
 		&i.KeyVersion,
 		&i.Status,
 		&i.Metadata,
+		&i.ManagementWorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -3095,8 +3099,8 @@ func (q *Queries) CreateWorkspaceConversation(ctx context.Context, arg CreateWor
 
 const createWorkspaceInvitation = `-- name: CreateWorkspaceInvitation :exec
 
-insert into workspace_invitations(id, token_hash, workspace_id, email, role, invited_by, expires_at, created_at)
-values ($1::uuid, $2::bytea, $3::uuid, $4, $5, $6::uuid, $7, $8)
+insert into workspace_invitations(id, token_hash, workspace_id, email, name, role, invited_by, expires_at, created_at)
+values ($1::uuid, $2::bytea, $3::uuid, $4, $5, $6, $7::uuid, $8, $9)
 `
 
 type CreateWorkspaceInvitationParams struct {
@@ -3104,6 +3108,7 @@ type CreateWorkspaceInvitationParams struct {
 	TokenHash   []byte             `json:"token_hash"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 	Email       string             `json:"email"`
+	Name        string             `json:"name"`
 	Role        string             `json:"role"`
 	InvitedBy   pgtype.UUID        `json:"invited_by"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
@@ -3119,6 +3124,7 @@ func (q *Queries) CreateWorkspaceInvitation(ctx context.Context, arg CreateWorks
 		arg.TokenHash,
 		arg.WorkspaceID,
 		arg.Email,
+		arg.Name,
 		arg.Role,
 		arg.InvitedBy,
 		arg.ExpiresAt,
@@ -3368,31 +3374,34 @@ const disableSecret = `-- name: DisableSecret :one
 update secrets
 set status = 'disabled', updated_at = $1
 where id = $2::uuid
+  and management_workspace_id = $3::uuid
   and deleted_at is null
-returning id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at
+returning id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 `
 
 type DisableSecretParams struct {
-	Now pgtype.Timestamptz `json:"now"`
-	ID  pgtype.UUID        `json:"id"`
+	Now         pgtype.Timestamptz `json:"now"`
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 }
 
 type DisableSecretRow struct {
-	ID         string             `json:"id"`
-	Slug       string             `json:"slug"`
-	Name       string             `json:"name"`
-	Kind       string             `json:"kind"`
-	Provider   string             `json:"provider"`
-	AuthType   string             `json:"auth_type"`
-	KeyVersion string             `json:"key_version"`
-	Status     string             `json:"status"`
-	Metadata   []byte             `json:"metadata"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ID                    string             `json:"id"`
+	Slug                  string             `json:"slug"`
+	Name                  string             `json:"name"`
+	Kind                  string             `json:"kind"`
+	Provider              string             `json:"provider"`
+	AuthType              string             `json:"auth_type"`
+	KeyVersion            string             `json:"key_version"`
+	Status                string             `json:"status"`
+	Metadata              []byte             `json:"metadata"`
+	ManagementWorkspaceID string             `json:"management_workspace_id"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) DisableSecret(ctx context.Context, arg DisableSecretParams) (DisableSecretRow, error) {
-	row := q.db.QueryRow(ctx, disableSecret, arg.Now, arg.ID)
+	row := q.db.QueryRow(ctx, disableSecret, arg.Now, arg.ID, arg.WorkspaceID)
 	var i DisableSecretRow
 	err := row.Scan(
 		&i.ID,
@@ -3404,6 +3413,7 @@ func (q *Queries) DisableSecret(ctx context.Context, arg DisableSecretParams) (D
 		&i.KeyVersion,
 		&i.Status,
 		&i.Metadata,
+		&i.ManagementWorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -6114,25 +6124,26 @@ func (q *Queries) GetScheduledTaskScope(ctx context.Context, id pgtype.UUID) (Ge
 }
 
 const getSecretPayload = `-- name: GetSecretPayload :one
-select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 from secrets
 where id = $1::uuid
   and deleted_at is null
 `
 
 type GetSecretPayloadRow struct {
-	ID               string             `json:"id"`
-	Slug             string             `json:"slug"`
-	Name             string             `json:"name"`
-	Kind             string             `json:"kind"`
-	Provider         string             `json:"provider"`
-	AuthType         string             `json:"auth_type"`
-	EncryptedPayload []byte             `json:"encrypted_payload"`
-	KeyVersion       string             `json:"key_version"`
-	Status           string             `json:"status"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	ID                    string             `json:"id"`
+	Slug                  string             `json:"slug"`
+	Name                  string             `json:"name"`
+	Kind                  string             `json:"kind"`
+	Provider              string             `json:"provider"`
+	AuthType              string             `json:"auth_type"`
+	EncryptedPayload      []byte             `json:"encrypted_payload"`
+	KeyVersion            string             `json:"key_version"`
+	Status                string             `json:"status"`
+	Metadata              []byte             `json:"metadata"`
+	ManagementWorkspaceID string             `json:"management_workspace_id"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) GetSecretPayload(ctx context.Context, id pgtype.UUID) (GetSecretPayloadRow, error) {
@@ -6149,6 +6160,7 @@ func (q *Queries) GetSecretPayload(ctx context.Context, id pgtype.UUID) (GetSecr
 		&i.KeyVersion,
 		&i.Status,
 		&i.Metadata,
+		&i.ManagementWorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -6397,6 +6409,7 @@ select
   wi.id::text           as id,
   wi.workspace_id::text as workspace_id,
   wi.email,
+  wi.name,
   wi.role,
   wi.invited_by::text   as invited_by,
   wi.expires_at,
@@ -6413,6 +6426,7 @@ type GetWorkspaceInvitationByTokenHashRow struct {
 	ID            string             `json:"id"`
 	WorkspaceID   string             `json:"workspace_id"`
 	Email         string             `json:"email"`
+	Name          string             `json:"name"`
 	Role          string             `json:"role"`
 	InvitedBy     string             `json:"invited_by"`
 	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
@@ -6429,6 +6443,7 @@ func (q *Queries) GetWorkspaceInvitationByTokenHash(ctx context.Context, tokenHa
 		&i.ID,
 		&i.WorkspaceID,
 		&i.Email,
+		&i.Name,
 		&i.Role,
 		&i.InvitedBy,
 		&i.ExpiresAt,
@@ -8127,7 +8142,7 @@ join agents a on a.id = ac.agent_id
 join capability_version cv on cv.id = ac.capability_version_id
 where a.workspace_id = $1::uuid
   and ac.capability_id = $2::uuid
-order by a.name asc, a.id asc
+order by agent_name asc, agent_id asc
 `
 
 type ListEnabledAgentsForMarketplaceCapabilityParams struct {
@@ -8961,7 +8976,7 @@ func (q *Queries) ListScheduledTasksByWorkspacePage(ctx context.Context, arg Lis
 }
 
 const listSecrets = `-- name: ListSecrets :many
-select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at
+select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 from secrets
 where ($1::text = '' or kind = $1::text)
   and deleted_at is null
@@ -8975,17 +8990,18 @@ type ListSecretsParams struct {
 }
 
 type ListSecretsRow struct {
-	ID         string             `json:"id"`
-	Slug       string             `json:"slug"`
-	Name       string             `json:"name"`
-	Kind       string             `json:"kind"`
-	Provider   string             `json:"provider"`
-	AuthType   string             `json:"auth_type"`
-	KeyVersion string             `json:"key_version"`
-	Status     string             `json:"status"`
-	Metadata   []byte             `json:"metadata"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ID                    string             `json:"id"`
+	Slug                  string             `json:"slug"`
+	Name                  string             `json:"name"`
+	Kind                  string             `json:"kind"`
+	Provider              string             `json:"provider"`
+	AuthType              string             `json:"auth_type"`
+	KeyVersion            string             `json:"key_version"`
+	Status                string             `json:"status"`
+	Metadata              []byte             `json:"metadata"`
+	ManagementWorkspaceID string             `json:"management_workspace_id"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Organization-level, no longer filtered by workspace. Optionally
@@ -9009,6 +9025,7 @@ func (q *Queries) ListSecrets(ctx context.Context, arg ListSecretsParams) ([]Lis
 			&i.KeyVersion,
 			&i.Status,
 			&i.Metadata,
+			&i.ManagementWorkspaceID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -9023,7 +9040,7 @@ func (q *Queries) ListSecrets(ctx context.Context, arg ListSecretsParams) ([]Lis
 }
 
 const listSecretsForWorkspace = `-- name: ListSecretsForWorkspace :many
-select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at
+select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 from secrets
 where (coalesce(metadata->>'workspace_id', '') = '' or metadata->>'workspace_id' = $1::text)
   and deleted_at is null
@@ -9037,17 +9054,18 @@ type ListSecretsForWorkspaceParams struct {
 }
 
 type ListSecretsForWorkspaceRow struct {
-	ID         string             `json:"id"`
-	Slug       string             `json:"slug"`
-	Name       string             `json:"name"`
-	Kind       string             `json:"kind"`
-	Provider   string             `json:"provider"`
-	AuthType   string             `json:"auth_type"`
-	KeyVersion string             `json:"key_version"`
-	Status     string             `json:"status"`
-	Metadata   []byte             `json:"metadata"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ID                    string             `json:"id"`
+	Slug                  string             `json:"slug"`
+	Name                  string             `json:"name"`
+	Kind                  string             `json:"kind"`
+	Provider              string             `json:"provider"`
+	AuthType              string             `json:"auth_type"`
+	KeyVersion            string             `json:"key_version"`
+	Status                string             `json:"status"`
+	Metadata              []byte             `json:"metadata"`
+	ManagementWorkspaceID string             `json:"management_workspace_id"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) ListSecretsForWorkspace(ctx context.Context, arg ListSecretsForWorkspaceParams) ([]ListSecretsForWorkspaceRow, error) {
@@ -9069,6 +9087,7 @@ func (q *Queries) ListSecretsForWorkspace(ctx context.Context, arg ListSecretsFo
 			&i.KeyVersion,
 			&i.Status,
 			&i.Metadata,
+			&i.ManagementWorkspaceID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -10025,6 +10044,7 @@ select distinct
   c.name,
   c.description,
   c.type,
+  c.visibility,
   cv.required_credentials,
   c.workspace_id::text as source_workspace_id,
   src_ws.name as source_workspace_name,
@@ -10050,12 +10070,12 @@ join lateral (
   select id, version, created_at
   from capability_version
   where capability_id = c.id
+    and (c.visibility = 'public' or id = ac.capability_version_id)
   order by created_at desc, version desc
   limit 1
 ) latest on true
 where a.workspace_id = $1::uuid
   and c.workspace_id != $1::uuid
-  and c.visibility = 'public'
   and c.deleted_at is null
 order by c.name asc, cv.version asc
 `
@@ -10065,6 +10085,7 @@ type ListWorkspaceMarketplaceInstallsRow struct {
 	Name                   string             `json:"name"`
 	Description            string             `json:"description"`
 	Type                   string             `json:"type"`
+	Visibility             string             `json:"visibility"`
 	RequiredCredentials    []byte             `json:"required_credentials"`
 	SourceWorkspaceID      string             `json:"source_workspace_id"`
 	SourceWorkspaceName    string             `json:"source_workspace_name"`
@@ -10091,6 +10112,7 @@ func (q *Queries) ListWorkspaceMarketplaceInstalls(ctx context.Context, targetWo
 			&i.Name,
 			&i.Description,
 			&i.Type,
+			&i.Visibility,
 			&i.RequiredCredentials,
 			&i.SourceWorkspaceID,
 			&i.SourceWorkspaceName,
@@ -10898,7 +10920,7 @@ func (q *Queries) ResolveAgentNameForConversation(ctx context.Context, conversat
 }
 
 const resolveDiscordBotSecretByGuild = `-- name: ResolveDiscordBotSecretByGuild :one
-select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 from secrets
 where kind = 'discord_bot'
   and status = 'active'
@@ -10909,18 +10931,19 @@ limit 1
 `
 
 type ResolveDiscordBotSecretByGuildRow struct {
-	ID               string             `json:"id"`
-	Slug             string             `json:"slug"`
-	Name             string             `json:"name"`
-	Kind             string             `json:"kind"`
-	Provider         string             `json:"provider"`
-	AuthType         string             `json:"auth_type"`
-	EncryptedPayload []byte             `json:"encrypted_payload"`
-	KeyVersion       string             `json:"key_version"`
-	Status           string             `json:"status"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	ID                    string             `json:"id"`
+	Slug                  string             `json:"slug"`
+	Name                  string             `json:"name"`
+	Kind                  string             `json:"kind"`
+	Provider              string             `json:"provider"`
+	AuthType              string             `json:"auth_type"`
+	EncryptedPayload      []byte             `json:"encrypted_payload"`
+	KeyVersion            string             `json:"key_version"`
+	Status                string             `json:"status"`
+	Metadata              []byte             `json:"metadata"`
+	ManagementWorkspaceID string             `json:"management_workspace_id"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Resolve the active Discord bot-token secret for a guild, keyed by the Discord
@@ -10944,6 +10967,7 @@ func (q *Queries) ResolveDiscordBotSecretByGuild(ctx context.Context, guildID st
 		&i.KeyVersion,
 		&i.Status,
 		&i.Metadata,
+		&i.ManagementWorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -11014,7 +11038,7 @@ func (q *Queries) ResolveModelRuntime(ctx context.Context, id pgtype.UUID) (Reso
 }
 
 const resolveSlackBotSecretByTeam = `-- name: ResolveSlackBotSecretByTeam :one
-select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 from secrets
 where kind = 'slack_bot'
   and status = 'active'
@@ -11025,18 +11049,19 @@ limit 1
 `
 
 type ResolveSlackBotSecretByTeamRow struct {
-	ID               string             `json:"id"`
-	Slug             string             `json:"slug"`
-	Name             string             `json:"name"`
-	Kind             string             `json:"kind"`
-	Provider         string             `json:"provider"`
-	AuthType         string             `json:"auth_type"`
-	EncryptedPayload []byte             `json:"encrypted_payload"`
-	KeyVersion       string             `json:"key_version"`
-	Status           string             `json:"status"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	ID                    string             `json:"id"`
+	Slug                  string             `json:"slug"`
+	Name                  string             `json:"name"`
+	Kind                  string             `json:"kind"`
+	Provider              string             `json:"provider"`
+	AuthType              string             `json:"auth_type"`
+	EncryptedPayload      []byte             `json:"encrypted_payload"`
+	KeyVersion            string             `json:"key_version"`
+	Status                string             `json:"status"`
+	Metadata              []byte             `json:"metadata"`
+	ManagementWorkspaceID string             `json:"management_workspace_id"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Resolve the active Slack bot-token secret for a workspace, keyed by the
@@ -11060,6 +11085,7 @@ func (q *Queries) ResolveSlackBotSecretByTeam(ctx context.Context, teamID string
 		&i.KeyVersion,
 		&i.Status,
 		&i.Metadata,
+		&i.ManagementWorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -12485,7 +12511,7 @@ set encrypted_payload = $1::jsonb,
     updated_at = $3
 where id = $4::uuid
   and deleted_at is null
-returning id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+returning id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 `
 
 type UpdateSecretPayloadParams struct {
@@ -12496,18 +12522,19 @@ type UpdateSecretPayloadParams struct {
 }
 
 type UpdateSecretPayloadRow struct {
-	ID               string             `json:"id"`
-	Slug             string             `json:"slug"`
-	Name             string             `json:"name"`
-	Kind             string             `json:"kind"`
-	Provider         string             `json:"provider"`
-	AuthType         string             `json:"auth_type"`
-	EncryptedPayload []byte             `json:"encrypted_payload"`
-	KeyVersion       string             `json:"key_version"`
-	Status           string             `json:"status"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	ID                    string             `json:"id"`
+	Slug                  string             `json:"slug"`
+	Name                  string             `json:"name"`
+	Kind                  string             `json:"kind"`
+	Provider              string             `json:"provider"`
+	AuthType              string             `json:"auth_type"`
+	EncryptedPayload      []byte             `json:"encrypted_payload"`
+	KeyVersion            string             `json:"key_version"`
+	Status                string             `json:"status"`
+	Metadata              []byte             `json:"metadata"`
+	ManagementWorkspaceID string             `json:"management_workspace_id"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) UpdateSecretPayload(ctx context.Context, arg UpdateSecretPayloadParams) (UpdateSecretPayloadRow, error) {
@@ -12529,6 +12556,7 @@ func (q *Queries) UpdateSecretPayload(ctx context.Context, arg UpdateSecretPaylo
 		&i.KeyVersion,
 		&i.Status,
 		&i.Metadata,
+		&i.ManagementWorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -12755,7 +12783,9 @@ where ac.agent_id = $4::uuid
   and cv.id = $1::uuid
   and cv.capability_id = ac.capability_id
   and c.id = ac.capability_id
-  and c.visibility = 'public'
+  and (c.visibility = 'public' or exists (
+    select 1 from agents a where a.id = ac.agent_id and a.workspace_id = c.workspace_id
+  ))
   and c.status = 'active'
   and c.deleted_at is null
   and c.deprecated_at is null

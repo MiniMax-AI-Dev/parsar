@@ -77,12 +77,7 @@ type RuntimeStore interface {
 	GetUserCredential(ctx context.Context, credentialID string) (store.UserCredentialRead, error)
 	UpdateUserCredential(ctx context.Context, input store.UpdateUserCredentialInput) (store.UserCredentialRead, error)
 	SoftDeleteUserCredential(ctx context.Context, credentialID string) (store.UserCredentialRead, error)
-	ListAgentCapabilities(ctx context.Context, agentID string) ([]store.AgentCapabilityRead, error)
-	GetEnabledMarketplaceCapabilitiesForAgent(ctx context.Context, agentID string) ([]store.EnabledCapabilityRead, error)
-	EnableAgentCapability(ctx context.Context, agentID string, versionID string, configuration map[string]any, pinningMode string) (store.AgentCapabilityRead, error)
-	UpgradeAgentCapability(ctx context.Context, agentID string, capabilityID string, newVersionID string, pinningMode string) (store.AgentCapabilityRead, error)
-	UninstallWorkspaceMarketplaceCapability(ctx context.Context, targetWorkspaceID string, sourceCapabilityID string) (int64, error)
-	DeleteAgentCapability(ctx context.Context, agentID string, capabilityVersionID string) error
+	agentCapabilityStore
 	CreateAgent(ctx context.Context, input store.CreateAgentInput) (store.CreateAgentResult, error)
 	GetAgent(ctx context.Context, agentID string) (store.AgentSummary, error)
 	UpdateAgent(ctx context.Context, input store.UpdateAgentInput) (store.AgentSummary, []string, error)

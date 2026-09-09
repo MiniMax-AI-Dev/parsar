@@ -5,10 +5,14 @@ import { StatusIcon } from "./status-icon"
 import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
 import { Button } from "./button"
+import { VerbatimBlock } from "./verbatim"
 
 interface ErrorStateProps {
   title?: string
+  /** Written for the reader. A sentence in their language. */
   description?: string
+  /** Written by the machine: a server message, a stack, an exit code. */
+  detail?: string
   hint?: string
   onRetry?: () => void
   action?: ReactNode
@@ -18,10 +22,16 @@ interface ErrorStateProps {
 /**
  * Flat error state: a failed-status icon, an ink title, the message and
  * hint in muted, one retry button. No red box; colour lives in the icon.
+ *
+ * `description` and `detail` are two different voices and are not
+ * interchangeable: the first is a sentence we wrote, the second is a string the
+ * server produced. Only the second gets the recessed block, which is how the
+ * reader tells at a glance which half was meant for them.
  */
 export function ErrorState({
   title,
   description,
+  detail,
   hint,
   onRetry,
   action,
@@ -31,11 +41,15 @@ export function ErrorState({
   const resolvedTitle = title ?? t("errors.loadFailed", { defaultValue: "Failed to load" })
   return (
     <div className={cn("flex flex-col items-start gap-3 py-4 text-sm", className)}>
-      <div className="flex items-start gap-2">
+      <div className="flex w-full items-start gap-2">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-        <div className="space-y-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <p className="font-medium text-fg">{resolvedTitle}</p>
-          {description && <p className="break-words font-mono text-xs text-fg">{description}</p>}
+          {description && <p className="break-words text-xs text-fg">{description}</p>}
+          {/* Shrink to the string, then wrap at the reading measure: a short
+              server message should not stretch into a grey bar the width of
+              the page. */}
+          {detail && <VerbatimBlock className="max-h-40 w-fit max-w-[min(52rem,100%)]">{detail}</VerbatimBlock>}
           {hint && <p className="text-xs text-fg-muted">{hint}</p>}
         </div>
       </div>
@@ -84,14 +98,20 @@ export function InlineNotice({
   children,
   action,
   className,
+  announce = true,
 }: {
   tone?: NoticeTone
   children: ReactNode
   action?: ReactNode
   className?: string
+  /** False when a parent live region already announces this text. */
+  announce?: boolean
 }) {
   return (
-    <div role={tone === "error" ? "alert" : "status"} className={cn("flex items-start gap-2 text-sm text-fg", className)}>
+    <div
+      role={announce ? (tone === "error" ? "alert" : "status") : undefined}
+      className={cn("flex items-start gap-2 text-sm text-fg", className)}
+    >
       {tone === "success" ? (
         <StatusIcon status="completed" className="mt-0.5" />
       ) : tone === "error" ? (

@@ -54,6 +54,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "../../components/ui/tabs"
+import { VerbatimBlock } from "../../components/ui/verbatim"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import {
@@ -275,13 +276,8 @@ export function RunsPage({ selectedId }: { selectedId?: string | null }) {
             <div className="px-6 pt-6">
               <ErrorState
                 title={isUnreachable ? t("runs.loadError.unreachable.title") : t("runs.loadError.title")}
-                description={
-                  isUnreachable
-                    ? t("runs.loadError.unreachable.description")
-                    : err instanceof Error
-                      ? err.message
-                      : t("runs.loadError.description")
-                }
+                description={isUnreachable ? t("runs.loadError.unreachable.description") : t("runs.loadError.description")}
+                detail={!isUnreachable && err instanceof Error ? err.message : undefined}
                 hint={isUnreachable ? t("runs.loadError.unreachable.hint") : t("runs.loadError.hint")}
                 onRetry={() => void query.refetch()}
               />
@@ -471,13 +467,8 @@ function RunDetailRail({
                 ? t("runs.loadError.unreachable.title")
                 : t("runs.loadError.title")
           }
-          description={
-            isMissing
-              ? t("runs.detail.notFound.description")
-              : err instanceof Error
-                ? err.message
-                : t("runs.loadError.description")
-          }
+          description={isMissing ? t("runs.detail.notFound.description") : t("runs.loadError.description")}
+          detail={!isMissing && err instanceof Error ? err.message : undefined}
           hint={isMissing ? undefined : t("runs.loadError.hint")}
           onRetry={isMissing ? undefined : () => void runQ.refetch()}
         />
@@ -526,7 +517,7 @@ function RunDetailRail({
       header={
         <>
           <StatusIcon status={run.status} />
-          <span className="shrink-0 text-sm font-medium text-fg">{t(`runStatus.${run.status}`)}</span>
+          <span className="shrink-0 text-base font-medium text-fg">{t(`runStatus.${run.status}`)}</span>
           <LedgerId className="min-w-0 flex-1">{run.id}</LedgerId>
         </>
       }
@@ -615,9 +606,15 @@ function RunDetailRail({
         <TabsContent value="overview">
           <RailSection title={t("runs.detail.overview.diagnostics")}>
             <PropertyList>
-              <Property label={t("runs.detail.diagnostics.fields.result")}>
-                <ToneBadge tone={diagnosis.tone} label={diagnosis.title} />
-              </Property>
+              {/* Only when the diagnosis knows something the header does not —
+                  "requeued", "runtime needs attention". For a plain failed or
+                  cancelled run it repeated the word in the header verbatim, and
+                  drew a second status glyph derived from a tone rather than
+                  from the run: a cancelled run wore the cancelled ring up there
+                  and the queued dashed ring down here. */}
+              {diagnosis.title !== t(`runStatus.${run.status}`) && (
+                <Property label={t("runs.detail.diagnostics.fields.result")}>{diagnosis.title}</Property>
+              )}
               <Property label={t("runs.detail.diagnostics.fields.reason")} className="h-auto min-h-7 whitespace-normal py-1 [overflow-wrap:anywhere]">
                 {diagnosis.reason}
               </Property>
@@ -759,9 +756,9 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
               {open && step.rawEvents.length > 0 && (
                 <div className="space-y-2 pb-2">
                   {formatRawRunEvents(step.rawEvents).map((block) => (
-                    <pre key={block.key} className="m-0 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                    <VerbatimBlock key={block.key}>
                       {block.text}
-                    </pre>
+                    </VerbatimBlock>
                   ))}
                 </div>
               )}
@@ -1081,16 +1078,20 @@ function RunCancelDialog({ open, loading, onCancel, onConfirm }: { open: boolean
 }
 
 
+/**
+ * The runtime's health as a word with its own glyph. A neutral tone draws no
+ * glyph at all: there is no "neutral" status, and the queued dashed ring it
+ * used to borrow said "waiting" about something that was not waiting.
+ */
 function ToneBadge({ tone, label }: { tone: DiagnosisTone; label: string }) {
-  const status = tone === "success" ? "completed" : tone === "error" ? "failed" : tone === "warning" ? "interrupted" : "queued"
+  const status = tone === "success" ? "completed" : tone === "error" ? "failed" : tone === "warning" ? "interrupted" : null
   return (
     <span className="inline-flex items-center gap-1.5 text-sm text-fg">
-      <StatusIcon status={status} />
+      {status && <StatusIcon status={status} />}
       {label}
     </span>
   )
 }
-
 
 function RuntimeCapabilities({ capabilities }: { capabilities?: Record<string, boolean> }) {
   const entries = runtimeCapabilityEntries(capabilities)

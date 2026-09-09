@@ -55,12 +55,12 @@ export function ImportMCPDialog({
         ) : error ? (
           <ErrorState
             title={t("capabilities.mcpDirectory.detail.loadError")}
-            description={error instanceof Error ? error.message : ""}
+            detail={error instanceof Error ? error.message : undefined}
             onRetry={onRetry}
           />
         ) : item ? (
           <div className="min-w-0 space-y-3">
-            <PropertyList className="grid-cols-[120px_minmax(0,1fr)]">
+            <PropertyList>
               <Property label={t("capabilities.mcpDirectory.detail.endpoint")} mono className="h-auto min-h-7 whitespace-normal break-all py-1">
                 {item.url || "—"}
               </Property>

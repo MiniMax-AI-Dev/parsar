@@ -19,11 +19,12 @@ import { FeishuConnectorFields } from "./feishuFields"
 import { SlackConnectorFields } from "./slackFields"
 import { DiscordConnectorFields } from "./discordFields"
 import { TeamsConnectorFields } from "./teamsFields"
+import type { ShowToast } from "../../../components/ui/toast"
 
 interface ChannelConnectorPanelProps {
   workspaceID: string | null
   canEdit: boolean
-  onToast: (msg: string) => void
+  onToast: ShowToast
 }
 
 const PLATFORMS: ConnectorPlatform[] = ["feishu", "slack", "discord", "teams"]

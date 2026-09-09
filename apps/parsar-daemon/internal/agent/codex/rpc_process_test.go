@@ -43,6 +43,33 @@ func TestJSONRPCClientCloseReapsChildProcess(t *testing.T) {
 	}
 }
 
+func TestJSONRPCClientResponseTimeoutStartsAfterWrite(t *testing.T) {
+	client, server, cleanup := NewTestClient()
+	defer cleanup()
+	client.cfg.RequestTimeout = 100 * time.Millisecond
+	responseDone := make(chan error, 1)
+	go func() {
+		// Block the pipe write for longer than the response timeout.
+		time.Sleep(200 * time.Millisecond)
+		var request JsonRpcRequest
+		if err := json.NewDecoder(server.FromClient).Decode(&request); err != nil {
+			responseDone <- err
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+		responseDone <- json.NewEncoder(server.ToClient).Encode(JsonRpcResponse{
+			JsonRpc: JsonRpcVersion, ID: request.ID, Result: "ok",
+		})
+	}()
+	result, err := client.Request(context.Background(), "echo", nil)
+	if responseErr := <-responseDone; responseErr != nil {
+		t.Fatalf("send response: %v", responseErr)
+	}
+	if err != nil || string(result) != `"ok"` {
+		t.Fatalf("response after blocked write: result=%s error=%v", result, err)
+	}
+}
+
 func TestJSONRPCClientFakeCodexProcess(t *testing.T) {
 	if os.Getenv("CODEX_RPC_FAKE_PROCESS") != "1" {
 		return

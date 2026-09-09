@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ManagedBadge } from "../../components/ui/managed-badge"
 import { useAdminView } from "../../lib/admin-router"
+import { PageSection } from "../../components/ui/section"
 
 // Placeholder so the router can resolve `?admin=runtime&id=<sandbox_id>`.
 
@@ -45,8 +46,7 @@ function ManagedBoundary() {
   const { t } = useTranslation("admin")
 
   return (
-    <section className="mt-6">
-      <h2 className="mb-2 text-sm font-medium text-fg">{t("runtime.managedBoundary.title")}</h2>
+    <PageSection title={t("runtime.managedBoundary.title")}>
       <div className="grid gap-x-8 md:grid-cols-2">
         <BoundaryColumn
           title={t("runtime.managedBoundary.managedTitle")}
@@ -66,7 +66,7 @@ function ManagedBoundary() {
           unmanaged
         />
       </div>
-    </section>
+    </PageSection>
   )
 }
 
@@ -81,7 +81,7 @@ function BoundaryColumn({
 }) {
   return (
     <div>
-      <h3 className="flex h-7 items-center justify-between gap-2 border-b border-line text-xs font-medium text-fg">
+      <h3 className="flex min-h-7 items-center justify-between gap-2 border-b border-line text-sm font-medium text-fg">
         <span>{title}</span>
         <ManagedBadge unmanaged={unmanaged} />
       </h3>

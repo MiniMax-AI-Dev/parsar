@@ -6,7 +6,7 @@
  */
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { AlertTriangle, Database, Download, Loader2, Plus, X } from "lucide-react"
+import { AlertTriangle, Database, Download, Loader2, Plus } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
@@ -23,8 +23,6 @@ import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
 import { Skeleton } from "../../components/ui/skeleton"
-import { StatusIcon } from "../../components/ui/status-icon"
-import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
 import {
   useBackgroundTestModels,
@@ -36,7 +34,6 @@ import {
   useUpdateModelInline,
 } from "../../lib/api-models"
 import type {
-  BulkDeleteModelsResponse,
   InlineCreateModelInput,
   ModelConnectivityResult,
 } from "../../lib/api-models"
@@ -49,6 +46,8 @@ import { useWorkspaceId } from "../../lib/workspace"
 import { useSecrets } from "../../lib/api-secrets"
 import { useCredentialKindsQuery } from "./capabilities/api"
 import { useAuth } from "../../lib/auth-context"
+import { useToast } from "../../components/ui/toast"
+import { FilterGroup, FilterMenu, FilterOption } from "../../components/ui/filter-menu"
 
 /* --- Confirm dialog ------------------------------------------------------ */
 
@@ -150,8 +149,8 @@ export function ModelsPage() {
   const [editModel, setEditModel] = useState<Model | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Model | null>(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const { show } = useToast()
   const [selectedModelIDs, setSelectedModelIDs] = useState<Set<string>>(() => new Set())
-  const [bulkDeleteResult, setBulkDeleteResult] = useState<BulkDeleteModelsResponse | null>(null)
   const [backgroundTestingIDs, setBackgroundTestingIDs] = useState<Set<string>>(() => new Set())
   const [testResult, setTestResult] = useState<{
     modelID: string
@@ -166,6 +165,10 @@ export function ModelsPage() {
   }
 
   const allModels = useMemo(() => modelsQ.data?.models ?? [], [modelsQ.data?.models])
+  const mineCount = useMemo(
+    () => (currentUserID ? allModels.filter((m) => m.created_by === currentUserID).length : 0),
+    [allModels, currentUserID],
+  )
   const filteredModels = useMemo(() => {
     if (ownership === "all") return allModels
     if (!currentUserID) return allModels
@@ -249,7 +252,15 @@ export function ModelsPage() {
     if (ids.length === 0) return
     bulkDeleteMut.mutate(ids, {
       onSuccess: (result) => {
-        setBulkDeleteResult(result)
+        const failed = result.failed ?? []
+        show(
+          t("models.bulkDelete.resultSummary", { deleted: result.deleted.length, failed: failed.length }),
+          // A partial failure lists models by name; it waits to be dismissed
+          // rather than taking the list with it after seven seconds.
+          failed.length > 0
+            ? { tone: "error", persist: true, detail: failed.map((f) => f.error).join("\n") }
+            : undefined,
+        )
         setSelectedModelIDs((current) => {
           const next = new Set(current)
           for (const id of result.deleted) {
@@ -296,7 +307,6 @@ export function ModelsPage() {
 
   const pageTitle = t("models.page.title")
   const hasModels = allModels.length > 0
-  const bulkFailed = bulkDeleteResult?.failed ?? []
 
   return (
     <AdminLayout activeMenu="models" fullBleed>
@@ -307,18 +317,27 @@ export function ModelsPage() {
           subtitleFor="models.page.title"
           action={
             <>
+              {/* A filter, not a navigation control: every other ledger page
+                  narrows itself with `FilterMenu`, and the action slot is for
+                  what you can do here. */}
               {hasModels && (
-                <Tabs value={ownership} onValueChange={(v) => setOwnership(v as OwnershipFilter)}>
-                  <TabsList>
-                    <TabsTrigger value="all">{t("models.ownership.all")}</TabsTrigger>
-                    <TabsTrigger value="mine" disabled={!currentUserID}>
-                      {t("models.ownership.mine")}
-                    </TabsTrigger>
-                    <TabsTrigger value="others" disabled={!currentUserID}>
-                      {t("models.ownership.others")}
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                <FilterMenu
+                  label={t("models.ownershipFilter.label")}
+                  summary={ownership === "all" ? null : t(`models.ownership.${ownership}`)}
+                >
+                  <FilterGroup value={ownership} onValueChange={(v) => setOwnership(v as OwnershipFilter)}>
+                    <FilterOption value="all" label={t("models.ownership.all")} count={allModels.length} />
+                    {/* Only when we know who you are — without a user id these
+                        two cannot filter anything, and the old tabs at least
+                        disabled themselves. */}
+                    {currentUserID && (
+                      <>
+                        <FilterOption value="mine" label={t("models.ownership.mine")} count={mineCount} />
+                        <FilterOption value="others" label={t("models.ownership.others")} count={allModels.length - mineCount} />
+                      </>
+                    )}
+                  </FilterGroup>
+                </FilterMenu>
               )}
               <Button variant="outline" onClick={() => setBulkImportOpen(true)} disabled={!wsId}>
                 <Download strokeWidth={1.5} aria-hidden="true" />
@@ -340,13 +359,8 @@ export function ModelsPage() {
           <div className="px-6 pt-6">
             <ErrorState
               title={isUnreachable ? t("models.loadError.unreachable.title") : t("models.loadError.title")}
-              description={
-                isUnreachable
-                  ? t("models.loadError.unreachable.description")
-                  : err instanceof Error
-                    ? err.message
-                    : t("models.loadError.description")
-              }
+              description={isUnreachable ? t("models.loadError.unreachable.description") : t("models.loadError.description")}
+              detail={!isUnreachable && err instanceof Error ? err.message : undefined}
               hint={isUnreachable ? t("models.loadError.unreachable.hint") : t("models.loadError.hint")}
               onRetry={refresh}
             />
@@ -395,29 +409,6 @@ export function ModelsPage() {
           </div>
         )}
 
-        {bulkDeleteResult && (
-          <div className="flex h-10 shrink-0 items-center gap-2 border-t border-line px-4 text-sm text-fg">
-            <StatusIcon status={bulkFailed.length === 0 ? "completed" : "failed"} />
-            <span className="min-w-0 flex-1 truncate">
-              {t("models.bulkDelete.resultSummary", {
-                deleted: bulkDeleteResult.deleted.length,
-                failed: bulkFailed.length,
-              })}
-              {bulkFailed.length > 0 && (
-                <span className="text-xs text-fg-muted"> · {bulkFailed.map((f) => f.error).join(", ")}</span>
-              )}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => setBulkDeleteResult(null)}
-              aria-label={tc("actions.close")}
-            >
-              <X strokeWidth={1.5} />
-            </Button>
-          </div>
-        )}
       </div>
 
       <CreateModelDialog

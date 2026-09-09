@@ -14,7 +14,6 @@ import { ErrorState } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
 import { Skeleton } from "../../components/ui/skeleton"
 import { InitialTile } from "../../components/ui/ledger"
-import { StatusIcon } from "../../components/ui/status-icon"
 import {
   Tabs,
   TabsContent,
@@ -43,6 +42,7 @@ import {
   defaultModelOf,
 } from "../../lib/agent-view-model"
 import type { Agent } from "../../lib/api-types"
+import { useToast } from "../../components/ui/toast"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 import { CreateAgentDialog } from "./CreateAgentDialog"
@@ -76,10 +76,6 @@ function InlineNotice({ icon, children, action }: { icon: ReactNode; children: R
   )
 }
 
-function SuccessNotice({ children }: { children: ReactNode }) {
-  return <InlineNotice icon={<StatusIcon status="completed" />}>{children}</InlineNotice>
-}
-
 function PendingCapabilityBanner({ children, onCancel, cancelLabel }: { children: ReactNode; onCancel: () => void; cancelLabel: string }) {
   return (
     <InlineNotice
@@ -101,7 +97,7 @@ export function AgentsPage() {
   const [editAgent, setEditAgent] = useState<Agent | null>(null)
   const [cloneAgent, setCloneAgent] = useState<Agent | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const toast = useToast()
   const [chatPendingID, setChatPendingID] = useState<string | null>(null)
   const fmtAgo = useRelativeTime()
 
@@ -177,12 +173,13 @@ export function AgentsPage() {
     <AdminLayout activeMenu="agents" fullBleed>
       <RailLayout rail={agentRail}>
         <PageHeader
-          className="static mx-0 mb-0"
+          className="static mx-0 mb-0 h-auto min-h-16 flex-wrap py-3"
+          actionClassName="min-w-0 max-w-full flex-wrap [&>button]:h-auto [&>button]:min-h-7 [&>button]:max-w-full [&>button]:flex-wrap [&>button]:whitespace-normal [&>button]:py-1"
           title={pageTitle}
           subtitleFor="agents.page.title"
           action={
             <>
-              <div className="relative w-72">
+              <div className="relative w-72 min-w-0 max-w-full grow basis-40">
                 <Search
                   className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
                   strokeWidth={1.5}
@@ -220,7 +217,6 @@ export function AgentsPage() {
             </>
           }
         />
-        {toast && <SuccessNotice>{toast}</SuccessNotice>}
         {pendingCapability.id && (
           <PendingCapabilityBanner
             cancelLabel={t("agents.pendingCapability.cancel")}
@@ -243,13 +239,8 @@ export function AgentsPage() {
                   ? t("agents.loadError.unreachable.title")
                   : t("agents.loadError.title")
               }
-              description={
-                isUnreachable
-                  ? t("agents.loadError.unreachable.description")
-                  : err instanceof Error
-                    ? err.message
-                    : t("agents.loadError.description")
-              }
+              description={isUnreachable ? t("agents.loadError.unreachable.description") : t("agents.loadError.description")}
+              detail={!isUnreachable && err instanceof Error ? err.message : undefined}
               hint={
                 isUnreachable
                   ? t("agents.loadError.unreachable.hint")
@@ -374,7 +365,7 @@ export function AgentsPage() {
           cloneMut.mutate(body as Parameters<typeof cloneMut.mutate>[0], {
             onSuccess: (created) => {
               setCloneAgent(null)
-              setToast(t("agents.listActions.clonedToast", { name: created.name }))
+              toast.show(t("agents.listActions.clonedToast", { name: created.name }))
             },
           })
         }}
@@ -394,7 +385,7 @@ export function AgentsPage() {
           deleteMut.mutate(deleteTarget.id, {
             onSuccess: () => {
               setDeleteTarget(null)
-              setToast(t("agents.delete.deletedToast", { name }))
+              toast.show(t("agents.delete.deletedToast", { name }))
             },
           })
         }}
@@ -437,7 +428,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
   const { navigate, tab: requestedTab } = useAdminView()
   const { railView } = useAppRoute()
   const wid = useWorkspaceId()
-  const [toast, setToast] = useState<string | null>(null)
+  const toast = useToast()
 
   const query = useAgentDetail(wid, id)
   const modelsQ = useModels(wid)
@@ -451,10 +442,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
   // Switching to another agent swaps the rail's content rather than replaying
   // its entrance, so the per-agent state is reset here instead of by a remount.
   const [shownID, setShownID] = useState(id)
-  if (id !== shownID) {
-    setShownID(id)
-    setToast(null)
-  }
+  if (id !== shownID) setShownID(id)
 
   if (query.isLoading || query.error || !agent) {
     return (
@@ -472,7 +460,8 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
         ) : query.error ? (
           <ErrorState
             title={t("agents.detail.loadError.title")}
-            description={query.error instanceof Error ? query.error.message : t("agents.detail.loadError.description")}
+            description={t("agents.detail.loadError.description")}
+            detail={query.error instanceof Error ? query.error.message : undefined}
             onRetry={() => void query.refetch()}
           />
         ) : (
@@ -492,7 +481,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
       header={
         <>
           <InitialTile name={agent.name} />
-          <span className="min-w-0 truncate text-sm font-medium text-fg">{agent.name}</span>
+          <span className="min-w-0 truncate text-base font-medium text-fg">{agent.name}</span>
           <AgentStatusBadge status={agent.status} />
         </>
       }
@@ -503,11 +492,10 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
           workspaceName={currentWorkspace?.name}
           workspaceRole={workspaceRole}
           models={models}
-          onToast={setToast}
+          onToast={toast.show}
         />
       }
     >
-      {toast && <SuccessNotice>{toast}</SuccessNotice>}
       {pendingCapability.id && (
         <PendingCapabilityBanner
           cancelLabel={t("agents.pendingCapability.cancel")}
@@ -541,7 +529,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
             workspaceID={wid}
             workspaceRole={workspaceRole}
             modelLabel={model}
-            onToast={setToast}
+            onToast={toast.show}
           />
         </TabsContent>
 
@@ -550,7 +538,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
             agent={agent}
             workspaceID={wid}
             canEdit={workspaceRole === "owner" || workspaceRole === "admin"}
-            onToast={setToast}
+            onToast={toast.show}
           />
         </TabsContent>
 

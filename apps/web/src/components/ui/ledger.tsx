@@ -2,6 +2,7 @@
 import * as React from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "../../lib/utils"
+import { StatusIcon, type StatusKind } from "./status-icon"
 
 /**
  * The ledger: the list idiom of the whole console. A sticky 28px muted
@@ -163,6 +164,64 @@ export function LedgerHeader({ children, className }: { children: React.ReactNod
     >
       {children}
     </div>
+  )
+}
+
+/**
+ * The status glyph until you reach for it, then the row's checkbox.
+ *
+ * A permanent column of empty boxes is a lot of furniture for a verb used
+ * rarely, and it costs a track on every row forever. This spends no width at
+ * all: the 14px status slot carries the checkbox on hover, and keeps carrying
+ * it while anything is selected, so the set you have built stays visible.
+ *
+ * Only a list with a real bulk verb should use it — a checkbox with nothing to
+ * submit to is an affordance with no destination.
+ */
+export function SelectableStatus({
+  status,
+  title,
+  selected,
+  selecting,
+  onSelectedChange,
+  label,
+}: {
+  status: StatusKind
+  title?: string
+  selected: boolean
+  /** True while any row in the list is selected. */
+  selecting: boolean
+  onSelectedChange: (next: boolean) => void
+  label: string
+}) {
+  const revealed = selected || selecting
+  return (
+    <span
+      className="relative flex h-3.5 w-3.5 shrink-0 items-center justify-center"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <StatusIcon
+        status={status}
+        title={title}
+        className={cn(
+          "transition-opacity duration-150 ease-settle",
+          revealed ? "opacity-0" : "group-hover:opacity-0 group-focus-within:opacity-0",
+        )}
+      />
+      <input
+        type="checkbox"
+        aria-label={label}
+        checked={selected}
+        onChange={(e) => onSelectedChange(e.target.checked)}
+        className={cn(
+          "absolute inset-0 h-3.5 w-3.5 cursor-pointer accent-accent transition-opacity duration-150 ease-settle",
+          revealed
+            ? "opacity-100"
+            : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100",
+        )}
+      />
+    </span>
   )
 }
 

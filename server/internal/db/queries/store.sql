@@ -1967,17 +1967,17 @@ limit @item_limit;
 -- (via generateAutoSlug("secret")); name is the display name and
 -- may repeat.
 insert into secrets(
-  id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at
+  id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, management_workspace_id, created_at, updated_at
 )
 values (
-  @id::uuid, @slug, @name, @kind, @provider, @auth_type, @encrypted_payload::jsonb, @key_version, 'active', @metadata::jsonb, @created_by::uuid, @now, @now
+  @id::uuid, @slug, @name, @kind, @provider, @auth_type, @encrypted_payload::jsonb, @key_version, 'active', @metadata::jsonb, @created_by::uuid, @management_workspace_id::uuid, @now, @now
 )
-returning id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at;
+returning id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at;
 
 -- name: ListSecrets :many
 -- Organization-level, no longer filtered by workspace. Optionally
 -- filter by kind (pass empty string to return all kinds).
-select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at
+select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 from secrets
 where (@kind_filter::text = '' or kind = @kind_filter::text)
   and deleted_at is null
@@ -1985,7 +1985,7 @@ order by created_at desc, id desc
 limit @item_limit;
 
 -- name: ListSecretsForWorkspace :many
-select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at
+select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 from secrets
 where (coalesce(metadata->>'workspace_id', '') = '' or metadata->>'workspace_id' = @workspace_id::text)
   and deleted_at is null
@@ -1993,7 +1993,7 @@ order by created_at desc, id desc
 limit @item_limit;
 
 -- name: GetSecretPayload :one
-select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 from secrets
 where id = @id::uuid
   and deleted_at is null;
@@ -2006,7 +2006,7 @@ set encrypted_payload = @encrypted_payload::jsonb,
     updated_at = @now
 where id = @id::uuid
   and deleted_at is null
-returning id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at;
+returning id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at;
 
 -- name: ResolveSlackBotSecretByTeam :one
 -- Resolve the active Slack bot-token secret for a workspace, keyed by the
@@ -2016,7 +2016,7 @@ returning id::text, slug, name, kind, provider, auth_type, encrypted_payload, ke
 -- Slack channel decrypts encrypted_payload to mint the per-call Web API bearer,
 -- so a re-installed app rotates without a process restart. Newest active row
 -- wins when two installs share a team (re-install supersedes).
-select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 from secrets
 where kind = 'slack_bot'
   and status = 'active'
@@ -2033,7 +2033,7 @@ limit 1;
 -- Discord channel decrypts encrypted_payload to mint the per-call API/Gateway
 -- bearer, so a re-installed bot rotates without a process restart. Newest active
 -- row wins when two installs share a guild (re-install supersedes).
-select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at
 from secrets
 where kind = 'discord_bot'
   and status = 'active'
@@ -2046,8 +2046,9 @@ limit 1;
 update secrets
 set status = 'disabled', updated_at = @now
 where id = @id::uuid
+  and management_workspace_id = @workspace_id::uuid
   and deleted_at is null
-returning id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at;
+returning id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, coalesce(management_workspace_id::text, '')::text as management_workspace_id, created_at, updated_at;
 
 -- name: ActiveSecretSlugExists :one
 select exists (
@@ -3701,6 +3702,7 @@ select distinct
   c.name,
   c.description,
   c.type,
+  c.visibility,
   cv.required_credentials,
   c.workspace_id::text as source_workspace_id,
   src_ws.name as source_workspace_name,
@@ -3726,12 +3728,12 @@ join lateral (
   select id, version, created_at
   from capability_version
   where capability_id = c.id
+    and (c.visibility = 'public' or id = ac.capability_version_id)
   order by created_at desc, version desc
   limit 1
 ) latest on true
 where a.workspace_id = @target_workspace_id::uuid
   and c.workspace_id != @target_workspace_id::uuid
-  and c.visibility = 'public'
   and c.deleted_at is null
 order by c.name asc, cv.version asc;
 
@@ -3764,7 +3766,7 @@ join agents a on a.id = ac.agent_id
 join capability_version cv on cv.id = ac.capability_version_id
 where a.workspace_id = @target_workspace_id::uuid
   and ac.capability_id = @source_capability_id::uuid
-order by a.name asc, a.id asc;
+order by agent_name asc, agent_id asc;
 
 -- name: UninstallWorkspaceMarketplaceCapability :execrows
 delete from agent_capabilities ac
@@ -3951,7 +3953,9 @@ where ac.agent_id = @agent_id::uuid
   and cv.id = @new_version_id::uuid
   and cv.capability_id = ac.capability_id
   and c.id = ac.capability_id
-  and c.visibility = 'public'
+  and (c.visibility = 'public' or exists (
+    select 1 from agents a where a.id = ac.agent_id and a.workspace_id = c.workspace_id
+  ))
   and c.status = 'active'
   and c.deleted_at is null
   and c.deprecated_at is null
@@ -4900,14 +4904,15 @@ where provider = 'email' and subject = @email;
 -- ================================================================
 
 -- name: CreateWorkspaceInvitation :exec
-insert into workspace_invitations(id, token_hash, workspace_id, email, role, invited_by, expires_at, created_at)
-values (@id::uuid, @token_hash::bytea, @workspace_id::uuid, @email, @role, @invited_by::uuid, @expires_at, @created_at);
+insert into workspace_invitations(id, token_hash, workspace_id, email, name, role, invited_by, expires_at, created_at)
+values (@id::uuid, @token_hash::bytea, @workspace_id::uuid, @email, @name, @role, @invited_by::uuid, @expires_at, @created_at);
 
 -- name: GetWorkspaceInvitationByTokenHash :one
 select
   wi.id::text           as id,
   wi.workspace_id::text as workspace_id,
   wi.email,
+  wi.name,
   wi.role,
   wi.invited_by::text   as invited_by,
   wi.expires_at,

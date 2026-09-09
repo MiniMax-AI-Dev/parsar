@@ -6,6 +6,7 @@ import { Button } from "../ui/button"
 import { EmptyState } from "../ui/empty-state"
 import { ErrorState } from "../ui/error-state"
 import { Skeleton } from "../ui/skeleton"
+import { VerbatimBlock } from "../ui/verbatim"
 import { useAuditRecords } from "../../lib/api-governance"
 import type { AuditActorType, AuditRecord } from "../../lib/api-types"
 import { useRelativeTime } from "../../lib/relative-time"
@@ -58,9 +59,9 @@ function TimelineRow({ record, fmtAgo }: { record: AuditRecord; fmtAgo: (iso: st
         )}
       </div>
       {open && hasPayload && (
-        <pre className="mb-2 mt-0 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+        <VerbatimBlock className="mb-2 mt-0">
           {`#${record.id} ${record.source}\n${JSON.stringify(record.payload ?? {}, null, 2)}`}
-        </pre>
+        </VerbatimBlock>
       )}
     </li>
   )
@@ -104,7 +105,7 @@ export function ResourceAuditTimeline({
     return (
       <ErrorState
         title={t("audit.loadError.title", { defaultValue: "Failed to load audit records" })}
-        description={query.error instanceof Error ? query.error.message : String(query.error)}
+        detail={query.error instanceof Error ? query.error.message : String(query.error)}
         onRetry={() => query.refetch()}
       />
     )

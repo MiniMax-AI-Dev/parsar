@@ -1,10 +1,8 @@
-import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { AlertTriangle, ExternalLink } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
-import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Badge } from "../../components/ui/badge"
 import { Ledger, LedgerHeader, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
@@ -15,6 +13,7 @@ import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "../../i18n"
 import { useWorkspaceAuthProviders, type WorkspaceAuthProvider } from "../../lib/api-auth"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useWorkspaceId } from "../../lib/workspace"
+import { PageSection } from "../../components/ui/section"
 
 /** provider · status · callback url · missing env · docs */
 const PROVIDER_COLUMNS = [col.title(), col.meta(104), col.id(200, 1.4), col.id(160, 1), col.actions(1)]
@@ -37,13 +36,12 @@ export function SettingsPage() {
           className="static mx-0 mb-0"
           title={t("settings.page.title")}
           subtitleFor="settings.page.title"
-          action={<SettingsTabs active="general" />}
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-4">
           <div className="space-y-6">
-            <Section title={t("settings.workspace.title")} description={t("settings.workspace.description")}>
-              <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
+            <PageSection title={t("settings.workspace.title")}>
+              <PropertyList>
                 <Property label={t("settings.workspace.name")}>{workspace?.name ?? "—"}</Property>
                 <Property label={t("settings.workspace.slug")} mono>{workspace?.slug ?? "—"}</Property>
                 <Property label={languageLabel}>
@@ -61,16 +59,15 @@ export function SettingsPage() {
                   </Tabs>
                 </Property>
               </PropertyList>
-            </Section>
+            </PageSection>
 
-            <Section
+            <PageSection
               title={t("settings.authentication.title")}
-              description={t("settings.authentication.description")}
             >
               {authProvidersQ.isLoading ? (
-                <div className="-mx-4">
+                <div className="-mx-6">
                   {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="flex h-9 items-center gap-3 border-b border-line px-4">
+                    <div key={i} className="flex h-9 items-center gap-3 border-b border-line px-6">
                       <Skeleton className="h-3 w-32" />
                       <Skeleton className="h-3 w-20" />
                       <Skeleton className="h-3 flex-1" />
@@ -87,7 +84,7 @@ export function SettingsPage() {
               ) : (
                 <Ledger
                   columns={PROVIDER_COLUMNS}
-                  className="-mx-4 flex-none overflow-visible"
+                  className="-mx-6 flex-none overflow-visible"
                   role="list"
                   aria-label={t("settings.authentication.title")}
                 >
@@ -105,27 +102,7 @@ export function SettingsPage() {
                   </ul>
                 </Ledger>
               )}
-            </Section>
-
-            <Section
-              title={t("settings.runtime.policy.title")}
-              description={t("settings.runtime.policy.description")}
-            >
-              <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
-                <Property label={t("settings.runtime.policy.workdirs.title")} mono>
-                  /absolute/path, ~/path
-                </Property>
-                <Property label={t("settings.runtime.policy.runtimeState.title")} mono>
-                  ~/.parsar/
-                </Property>
-                <Property label={t("settings.runtime.policy.agentRuntime.title")}>
-                  {t("settings.runtime.policy.agentRuntime.value")}
-                </Property>
-                <Property label={t("settings.runtime.policy.capabilities.title")}>
-                  {t("settings.runtime.policy.capabilities.value")}
-                </Property>
-              </PropertyList>
-            </Section>
+            </PageSection>
           </div>
         </div>
       </div>
@@ -173,27 +150,4 @@ function AuthProviderRow({ provider }: { provider: WorkspaceAuthProvider }) {
   )
 }
 
-/* ------------------------------------------------------------------ */
-/*  Section head                                                       */
-/* ------------------------------------------------------------------ */
 
-/**
- * A page section: a 12px/500 head, then content. `description` is
- * accepted for call-site compatibility and never rendered — the design
- * system has no helper paragraphs.
- */
-function Section({
-  title,
-  children,
-}: {
-  title: string
-  description?: string
-  children: ReactNode
-}) {
-  return (
-    <section>
-      <h2 className="mb-2 text-xs font-medium text-fg">{title}</h2>
-      {children}
-    </section>
-  )
-}

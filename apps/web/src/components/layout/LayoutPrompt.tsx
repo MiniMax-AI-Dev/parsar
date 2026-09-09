@@ -1,54 +1,61 @@
-import { useEffect, useState } from "react"
-import { createPortal } from "react-dom"
+import { useEffect } from "react"
 import { useTranslation } from "react-i18next"
-import { cn } from "../../lib/utils"
+
 import { Button } from "../ui/button"
+import { useToast } from "../ui/toast"
 
 /**
- * Small prompt at the top of the viewport after a panel edge was dragged:
- * save (persists across reloads) · this session only · restore (springs
- * the panel back to its default width).
+ * Asks what to do with a panel width the reader just dragged: save it, keep it
+ * for this session, or spring it back.
+ *
+ * It draws no strip of its own. It used to, at the same coordinate the toast
+ * later took, which meant a confirmation could land on top of these buttons and
+ * swallow the clicks. Going through the same queue makes that impossible:
+ * messages stack instead of overlapping, and they inherit the queue's portal
+ * and its z, so nothing else in the app can cover them either.
+ *
+ * It persists: unlike a confirmation, it is a question, and a question that
+ * times out has answered itself. It is keyed per panel, because the sidebar and
+ * the rail can each be mid-question, and it takes its question with it when the
+ * panel unmounts — a strip with no timer and no owner would otherwise sit there
+ * with dead buttons.
  */
 export function LayoutPrompt({
+  panel,
   open,
   onSave,
   onTemporary,
   onRestore,
 }: {
+  /** The panel this question is about, from `useResizableWidth`. */
+  panel: string
   open: boolean
   onSave: () => void
   onTemporary: () => void
   onRestore: () => void
 }) {
   const { t } = useTranslation("common")
-  // Keep the prompt mounted for its 150ms exit after `open` turns false.
-  const [mounted, setMounted] = useState(open)
-  if (open && !mounted) setMounted(true)
+  const { show, dismiss } = useToast()
+
   useEffect(() => {
-    if (open) return
-    const id = window.setTimeout(() => setMounted(false), 160)
-    return () => window.clearTimeout(id)
-  }, [open])
-  if (!mounted || typeof document === "undefined") return null
-  return createPortal(
-    <div
-      role="status"
-      className={cn(
-        "app-shadow-floating fixed left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-line bg-surface py-1.5 pl-3 pr-1.5 text-sm text-fg",
-        open ? "animate-pop-in" : "pointer-events-none animate-pop-out",
-      )}
-    >
-      <span className="mr-1">{t("layout.adjusted")}</span>
-      <Button size="sm" onClick={onSave}>
-        {t("actions.save")}
-      </Button>
-      <Button size="sm" variant="outline" onClick={onTemporary}>
-        {t("layout.temporary")}
-      </Button>
-      <Button size="sm" variant="ghost" onClick={onRestore}>
-        {t("layout.restore")}
-      </Button>
-    </div>,
-    document.body,
-  )
+    const key = `layout-adjusted:${panel}`
+    if (!open) {
+      dismiss(key)
+      return
+    }
+    show(t("layout.adjusted"), {
+      key,
+      persist: true,
+      action: (
+        <>
+          <Button size="sm" onClick={onSave}>{t("actions.save")}</Button>
+          <Button size="sm" variant="outline" onClick={onTemporary}>{t("layout.temporary")}</Button>
+          <Button size="sm" variant="ghost" onClick={onRestore}>{t("layout.restore")}</Button>
+        </>
+      ),
+    })
+    return () => dismiss(key)
+  }, [panel, open, show, dismiss, t, onSave, onTemporary, onRestore])
+
+  return null
 }

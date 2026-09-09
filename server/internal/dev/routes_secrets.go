@@ -31,7 +31,7 @@ type createSecretBody struct {
 //	@Produce		json
 //	@Param			workspaceID	path	string			true	"Workspace UUID"
 //	@Param			body		body	createSecretBody	true	"Secret create payload"
-//	@Success		201 {object} map[string]interface{} "Created secret"
+//	@Success		201 {object} store.SecretRead "Created secret"
 //	@Failure		400 {object} map[string]string "Invalid body or UUID"
 //	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
 //	@Router			/api/v1/workspaces/{workspaceID}/secrets [post]
@@ -94,7 +94,7 @@ func createSecret(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@ID				listDevSecrets
 //	@Produce		json
 //	@Param			workspaceID	path	string	true	"Workspace UUID"
-//	@Success		200 {object} map[string]interface{} "Secret list"
+//	@Success		200 {object} map[string][]store.SecretRead "Secret list"
 //	@Failure		400 {object} map[string]string "Invalid UUID"
 //	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
 //	@Router			/api/v1/workspaces/{workspaceID}/secrets [get]
@@ -126,16 +126,16 @@ func listSecrets(runtimeStore RuntimeStore) http.HandlerFunc {
 // disableSecret marks a secret row as disabled.
 //
 //	@Summary		Disable a secret
-//	@Description	Marks the secret as disabled so agents can no longer bind to it. Owner/admin only.
+//	@Description	Marks the secret as disabled. Caller must be owner/admin of the secret's recorded management workspace. Shared use does not grant management rights; legacy secrets without recorded ownership cannot be disabled.
 //	@Tags			secrets
 //	@ID				disableDevSecret
 //	@Produce		json
 //	@Param			workspaceID	path	string	true	"Workspace UUID"
 //	@Param			secretID	path	string	true	"Secret UUID"
-//	@Success		200 {object} map[string]interface{} "Disabled secret"
+//	@Success		200 {object} store.SecretRead "Disabled secret"
 //	@Failure		400 {object} map[string]string "Invalid UUID"
 //	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
-//	@Failure		404 {object} map[string]string "Secret not found"
+//	@Failure		404 {object} map[string]string "Secret not found in this management workspace"
 //	@Router			/api/v1/workspaces/{workspaceID}/secrets/{secretID}/disable [post]
 func disableSecret(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

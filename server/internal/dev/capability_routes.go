@@ -555,7 +555,7 @@ func previewMarketplaceMCP(spec *canonical.MCPSpec) *marketplaceMCPPreview {
 // workspace has installed (as opposed to authored).
 //
 //	@Summary		List workspace marketplace installs
-//	@Description	Returns the marketplace capabilities the workspace has installed (as opposed to authored).
+//	@Description	Returns installed capabilities, including unpublished sources, with visibility and bound version metadata. Unpublished sources do not expose later private versions.
 //	@Tags			capabilities
 //	@ID				listDevWorkspaceMarketplaceInstalls
 //	@Produce		json
@@ -1370,7 +1370,7 @@ func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 // Cross-workspace requires the source capability to be public + non-deprecated.
 //
 //	@Summary		Enable a capability on an agent
-//	@Description	Enables (installs) a capability version on the agent. Cross-workspace enable requires the source capability to be public and non-deprecated. Workspace owner, admin, or member only.
+//	@Description	Enables (installs) a capability version on the agent. Cross-workspace enable requires the source capability to be public and non-deprecated. Workspace owner, admin, or member only. Successful requests appear in Agent audit.
 //	@Tags			capabilities
 //	@ID				enableDevAgentCapability
 //	@Accept			json
@@ -1451,6 +1451,11 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeCapabilityError(w, err, "failed to enable agent capability")
 			return
 		}
+		runtimeStore.RecordAgentCapabilityAudit(store.AgentCapabilityAuditInput{
+			WorkspaceID: agent.WorkspaceID, AgentID: agentID, ActorID: actorIDFromRequest(r),
+			Action: "enabled", CapabilityID: enabled.CapabilityID, VersionID: enabled.CapabilityVersionID,
+			PinningMode: enabled.PinningMode, Enabled: enabled.Enabled,
+		})
 		writeJSON(w, http.StatusOK, enabled)
 	}
 }
@@ -1458,7 +1463,7 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 // deleteAgentCapability uninstalls a capability version from the agent.
 //
 //	@Summary		Uninstall a capability from an agent
-//	@Description	Removes the given capability version from the agent. Workspace owner, admin, or member only.
+//	@Description	Removes the given capability version from the agent. Workspace owner, admin, or member only. Successful requests appear in Agent audit.
 //	@Tags			capabilities
 //	@ID				deleteDevAgentCapability
 //	@Produce		json
@@ -1473,7 +1478,7 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID} [delete]
 func deleteAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, agentID, _, ok := requireAgentWritableMember(w, r, runtimeStore)
+		workspaceID, agentID, _, ok := requireAgentWritableMember(w, r, runtimeStore)
 		if !ok {
 			return
 		}
@@ -1486,6 +1491,10 @@ func deleteAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeCapabilityError(w, err, "failed to delete agent capability")
 			return
 		}
+		runtimeStore.RecordAgentCapabilityAudit(store.AgentCapabilityAuditInput{
+			WorkspaceID: workspaceID, AgentID: agentID, ActorID: actorIDFromRequest(r),
+			Action: "removed", ReferenceID: versionID,
+		})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -1495,7 +1504,7 @@ func deleteAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 // registry so callers can't create arbitrary rows.
 //
 //	@Summary		Toggle a built-in capability on an agent
-//	@Description	Toggles a runtime-injected built-in on/off for one agent. Workspace owners, admins, and members may change it. The key must be a known built-in.
+//	@Description	Toggles a runtime-injected built-in on/off for one agent. Workspace owners, admins, and members may change it. The key must be a known built-in. Successful requests appear in Agent audit.
 //	@Tags			capabilities
 //	@ID				setDevAgentBuiltinCapability
 //	@Accept			json
@@ -1512,7 +1521,7 @@ func deleteAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/builtin-capabilities/{key} [put]
 func setBuiltinCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, agentID, _, ok := requireAgentWritableMember(w, r, runtimeStore)
+		workspaceID, agentID, _, ok := requireAgentWritableMember(w, r, runtimeStore)
 		if !ok {
 			return
 		}
@@ -1530,6 +1539,10 @@ func setBuiltinCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeCapabilityError(w, err, "failed to set builtin capability")
 			return
 		}
+		runtimeStore.RecordAgentCapabilityAudit(store.AgentCapabilityAuditInput{
+			WorkspaceID: workspaceID, AgentID: agentID, ActorID: actorIDFromRequest(r),
+			Action: "builtin.updated", BuiltinKey: key, Enabled: body.Enabled,
+		})
 		writeJSON(w, http.StatusOK, map[string]any{"agent_id": agentID, "builtin_key": key, "enabled": body.Enabled})
 	}
 }
@@ -1538,7 +1551,7 @@ func setBuiltinCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 // same capability, optionally flipping the pinning mode at the same time.
 //
 //	@Summary		Upgrade an agent's capability version
-//	@Description	Swaps the agent's binding to a new version of the same capability, optionally flipping the pinning mode at the same time. Workspace owner, admin, or member only.
+//	@Description	Swaps the agent's binding to a new version of the same capability, optionally flipping the pinning mode at the same time. Workspace owner, admin, or member only. Successful requests appear in Agent audit.
 //	@Tags			capabilities
 //	@ID				upgradeDevAgentCapability
 //	@Accept			json
@@ -1621,6 +1634,11 @@ func upgradeAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeCapabilityError(w, err, "failed to upgrade agent capability")
 			return
 		}
+		runtimeStore.RecordAgentCapabilityAudit(store.AgentCapabilityAuditInput{
+			WorkspaceID: agent.WorkspaceID, AgentID: agentID, ActorID: actorIDFromRequest(r),
+			Action: "upgraded", CapabilityID: upgraded.CapabilityID, VersionID: upgraded.CapabilityVersionID,
+			PinningMode: upgraded.PinningMode, Enabled: upgraded.Enabled,
+		})
 		writeJSON(w, http.StatusOK, upgraded)
 	}
 }

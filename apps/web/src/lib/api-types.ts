@@ -879,6 +879,7 @@ export type SecretStatus = "active" | "disabled"
  */
 export interface Secret {
   id: string
+  management_workspace_id?: string
   slug: string
   name: string
   kind: string

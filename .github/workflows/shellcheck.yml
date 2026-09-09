@@ -48,3 +48,6 @@ jobs:
         with:
           scandir: ./scripts
           severity: error
+
+      - name: Check installer lifecycle without Docker
+        run: bash scripts/check-installer.sh

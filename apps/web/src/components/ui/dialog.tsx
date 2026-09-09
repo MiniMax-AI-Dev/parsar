@@ -7,7 +7,7 @@ import { cn } from "../../lib/utils"
 /**
  * The one dialog, built like the detail rail: a floating paper panel (8px
  * radius, hairline, floating shadow, pop-in / pop-out) whose header and
- * footer are hairline-bounded bars (48px header with the 13px/500 title
+ * footer are hairline-bounded bars (48px header with the 16px/500 title
  * and the ghost close button; footer with the actions right-aligned), and a
  * 16px-padded body between them.
  */
@@ -97,7 +97,7 @@ export const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-sm font-medium leading-tight text-fg", className)}
+    className={cn("text-lg font-medium leading-snug text-fg", className)}
     {...props}
   />
 ))

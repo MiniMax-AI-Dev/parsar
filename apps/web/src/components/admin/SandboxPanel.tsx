@@ -30,31 +30,12 @@ import { findSandboxRuntimeForAgent, isSandboxPairingExpired } from "../../lib/s
 import { useNow } from "../../lib/use-now"
 import { useRelativeTime } from "../../lib/relative-time"
 import { SandboxPreparingNotice, SandboxStartupTimedOutNotice } from "./SandboxProvisioningNotice"
+import { RailSection } from "../ui/detail-rail"
 
 const STATUS_FOR_KIND: Record<SandboxStatusKind, StatusKind> = {
   live: "completed",
   transient: "running",
   terminal: "cancelled",
-}
-
-function Section({
-  title,
-  action,
-  children,
-}: {
-  title: string
-  action?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <section>
-      <div className="flex h-7 items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-fg">{title}</h3>
-        {action}
-      </div>
-      {children}
-    </section>
-  )
 }
 
 function Timestamp({ iso }: { iso: string }) {
@@ -163,14 +144,14 @@ export function SandboxPanel({
     return (
       <ErrorState
         title={t("agents.detail.sandbox.errorTitle")}
-        description={(query.error as Error).message}
+        detail={(query.error as Error).message}
         onRetry={() => void query.refetch()}
       />
     )
   }
   if (!binding) {
     return (
-      <Section title={t("agents.detail.sandbox.title")}>
+      <RailSection title={t("agents.detail.sandbox.title")}>
         {preparing ? (
           <SandboxPreparingNotice
             runtime={sandboxRuntime}
@@ -201,10 +182,10 @@ export function SandboxPanel({
         {acquireMut.error && (
           <ErrorState
             title={t("agents.detail.sandbox.provisionError")}
-            description={(acquireMut.error as Error).message}
+            detail={(acquireMut.error as Error).message}
           />
         )}
-      </Section>
+      </RailSection>
     )
   }
 
@@ -212,7 +193,7 @@ export function SandboxPanel({
 
   return (
     <div className="space-y-4">
-      <Section
+      <RailSection
         title={t("agents.detail.sandbox.title")}
         action={
           <div className="flex items-center gap-1">
@@ -263,18 +244,18 @@ export function SandboxPanel({
             <SandboxPreparingNotice runtime={sandboxRuntime} />
           </div>
         )}
-      </Section>
+      </RailSection>
 
       {rebuildMut.error && (
         <ErrorState
           title={t("agents.detail.sandbox.rebuildError")}
-          description={(rebuildMut.error as Error).message}
+          detail={(rebuildMut.error as Error).message}
         />
       )}
       {renewMut.error && (
         <ErrorState
           title={t("agents.detail.sandbox.renewError")}
-          description={(renewMut.error as Error).message}
+          detail={(renewMut.error as Error).message}
         />
       )}
       {renewMut.isSuccess && renewMut.data?.expires_at && (

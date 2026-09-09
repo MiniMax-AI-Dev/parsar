@@ -5,7 +5,6 @@ import { ArrowUpRight, Check, Code, ListFilter, MessageSquare, Search, ShieldChe
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
-import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Button } from "../../components/ui/button"
@@ -15,6 +14,7 @@ import { Input } from "../../components/ui/input"
 import { Kbd } from "../../components/ui/kbd"
 import { InitialTile, Ledger, LedgerHeader, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
 import { Skeleton } from "../../components/ui/skeleton"
+import { VerbatimBlock } from "../../components/ui/verbatim"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useAuditRecords } from "../../lib/api-governance"
@@ -168,7 +168,7 @@ export function AuditPage() {
   const targetTypeLabel = (tt: string) => t(`audit.targetType.${tt}`, { defaultValue: tt })
 
   return (
-    <AdminLayout activeMenu="settings" fullBleed>
+    <AdminLayout activeMenu="audit" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
         <PageHeader
           className="static mx-0 mb-0"
@@ -176,7 +176,6 @@ export function AuditPage() {
           subtitleFor="audit.page.title"
           action={
             <>
-              <SettingsTabs active="audit" />
               <div className="relative w-72">
                 <Search
                   className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
@@ -254,13 +253,8 @@ export function AuditPage() {
           <div className="px-4 pt-4">
             <ErrorState
               title={isUnreachable ? t("audit.loadError.unreachable.title") : t("audit.loadError.title")}
-              description={
-                isUnreachable
-                  ? t("audit.loadError.unreachable.description")
-                  : err instanceof Error
-                    ? err.message
-                    : t("audit.loadError.description")
-              }
+              description={isUnreachable ? t("audit.loadError.unreachable.description") : t("audit.loadError.description")}
+              detail={!isUnreachable && err instanceof Error ? err.message : undefined}
               hint={isUnreachable ? t("audit.loadError.unreachable.hint") : t("audit.loadError.hint")}
               onRetry={() => void query.refetch()}
             />
@@ -297,10 +291,10 @@ export function AuditPage() {
                     onToggle={() => setOpenRow((cur) => (cur === r.id ? null : r.id))}
                   />
                   {openRow === r.id && (
-                    <li className="border-b border-line px-4 py-2">
-                      <pre className="m-0 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                    <li className="border-b border-line px-6 py-2">
+                      <VerbatimBlock>
                         {`#${r.id} ${r.event_type}\n${JSON.stringify(r.payload ?? {}, null, 2)}`}
-                      </pre>
+                      </VerbatimBlock>
                     </li>
                   )}
                 </Fragment>

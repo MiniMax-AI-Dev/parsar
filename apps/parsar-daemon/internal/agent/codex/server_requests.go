@@ -37,6 +37,7 @@ type codexPermissionKind uint8
 const (
 	codexDecisionApproval codexPermissionKind = iota
 	codexPermissionsApproval
+	codexMCPApproval
 )
 
 type pendingCodexInteractions struct {
@@ -230,6 +231,13 @@ func (s *Session) sendCodexPermissionReply(pending pendingCodexPermission, appro
 	value := "decline"
 	if approved {
 		value = "accept"
+	}
+	if pending.kind == codexMCPApproval {
+		var content map[string]any
+		if approved {
+			content = map[string]any{}
+		}
+		return s.rpc.SendServerReply(pending.rpcID, mcpElicitationResponse{Action: value, Content: content})
 	}
 	return s.rpc.SendServerReply(pending.rpcID, ApprovalDecisionResult{Decision: value})
 }

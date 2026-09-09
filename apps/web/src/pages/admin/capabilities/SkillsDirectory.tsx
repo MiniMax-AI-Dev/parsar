@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent } from "react"
+import { useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { ArrowUpRight, Download, PackageCheck } from "lucide-react"
 
@@ -11,6 +11,7 @@ import { Skeleton } from "../../../components/ui/skeleton"
 import { useInstallSkill, useSkillsCatalog, type SkillsCatalogItem } from "../../../lib/api-skills"
 import { useWorkspaceId } from "../../../lib/workspace"
 import { InlineNotice } from "./notices"
+import { SkillInstallErrorDialog } from "./SkillInstallErrorDialog"
 
 interface SkillsDirectoryProps {
   query: string
@@ -24,6 +25,7 @@ const SKILL_COLUMNS = [col.fixed(40), col.title(), col.id(200, 1), col.num(72), 
 export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDirectoryProps) {
   const { t, i18n } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
+  const directoryRef = useRef<HTMLDivElement>(null)
   const catalogQ = useSkillsCatalog()
   const installMut = useInstallSkill(workspaceID)
   const [installed, setInstalled] = useState<Record<string, string>>({})
@@ -41,6 +43,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
     )
   }, [catalogQ.data?.items, query])
   const pendingID = installMut.isPending ? (installMut.variables?.id ?? null) : null
+  const failedSkill = installMut.error ? installMut.variables : null
 
   const install = (skill: SkillsCatalogItem) => {
     if (!canImport || installed[skill.id]) return
@@ -53,7 +56,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-testid="skills-directory">
+    <div ref={directoryRef} tabIndex={-1} className="flex min-h-0 flex-1 flex-col" data-testid="skills-directory">
       {success ? (
         <InlineNotice
           tone="success"
@@ -73,19 +76,24 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
         <div className="px-4 pt-4">
           <ErrorState
             title={t("capabilities.skillsDirectory.loadError.title")}
-            description={catalogQ.error instanceof Error ? catalogQ.error.message : t("capabilities.skillsDirectory.loadError.description")}
+            description={t("capabilities.skillsDirectory.loadError.description")}
+            detail={catalogQ.error instanceof Error ? catalogQ.error.message : undefined}
             onRetry={() => void catalogQ.refetch()}
           />
         </div>
       ) : null}
-      {installMut.error ? (
-        <div className="px-4 pt-4">
-          <ErrorState
-            title={t("capabilities.skillsDirectory.install.failed")}
-            description={installMut.error instanceof Error ? installMut.error.message : ""}
-            onRetry={() => installMut.reset()}
-          />
-        </div>
+      {failedSkill ? (
+        <SkillInstallErrorDialog
+          name={failedSkill.name || failedSkill.slug}
+          detail={installMut.error instanceof Error ? installMut.error.message : String(installMut.error)}
+          onClose={() => installMut.reset()}
+          onRetry={() => install(failedSkill)}
+          onRestoreFocus={() => {
+            const row = directoryRef.current?.querySelector<HTMLElement>(`[data-catalog-id="${CSS.escape(failedSkill.id)}"]`)
+            const target = row ?? directoryRef.current
+            target?.focus()
+          }}
+        />
       ) : null}
 
       {catalogQ.isLoading ? (

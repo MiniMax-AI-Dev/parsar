@@ -42,6 +42,7 @@ import type {
   Agent,
   ToolStep,
 } from "../../lib/api-types"
+import { isUserMessageSender } from "../../lib/message-sender"
 import { useRelativeTime } from "../../lib/relative-time"
 import { credentialKindLabel } from "../../pages/admin/capability-ui"
 import { ToolCardSlot, SingleSlot, ListSlot } from "../plugin/SlotRenderer"
@@ -53,6 +54,7 @@ const THREAD_STYLE = { ["--thread-max-width" as string]: "48rem" }
 /** title · conversation id · age (actions replace the age on hover) */
 
 import type { SandboxSendGuard } from "../../lib/sandbox-send-guard"
+import { VerbatimBlock } from "../ui/verbatim"
 
 /* ============================================================== */
 /*  The conversation thread, mounted by the console and by /c/<id> */
@@ -154,13 +156,8 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
                 ? t("conversations.loadError.unreachable.title")
                 : t("conversations.loadError.title")
             }
-            description={
-              isUnreachable
-                ? t("conversations.loadError.unreachable.description")
-                : err instanceof Error
-                  ? err.message
-                  : t("conversations.loadError.description")
-            }
+            description={isUnreachable ? t("conversations.loadError.unreachable.description") : t("conversations.loadError.description")}
+            detail={!isUnreachable && err instanceof Error ? err.message : undefined}
             hint={
               isUnreachable
                 ? t("conversations.loadError.unreachable.hint")
@@ -381,14 +378,22 @@ function ChatStream({
   // network error). Server now auto-starts agent_daemon runs, so a
   // /start that returns 200 `already running` is fine; only true
   // network/5xx errors land here.
-  const [chatToast, setChatToast] = useState<string | null>(null)
+  const [chatToast, setChatToast] = useState<{ text: string; detail?: string } | null>(null)
   const stream = useAgentRunStream(conversationId, activeRunId, { enabled: !!activeRunId })
   const hasActiveStream = !!activeRunId && stream.status !== "error" && stream.status !== "done"
-  const streamErrorMessage = stream.error
-    ? isContextRejectedStreamError(stream.error)
-      ? t("conversations.stream.contextRejected")
-      : t("conversations.stream.error", { error: stream.error })
-    : null
+  // Our sentence and the server's string, kept apart. They used to be one
+  // interpolated line, which put the machine's words in our mouth.
+  // Memoised because it is an object now and it feeds an effect's deps: a
+  // fresh literal every render would re-run that effect every render.
+  const streamErrorMessage = useMemo(
+    () =>
+      stream.error
+        ? isContextRejectedStreamError(stream.error)
+          ? { text: t("conversations.stream.contextRejected") }
+          : { text: t("conversations.stream.error"), detail: stream.error }
+        : null,
+    [stream.error, t],
+  )
 
   const timelineQ = useConversationTimeline(conversationId, undefined, {
     pollingEnabled: !hasActiveStream,
@@ -473,7 +478,7 @@ function ChatStream({
   const turns = useMemo(
     () =>
       messages
-        .filter((m) => m.sender_type === "user")
+        .filter((m) => isUserMessageSender(m.sender_type))
         .map((m) => ({ key: m.id, preview: turnPreview(m.content) })),
     [messages],
   )
@@ -560,7 +565,7 @@ function ChatStream({
                   onOpenRun={openRun}
                 />
               )
-              if (m.sender_type === "user") {
+              if (isUserMessageSender(m.sender_type)) {
                 // The turn and the work it triggered share one anchor.
                 return (
                   <div key={m.id} data-turn-key={m.id} className="flex flex-col gap-3">
@@ -596,10 +601,15 @@ function ChatStream({
             omitPermission
           />
           {stream.status === "error" && (
-            <p className="m-0 flex items-start gap-1.5 text-sm text-fg">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-              <span>{streamErrorMessage}</span>
-            </p>
+            <div className="flex flex-col gap-1">
+              <p className="m-0 flex items-start gap-1.5 text-sm text-fg">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+                <span>{streamErrorMessage?.text}</span>
+              </p>
+              {streamErrorMessage?.detail && (
+                <VerbatimBlock className="ml-5 max-h-32">{streamErrorMessage.detail}</VerbatimBlock>
+              )}
+            </div>
           )}
           {/*
             Queued runs render one "queued" line per run, distinct from the
@@ -654,7 +664,7 @@ function ChatStream({
             placeholder={t("conversations.composer.placeholder", { agent: agent?.name ?? "" })}
             disabled={!canWrite || !agent || sandboxGuard?.blocked}
             onRunStarted={startRun}
-            onStartError={setChatToast}
+            onStartError={(message: string) => setChatToast({ text: message })}
             activeRunId={activeRunId}
             // Drop activeRunId immediately on click for the same reason
             // the "Cancel all" header button does: stop showing "thinking" /
@@ -778,12 +788,15 @@ function RunTrace({
  * message in ink, one ghost dismiss button. Ad-hoc on purpose — it is
  * rendered in one place today.
  */
-function ChatErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+function ChatErrorToast({ message, onDismiss }: { message: { text: string; detail?: string }; onDismiss: () => void }) {
   const { t: tc } = useTranslation("common")
   return (
     <div className="mb-2 flex items-start gap-1.5 text-sm text-fg">
       <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-      <span className="min-w-0 flex-1 break-words">{message}</span>
+      <span className="min-w-0 flex-1 break-words">
+        {message.text}
+        {message.detail && <VerbatimBlock className="mt-1 max-h-24">{message.detail}</VerbatimBlock>}
+      </span>
       <Button variant="ghost" size="icon" className="-my-1.5 h-6 w-6" onClick={onDismiss} aria-label={tc("actions.close")}>
         <X strokeWidth={1.5} aria-hidden="true" />
       </Button>
@@ -823,7 +836,7 @@ const MessageRow = memo(function MessageRow({
   onOpenRun?: (runID: string) => void
 }) {
   const { i18n, t } = useTranslation("admin")
-  const isUser = senderType === "user"
+  const isUser = isUserMessageSender(senderType)
   if (isUser) {
     return (
       <div className="flex justify-end">
@@ -831,7 +844,9 @@ const MessageRow = memo(function MessageRow({
           <div className="rounded-md bg-surface-muted px-3 py-2 text-base text-fg">
             <p className="m-0 whitespace-pre-wrap break-words">{content}</p>
           </div>
-          <div className="mt-1 text-xs text-fg-muted">{stamp}</div>
+          <div className="mt-1 text-xs text-fg-muted">
+            {senderType === "external" && <>{t("conversations.detail.externalUser")} · </>}{stamp}
+          </div>
         </div>
       </div>
     )
@@ -845,8 +860,10 @@ const MessageRow = memo(function MessageRow({
         <div className="flex items-start gap-1.5 text-base text-fg">
           <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
           <div className="min-w-0">
-            <p className="m-0 font-medium">{t("conversations.runtime_error.badge")}</p>
-            <p className="m-0 mt-1 break-words">{runtimeError.message}</p>
+            {/* No "Run failed" heading over it: the red triangle says failure
+                and the sentence beneath says it again in words — three
+                statements of one fact in four lines. */}
+            <p className="m-0 break-words font-medium">{runtimeError.message}</p>
             {runtimeError.href && runtimeError.action && (
               <Button asChild variant="outline" size="sm" className="mt-2">
                 <a href={runtimeError.href}>{runtimeError.action}</a>
@@ -1121,7 +1138,7 @@ function ComposerForm({
       }}
     >
       {sendError?.targetId === sendTargetId && (
-        <ChatErrorToast message={sendError.message} onDismiss={() => setSendError(null)} />
+        <ChatErrorToast message={{ text: sendError.message }} onDismiss={() => setSendError(null)} />
       )}
       {blockReason && <InlineError className="mb-2">{blockReason}</InlineError>}
       {/* The composer: one tonal, borderless 16px panel (the ChatGPT idiom

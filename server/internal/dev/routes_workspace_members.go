@@ -12,10 +12,8 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	authinvite "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/invite"
-	authpassword "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/password"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 // listWorkspaceMembers lists members of a workspace.
@@ -131,20 +129,6 @@ func addWorkspaceMember(runtimeStore RuntimeStore) http.HandlerFunc {
 
 // ── Invitation handlers ─────────────────────────────────────────
 
-type createInvitationRequest struct {
-	Email string `json:"email"`
-	Name  string `json:"name,omitempty"`
-	Role  string `json:"role"`
-}
-
-type createInvitationResponse struct {
-	InvitationID string `json:"invitation_id"`
-	InviteLink   string `json:"invite_link"`
-	Email        string `json:"email"`
-	Role         string `json:"role"`
-	ExpiresAt    string `json:"expires_at"`
-}
-
 func invitationCallerRole(r *http.Request, runtimeStore RuntimeStore, workspaceID string) (string, string, error) {
 	ctx := requestContextForRBAC(r)
 	callerID := auth.UserIDFromContext(ctx)
@@ -156,77 +140,6 @@ func invitationCallerRole(r *http.Request, runtimeStore RuntimeStore, workspaceI
 		return "", "", err
 	}
 	return callerID, role, nil
-}
-
-func createInvitation(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		if !isUUID(workspaceID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
-			return
-		}
-		var req createInvitationRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
-			return
-		}
-		req.Email = strings.TrimSpace(req.Email)
-		req.Role = strings.TrimSpace(req.Role)
-		if req.Email == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "email is required"})
-			return
-		}
-		if !store.IsValidMemberRole(req.Role) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role must be one of owner|admin|member|viewer"})
-			return
-		}
-
-		now := time.Now().UTC()
-		expiresAt := now.Add(authinvite.MaxLifetime)
-		invID := uuid.New().String()
-		token := invID
-
-		callerID, callerRole, err := invitationCallerRole(r, runtimeStore, workspaceID)
-		if err != nil {
-			writeRBACError(w, err)
-			return
-		}
-		if callerRole == "member" && req.Role != "member" {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "members can only invite new members with the member role"})
-			return
-		}
-
-		if err := runtimeStore.CreateInvitation(r.Context(), store.CreateInvitationInput{
-			ID:          invID,
-			TokenHash:   authinvite.TokenHash(token),
-			WorkspaceID: workspaceID,
-			Email:       req.Email,
-			Role:        req.Role,
-			InvitedBy:   callerID,
-			ExpiresAt:   expiresAt,
-			Now:         now,
-		}); err != nil {
-			if strings.Contains(err.Error(), "uk_workspace_invitations_pending_email") {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "an invitation is already pending for this email"})
-				return
-			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create invitation"})
-			return
-		}
-
-		link := cfg.publicURL + "/invite/" + token
-		writeJSON(w, http.StatusCreated, createInvitationResponse{
-			InvitationID: invID,
-			InviteLink:   link,
-			Email:        store.NormalizeEmail(req.Email),
-			Role:         req.Role,
-			ExpiresAt:    expiresAt.Format(time.RFC3339),
-		})
-	}
 }
 
 type pendingInvitationResponse struct {
@@ -387,88 +300,6 @@ func getInviteInfo(runtimeStore RuntimeStore) http.HandlerFunc {
 			WorkspaceName: inv.WorkspaceName,
 			Email:         inv.Email,
 			Role:          inv.Role,
-		})
-	}
-}
-
-type acceptInvitationRequest struct {
-	Token    string `json:"token"`
-	Password string `json:"password"`
-}
-
-type acceptInvitationResponse struct {
-	UserID      string `json:"user_id"`
-	Email       string `json:"email"`
-	WorkspaceID string `json:"workspace_id"`
-}
-
-func acceptInvitation(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req acceptInvitationRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
-			return
-		}
-		req.Token = strings.TrimSpace(req.Token)
-		if req.Token == "" || req.Password == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "token and password are required"})
-			return
-		}
-
-		inv, err := runtimeStore.GetInvitationByTokenHash(r.Context(), authinvite.TokenHash(req.Token))
-		if err != nil {
-			writeJSON(w, http.StatusGone, map[string]string{"error": "invitation is invalid, expired, or already used"})
-			return
-		}
-		now := time.Now().UTC()
-		if inv.AcceptedAt != nil || inv.RevokedAt != nil || !inv.ExpiresAt.After(now) {
-			writeJSON(w, http.StatusGone, map[string]string{"error": "invitation is invalid, expired, or already used"})
-			return
-		}
-
-		if err := authpassword.Validate(req.Password); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-
-		hash, err := authpassword.Hash(req.Password)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to hash password"})
-			return
-		}
-
-		result, err := runtimeStore.AcceptInvitation(r.Context(), store.AcceptInvitationInput{
-			TokenHash:    authinvite.TokenHash(req.Token),
-			Email:        inv.Email,
-			Role:         inv.Role,
-			WorkspaceID:  inv.WorkspaceID,
-			PasswordHash: hash,
-			Now:          now,
-		})
-		if err != nil {
-			if errors.Is(err, store.ErrInvitationInvalid) {
-				writeJSON(w, http.StatusGone, map[string]string{"error": "invitation is invalid, expired, or already used"})
-				return
-			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to accept invitation"})
-			return
-		}
-
-		sid, err := cfg.inviteSessions.Create(r.Context(), auth.CreateSessionInput{
-			UserID:    result.Member.UserID,
-			UserAgent: r.UserAgent(),
-			IP:        r.RemoteAddr,
-		})
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
-			return
-		}
-		auth.IssueCookie(w, sid, 0, cfg.inviteCookieSecure)
-
-		writeJSON(w, http.StatusOK, acceptInvitationResponse{
-			UserID:      result.Member.UserID,
-			Email:       result.Member.UserEmail,
-			WorkspaceID: result.Member.WorkspaceID,
 		})
 	}
 }

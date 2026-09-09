@@ -162,11 +162,8 @@ export function MembersPage() {
           <div className="px-6 pt-6">
             <ErrorState
               title={loadError.envelope?.unreachable ? t("members.error.unreachable.title") : t("members.error.load.title")}
-              description={
-                loadError.envelope?.unreachable
-                  ? t("members.error.unreachable.description")
-                  : loadError.message ?? t("members.error.load.description")
-              }
+              description={loadError.envelope?.unreachable ? t("members.error.unreachable.description") : t("members.error.load.description")}
+              detail={loadError.envelope?.unreachable ? undefined : loadError.message}
               hint={loadError.envelope?.unreachable ? t("members.error.unreachable.hint") : t("members.error.load.hint")}
               onRetry={() => void wsQ.refetch()}
             />
@@ -184,7 +181,7 @@ export function MembersPage() {
             </LedgerHeader>
 
             {mutationError && (
-              <p className="flex h-9 items-center gap-1.5 border-b border-line px-4 text-sm text-fg">
+              <p className="flex h-9 items-center gap-1.5 border-b border-line px-6 text-sm text-fg">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
                 <span className="truncate">{mutationError}</span>
               </p>

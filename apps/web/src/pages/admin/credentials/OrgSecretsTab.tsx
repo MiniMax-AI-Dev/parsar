@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next"
 import { AlertTriangle, ArrowUpRight, Ban, Loader2 } from "lucide-react"
 
 import { ActionIconButton, RowActions } from "../../../components/ui/action-button"
-import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
 import {
   Dialog,
@@ -38,6 +37,7 @@ import type {
 } from "../../../lib/api-types"
 import { useNavigateAdmin } from "../../../lib/admin-router"
 import { useRelativeTime } from "../../../lib/relative-time"
+import { StatusIcon } from "../../../components/ui/status-icon"
 
 interface OrgSecretsTabProps {
   workspaceID: string
@@ -106,7 +106,8 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
       <div className="px-4 pt-4">
         <ErrorState
           title={errorObj?.envelope?.unreachable ? t("secrets.error.unreachable.title") : t("secrets.error.load.title")}
-          description={errorObj?.envelope?.unreachable ? t("secrets.error.unreachable.description") : errorObj?.message ?? t("secrets.error.load.description")}
+          description={errorObj?.envelope?.unreachable ? t("secrets.error.unreachable.description") : t("secrets.error.load.description")}
+          detail={errorObj?.envelope?.unreachable ? undefined : errorObj?.message}
           hint={errorObj?.envelope?.unreachable ? t("secrets.error.unreachable.hint") : t("secrets.error.load.hint")}
           onRetry={() => void secretsQ.refetch()}
         />
@@ -119,7 +120,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
       <Ledger columns={LEDGER_COLUMNS} role="list" aria-label={t("credentialsPage.tabs.org")}>
         <LedgerHeader>
           <span>{t("secrets.create.field.name")}</span>
-          <span>{t("myCredentials.table.kind")}</span>
+          <span>{t("secrets.table.status")}</span>
           <span>{t("secrets.create.field.provider")}</span>
           <span>{t("secrets.create.field.apiKey")}</span>
           <span className="text-right">{t("myCredentials.table.lastUsed")}</span>
@@ -128,6 +129,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
 
         {/* Model API Keys — read-only. Rotation lives on the Models page. */}
         <SecretGroup
+          workspaceID={workspaceID}
           label={t("secrets.sections.modelKeys")}
           items={modelKeys}
           empty={t("secrets.empty.modelKeys")}
@@ -137,6 +139,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
           onDisable={setConfirmTarget}
         />
         <SecretGroup
+          workspaceID={workspaceID}
           label={t("secrets.sections.runtimeKeys")}
           items={runtimeKeys}
           empty={t("secrets.empty.runtimeKeys")}
@@ -145,6 +148,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
         />
         {otherKeys.length > 0 && (
           <SecretGroup
+            workspaceID={workspaceID}
             label={t("secrets.sections.otherKeys")}
             items={otherKeys}
             fmtAgo={fmtAgo}
@@ -193,6 +197,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
 }
 
 interface GroupProps {
+  workspaceID: string
   label: string
   items: Secret[]
   empty?: string
@@ -204,15 +209,16 @@ interface GroupProps {
   onOpenModels?: () => void
 }
 
-function SecretGroup({ label, items, empty, fmtAgo, onDisable, readOnlyLabel, onOpenModels }: GroupProps) {
+function SecretGroup({ workspaceID, label, items, empty, fmtAgo, onDisable, readOnlyLabel, onOpenModels }: GroupProps) {
   const { t } = useTranslation("admin")
   return (
     <LedgerGroup label={label} count={items.length}>
       {items.length === 0 && empty ? (
-        <li className="flex h-9 items-center border-b border-line px-4 text-sm text-fg-muted">{empty}</li>
+        <li className="flex h-9 items-center border-b border-line px-6 text-sm text-fg-muted">{empty}</li>
       ) : (
         items.map((secret) => {
           const active = secret.status === "active"
+          const canDisable = secret.management_workspace_id === workspaceID
           const statusLabel = active ? t("secrets.status.active") : t("secrets.status.disabled")
           return (
             <LedgerRow key={secret.id} role="listitem" tabIndex={-1}>
@@ -220,10 +226,13 @@ function SecretGroup({ label, items, empty, fmtAgo, onDisable, readOnlyLabel, on
                 <span className="truncate font-medium">{secret.name}</span>
                 {secret.slug && <LedgerId className="shrink-0">{secret.slug}</LedgerId>}
               </span>
-              <span className="min-w-0">
-                <Badge variant={active ? "success" : "neutral"} dot title={statusLabel}>
-                  {kindLabel(secret.kind)}
-                </Badge>
+              {/* The state, in words. This cell used to print the group header
+                  again on every row — "Model API Key" under 模型 API Keys —
+                  inside a badge whose coloured dot silently carried the
+                  *status*, with the word only in a `title`. */}
+              <span className="flex min-w-0 items-center gap-1.5">
+                <StatusIcon status={active ? "completed" : "cancelled"} />
+                <span className="truncate text-sm text-fg">{statusLabel}</span>
               </span>
               <span className="truncate text-xs text-fg-muted">{secret.provider || t("secrets.none")}</span>
               <LedgerId>{secret.masked}</LedgerId>
@@ -232,7 +241,13 @@ function SecretGroup({ label, items, empty, fmtAgo, onDisable, readOnlyLabel, on
                 {readOnlyLabel && onOpenModels ? (
                   <ActionIconButton icon={ArrowUpRight} label={readOnlyLabel} onClick={onOpenModels} />
                 ) : active ? (
-                  <ActionIconButton icon={Ban} label={t("secrets.actions.disable")} tone="danger" onClick={() => onDisable(secret)} />
+                  <ActionIconButton
+                    icon={Ban}
+                    label={t(canDisable ? "secrets.actions.disable" : "secrets.actions.disableUnavailable")}
+                    tone="danger"
+                    disabled={!canDisable}
+                    onClick={() => onDisable(secret)}
+                  />
                 ) : null}
               </RowActions>
             </LedgerRow>
@@ -306,7 +321,7 @@ function CreateDialog({ onClose, onSubmit, pending, error }: CreateDialogProps) 
               <Input id="secret-api-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="sk-..." autoComplete="off" required />
             </Field>
             {error && (
-              <ErrorState title={t("secrets.create.error.title")} description={error.message} className="py-0" />
+              <ErrorState title={t("secrets.create.error.title")} detail={error.message} className="py-0" />
             )}
           </div>
           <DialogFooter>

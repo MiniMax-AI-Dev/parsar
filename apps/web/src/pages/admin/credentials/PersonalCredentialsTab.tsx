@@ -56,7 +56,7 @@ interface PersonalCredentialsTabProps {
 }
 
 /** kind · code / refs · created · last used · actions */
-const LEDGER_COLUMNS = [col.title(), col.id(176), col.meta(148), col.age(80), col.actions(2)]
+const LEDGER_COLUMNS = [col.title(), col.id(176), col.age(96), col.age(80), col.actions(2)]
 
 export function PersonalCredentialsTab({ standalone = false, query = "", createRequest = 0 }: PersonalCredentialsTabProps) {
   const { t, i18n } = useTranslation("admin")
@@ -156,7 +156,8 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
       <div className="px-4 pt-4">
         <ErrorState
           title={isUnreachable ? t("myCredentials.error.unreachable.title") : t("myCredentials.error.load.title")}
-          description={isUnreachable ? t("myCredentials.error.unreachable.description") : loadErr instanceof Error ? loadErr.message : t("myCredentials.error.load.hint")}
+          description={isUnreachable ? t("myCredentials.error.unreachable.description") : undefined}
+          detail={!isUnreachable && loadErr instanceof Error ? loadErr.message : undefined}
           hint={isUnreachable ? t("myCredentials.error.unreachable.hint") : t("myCredentials.error.load.hint")}
           onRetry={() => void credentialsQ.refetch()}
         />
@@ -166,9 +167,11 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
 
   const showPending = !capabilitiesScan.isLoading && missing.length > 0
   const kindLabelOf = (kind: string, fallback: string) => credentialKindLabel(kind, i18n.language, fallback, kindOptions.kinds)
+  // The date alone: the column header says "添加于" once, at the top, instead of
+  // the cell repeating it on every row.
   const createdLabel = (iso: string) => {
     const ms = Date.parse(iso)
-    return Number.isNaN(ms) ? "—" : t("myCredentials.table.createdAt", { date: new Date(ms).toLocaleDateString() })
+    return Number.isNaN(ms) ? "—" : new Date(ms).toLocaleDateString()
   }
 
   return (
@@ -181,10 +184,13 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
         />
       ) : (
         <Ledger columns={LEDGER_COLUMNS} role="list" aria-label={t("credentialsPage.tabs.personal")}>
+          {/* Every column that carries something is named. Two of these were
+              blank, so the mono kind code and the date beneath them stood in
+              unlabelled columns. */}
           <LedgerHeader>
             <span>{t("myCredentials.table.kind")}</span>
-            <span />
-            <span />
+            <span>{t("myCredentials.table.kindCode")}</span>
+            <span className="text-right">{t("myCredentials.table.addedAt")}</span>
             <span className="text-right">{t("myCredentials.table.lastUsed")}</span>
             <span />
           </LedgerHeader>
@@ -225,7 +231,7 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
 
           <LedgerGroup label={t("credentialsPage.personal.configured.title")} count={credentials.length}>
             {credentials.length === 0 ? (
-              <li className="flex h-9 items-center border-b border-line px-4 text-sm text-fg-muted">
+              <li className="flex h-9 items-center border-b border-line px-6 text-sm text-fg-muted">
                 {t("credentialsPage.personal.configured.empty.title")}
               </li>
             ) : filtered.length === 0 ? (
@@ -240,7 +246,7 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
                     <span className="truncate font-medium">{kindLabelOf(credential.kind, t("myCredentials.kind.unknown"))}</span>
                   </span>
                   <LedgerId>{credential.kind}</LedgerId>
-                  <span className="truncate text-xs text-fg-muted">{createdLabel(credential.created_at)}</span>
+                  <span className="truncate text-right text-xs tabular-nums text-fg-muted">{createdLabel(credential.created_at)}</span>
                   <span className="truncate text-right text-xs text-fg-muted">{fmtAgo(credential.last_used_at)}</span>
                   <RowActions>
                     <ActionIconButton icon={Pencil} label={t("myCredentials.actions.edit")} onClick={() => setEditTarget(credential)} />
@@ -342,23 +348,27 @@ function PendingRow({
   const { t } = useTranslation("admin")
   return (
     <LedgerRow role="listitem" tabIndex={-1}>
+      {/* The disclosure belongs to the name, in the name's column. It used to
+          sit in the second column, which the header calls 类型标识 — a count
+          of references standing under a label for a kind code. */}
       <span className="flex min-w-0 items-center gap-1.5">
         <KeyRound className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
         <span className="truncate font-medium">{label}</span>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={onToggle}
+          className="inline-flex min-w-0 shrink items-center gap-1 truncate text-left text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-spring", !open && "-rotate-90")}
+            strokeWidth={1.5}
+            aria-hidden="true"
+          />
+          <span className="truncate">{t("credentialsPage.personal.pending.refCount", { count: row.refCount })}</span>
+        </button>
       </span>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={onToggle}
-        className="inline-flex min-w-0 items-center gap-1 truncate text-left text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-      >
-        <ChevronDown
-          className={cn("h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-spring", !open && "-rotate-90")}
-          strokeWidth={1.5}
-          aria-hidden="true"
-        />
-        <span className="truncate">{t("credentialsPage.personal.pending.refCount", { count: row.refCount })}</span>
-      </button>
+      <span />
       <span />
       <span />
       <RowActions>

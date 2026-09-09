@@ -61,6 +61,7 @@ import {
   useDeprecate,
   useInstallCount,
   useMarketplaceEnabledAgents,
+  normalizeMarketplaceInstall,
   useMCPDirectory,
   usePublish,
   useTargetMarketplaceInstalls,
@@ -74,6 +75,8 @@ import {
 import { navigateAdmin, useAdminView } from "../../../lib/admin-router"
 import type { AgentCapability, Capability, CapabilityVersion } from "../../../lib/api-types"
 import { useMyWorkspaces } from "../../../lib/api-workspaces"
+import { useToast } from "../../../components/ui/toast"
+import { VerbatimBlock } from "../../../components/ui/verbatim"
 import { useWorkspaceId } from "../../../lib/workspace"
 import { useRelativeTime } from "../../../lib/relative-time"
 import { requiredCredentialsLabel } from "../../../lib/credential-kind-ui"
@@ -113,7 +116,7 @@ const TYPE_FILTERS: { value: CapabilityTypeFilter; label: string }[] = [
 ]
 
 /** name (+type, +description) · version · source · enabled agents · credentials · updated · actions */
-const LEDGER_COLUMNS = [col.title(), col.id(96, 0.4), col.meta(104), col.num(96), col.meta(120), col.age(80), col.actions(2)]
+const LEDGER_COLUMNS = [col.title(280), col.id(96, 0.4), col.meta(104), col.num(96), col.meta(120), col.age(80), col.actions(2)]
 
 export function CapabilitiesPage() {
   const { t, i18n } = useTranslation("admin")
@@ -146,7 +149,7 @@ export function CapabilitiesPage() {
   const [marketClientError, setMarketClientError] = useState<string | null>(null)
   const [uninstallTarget, setUninstallTarget] = useState<TargetMarketplaceInstall | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Capability | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const toast = useToast()
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
   const canImportDirectory = isAdmin || workspaceRole === "member"
@@ -205,7 +208,7 @@ export function CapabilitiesPage() {
   // the separate full-list endpoint. The standalone endpoint stays mounted to
   // compute totals (and as a fallback if paginated mode is off).
   const pageInstalls = useMemo(
-    () => (capsQ.data?.marketplace_installs ?? []) as TargetMarketplaceInstall[],
+    () => ((capsQ.data?.marketplace_installs ?? []) as TargetMarketplaceInstall[]).map(normalizeMarketplaceInstall),
     [capsQ.data?.marketplace_installs],
   )
   const allInstalls = marketplaceInstallsQ.data ?? []
@@ -256,7 +259,7 @@ export function CapabilitiesPage() {
           : undeprecateMut
     mutation.mutate(capability.id, {
       onSuccess: () => {
-        setToast(t(`capabilities.marketStatus.toast.${action}`, { name: capability.name }))
+        toast.show(t(`capabilities.marketStatus.toast.${action}`, { name: capability.name }))
         setMarketTarget(null)
       },
     })
@@ -301,8 +304,13 @@ export function CapabilitiesPage() {
         key={`${fromMarketplace ? "market" : "own"}-${cap.id}`}
         capability={cap}
         version={version}
-        source={fromMarketplace ? marketplaceSourceName(marketCap) : t("capabilities.tabs.workspace")}
-        deprecatedLabel={fromMarketplace ? t("capabilities.deprecated.badgeTarget") : t("capabilities.deprecated.badgeSource")}
+        // Own capabilities show nothing rather than an em dash: the value is
+        // not missing, it is redundant with the group header — and a dash in
+        // this ledger means "unknown".
+        source={fromMarketplace ? marketplaceSourceName(marketCap) : ""}
+        availabilityLabel={fromMarketplace && cap.visibility === "workspace"
+          ? t("capabilities.unpublished.badge")
+          : cap.deprecated_at ? t("capabilities.deprecated.badgeSource") : ""}
         enabledCount={enabledCount}
         credentials={requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.credentials.none"))}
         age={fmtAgo(cap.updated_at ?? cap.created_at)}
@@ -330,7 +338,8 @@ export function CapabilitiesPage() {
     <div className="px-4 pt-4">
       <ErrorState
         title={isUnreachable ? t("capabilities.loadError.unreachable.title") : t("capabilities.loadError.title")}
-        description={isUnreachable ? t("capabilities.loadError.unreachable.description") : err instanceof Error ? err.message : t("capabilities.loadError.description")}
+        description={isUnreachable ? t("capabilities.loadError.unreachable.description") : t("capabilities.loadError.description")}
+        detail={!isUnreachable && err instanceof Error ? err.message : undefined}
         hint={isUnreachable ? t("capabilities.loadError.unreachable.hint") : t("capabilities.loadError.hint")}
         onRetry={() => void capsQ.refetch()}
       />
@@ -471,8 +480,6 @@ export function CapabilitiesPage() {
             </TabsList>
           </Tabs>
         </div>
-
-        {toast && <InlineNotice tone="success" className="border-b border-line px-4 py-2">{toast}</InlineNotice>}
         {marketClientError && <InlineNotice tone="error" className="border-b border-line px-4 py-2">{marketClientError}</InlineNotice>}
 
         {pageTab === "workspace" ? (
@@ -487,7 +494,7 @@ export function CapabilitiesPage() {
         open={importOpen}
         onOpenChange={setImportOpen}
         onCreated={(capabilityID) => {
-          setToast(t("capabilities.toast.created", { name: capabilityID }))
+          toast.show(t("capabilities.toast.created", { name: capabilityID }))
         }}
       />
       {addVersionCapability && (
@@ -503,7 +510,7 @@ export function CapabilitiesPage() {
           onCommitted={() => {
             const name = addVersionCapability.name
             setAddVersionCapability(null)
-            setToast(t("capabilities.toast.versionAdded", { name }))
+            toast.show(t("capabilities.toast.versionAdded", { name }))
           }}
         />
       )}
@@ -540,7 +547,7 @@ export function CapabilitiesPage() {
           deleteMut.mutate(deleteTarget.id, {
             onSuccess: () => {
               setDeleteTarget(null)
-              setToast(t("capabilities.delete.toast.success", { name }))
+              toast.show(t("capabilities.delete.toast.success", { name }))
             },
           })
         }}
@@ -560,7 +567,7 @@ export function CapabilitiesPage() {
           onConfirm={() => {
             uninstallMut.mutate(uninstallTarget.id, {
               onSuccess: () => {
-                setToast(t("capabilities.uninstall.toast", { name: uninstallTarget.name }))
+                toast.show(t("capabilities.uninstall.toast", { name: uninstallTarget.name }))
                 setUninstallTarget(null)
               },
             })
@@ -579,7 +586,7 @@ function CapabilityRow({
   capability,
   version,
   source,
-  deprecatedLabel,
+  availabilityLabel,
   enabledCount,
   credentials,
   age,
@@ -590,7 +597,7 @@ function CapabilityRow({
   capability: Capability
   version?: string
   source: string
-  deprecatedLabel: string
+  availabilityLabel: string
   enabledCount: number
   credentials: string
   age: string
@@ -608,11 +615,11 @@ function CapabilityRow({
   return (
     <LedgerRow selected={selected} onClick={onOpen} onKeyDown={onKeyDown}>
       <span className="flex min-w-0 items-center gap-2">
-        <span className="shrink-0 truncate font-medium">{capability.name}</span>
+        <span className="min-w-0 truncate font-medium" title={capability.name}>{capability.name}</span>
         <CapabilityTypeBadge type={capability.type} />
-        {capability.deprecated_at && <Badge variant="neutral" dot>{deprecatedLabel}</Badge>}
+        {availabilityLabel && <Badge variant="neutral" className="shrink-0" dot>{availabilityLabel}</Badge>}
         {capability.description && (
-          <span className="min-w-0 truncate text-xs text-fg-muted">· {capability.description}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">· {capability.description}</span>
         )}
       </span>
       <span className={cnMono(!!version)}>{version ?? "—"}</span>
@@ -900,7 +907,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
   const [marketAction, setMarketAction] = useState<MarketAction>(null)
   const [marketClientError, setMarketClientError] = useState<string | null>(null)
   const [viewVersion, setViewVersion] = useState<CapabilityVersion | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const toast = useToast()
   // Switching to another capability swaps the rail's content rather than
   // replaying its entrance, so the per-capability state is reset here instead
   // of by a remount.
@@ -912,7 +919,6 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
     setMarketAction(null)
     setMarketClientError(null)
     setViewVersion(null)
-    setToast(null)
   }
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
@@ -964,7 +970,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
     if (!action) return
     mutation.mutate(capability.id, {
       onSuccess: () => {
-        setToast(t(`capabilities.marketStatus.toast.${action}`, { name: capability.name }))
+        toast.show(t(`capabilities.marketStatus.toast.${action}`, { name: capability.name }))
         setMarketAction(null)
       },
     })
@@ -994,11 +1000,11 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
       aria-label={capability.name}
       header={
         <>
-          <span className="min-w-0 truncate text-sm font-medium text-fg">{capability.name}</span>
+          <span className="min-w-0 truncate text-base font-medium text-fg">{capability.name}</span>
           <CapabilityTypeBadge type={capability.type} />
-          <Badge variant="neutral" dot>
-            {t(deprecated ? "capabilities.status.deprecated" : "capabilities.status.active")}
-          </Badge>
+          {/* Only when it is off the shelf. "可用" was on every capability
+              that was not deprecated, which is a badge that never varies. */}
+          {deprecated && <Badge variant="neutral" dot>{t("capabilities.status.deprecated")}</Badge>}
         </>
       }
       footer={
@@ -1013,14 +1019,12 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
         ) : undefined
       }
     >
-      {toast && <InlineNotice tone="success" className="mb-4">{toast}</InlineNotice>}
       {marketClientError && <InlineNotice tone="error" className="mb-4">{marketClientError}</InlineNotice>}
 
       {capability.description && <p className="mb-4 text-sm text-fg">{capability.description}</p>}
 
       <RailSection title={t("capabilities.detail.basic.title")}>
         <PropertyList>
-          <Property label={t("capabilities.table.type")}><CapabilityTypeBadge type={capability.type} /></Property>
           <Property label={t("capabilities.table.credentials")}>
             {requiredCredentialsLabel(capability.required_credentials, i18n.language, t("capabilities.credentials.none"))}
           </Property>
@@ -1070,7 +1074,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
                   name={item.agentName}
                   version={item.version}
                   oldLabel={item.latest ? undefined : t("capabilities.detail.enabledAgents.old")}
-                  onOpen={() => navigateAdmin("agents", { id: item.agentID, tab: "capabilities" })}
+                  onOpen={() => navigateAdmin("agents", { id: item.agentID, tab: "config" })}
                 />
               ))}
             </ul>
@@ -1081,11 +1085,11 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
       {isAdmin && (
         <RailSection title={t("capabilities.marketStatus.title")} className="mt-6">
           <PropertyList>
-            <Property label={t("capabilities.marketStatus.title")}>
-              <Badge variant="neutral" dot>
-                {published ? t("capabilities.marketStatus.published") : t("capabilities.marketStatus.unpublished")}
-              </Badge>
-              {deprecated && <span className="text-xs text-fg-muted">{t("capabilities.deprecated.badgeSource")}</span>}
+            {/* Labelled "上架状态", not "市场状态" again — it used to repeat the
+                section head two lines above it. The deprecation is said once,
+                by the header badge, in one word. */}
+            <Property label={t("capabilities.marketStatus.state")}>
+              {published ? t("capabilities.marketStatus.published") : t("capabilities.marketStatus.unpublished")}
             </Property>
             <Property label={t("capabilities.marketplace.detail.addedCount")} mono>{installCountQ.data ?? 0}</Property>
           </PropertyList>
@@ -1122,7 +1126,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
           updateMut.mutate({ capabilityID: capability.id, body }, {
             onSuccess: () => {
               setEditOpen(false)
-              setToast(t("capabilities.toast.updated", { name: body.name ?? capability.name }))
+              toast.show(t("capabilities.toast.updated", { name: body.name ?? capability.name }))
             },
           })
         }}
@@ -1137,7 +1141,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
         }}
         onCommitted={() => {
           setAddVersionOpen(false)
-          setToast(t("capabilities.toast.versionAdded", { name: capability.name }))
+          toast.show(t("capabilities.toast.versionAdded", { name: capability.name }))
         }}
       />
       <DeprecateCapabilityDialog
@@ -1274,7 +1278,6 @@ function ViewVersionContentDialog({ version, capability, onOpenChange }: { versi
 
 type Translate = ReturnType<typeof useTranslation<"admin">>["t"]
 
-const CODE_BLOCK_CLASS = "m-0 max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg"
 
 /**
  * Picks the right body for "view version content":
@@ -1300,20 +1303,20 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
         <PropertyList>
           <Property label="mode" mono>{sp?.mode ?? "append"}</Property>
         </PropertyList>
-        <pre className={CODE_BLOCK_CLASS}>{sp?.prompt ?? t("capabilities.none")}</pre>
+        <VerbatimBlock className="max-h-[420px]">{sp?.prompt ?? t("capabilities.none")}</VerbatimBlock>
       </div>
     )
   }
 
   if (capability.type === "mcp") {
-    return <pre className={CODE_BLOCK_CLASS}>{JSON.stringify(canonicalSpec?.mcp ?? version.content ?? {}, null, 2)}</pre>
+    return <VerbatimBlock className="max-h-[420px]">{JSON.stringify(canonicalSpec?.mcp ?? version.content ?? {}, null, 2)}</VerbatimBlock>
   }
 
   if (capability.type === "plugin") {
     const plugin = canonicalSpec?.plugin
     if (!plugin) return <p className="text-sm text-fg-muted">{t("capabilities.none")}</p>
     return (
-      <PropertyList className="grid-cols-[120px_minmax(0,1fr)]">
+      <PropertyList>
         {plugin.name && <Property label="name" mono>{plugin.name}</Property>}
         {plugin.version && <Property label="version" mono>{plugin.version}</Property>}
         {plugin.description && <Property label="description">{plugin.description}</Property>}
@@ -1331,18 +1334,18 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
     const skill = canonicalSpec.skill
     return (
       <div className="space-y-2">
-        <PropertyList className="grid-cols-[120px_minmax(0,1fr)]">
+        <PropertyList>
           {skill.slug && <Property label="slug" mono>{skill.slug}</Property>}
           {skill.title && <Property label="title">{skill.title}</Property>}
           {skill.description && <Property label="description" className="h-auto min-h-7 whitespace-normal py-1">{skill.description}</Property>}
           {skill.trigger && <Property label="trigger" className="h-auto min-h-7 whitespace-normal py-1">{skill.trigger}</Property>}
         </PropertyList>
-        {skill.instruction && <pre className={CODE_BLOCK_CLASS}>{skill.instruction}</pre>}
+        {skill.instruction && <VerbatimBlock className="max-h-[420px]">{skill.instruction}</VerbatimBlock>}
       </div>
     )
   }
   return (
-    <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
+    <PropertyList>
       <Property label={t("capabilities.fields.gitRepoUrl.label")} mono>{version.git_repo_url || t("capabilities.none")}</Property>
       <Property label={t("capabilities.fields.gitRef.label")} mono>{skillVersionRef(version) || t("capabilities.none")}</Property>
       <Property label={t("capabilities.fields.path.label")} mono>{version.path || t("capabilities.none")}</Property>

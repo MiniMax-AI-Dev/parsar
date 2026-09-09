@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
@@ -698,41 +699,6 @@ type UsageLogRead struct {
 	CreatedAt    time.Time      `json:"created_at"`
 }
 
-type CreateSecretInput struct {
-	WorkspaceID string
-	Name        string
-	Kind        string
-	Provider    string
-	AuthType    string
-	Payload     map[string]any
-	Masked      string
-	CreatedBy   string
-	// CredentialKindCode is optional metadata that pins a capability_inline
-	// secret to a single credential_kinds.code. Used by the agent-creation
-	// shared-binding picker to filter secrets by the kind they hold.
-	CredentialKindCode string
-}
-
-type SecretRead struct {
-	ID         string         `json:"id"`
-	Slug       string         `json:"slug"`
-	Name       string         `json:"name"`
-	Kind       string         `json:"kind"`
-	Provider   string         `json:"provider"`
-	AuthType   string         `json:"auth_type"`
-	KeyVersion string         `json:"key_version"`
-	Status     string         `json:"status"`
-	Masked     string         `json:"masked"`
-	Metadata   map[string]any `json:"metadata"`
-	CreatedAt  time.Time      `json:"created_at"`
-	UpdatedAt  time.Time      `json:"updated_at"`
-}
-
-type SecretPayload struct {
-	SecretRead
-	EncryptedPayload []byte
-}
-
 // CreateModelInput carries the fields of a new shared model.
 // Credential mode is one-of inline_secret / credential_ref.
 type CreateModelInput struct {
@@ -1162,17 +1128,18 @@ func (s *Store) RegisterWorkspaceRuntimeCredential(ctx context.Context, in Regis
 
 	// Step 2 — insert the new credential secret.
 	row, err := q.CreateSecret(ctx, sqlc.CreateSecretParams{
-		ID:               mustUUID(newID()),
-		Slug:             generateAutoSlug("secret"),
-		Name:             strings.TrimSpace(in.Name),
-		Kind:             secretKind(in.Kind),
-		Provider:         strings.TrimSpace(in.Provider),
-		AuthType:         strings.TrimSpace(in.AuthType),
-		EncryptedPayload: in.EncryptedPayload,
-		KeyVersion:       "v1",
-		Metadata:         metadataJSON,
-		CreatedBy:        createdBy,
-		Now:              timestamptz(in.Now),
+		ID:                    mustUUID(newID()),
+		Slug:                  generateAutoSlug("secret"),
+		Name:                  strings.TrimSpace(in.Name),
+		Kind:                  secretKind(in.Kind),
+		Provider:              strings.TrimSpace(in.Provider),
+		AuthType:              strings.TrimSpace(in.AuthType),
+		EncryptedPayload:      in.EncryptedPayload,
+		KeyVersion:            "v1",
+		Metadata:              metadataJSON,
+		CreatedBy:             createdBy,
+		ManagementWorkspaceID: wsUUID,
+		Now:                   timestamptz(in.Now),
 	})
 	if err != nil {
 		return SecretRead{}, fmt.Errorf("insert runtime credential secret: %w", err)
@@ -5179,133 +5146,7 @@ func (s *Store) AddWorkspaceMember(ctx context.Context, input AddWorkspaceMember
 	}, nil
 }
 
-// AcceptInvitationInput carries the data needed to atomically consume
-// an invite token and provision the user + workspace membership.
-type AcceptInvitationInput struct {
-	TokenHash    []byte
-	Email        string
-	Role         string
-	WorkspaceID  string
-	PasswordHash string
-	Now          time.Time
-}
-
-// AcceptInvitation atomically: marks the invitation consumed, upserts
-// the user, binds email/password identity, and adds workspace membership.
-func (s *Store) AcceptInvitation(ctx context.Context, input AcceptInvitationInput) (AddWorkspaceMemberResult, error) {
-	if !IsValidMemberRole(input.Role) {
-		return AddWorkspaceMemberResult{}, fmt.Errorf("%w: %s", ErrInvalidMemberRole, input.Role)
-	}
-	email := normalizeEmail(input.Email)
-	wsUUID, err := uuid(input.WorkspaceID)
-	if err != nil {
-		return AddWorkspaceMemberResult{}, err
-	}
-
-	beginner, ok := s.db.(txBeginner)
-	if !ok {
-		return AddWorkspaceMemberResult{}, fmt.Errorf("backing pool does not support transactions")
-	}
-	tx, err := beginner.Begin(ctx)
-	if err != nil {
-		return AddWorkspaceMemberResult{}, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	q := sqlc.New(tx)
-
-	// CAS: mark invitation consumed. Returns 0 rows if already used/revoked/expired.
-	rows, err := q.AcceptWorkspaceInvitation(ctx, sqlc.AcceptWorkspaceInvitationParams{
-		TokenHash: input.TokenHash,
-		Now:       timestamptz(input.Now),
-	})
-	if err != nil {
-		return AddWorkspaceMemberResult{}, err
-	}
-	if rows == 0 {
-		return AddWorkspaceMemberResult{}, ErrInvitationInvalid
-	}
-
-	// Upsert user by email.
-	name := email
-	if at := strings.Index(email, "@"); at > 0 {
-		name = email[:at]
-	}
-	userRow, err := q.UpsertUserByEmail(ctx, sqlc.UpsertUserByEmailParams{
-		ID:    mustUUID(newID()),
-		Email: email,
-		Name:  name,
-		Now:   timestamptz(input.Now),
-	})
-	if err != nil {
-		return AddWorkspaceMemberResult{}, err
-	}
-
-	// Bind email/password identity (create or update password).
-	metaBytes, err := json.Marshal(map[string]string{
-		"password_hash": input.PasswordHash,
-		"hashed_at":     input.Now.Format(time.RFC3339),
-		"invited":       "true",
-	})
-	if err != nil {
-		return AddWorkspaceMemberResult{}, fmt.Errorf("marshal identity metadata: %w", err)
-	}
-	if err := q.UpsertEmailPasswordIdentity(ctx, sqlc.UpsertEmailPasswordIdentityParams{
-		ID:       mustUUID(newID()),
-		UserID:   mustUUID(userRow.ID),
-		Email:    email,
-		Metadata: metaBytes,
-		Now:      timestamptz(input.Now),
-	}); err != nil {
-		return AddWorkspaceMemberResult{}, fmt.Errorf("upsert email identity: %w", err)
-	}
-
-	// Add workspace membership.
-	memberRow, err := q.AddWorkspaceMember(ctx, sqlc.AddWorkspaceMemberParams{
-		ID:            mustUUID(newID()),
-		WorkspaceID:   wsUUID,
-		UserID:        mustUUID(userRow.ID),
-		Role:          input.Role,
-		Status:        memberStatusActive,
-		RequestReason: "",
-		Now:           timestamptz(input.Now),
-	})
-	if err != nil {
-		return AddWorkspaceMemberResult{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return AddWorkspaceMemberResult{}, err
-	}
-
-	return AddWorkspaceMemberResult{
-		Member: WorkspaceMemberRead{
-			ID:          memberRow.ID,
-			WorkspaceID: memberRow.WorkspaceID,
-			UserID:      memberRow.UserID,
-			Role:        memberRow.Role,
-			UserEmail:   userRow.Email,
-			UserName:    userRow.Name,
-			UserStatus:  userRow.Status,
-			CreatedAt:   pgTime(memberRow.CreatedAt),
-			UpdatedAt:   pgTime(memberRow.UpdatedAt),
-		},
-		UserCreated: userRow.Created,
-	}, nil
-}
-
 // ── Invitation CRUD ─────────────────────────────────────────────
-
-type CreateInvitationInput struct {
-	ID          string
-	TokenHash   []byte
-	WorkspaceID string
-	Email       string
-	Role        string
-	InvitedBy   string
-	ExpiresAt   time.Time
-	Now         time.Time
-}
 
 type PendingInvitationRead struct {
 	ID            string    `json:"id"`
@@ -5316,33 +5157,6 @@ type PendingInvitationRead struct {
 	InvitedByName string    `json:"invited_by_name"`
 	ExpiresAt     time.Time `json:"expires_at"`
 	CreatedAt     time.Time `json:"created_at"`
-}
-
-type InvitationRead struct {
-	ID            string     `json:"id"`
-	WorkspaceID   string     `json:"workspace_id"`
-	Email         string     `json:"email"`
-	Role          string     `json:"role"`
-	InvitedBy     string     `json:"invited_by"`
-	ExpiresAt     time.Time  `json:"expires_at"`
-	AcceptedAt    *time.Time `json:"accepted_at"`
-	RevokedAt     *time.Time `json:"revoked_at"`
-	CreatedAt     time.Time  `json:"created_at"`
-	WorkspaceName string     `json:"workspace_name"`
-}
-
-func (s *Store) CreateInvitation(ctx context.Context, input CreateInvitationInput) error {
-	q := sqlc.New(s.db)
-	return q.CreateWorkspaceInvitation(ctx, sqlc.CreateWorkspaceInvitationParams{
-		ID:          mustUUID(input.ID),
-		TokenHash:   input.TokenHash,
-		WorkspaceID: mustUUID(input.WorkspaceID),
-		Email:       normalizeEmail(input.Email),
-		Role:        input.Role,
-		InvitedBy:   mustUUID(input.InvitedBy),
-		ExpiresAt:   timestamptz(input.ExpiresAt),
-		CreatedAt:   timestamptz(input.Now),
-	})
 }
 
 func (s *Store) ListPendingInvitations(ctx context.Context, workspaceID string) ([]PendingInvitationRead, error) {
@@ -5425,31 +5239,6 @@ func (s *Store) RevokeOwnInvitation(ctx context.Context, workspaceID, invitation
 		InvitedBy:   mustUUID(invitedBy),
 		Now:         timestamptz(time.Now().UTC()),
 	})
-}
-
-func (s *Store) GetInvitationByTokenHash(ctx context.Context, tokenHash []byte) (InvitationRead, error) {
-	q := sqlc.New(s.db)
-	row, err := q.GetWorkspaceInvitationByTokenHash(ctx, tokenHash)
-	if err != nil {
-		return InvitationRead{}, err
-	}
-	inv := InvitationRead{
-		ID:            row.ID,
-		WorkspaceID:   row.WorkspaceID,
-		Email:         row.Email,
-		Role:          row.Role,
-		InvitedBy:     row.InvitedBy,
-		ExpiresAt:     row.ExpiresAt.Time,
-		CreatedAt:     row.CreatedAt.Time,
-		WorkspaceName: row.WorkspaceName,
-	}
-	if row.AcceptedAt.Valid {
-		inv.AcceptedAt = &row.AcceptedAt.Time
-	}
-	if row.RevokedAt.Valid {
-		inv.RevokedAt = &row.RevokedAt.Time
-	}
-	return inv, nil
 }
 
 // UpdateWorkspaceMemberRole flips an existing member's role. Returns
@@ -5707,59 +5496,6 @@ func (s *Store) ListWorkspaceUsageLogs(ctx context.Context, workspaceID string, 
 	return usage, nil
 }
 
-func (s *Store) CreateSecret(ctx context.Context, input CreateSecretInput, encryptedPayload []byte) (SecretRead, error) {
-	now := time.Now().UTC()
-	createdBy := nullableUUID(input.CreatedBy)
-	metaPayload := map[string]any{"masked": strings.TrimSpace(input.Masked)}
-	if code := strings.TrimSpace(input.CredentialKindCode); code != "" {
-		metaPayload["credential_kind_code"] = code
-	}
-	if strings.TrimSpace(input.Kind) == "capability_inline" {
-		metaPayload["workspace_id"] = strings.TrimSpace(input.WorkspaceID)
-	}
-	metadata, err := json.Marshal(metaPayload)
-	if err != nil {
-		return SecretRead{}, err
-	}
-	row, err := sqlc.New(s.db).CreateSecret(ctx, sqlc.CreateSecretParams{
-		ID:               mustUUID(newID()),
-		Slug:             generateAutoSlug("secret"),
-		Name:             strings.TrimSpace(input.Name),
-		Kind:             secretKind(input.Kind),
-		Provider:         strings.TrimSpace(input.Provider),
-		AuthType:         strings.TrimSpace(input.AuthType),
-		EncryptedPayload: encryptedPayload,
-		KeyVersion:       "v1",
-		Metadata:         metadata,
-		CreatedBy:        createdBy,
-		Now:              timestamptz(now),
-	})
-	if err != nil {
-		return SecretRead{}, err
-	}
-	read := secretReadFromCreateRow(row)
-
-	s.emitAuditEvent(audit.Event{
-		OccurredAt: now,
-		Source:     audit.SourceAdmin,
-		EventType:  auditSecretCreated,
-		ActorType:  audit.ActorTypeSystem,
-		ActorID:    input.CreatedBy,
-		TargetType: "secret",
-		TargetID:   read.ID,
-		Payload: map[string]any{
-			"source":    auditSourceDevSecretWrite,
-			"name":      read.Name,
-			"slug":      read.Slug,
-			"kind":      read.Kind,
-			"provider":  read.Provider,
-			"auth_type": read.AuthType,
-		},
-	})
-
-	return read, nil
-}
-
 func (s *Store) ListSecrets(ctx context.Context, workspaceID string, limit int32) ([]SecretRead, error) {
 	if limit <= 0 {
 		limit = defaultReadLimit
@@ -5791,42 +5527,6 @@ func (s *Store) ListSecretsByKind(ctx context.Context, kindFilter string, limit 
 		secrets = append(secrets, secretReadFromListRow(row))
 	}
 	return secrets, nil
-}
-
-func (s *Store) DisableSecret(ctx context.Context, workspaceID string, secretID string) (SecretRead, error) {
-	now := time.Now().UTC()
-	if _, err := s.GetSecretPayload(ctx, workspaceID, secretID); err != nil {
-		return SecretRead{}, err
-	}
-	secretUUID, err := uuid(secretID)
-	if err != nil {
-		return SecretRead{}, err
-	}
-	row, err := sqlc.New(s.db).DisableSecret(ctx, sqlc.DisableSecretParams{ID: secretUUID, Now: timestamptz(now)})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return SecretRead{}, fmt.Errorf("%w: %s", ErrUnknownSecret, secretID)
-		}
-		return SecretRead{}, err
-	}
-	read := secretReadFromDisableRow(row)
-
-	s.emitAuditEvent(audit.Event{
-		OccurredAt: now,
-		Source:     audit.SourceAdmin,
-		EventType:  auditSecretDisabled,
-		ActorType:  audit.ActorTypeSystem,
-		TargetType: "secret",
-		TargetID:   read.ID,
-		Payload: map[string]any{
-			"source": auditSourceDevSecretWrite,
-			"name":   read.Name,
-			"slug":   read.Slug,
-			"status": read.Status,
-		},
-	})
-
-	return read, nil
 }
 
 func (s *Store) GetSecretPayload(ctx context.Context, workspaceID string, secretID string) (SecretPayload, error) {
@@ -6986,7 +6686,7 @@ func (s *Store) SendUserMessageToConversation(ctx context.Context, input SendUse
 		return result, err
 	}
 	content := strings.TrimSpace(input.Content)
-	if content == "" || len(content) > 32000 {
+	if content == "" || utf8.RuneCountInString(content) > 32000 {
 		return result, ErrInvalidInput
 	}
 
@@ -8336,49 +8036,6 @@ func usageLogFromWorkspaceRunRow(row sqlc.ListWorkspaceUsageLogsByRunRow) UsageL
 
 func usageLogFromRunRow(row sqlc.ListUsageLogsByRunRow) UsageLogRead {
 	return usageLogFromRow(usageLogRow(row))
-}
-
-func secretReadFromCreateRow(row sqlc.CreateSecretRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretReadFromListRow(row sqlc.ListSecretsRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretReadFromWorkspaceListRow(row sqlc.ListSecretsForWorkspaceRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretReadFromDisableRow(row sqlc.DisableSecretRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretReadFromSecretRow(row sqlc.GetSecretPayloadRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretReadFromUpdatePayloadRow(row sqlc.UpdateSecretPayloadRow) SecretRead {
-	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
-}
-
-func secretRead(id, slug, name, kind, provider, authType, keyVersion, status string, metadataJSON []byte, createdAt, updatedAt pgtype.Timestamptz) SecretRead {
-	metadata := decodeJSONMap(metadataJSON)
-	masked, _ := metadata["masked"].(string)
-	return SecretRead{
-		ID:         id,
-		Slug:       slug,
-		Name:       name,
-		Kind:       kind,
-		Provider:   provider,
-		AuthType:   authType,
-		KeyVersion: keyVersion,
-		Status:     status,
-		Masked:     masked,
-		Metadata:   metadata,
-		CreatedAt:  pgTime(createdAt),
-		UpdatedAt:  pgTime(updatedAt),
-	}
 }
 
 func modelReadFromCreateRow(row sqlc.CreateModelRow) ModelRead {

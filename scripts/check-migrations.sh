@@ -83,5 +83,6 @@ fi
 )
 
 go test ./server/internal/store -count=1
+go test ./server/internal/dev -run '^TestSecretDisableRequiresItsManagementWorkspace$' -count=1
 
 echo "Parsar migration and store integration smoke test passed."

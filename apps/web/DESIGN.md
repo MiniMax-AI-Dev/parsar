@@ -58,6 +58,16 @@ typography:
     fontWeight: 500
     lineHeight: "30px"
     letterSpacing: "-0.02em"
+  section-head:
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    fontSize: "16px"
+    fontWeight: 500
+    lineHeight: "24px"
+  rail-section-head:
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    fontSize: "14px"
+    fontWeight: 500
+    lineHeight: "20px"
   panel-title:
     fontFamily: "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Helvetica, Arial, sans-serif"
     fontSize: "13px"
@@ -233,7 +243,7 @@ components:
     typography: "{typography.label}"
   page-section-head:
     textColor: "{colors.ink}"
-    typography: "{typography.panel-title}"
+    typography: "{typography.section-head}"
     height: "28px"
     padding: "0 0 8px"
   ledger-header:
@@ -271,7 +281,7 @@ components:
     padding: "16px"
   dialog-header:
     textColor: "{colors.ink}"
-    typography: "{typography.panel-title}"
+    typography: "{typography.section-head}"
     height: "48px"
     padding: "10px 48px 10px 16px"
   dialog-footer:
@@ -328,8 +338,8 @@ components:
     padding: "0 8px 0 16px"
   rail-section-head:
     textColor: "{colors.ink}"
-    typography: "{typography.label}"
-    padding: "0 0 2px"
+    typography: "{typography.rail-section-head}"
+    padding: "0 0 4px"
   rail-modal:
     backgroundColor: "{colors.paper-panel}"
     rounded: "{rounded.lg}"
@@ -338,10 +348,10 @@ components:
     padding: "16px 24px 8px"
   resize-handle:
     width: "6px"
-  layout-prompt:
+  toast:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.ink}"
-    typography: "{typography.body}"
+    typography: "{typography.row}"
     rounded: "{rounded.lg}"
     padding: "6px 6px 6px 12px"
   inline-notice:
@@ -416,9 +426,9 @@ Two tones of ink on paper, one indigo for selection and focus, and six status hu
 - **Ink Muted** (`ink-muted`, dark `dark-ink-muted`): labels, metadata (ids, ages, counts, column headers, group labels, placeholders, field labels and hints), categories (member role, capability type and source), the English page name, inactive tabs, inactive nav icons, resting action icons, disabled text. `fg-subtle` and `fg-faint` exist as aliases and resolve to the same value; there is no third grey for content.
 - **Ink Sidebar** (`ink-sidebar`, dark `dark-ink-sidebar`): the resting colour of sidebar text only, set once on the `.app-sidebar` surface; the active nav row returns to full Ink. This is a surface rule, not a third content grey.
 - **Ink On Emphasis** (`ink-on-emphasis`): text on an ink or danger background (the skip link, the destructive button).
-- **Paper** (`paper`, dark `dark-ground`): the main list ground, the topbar, buttons, inputs, kbd, tooltips, menus, the layout prompt and the entry panel. In dark these all sit on the ground (#191919); nothing lifts to a lighter grey except the muted tint.
+- **Paper** (`paper`, dark `dark-ground`): the main list ground, the topbar, buttons, inputs, kbd, tooltips, menus, the toast strip and the entry panel. In dark these all sit on the ground (#191919); nothing lifts to a lighter grey except the muted tint.
 - **Paper Panel** (`paper-panel`, dark `dark-panel`): the sidebar, the detail rail and the rail's expanded modal: one step off the ground. Group header rows inside the list stay on the list ground.
-- **Paper Muted** (`paper-muted`, dark `dark-surface-muted`): the secondary button, a disabled field, the skeleton, the raw-event `pre` block inside the rail, and the pressed row in a menu.
+- **Paper Muted** (`paper-muted`, dark `dark-surface-muted`): the secondary button, a disabled field, the skeleton, every `VerbatimBlock`, and the pressed row in a menu.
 - **Paper Inverse** (`paper-inverse`, dark `dark-paper-inverse`): the ground's opposite (`surface-inverse`), used at 30% as the overlay behind every dialog and behind the expanded rail modal. Never used solid.
 - **Hairline** (`hairline`, dark `dark-hairline`): every structural line: row separators, panel edges, the topbar and rail header, the 40px view-tabs row, the tab and theme-toggle frames, menu edges, the entry panel's border, and the resting resize handle (which is the panel's own hairline). **Hairline Muted** (`hairline-muted`) exists in the token set and is not used by the console surfaces.
 - **Hairline Strong** (`hairline-strong`, dark `dark-hairline-strong`): borders of interactive controls: outline buttons, inputs, selects, textareas, kbd, badges.
@@ -450,21 +460,23 @@ Two tones of ink on paper, one indigo for selection and focus, and six status hu
 
 **Character:** native and invisible. The type looks like the operating system, which is the point: a Mac user sees SF Pro and PingFang exactly as Notion renders them. No webfont is loaded for Latin or CJK. `text-rendering: optimizeLegibility`, headings `text-wrap: balance`, paragraphs `text-wrap: pretty`.
 
-The stylesheet defines an eight-tick scale (`text-2xs` 11 … `text-3xl` 28) with a fixed line-height per tick; arbitrary sizes are forbidden by lint. The console uses five ticks; 16 is reserved for dialog headings, 22 for the entry-panel title, 28 exists for a setup hero, and 11 exists only for the letter inside an 18px initial tile.
+The stylesheet defines an eight-tick scale (`text-2xs` 11 … `text-3xl` 28) with a fixed line-height per tick; arbitrary sizes are forbidden by lint. The console uses six ticks; 16 is the page's section head and a dialog's title, 14 the rail's section head and the sidebar's rows, 22 belongs to the entry-panel title, 28 exists for a setup hero, and 11 exists only for the letter inside an 18px initial tile.
 
 ### Hierarchy
 - **Title** (600, 20px, line-height 1, -0.02em; `.font-display`): the page title in the 64px topbar, followed on the same baseline by the page's English name in 12px muted (`subtitleFor`, resolved from the en-US locale). The only 600 on a screen.
 - **Entry Title** (500, 22px, 30px, -0.02em): the one heading inside `EntryPanel` on login / setup / invite / join. Not 600: the wordmark and the form are the point, not the heading.
-- **Panel Title** (500, 13px, 18px): the status word in the rail header, the agent name at the top of the rail body, the head of a `PageSection`; also every button label, the active nav item, the active tab, the workspace brand, the account name and the "Parsar" wordmark in the entry panel.
-- **Body / UI** (400, 14px, 20px): sidebar nav items, form copy, dialogs, the layout prompt, the entry panel's one muted sentence.
-- **Row** (400, 13px, 18px): list rows, inputs, selects, textareas, property values, step titles, inline messages, footers.
-- **Label** (400, 12px, 16px): column headers, group labels, property labels, field labels and hints, kbd, counts, ages, connector names, categories (role, type, source), tooltips, the topbar's English name, rail section heads (500).
+- **Section Head** (500, 16px, 24px): the head of a `PageSection` — the one heading between the page title and its content. Also a dialog's heading.
+- **Rail Section Head** (500, 14px, 20px): the head of a `RailSection`, and the name of the rail's subject in its header bar. The rail runs its own compressed ladder — 14 for the subject and the section heads, 13 for values, 12 for labels — because a 384px panel cannot carry the page's. The subject is never smaller than the heads beneath it, for the same reason a page title is not.
+- **Panel Title** (500, 13px, 18px): the status word in the rail header, the agent name at the top of the rail body, a sub-head *inside* a section; also every button label, the active nav item, the active tab, the workspace brand, the account name and the "Parsar" wordmark in the entry panel.
+- **Body / UI** (400, 14px, 20px): sidebar nav items, form copy, dialogs, the entry panel's one muted sentence.
+- **Row** (400, 13px, 18px): list rows, inputs, selects, textareas, property values, step titles, inline messages, the toast strip, footers.
+- **Label** (400, 12px, 16px): column headers, group labels, property labels, field labels and hints, kbd, counts, ages, connector names, categories (role, type, source), tooltips, the topbar's English name.
 - **Mono** (400, 12px, 16px, `tnum` + `zero`, tabular slashed-zero): identifiers, durations, timestamps, paths, e-mail addresses in rows, model ids, step indices.
 
 ### Named Rules
 **The Three Weights Rule.** 600 is the page title only. 500 is the name of a thing (workspace, user, row title, run id in the rail), the active nav item or tab, button labels, section heads and the entry title. Everything else, including every label and every value, is 400. 700 does not exist.
 
-**The Five Sizes Rule.** 20 / 14 / 13 / 12 and 12-mono. There is no 11px functional text and no sixth size in the console; 22 belongs to the entry panel alone.
+**The Six Sizes Rule.** 20 / 16 / 14 / 13 / 12 and 12-mono, and each one is a rung: 20 titles a page, 16 heads its sections, 14 is body copy and the rail's own heads, 13 is a row, 12 is a label. There is no 11px functional text and no seventh size; 22 belongs to the entry panel alone.
 
 **The Layered Base Rule.** Element-level type and reset rules live in `@layer base`, never unlayered. An unlayered `button, select, textarea { font: inherit }` outranks Tailwind's utility layer and silently drags every button, tab and nav row to the 16px root size; inside `@layer base` the `text-*` utilities win. Any new element rule added to `src/style.css` goes in that layer.
 
@@ -474,20 +486,20 @@ The stylesheet defines an eight-tick scale (`text-2xs` 11 … `text-3xl` 28) wit
 
 Three columns on a 1440 desktop (the design width): a 232px sidebar (draggable 200–360), a fluid main column, and a 384px detail rail (draggable 320–640). The page is not responsive below 960px; `body` sets a 960px minimum width and the turn-nav rail hides there. At or below 1360px the ledger row's inline error summary hides; the rail no longer narrows. The shell is `h-screen` with each column scrolling on its own. The conversation thread is measured, not full-bleed: 48rem (`--thread-max-width`) centred, with the composer footer at the same measure.
 
-Panel edges are the user's. A `ResizeHandle` straddles each inner hairline: a 6px invisible hit area (`role="separator"`, focusable) whose 1px line turns indigo while hovered, focused or dragged; arrow keys move it 8px, shift-arrow 32px. After a drag or key press the `LayoutPrompt` appears once at the top centre of the viewport: a floating paper strip (8px radius, hairline, floating shadow, `pop-in`) with the sentence "布局已调整" and three small buttons: 保存 (primary; writes `localStorage`), 临时 (outline; writes `sessionStorage`), 恢复 (ghost; clears both and springs the panel back to its default over 420ms on the spring ease). Storage keys are `parsar.layout.sidebar` and `parsar.layout.rail`; resolution on load is localStorage → sessionStorage → default.
+Panel edges are the user's. A `ResizeHandle` straddles each inner hairline: a 6px invisible hit area (`role="separator"`, focusable) whose 1px line turns indigo while hovered, focused or dragged; arrow keys move it 8px, shift-arrow 32px. After a drag or key press the `LayoutPrompt` raises one persistent toast, keyed on the panel so the sidebar and the rail can each be mid-question: the sentence "布局已调整" and three small buttons — 保存 (primary; writes `localStorage`), 临时 (outline; writes `sessionStorage`), 恢复 (ghost; clears both and springs the panel back to its default over 420ms on the spring ease). It leaves with its panel. Storage keys are `parsar.layout.sidebar` and `parsar.layout.rail`; resolution on load is localStorage → sessionStorage → default.
 
 Sidebar (paper-panel, 1px right hairline, 10px padding): a single 32px text row "Parsar / Workspace ⇕" at the top, then group labels (12px muted, 14px above, 4px below, 8px inset) and 30px nav rows 1px apart, then the account row pinned to the bottom (top hairline, 10px above; 24px avatar tile, name 13px/500, role 12px muted, and a two-segment theme toggle).
 
 Main column: every page begins with the 64px `PageHeader` (title left with its English name; actions right, 8px apart; 24px side padding; bottom hairline). Two page shapes follow:
-- **List pages** (Runs, Members, Agents, Capabilities, Models, Connections, Scheduled, Approvals, Audit, Usage): `AdminLayout fullBleed` with `PageHeader className="static mx-0 mb-0"`, so the sticky 28px column header sits directly under the topbar with no padding between them, then grouped 36px rows, then the 40px `OffsetPagination` footer. The topbar action slot holds a 240px search field, one filter or one primary button.
-- **Settings pages** (General, Credentials, Runtime, Connectors, Usage, Audit): the same topbar with `SettingsTabs` in its action slot (the segmented control navigating between settings views), then a 24px-padded scrolling body of `PageSection`s (or, on Runtime, Capabilities and Connections, a 40px hairline row holding the content tabs first).
+- **List pages** (Runs, Members, Agents, Capabilities, Models, Connections, Scheduled, Approvals, Audit, Usage): `AdminLayout fullBleed` with `PageHeader className="static mx-0 mb-0"`, so the sticky 28px column header sits directly under the topbar with no padding between them, then grouped 36px rows, then the 40px `OffsetPagination` footer. The topbar action slot holds a 288px search field, one filter or one primary button.
+- **Settings page** (设置 alone): the ordinary topbar — its action slot free, because there is nothing to do here — then a 24px-padded scrolling body of `PageSection`s. 凭据, 用量 and 审计 are not settings and are not tabs of it; they are their own sidebar entries, each an ordinary ledger or report page.
 - **Conversations**: a full-bleed two-pane page whose list-panel header is also 64px with a bottom hairline, matching the topbar.
 
-Two tab kinds, two places: *navigation* tabs (`SettingsTabs`) live in the topbar action slot; *content / view* tabs live in a 40px hairline-bottomed row directly under the topbar, 16px inset. Neither is ever repeated on the page.
+One kind of tab, one place: *content / view* tabs in a 40px hairline-bottomed row directly under the topbar, 16px inset, never repeated on the page. There is no second, *navigation* kind — navigation is the sidebar's job, and a segmented control in the topbar's action slot was navigation wearing an action's clothes.
 
-Row grid (padding 0 24px, column gap 10px; a trailing zero-width actions track shortens the right padding to 14px so the gap makes up the difference). Header, group header and rows all take the same template and the same gutters, so the first and last columns of every ledger land on the same two edges as the topbar. Runs example: `[col.icon(), col.id(132), col.title(), col.meta(104), col.meta(104), col.num(64), col.age(80), col.actions(2)]`. Every list leads with the status column when the object has a status (Runs, Agents, Connections, Scheduled) or with the 18px initial tile when it is a person or a capability; numbers and ages are right-aligned and tabular; `RowActions` has no track of its own and floats over the row's right end. Group headers indent 22px so the chevron sits on the status-icon column.
+Row grid (padding 0 24px, column gap 10px; a trailing zero-width actions track shortens the right padding to 14px so the gap makes up the difference). Header, group header and rows all take the same template and the same gutters, so the first and last columns of every ledger land on the same two edges as the topbar. Runs example: `[col.icon(), col.id(132), col.title(), col.meta(104), col.meta(104), col.num(64), col.age(80), col.actions(2)]`. Every list leads with the status column when the object has a status (Runs, Agents, Connections, Scheduled, Runtimes, Models, sandbox instances) — and where that list also multi-selects, the status slot is what carries the checkbox or with the 18px initial tile when it is a person or a capability; numbers and ages are right-aligned and tabular; `RowActions` has no track of its own and floats over the row's right end. Group headers indent 22px so the chevron sits on the status-icon column.
 
-Rail (paper-panel, 1px left hairline): 64px header (status icon + word, mono id, then a 28px ghost expand button and a 28px ghost close button; 16px left, 8px right), body padding 16px / 16px / 8px, an 84px-label property grid with 28px rows and 12px column gap, a full-width segmented tab control (24px segments in a 28px frame) with 16px below it, rail sections 20px apart with a 12px/500 head, hairline-separated 32px step rows, and a 12px/16px action footer with a top hairline (outline buttons left, a link with a trailing arrow right). Expanded, the same header · body · footer frame fills a centred 70vw × 70vh modal (min 720px, max 1200px wide) with 24px side padding and a 52rem centred measure on body and footer, so expanding buys reading room rather than stretched rows; the collapse button is its only control.
+Rail (paper-panel, 1px left hairline): 64px header (status icon + word, mono id, then a 28px ghost expand button and a 28px ghost close button; 16px left, 8px right), body padding 16px / 16px / 8px, a property grid whose label column is `minmax(5.25rem, max-content)` with 28px rows and a 12px column gap, a full-width segmented tab control (24px segments in a 28px frame) with 16px below it, rail sections 20px apart with a 14px/500 head, hairline-separated 32px step rows, and a 12px/16px action footer with a top hairline (outline buttons left, a link with a trailing arrow right). Expanded, the same header · body · footer frame fills a centred 70vw × 70vh modal (min 720px, max 1200px wide) with 24px side padding and a 52rem centred measure on body and footer, so expanding buys reading room rather than stretched rows; the collapse button is its only control.
 
 Entry surfaces (login, setup, onboarding, invite, join): `EntryPage` centres a single `EntryPanel` (400px wide, 24px padding) on the paper ground; nothing else is on the page.
 
@@ -502,7 +514,21 @@ Spacing rhythm: 2 / 4 / 8 / 10 / 12 / 16 / 24. Tight inside a group, generous be
 
 **The Addressable Detail Rule.** Every step of the ladder lives in the URL: `?id=` (or `&item=`) selects the rail, `&tab=` picks its tab, `&view=full` lifts it into the expanded panel. The expanded panel is therefore linkable, bookmarkable, and dismissed by the browser's back button — never a dead end floating over the list. `view` belongs to the selected entity, not to the route: it survives a tab change on the same entity and is dropped the moment the selection changes or clears, because an expanded panel with nothing selected is not a reachable state.
 
-**The Every Entrance Has An Exit Rule.** Nothing disappears without playing its reverse: `rail-out` before the rail unmounts, `pop-out` on every floating layer (menus, tooltips, dialogs, the layout prompt, the turn preview), `overlay-out` under them, `modal-out` when the expanded rail collapses. A component that owns an exit stays mounted until the animation ends (the rail unmounts on `animationend`; `LayoutPrompt` holds for 160ms after `open` turns false).
+**The Every Entrance Has An Exit Rule.** Nothing disappears without playing its reverse: `rail-out` before the rail unmounts, `pop-out` on every floating layer (menus, tooltips, dialogs, the toast strip, the turn preview), `overlay-out` under them, `modal-out` when the expanded rail collapses. A component that owns an exit stays mounted until the animation ends (the rail unmounts on `animationend`; a toast pushed past the cap is asked to leave and drops itself when its own `pop-out` ends, never mid-flight and never on a child's animation).
+
+**The Action Slot Is For Actions Rule.** The topbar's right end holds what you can *do* on this page, and nothing else. A segmented control that navigates between pages is not an action, and putting one there — as 设置 did, one control away from 添加凭据 — asks the reader to tell navigation from action by reading rather than by position. Navigation is the sidebar's job.
+
+**A Place Is Not An Object Rule.** 设置 named a place and hid three real objects inside it: a credential ledger, a usage report and an audit log, none of which is a setting, each reachable only by first going somewhere it does not belong. When a "section" turns out to hold things of different shapes, those things are pages, and the section was a folder someone put them in. Settings keeps what is genuinely the workspace's own — its name, its language, its auth providers — and the ledgers stand with the other ledgers.
+
+The same test applies inside a page. **A thing is an object when it is instanceable, structured and useful**: you can have more than one, it has attributes of its own, and the reader cares about it in its own right. 当前运行策略 was four property rows and passed none of them — one, identical for every workspace, forever; four unrelated facts; and nothing on it to act on. Two of its rows named destinations the sidebar already lists, rendered as unlinked strings. A rule about a field belongs on that field, a fact about the daemon belongs where you install one, and what is left after that is a note about the product's construction, which is not a section.
+
+**The Passing Message Rule.** The result of pressing a button is a passing thing: it floats in at the top, holds long enough to be read, and leaves. It never opens a row in the layout — a strip under the header pushes the whole list down, stays after it has been read, and makes a confirmation look like a page state. A *standing condition* is the opposite and keeps its place in the page: "this workspace has no agent" is why the button is disabled, not news about something that just happened.
+
+**The Two Voices Rule.** Two voices speak in this console and they never share a tone: ours (a sentence, in the reader's language, in ink) and the machine's (a server string, an exit code, a payload). The machine's goes in a `VerbatimBlock`, one tone step down. `ErrorState` and the toast both take them as separate props for this reason: passing a raw server message as `description` puts words in our mouth that we did not write, and interpolating one into a translated sentence (`"切换失败:{{message}}"`) does the same thing with extra steps. The rule governs those two props; the block itself is the wider idiom and also holds quoted content a person wrote.
+
+**The Quiet Selection Rule.** A list gets multi-select only when it has a verb that is *uniform* across rows and *genuinely repeated* — the same action with the same parameters applied to each (delete, cancel, reclaim; never edit or configure, where every row differs), and an action people really do to many at once (stale sandboxes, models imported in a batch; not the agents you built by hand). A checkbox with no bulk verb to submit to is an affordance with no destination. Approvals are the deliberate exception: approve and deny are uniform, but they are *decisions*, and batching a decision is the thing not to build.
+
+Where it applies, selection spends no width. `SelectableStatus` puts the checkbox in the 14px status slot: the glyph at rest, the checkbox on hover, and the checkbox on every row while any row is selected, so the set you have built stays visible. A permanent column of empty boxes is a lot of furniture for a rare verb, and the one small checkbox in the ledger header — select-all — is what says the list can do this at all.
 
 **The Row Reading Rule.** A column header never wraps: one line, truncating, in a 28px header. Every cell in a row is vertically centred, and every numeric or age column is right-aligned and tabular, so the eye reads down a column of figures without drifting.
 
@@ -512,7 +538,7 @@ Spacing rhythm: 2 / 4 / 8 / 10 / 12 / 16 / 24. Tight inside a group, generous be
 
 ### Product-truth notes
 - The approval bar ships **deny + allow-once** only. The API has no session-scoped approval, so a third button would name a decision the product cannot make. This is a product fact recorded here so it is not read as a missing state.
-- **The Agent is the first-class object; the sidebar says so.** It stands alone above the groups rather than sitting as a sibling of the things it is assembled from. Below it, **运行中 / Activity** is what agents are doing (conversations, inbox, runs, schedules) and **构建 / Build** is what an agent is made of — its model, its capabilities, where it runs (执行层), and the platforms it can be let out on (集成). A thing that only exists to configure an Agent belongs in Build, never beside the Agent.
+- **The Agent is the first-class object; the sidebar says so.** It stands alone above the groups rather than sitting as a sibling of the things it is assembled from. Below it, **运行中 / Activity** is what agents are doing and the record of what they did (conversations, inbox, runs, schedules, usage, audit) and **构建 / Build** is what an agent is made of and given — its model, its capabilities, where it runs (执行层), the platforms it can be let out on (集成), and the credentials it uses (凭据). A thing that only exists to configure an Agent belongs in Build, never beside the Agent.
 - **Tabs are for a different shape of content; groups are for one shape in categories.** 执行层 showed three tabs — local device, cloud sandbox, external agent — where every row was the same shape, a runtime. They are one ledger with `LedgerGroup` headers now, which shows the whole picture at once and folds what the reader does not need. An Agent's 动态 / 配置 / 审计 stay tabs, because those are three different kinds of content.
 - **执行层 lives in Build, not in Settings.** It was a settings tab, which made every settings-family page render a control for it — and, because the tab strip is rendered on each of them, made five unrelated pages fire a `/sandboxes` request they had no use for. One control, one home.
 - **Parsar has two ends, and each gets its own door.** Upward it connects to the platforms people are on — Feishu, Slack, Discord, Teams — which receive events; that is **集成 / Integrations**, in the sidebar, backed by `workspace_im_connectors`. Downward it connects to the agents themselves — `agent_daemon`, `http`, `a2a` — which Parsar *calls* (`AgentConnector.Prompt`); that is an Agent's **connector**, an attribute on the Agent, surfaced as a column and a counted filter on the Agent list. The two ends are not two views of one thing and must never be merged. The UI once named them 连接 and 连接器, one character apart, because it dropped the qualifiers the server already carries (`workspace_im_` and `Agent`); the names above put them back. The bare word **连接器 / Connectors** belongs to the MCP directory, which is where the industry uses it bare. The downstream connector had a page of its own for a while; it does not deserve one. `agent_daemon`, `http` and `a2a` are not instanceable, hold no state and cannot be created — they are the *values of an attribute on Agent*, and a value set is not an object. Promoting one to a first-class place is the OOUX error of mistaking instances for objects, the same mistake as giving "CAC" and "ROAS" pages instead of giving one to Metric. The question the page answered — which connectors are in use, and how many agents on each — belongs on the object that owns the attribute, so the Agent list's filter carries a count per value, zeroes included: a value with nothing on it is usually what the reader opened the menu to check. **集成** rather than **渠道** because the products this console is modelled on — Multica and Linear — both call this Integrations; 渠道 / Channels is the help-desk convention (Intercom, Zendesk), and Parsar is an agent console, not a support desk.
@@ -520,22 +546,22 @@ Spacing rhythm: 2 / 4 / 8 / 10 / 12 / 16 / 24. Tight inside a group, generous be
 
 ### Compatibility note
 - `adaptLegacyTemplate` in `ledger.tsx` accepts a raw grid string and adapts it to the flexible model. Every page is on `col.*`; the adapter exists so an outside caller does not break. Do not write a new string template.
-- Some i18n strings survive for compatibility and are never rendered: every page `description`, `audit.footer.shownCount`, and login `noAccountHint`. `PageHeader` accepts `description` and drops it. Do not wire them back into the UI.
+- No i18n string survives that nothing renders. `PageHeader` still accepts a `description` and drops it — the prop is kept for call-site compatibility — but the strings behind it are gone, along with 610 others no source file could reach. `npm run i18n:unused` reports any that grow back: it parses with the TypeScript compiler (a grep cannot see a key built in a ternary, an alias or a template), then requires the key to be absent from the whole repo as text. Its output is still not proof — run `.impeccable/review/probe-missing-keys.mjs`, which renders every surface in both locales and looks for a raw key on screen, because that is the only thing that actually demonstrates it.
 
 ## Elevation & Depth
 
-Flat by default. Depth is tonal: panel tone one step off the ground, hairlines for structure. Shadows exist in exactly two sizes and appear only on raised controls (outline and primary buttons, inputs, selects, textareas, the active theme segment) and on floating layers (menus, tooltips, dialogs, the rail's expanded modal, the layout prompt, the entry panel, the skip link). The one dimming layer is the ground's inverse at 30%, under dialogs and the expanded rail.
+Flat by default. Depth is tonal: panel tone one step off the ground, hairlines for structure. Shadows exist in exactly two sizes and appear only on raised controls (outline and primary buttons, inputs, selects, textareas, the active theme segment) and on floating layers (menus, tooltips, dialogs, the rail's expanded modal, the toast strip, the entry panel, the skip link). The one dimming layer is the ground's inverse at 30%, under dialogs and the expanded rail.
 
 ### Shadow Vocabulary
 - **control** (`0 1px 2px rgb(0 0 0 / 6%)`, dark `40%`): outline / primary / destructive buttons, inputs, selects, textareas, the pressed theme segment. Removed on a disabled outline button.
-- **floating** (`0 1px 2px rgb(24 24 27 / 4%), 0 8px 24px -12px rgb(24 24 27 / 18%)`, dark `30%` / `55%` black): dropdown menus, tooltips, dialogs, the rail modal, the layout prompt, the `.app-panel` entry card.
+- **floating** (`0 1px 2px rgb(24 24 27 / 4%), 0 8px 24px -12px rgb(24 24 27 / 18%)`, dark `30%` / `55%` black): dropdown menus, tooltips, dialogs, the rail modal, the toast strip, the `.app-panel` entry card.
 
 ### Named Rules
-**The Flat-By-Default Rule.** Rows, panels, group headers, sections and the rail never carry a shadow or a tint of their own. If something floats, it is a menu, a tooltip, a dialog, the rail's modal or the layout prompt.
+**The Flat-By-Default Rule.** Rows, panels, group headers, sections and the rail never carry a shadow or a tint of their own. If something floats, it is a menu, a tooltip, a dialog, the rail's modal or the toast strip.
 
 ## Shapes
 
-Small radii, straight structure. Controls are 6px (buttons, inputs, selects, textareas, badges, tooltips, nav rows, the workspace row, tab and theme frames); kbd, initial tiles, avatar tiles, tab segments and theme segments are 4px; menus, dialogs, the rail modal, the layout prompt and the entry panel are 8px; the nav count badge is a 999px pill; the raw-event `pre` block is 6px. Button `shape` also offers `pill`, `circle` and `square` for chips-as-buttons, round icon buttons and flush accents. Rows, panels, group headers, sections and the rail are square-cornered and hairline-bounded. Icons are 16px (14px inside rows, buttons, action buttons, messages and the rail), 1.5px stroke, round caps, lucide geometry; the status icon is a hand-drawn 14px SVG. Scrollbars are 8px, thin, transparent-tracked, with a 999px thumb. The resize handle has no visible shape of its own: it is the panel's hairline, recoloured.
+Small radii, straight structure. Controls are 6px (buttons, inputs, selects, textareas, badges, tooltips, nav rows, the workspace row, tab and theme frames); kbd, initial tiles, avatar tiles, tab segments and theme segments are 4px; menus, dialogs, the rail modal, the toast strip and the entry panel are 8px; the nav count badge is a 999px pill; a `VerbatimBlock` is 6px. Button `shape` also offers `pill`, `circle` and `square` for chips-as-buttons, round icon buttons and flush accents. Rows, panels, group headers, sections and the rail are square-cornered and hairline-bounded. Icons are 16px (14px inside rows, buttons, action buttons, messages and the rail), 1.5px stroke, round caps, lucide geometry; the status icon is a hand-drawn 14px SVG. Scrollbars are 8px, thin, transparent-tracked, with a 999px thumb. The resize handle has no visible shape of its own: it is the panel's hairline, recoloured.
 
 ## Components
 
@@ -561,7 +587,8 @@ The one button (`Button`, cva): 28px tall, 6px radius, 13px/500 label, 10px hori
 
 ### Cards / Containers
 - There are no cards. Containers are the sidebar, the main column, the rail, `PageSection`s and ledger groups, separated by hairlines, spacing and one tone step. Content never sits in a bordered box inside another bordered box. The single floating card is `EntryPanel` (`.app-panel`: hairline, 8px radius, floating shadow, 400px, 24px padding) on login / setup / onboarding / invite / join: a 13px/500 "Parsar" wordmark, an optional 22px/500 title and one 14px muted sentence, the form, and an `EntryFooter` (top hairline, 16px above, message left, buttons right).
-- **PageSection:** the section of a settings or full-page detail view: a 28px head row (13px/500 ink title, optional 12px muted tabular count, one right-aligned action), 8px below it, content beneath; sections 24px apart; no border, no background. `RailSection` is the 12px variant inside the rail (20px apart, 2px below the head).
+- **PageSection / SectionHead:** the section of a settings or full-page view: a 28px head row (16px/500 ink title, optional 12px muted tabular count, one right-aligned action), 8px below it, content beneath; sections 24px apart; no border, no background. `SectionHead` is the head on its own, for a section whose content must span the page. Sixteen and not thirteen because a heading the size of the rows beneath it is a caption: the page reads 20 · 16 · 13, three sizes the eye separates at a glance.
+- **RailSection:** the rail's section, and the only one it has (`DetailSection` is this component). A 14px/500 head with an optional muted count and one right-aligned action, 4px above its content, sections 20px apart. Fourteen and not the page's sixteen: in a 384px panel the head introduces a property list, not a page, so it sits one tick over the 13px values and two over the 12px labels. Twelve was the same size as every label under it and separated by weight alone.
 
 ### Inputs / Fields
 - **Input:** 28px, paper background, hairline-strong border, control shadow, 6px radius, 8px padding, 13px ink text; search variant adds a 14px muted leading icon (28px left padding) and a trailing kbd (44px right padding).
@@ -572,16 +599,18 @@ The one button (`Button`, cva): 28px tall, 6px radius, 13px/500 label, 10px hori
 - **Placeholder:** muted. **Disabled:** paper-muted background, 60% opacity, not-allowed cursor.
 - **⌘K exception:** the search field on a ledger page may carry a `⌘K` kbd inside its right edge. This is the one keyboard hint the UI shows, approved by the user; no other shortcut is advertised.
 
-### Messages (`ErrorState`, `InlineError`, `InlineNotice`)
+### Messages (`ErrorState`, `InlineError`, `InlineNotice`, `VerbatimBlock`, `Toast`)
 - **InlineError:** a 14px failed-red triangle (top-aligned) and 13px ink text, 6px apart; `role="alert"`. Under a field, in an `EntryFooter`, or as a 36px hairline row above a ledger's rows.
 - **InlineNotice:** the same shape with the tone in the glyph: success = the completed status icon, error = the failed-red triangle, warning = the running-amber triangle, info = a muted info circle; text in ink; optional trailing action. Inside a full-bleed page it sits in a hairline-bottomed 8px/16px row under the tabs row.
-- **ErrorState:** the block form: 14px triangle, 13px/500 title, the message in 12px mono ink, the hint 12px muted, one `sm` outline retry button indented 24px; 16px vertical padding; no red box.
+- **ErrorState:** the block form: 14px triangle, 13px/500 title, `description` (12px ink — our sentence), `detail` (the server's string, in a `VerbatimBlock` that shrinks to its content, wraps at 52rem and scrolls past 160px), the hint 12px muted, one `sm` outline retry button indented 24px; 16px vertical padding; no red box.
+- **VerbatimBlock:** content shown exactly as it was written — a server message, a command, a payload, a log, a skill's instruction, an agent's system prompt — in a paper-muted block: 6px radius, 8px padding, 12px mono ink, relaxed leading, `break-words` so a line breaks only when it cannot fit on its own. The fill is the whole point: one tone step down from our own copy is how a reader tells which half is quoted. No border, no colour, no label. It states no height — a five-line server message and a 400-line skill file want different answers — so each caller passes the `max-h-*` its content deserves.
+- **Toast (`ToastProvider` / `useToast`):** the console's one transient message, portalled to `body` at z-60 — one step above the 50 dialogs use, because a message an overlay dims is a message nobody reads — fixed 12px from the top and centred; paper, hairline, 8px radius, floating shadow, `pop-in` on arrival and `pop-out` on exit; 6px vertical padding, 12px sides (12px / 6px when it carries an action); a 14px tone glyph with 13px ink text, an optional `detail` in a `VerbatimBlock` beneath it, and optional buttons to its right. Four seconds, seven for an error; hovering or focusing *pauses* the countdown and leaving resumes it with the time that was left, so a resting cursor cannot pin a message on screen. At most three stand at once — a fourth asks the oldest to leave rather than yanking it. Failures live in an `aria-live="assertive"` region and everything else in a polite one; the strips carry no role of their own, so nothing is announced twice, and both regions keep speaking under a modal because `aria-hidden` exempts `[aria-live]` and its ancestors. `key` re-words the strip that is already standing — same node, no second entrance — instead of stacking a second one, and `persist` keeps it until dismissed and exempts it from the cap, because a question is not something to crowd out.
 - **Empty:** 20px muted icon, 13px/500 title, muted description, one action, 64px vertical padding, centred.
 
 ### Navigation
-- **PageHeader (topbar):** 64px, sticky, full column width, bottom hairline, 24px padding, 12px gap; title 20px/600 with the English name (`subtitleFor`) in 12px muted, 8px after it on the same baseline; an optional 12px muted back link before the title; actions right-aligned 8px apart. On full-bleed pages it is `static mx-0 mb-0`. `description` is accepted for type-compatibility and never rendered.
-- **SettingsTabs:** the segmented `Tabs` control rendered once per settings page in the topbar action slot, one segment per settings view (general, credentials, runtime, connectors, usage, audit); the sidebar keeps the single 设置 entry active.
+- **PageHeader (topbar):** 64px, sticky, full column width, bottom hairline, 24px padding, 12px gap; title 20px/600 on the scale's own 24px line — never `leading-none`, because the title truncates and a 20px line box around a 20px face clips the tail off every descender — with the English name (`subtitleFor`) in 12px muted, 8px after it on the same baseline; an optional 12px muted back link before the title; actions right-aligned 8px apart. On full-bleed pages it is `static mx-0 mb-0`. `description` is accepted for type-compatibility and never rendered.
 - **View tabs row:** content tabs (`TabsList`) in a 40px row, bottom hairline, 16px inset, directly under the topbar; content begins beneath with no top margin.
+- **Sidebar groups:** Agent alone at the top, then 运行中 (对话, 收件箱, 运行, 定时任务, 用量, 审计 — what agents are doing and the record of what they did), 构建 (模型, 能力, 执行层, 集成, 凭据 — what an agent is assembled from and given), 团队 (成员, 设置). A group is a claim about what kind of thing a row is, so a row moves group when its kind changes, not when the list gets long.
 - **Sidebar rows:** 30px, 8px padding, 6px radius, 14px text inheriting the sidebar grey, 16px muted icon 8px before the label; hover = ink 3%; active (`aria-current="page"`) = ink 6% tint, 500 weight, text and icon return to ink. No border and no shadow on the active row. Focus = 2px indigo-40% ring.
 - **Workspace row:** 32px, 8px padding, 6px radius, one 13px text line "Parsar / Workspace" with a 14px chevrons-up-down icon; brand 500 ink, separator and workspace muted; hover tint, open = pressed tint. The menu is a 300px floating layer (8px radius, hairline, 4px inner padding, pop-in).
 - **Account row:** pinned bottom, top hairline, 10px above; a 24px initials tile (ink-7%, 12px/500) with the name 13px/500 and role 12px muted as a hover-tinted trigger; the two-segment sun/moon theme toggle to its right (hairline frame, 2px inset, 22×26px segments, 14px icons; the resolved segment sits on paper with the control shadow and ink icon, the other is muted).
@@ -590,7 +619,7 @@ The one button (`Button`, cva): 28px tall, 6px radius, 13px/500 label, 10px hori
 
 ### Dialogs (`Dialog`, `AlertDialog`)
 Dialogs are built like the rail, not like a card: a floating paper panel (448px max, 8px radius, hairline, floating shadow) whose header and footer are hairline-bounded bars.
-- **Header:** a 48px minimum bar bounded below by a hairline, holding the 13px/500 ink title and, beneath it, an optional 13px muted description. `Dialog` reserves 48px on the right for a 28px ghost close button (top right, 8px/10px inset); `AlertDialog` has no close — its actions are the only exits.
+- **Header:** a 48px minimum bar bounded below by a hairline, holding the 16px/500 ink title — a dialog is a small surface, so it runs the rail's ladder: 16 over a 14px `RailSection` head over 13px content — and, beneath it, an optional 13px muted description. `Dialog` reserves 48px on the right for a 28px ghost close button (top right, 8px/10px inset); `AlertDialog` has no close — its actions are the only exits.
 - **Body:** 16px padding, 16px gaps, 13px ink.
 - **Footer:** a hairline-topped bar, 12px/16px padding, actions right-aligned 8px apart: outline cancel, then primary or destructive confirm.
 - **Motion:** `pop-in` on open, `pop-out` on close, over a 30% inverse overlay that fades in with `overlay-in` and out with `overlay-out`. The overlay never snaps.
@@ -621,6 +650,11 @@ A conversation is **one** exit, not two: the console frames it in admin chrome a
 - **Table:** the same idiom as an HTML table (`Table*`): 28px muted 12px header, 36px hairline rows, 12px cell padding, hover and selected tints; no outer card.
 - **Skeleton:** paper-muted at 70%, 6px radius, pulse; list skeletons echo the 28px header and 36px rows.
 
+### Capability row (signature)
+Every capability an agent has renders as one row of the same shape, whichever kind it is: a 14px status glyph carrying the row's worst state (failed = a missing credential, an unsupported engine or a deleted version; running = a new version or a deprecation; cancelled = a built-in switched off; completed = usable), the name in 13px/500, its kind in 12px muted, the pinned version right-aligned in 12px mono, and the verbs in a `RowActions` cluster — switch version, remove, or the built-in's power toggle. The cluster reveals on hover, except where the verb is the row's whole point: a built-in's toggle and the add-list's 启用 stay visible at rest. Upgrading is not a row verb; it is the action on the "there is a newer version" note. Beneath: the description on one truncating line, then only the problems worth acting on, one line each with at most one thing to press.
+
+It says each fact once. The version lives in the version slot and nowhere else; a credential that is set says nothing at all, because the glyph already reports that the row is in order and an "add credential" link beside a credential you have added is an affordance with nowhere to go; provenance lives on the capability's own page. Where there is no version to show, the slot is empty rather than an em dash.
+
 ### Detail rail (signature)
 `DetailRail` (header · scrolling body · footer, resizable, expandable) with `RailSection`, `PropertyList` / `Property`, segmented `Tabs`.
 - **Rail:** 384px by default, draggable 320–640 through a left-edge `ResizeHandle` with the shared `LayoutPrompt`; paper-panel, left hairline. It is the console's only detail surface: every ledger — runs, approvals, connections, agents, connectors, and all three capability catalogues — opens into it. Agent is its widest brief (three tabs, an editable config, an audit trail) and it fits: a tab lives in the URL beside the id, so `&view=full` survives a tab change and the expanded panel does not collapse under the reader. Its *width* is what animates, from and back to zero on a 260ms spring, so the list column widens and narrows in the same motion instead of jumping once the rail is gone. Every closer (the X, clicking the open row, a route change) flips the same `open` prop, so they all play the identical exit; the caller holds the selected item through that exit and drops the mount on `onClosed`. Switching to another row swaps the content and leaves the width alone.
@@ -628,10 +662,10 @@ A conversation is **one** exit, not two: the console frames it in admin chrome a
 - **Header:** 64px, bottom hairline, 8px gap: the object's identity — a 14px status icon or connector mark, the name or status word 13px/500 ink, then its badges or a mono id filling the rest — followed by a 28px ghost expand button (Maximize2) and a 28px ghost close button (X); 16px left, 8px right. The name and its badges sit on one baseline here; a detail that still owns a page puts them under the topbar rule with `DetailHeading` instead.
 - **Expanded panel:** the Maximize2 button writes `&view=full` to the URL, which lifts the same header · body · footer into a centred 70vw × 70vh panel (min 720px, max 1200px, paper-panel, hairline, 8px radius, floating shadow) over a 30% inverse overlay. It flies in from the rail's side with `modal-in` (420ms spring, from 34vw right at 0.35 scale) and settles back with `modal-out` (260ms settle, to 0.45 scale); the overlay fades 240ms in / 200ms out. Centring lives in the keyframes and `.app-modal-center`, never in a translate utility. Its only control is the Minimize2 collapse button; the close X and the rail stay where they were. Body and footer widen to 24px side padding and hold a 52rem centred measure — the extra width is reading room for previews and code, never a stretched property grid.
 - **Body:** 16px padding (8px bottom); the agent line (18px initial tile + 13px/500 name, 12px below); then the property grid.
-- **Properties:** 84px muted 12px label column, 12px gap, 13px ink values, 28px rows, truncating; `mono` values at 12px mono. There is one property grid: a page that widens the label column for itself is a page that has not moved into the rail yet. Long values (reasons, next actions, capability badges) release the height and wrap. Values are never muted.
+- **Properties:** a `minmax(5.25rem, max-content)` muted 12px label column — a floor of 84px so short labels line up, growing to the longest label in the list so none of them wrap onto a second line and break the 28px rhythm — 12px gap, 13px ink values, 28px rows, truncating; `mono` values at 12px mono. The label truncates at 12rem with its full text in a `title`, so one long label cannot eat the value column. There is one property grid: a page that widens the label column for itself is a page that has not moved into the rail yet. (`fit-content()` is *not* legal as the max of `minmax()`; a browser drops the whole `grid-template-columns` declaration and the grid silently collapses to one column. `max-content` is the one that works.) Long values (reasons, next actions, capability badges) release the height and wrap. Values are never muted.
 - **Segmented tabs:** 28px hairline frame on paper, 2px inset, 2px gap, 24px segments 4px-rounded, 12px muted labels, hover tint; active segment = pressed tint, 500, ink; press scales to 0.97; content starts 16px below.
-- **Sections (`RailSection`):** 20px apart, 12px/500 ink head with an optional muted tabular count right-aligned, 2px below the head.
-- **Steps:** hairline-separated 32px rows: a 14px muted lucide icon, a 12px mono muted index right-aligned in 16px, a truncating 13px ink title with a muted detail after " · ", and a 24px ghost code toggle that reveals raw events in a paper-muted 6px `pre` at 12px mono.
+- **Sections (`RailSection`):** 20px apart, 14px/500 ink head with an optional muted tabular count and one right-aligned action, 4px below the head. The Agent rail's `DetailSection` is an alias of it, so the rail cannot drift into two sizes of the same thing.
+- **Steps:** hairline-separated 32px rows: a 14px muted lucide icon, a 12px mono muted index right-aligned in 16px, a truncating 13px ink title with a muted detail after " · ", and a 24px ghost code toggle that reveals raw events in a `VerbatimBlock`.
 - **Footer:** 12px/16px padding, top hairline, 8px gap: outline buttons left, the link button pushed right. The object's verbs live here, not in the topbar — a rail-backed list keeps its own header (search, filter, create) while the rail is open.
 
 ### Conversation surface (signature)
@@ -643,7 +677,7 @@ The one place in the console that is not a ledger: a measured 48rem thread with 
 
 ### Resize handle and layout prompt (signature)
 - **ResizeHandle:** `role="separator"`, `aria-orientation="vertical"`, `tabIndex 0`; a 6px-wide full-height hit area centred on the panel hairline (3px past the edge), `cursor: col-resize`; inside it a 1px line, transparent at rest, indigo on hover / focus / drag, 150ms settle. Arrow keys resize 8px, shift-arrow 32px; a drag of less than 2px is ignored.
-- **LayoutPrompt:** `role="status"`, portalled to `body`, fixed 12px from the top, horizontally centred; paper, hairline, 8px radius, floating shadow, `pop-in` on arrival and `pop-out` on dismissal (it stays mounted 160ms to play it); 6px vertical padding, 12px left, 6px right; 14px ink sentence, then three `sm` buttons 8px apart: primary 保存, outline 临时, ghost 恢复. It appears only while a width is unsaved and closes on any choice.
+- **LayoutPrompt:** draws nothing of its own. It is one persistent toast, keyed `layout-adjusted:<panel>` from the panel's own storage key, carrying three `sm` buttons 8px apart — primary 保存, outline 临时, ghost 恢复 — raised while a width is unsaved, dismissed on any choice, and dismissed again when the panel unmounts, so a rail that closes mid-question does not leave a strip with dead buttons. It persists because it is a question, and a question that times out has answered itself. It used to draw its own strip at the toast's coordinate, so a confirmation could land on top of it and swallow the clicks; a queue cannot collide with itself.
 
 ### Status icon (signature)
 `StatusIcon`: a 14px hand-drawn SVG, `currentColor` from the six `status-*` tokens, 1.5px strokes, round caps. Queued dashed ring; running three-quarter arc on the `status-track` ring, spinning 1.8s linear (paused under reduced motion); completed and failed are filled discs with a paper check or x; cancelled a ring with a slash; interrupted a ring with a dash. Decorative unless given a `title`.
@@ -659,13 +693,12 @@ Short, springy, rare. Every transition is non-linear; nothing is `linear` or def
 - **rail-in** (260ms spring, from 16px right) / **rail-out** (200ms settle, back to 16px right): the detail rail entering once per selection and leaving before it unmounts.
 - **pop-out** (150ms settle, to scale 0.97): the reverse of `pop-in` on every floating layer.
 - **modal-in** (420ms spring; from translate(−50% + 34vw, −50%) scale 0.35, opaque by 40%) / **modal-out** (260ms settle; to the same offset at scale 0.45): the rail's expanded modal flying from and back to the rail's side. **overlay-in** (240ms settle) / **overlay-out** (200ms settle): the 30% inverse overlay under it.
-- **pop-in** (200ms spring, from scale 0.96): menus, tooltips, dialogs, the layout prompt, the turn preview, transient inline confirmations.
+- **pop-in** (200ms spring, from scale 0.96): menus, tooltips, dialogs, the toast strip, the turn preview.
 - **press** (`scale(0.97)`, spring, 120ms): buttons, action icons, segmented tabs and theme segments on active.
 - **width spring-back** (`transition: width 420ms spring`): a panel returning to its default width after 恢复; the transition exists only for those 420ms so drags stay direct.
 - **reveal** (opacity, 150ms settle): `RowActions` on row hover / focus-within.
 - **chevron** (200ms spring): the ledger group chevron rotating to −90°.
 - **running** (`spin 1.8s linear infinite`, `--animate-spin-slow`): the running status arc only.
-- **fade-out** (`2s ease-out`, holds 70% then fades): transient confirmations.
 - **collapse** (`grid-template-rows` 0fr → 1fr, 220ms settle, with opacity and a 4px lift on the content): the `WorkTrace` block and its step details; the body mounts on first open and unmounts after the exit.
 - `prefers-reduced-motion: reduce` collapses every animation and transition to 0.01ms and removes the press scale and the running spin; the page, rail and modal then simply appear.
 
@@ -687,7 +720,7 @@ Short, springy, rare. Every transition is non-linear; nothing is `linear` or def
 - **Do** keep light and dark as one token set; dark is warm grey, never black.
 - **Do** build every list on `Ledger` and pass the column template once so header and rows share one grid; build every detail pane on `DetailRail` + `PropertyList`; build every settings body on `PageSection`; build every entry surface on `EntryPanel`.
 - **Do** write categories as 12px muted text and reserve `Badge` for one neutral-dot secondary state per row.
-- **Do** put navigation tabs in the topbar action slot and content tabs in the 40px hairline row under it.
+- **Do** put content tabs in the 40px hairline row under the topbar, and leave the topbar's action slot to actions and the one filter control.
 - **Do** hide `RowActions` until hover or focus, and pull pagination strings only from `common:pagination.*`.
 - **Do** declare ledger columns with `col.*` and let the primitive build the grid; keep the 24px outer edges so every list shares the topbar's two edges.
 - **Do** keep column headers on one truncating line, centre every cell vertically, and right-align numeric and age columns.
@@ -698,7 +731,7 @@ Short, springy, rare. Every transition is non-linear; nothing is `linear` or def
 
 ### Don't:
 - **Don't** add a description or subtitle under a page title, a keyboard-hint line, a version string, or any helper copy that is not content or a control. The one exception, approved by the user, is the `⌘K` kbd inside the search field. The English page name beside the title is a name, not a description.
-- **Don't** render the same action twice (a header button and a table-footer button, a sidebar utility row and a nav item, a topbar count and a footer count, a settings tab strip in two places).
+- **Don't** render the same action twice (a header button and a table-footer button, a sidebar utility row and a nav item, a topbar count and a footer count).
 - **Don't** use cards, stat tiles, nested bordered boxes, tinted message boxes, or coloured left borders thicker than the 2px selection marker.
 - **Don't** wrap a category (role, type, source) in a chip, or put more than one `Badge` on a row.
 - **Don't** add padding between the topbar and a ledger's column header, or a margin above the first section of a page.
@@ -712,5 +745,5 @@ Short, springy, rare. Every transition is non-linear; nothing is `linear` or def
 - **Don't** load Google Fonts for Latin or CJK; Noto Sans SC stays a last-resort fallback only.
 - **Don't** put colour in text to signal state; tint a background or draw an icon instead.
 - **Don't** use linear easing for anything but the running spinner, or declare a keyframe outside `src/style.css`.
-- **Don't** render the compatibility strings (`description`, `audit.footer.shownCount`, login `noAccountHint`).
+- **Don't** leave a locale string that nothing renders; `npm run i18n:unused` is how you find them.
 - **Don't** reach past the semantic tokens (`fg-*`, `surface-*`, `line-*`, `accent`, `status-*`, `app-*`) to the raw palette; lint will fail the build.
