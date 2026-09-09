@@ -54,7 +54,7 @@ func ParseSkill(raw string, format SourceFormat) (SkillParseResult, error) {
 		slug = kebabFromName(front.Name)
 	}
 	if slug == "" {
-		warnings = append(warnings, "frontmatter provided no slug or name — on submit the slug will be derived from the name entered in the form")
+		warnings = append(warnings, "frontmatter provided no slug or name — add a name to the YAML frontmatter in SKILL.md, then upload or preview again")
 	}
 
 	title := strings.TrimSpace(front.Title)
@@ -74,7 +74,7 @@ func ParseSkill(raw string, format SourceFormat) (SkillParseResult, error) {
 		},
 	}
 	if title == "" {
-		warnings = append(warnings, "title is empty — recommend filling in a human-friendly name before committing")
+		warnings = append(warnings, "title is empty — add a name or title to the YAML frontmatter in SKILL.md, then upload or preview again")
 	}
 	return SkillParseResult{
 		Spec:          spec,
@@ -94,7 +94,7 @@ func splitSkillDoc(raw string) (skillFrontmatter, string, []string) {
 	var warnings []string
 	loc := frontmatterPattern.FindStringSubmatchIndex(raw)
 	if loc == nil {
-		warnings = append(warnings, "no YAML frontmatter detected — using entire content as instruction body and synthesizing slug/title from defaults")
+		warnings = append(warnings, "no YAML frontmatter detected — add a YAML block with name and description at the start of SKILL.md, then upload or preview again")
 		return front, raw, warnings
 	}
 	yamlBlock := raw[loc[2]:loc[3]]
@@ -106,7 +106,7 @@ func splitSkillDoc(raw string) (skillFrontmatter, string, []string) {
 			warnings = append(warnings, fmt.Sprintf("frontmatter YAML parse failed, fell back to simple field extraction: %v", err))
 			return fallback, body, warnings
 		}
-		warnings = append(warnings, fmt.Sprintf("frontmatter YAML parse failed and field extraction fallback also failed, please fill the name manually in the dialog: %v", err))
+		warnings = append(warnings, fmt.Sprintf("frontmatter YAML parse failed and field extraction fallback also failed — correct the YAML block in SKILL.md, then upload or preview again: %v", err))
 		return skillFrontmatter{}, body, warnings
 	}
 	return front, body, warnings
