@@ -5,12 +5,14 @@ import {
   Globe,
   Layers,
   Plus,
+  RefreshCw,
   Send,
   X,
 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { BrandMark } from "../ui/brand-mark"
+import { InlineNotice } from "../ui/error-state"
 import { WorkspaceMenuItem } from "./WorkspaceMenuItem"
 import {
   setWorkspaceId,
@@ -64,10 +66,10 @@ export function WorkspaceSwitcher() {
   // Self-heal: stale wsId from localStorage (archived ws or old dev seed)
   // would leave currentWorkspace undefined; auto-pick the first one.
   useEffect(() => {
-    if (workspacesQuery.isLoading || workspacesQuery.isFetching || workspaces.length === 0) return
+    if (workspacesQuery.isLoading || workspacesQuery.isFetching || workspacesQuery.isError || workspaces.length === 0) return
     if (wsId && workspaces.some((w) => w.id === wsId)) return
     setWorkspaceId(workspaces[0].id)
-  }, [wsId, workspaces, workspacesQuery.isLoading, workspacesQuery.isFetching])
+  }, [wsId, workspaces, workspacesQuery.isLoading, workspacesQuery.isFetching, workspacesQuery.isError])
 
   // Dialog state lives here so Radix Dropdown's focus trap doesn't fight
   // the dialog's focus trap.
@@ -96,7 +98,7 @@ export function WorkspaceSwitcher() {
     ? currentWorkspace.name
     : wsId
       ? `WS · ${shortId(wsId)}`
-      : t("workspaceSwitcher.demoWorkspace")
+      : t("workspaceSwitcher.workspaceLabel")
 
   return (
     <>
@@ -139,7 +141,26 @@ export function WorkspaceSwitcher() {
               {t("workspaceSwitcher.workspaceLabel")}
             </DropdownMenu.Label>
 
-            {workspaces.length === 0 && (
+            {workspacesQuery.isError && (
+              <>
+                <InlineNotice tone="error" className="px-2 py-2">
+                  {t(workspaces.length > 0 ? "workspaceSwitcher.refreshFailed" : "workspaceSwitcher.loadFailed")}
+                </InlineNotice>
+                <DropdownMenu.Item
+                  disabled={workspacesQuery.fetchStatus !== "idle"}
+                  onSelect={(event) => {
+                    event.preventDefault()
+                    void workspacesQuery.refetch()
+                  }}
+                  className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-surface-muted data-[disabled]:opacity-50"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+                  {workspacesQuery.fetchStatus !== "idle" ? t("states.loading") : t("actions.retry")}
+                </DropdownMenu.Item>
+              </>
+            )}
+
+            {!workspacesQuery.isError && workspaces.length === 0 && (
               <div className="px-2 py-2 text-sm text-fg-faint">
                 {workspacesQuery.isLoading
                   ? t("states.loading")
