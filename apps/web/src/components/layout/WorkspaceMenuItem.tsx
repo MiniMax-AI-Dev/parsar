@@ -15,7 +15,7 @@ export function WorkspaceMenuItem({ workspace, active, onRename, onArchive }: {
   const { t } = useTranslation("common")
   const canManage = workspace.role === "owner" || workspace.role === "admin"
   return (
-    <div className="group/row grid grid-cols-[minmax(0,1fr)_1.75rem_1.75rem] items-center gap-1">
+    <div className="grid grid-cols-[minmax(0,1fr)_1.75rem_1.75rem] items-center gap-1">
       <DropdownMenu.Item
         onSelect={() => { if (!active) setWorkspaceId(workspace.id) }}
         aria-current={active ? "true" : undefined}
@@ -54,7 +54,7 @@ function RowAction({ title, icon, onSelect, danger }: {
       title={title}
       aria-label={title}
       className={cn(
-        "invisible flex h-7 w-7 cursor-pointer items-center justify-center rounded outline-none text-fg-faint hover:text-fg-muted data-[highlighted]:text-fg-muted group-hover/row:visible group-focus-within/row:visible",
+        "flex h-7 w-7 cursor-pointer items-center justify-center rounded outline-none text-fg-muted data-[highlighted]:app-pressed",
         danger && "hover:text-danger data-[highlighted]:text-danger",
       )}
     >
