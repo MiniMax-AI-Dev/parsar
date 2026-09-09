@@ -149,14 +149,14 @@ export function useInstallSkill(workspaceID: string | null) {
     },
     retry: noUnreachableRetry,
     onSuccess: (result, skill) => {
-      if (!workspaceID) return
-      qc.setQueryData<Record<string, string>>(KEY_INSTALLED_SKILLS(workspaceID), (current) => ({
+      const installedWorkspaceID = result.capability.workspace_id
+      qc.setQueryData<Record<string, string>>(KEY_INSTALLED_SKILLS(installedWorkspaceID), (current) => ({
         ...current, [skill.id]: result.capability.id,
       }))
-      void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID) })
+      void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(installedWorkspaceID) })
       void qc.invalidateQueries({ queryKey: ["admin", "capability"] })
       void qc.invalidateQueries({
-        queryKey: KEY_CAPABILITY_VERSIONS(workspaceID, result.capability.id),
+        queryKey: KEY_CAPABILITY_VERSIONS(installedWorkspaceID, result.capability.id),
       })
     },
   })
