@@ -581,6 +581,11 @@ When a list needs a compact presentation beside a detail rail, use container
 queries against the list width. Keep the same data and row actions, with
 explicit field labels when column headings are hidden.
 
+Property groups use the shared `PropertyList` label track: 8rem capped at 40%
+of the available width. Labels wrap and values retain their existing overflow
+behavior. Do not size individual groups from their longest label or add
+page-specific label widths; groups in the same context must align.
+
 ## Typography contract
 
 The type scale has 7 defined steps. Arbitrary pixel sizes (`text-[Npx]`) are
