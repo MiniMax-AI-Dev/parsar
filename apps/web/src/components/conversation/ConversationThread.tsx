@@ -43,6 +43,7 @@ import type {
   ToolStep,
 } from "../../lib/api-types"
 import { isUserMessageSender } from "../../lib/message-sender"
+import { isRuntimeCapabilityError } from "../../lib/message-kind"
 import { useRelativeTime } from "../../lib/relative-time"
 import { credentialKindLabel } from "../../pages/admin/capability-ui"
 import { ToolCardSlot, SingleSlot, ListSlot } from "../plugin/SlotRenderer"
@@ -837,7 +838,7 @@ const MessageRow = memo(function MessageRow({
   }
   const senderName = senderType === "system" ? t("conversations.detail.systemSender") : agentName
   const byline = senderName ? `${senderName} · ${stamp}` : stamp
-  if (messageType === "runtime_error") {
+  if (isRuntimeCapabilityError(messageType, metadata)) {
     const runtimeError = runtimeErrorViewModel(metadata, content, conversationId, i18n.language, t)
     return (
       <div className="max-w-[85%]">

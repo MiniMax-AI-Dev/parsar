@@ -286,16 +286,16 @@
       "systemSender": "System"
     },
     "runtime_error": {
-      "badge": "Run failed",
+      "badge": "Capability unavailable",
       "fallbackCapability": "this capability",
       "capability_credential_missing": "Capability {{name}} failed to start: missing {{kind}} credential.",
       "capability_credential_decrypt_failed": "Capability {{name}} credential could not be decrypted. Please contact an administrator.",
       "capability_credential_kind_mismatch": "Capability {{name}} credential type does not match. Please set it again.",
-      "capability_version_unavailable": "Capability {{name}} has no usable upload yet. Re-upload it as a zip, pick a newer version, or switch the binding to 'latest'.",
+      "capability_version_unavailable": "Capability {{name}} has no usable upload. Import a working version, then enable it on this Agent.",
       "addCredential": "Add credential",
       "resetCredential": "Reset credential",
       "manageCapability": "Manage capability",
-      "retryHint": "After setting the credential, send your request again. Parsar will not retry automatically.",
+      "retryHint": "This capability was unavailable for this run, so any answer may be incomplete. Fix the capability or its credential, then send your request again. Parsar will not retry automatically.",
       "generic": "A runtime capability failed to start. Please retry later or contact an administrator."
     },
     "composer": {
@@ -353,7 +353,7 @@
     "trace": {
       "label": "Work trace",
       "running": "Running",
-      "completed": "Done",
+      "completed": "Execution finished",
       "failed": "Failed",
       "cancelled": "Cancelled",
       "interrupted": "Interrupted",

@@ -24,6 +24,7 @@ import type {
 } from "./api-types"
 import { startAgentRun } from "./api-conversations"
 import { isUserMessageSender } from "./message-sender"
+import { isRuntimeCapabilityError } from "./message-kind"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -116,7 +117,7 @@ export function convertTimelineMessage(
     }
   }
 
-  if (msg.sender_type === "system" && msg.kind !== "runtime_error") {
+  if (msg.sender_type === "system" && !isRuntimeCapabilityError(msg.kind, msg.metadata)) {
     return {
       id: msg.id,
       role: "system",
@@ -167,7 +168,7 @@ export function convertTimelineMessage(
   // routes to RuntimeErrorCard. Safe because API strings never contain
   // null bytes. If this becomes fragile, switch to a Map<messageId, metadata>
   // side-channel.
-  if (msg.kind === "runtime_error") {
+  if (isRuntimeCapabilityError(msg.kind, msg.metadata)) {
     // Replace the plain text part with one that includes metadata marker
     const errorText = msg.content || ""
     const metaJson = JSON.stringify(msg.metadata ?? {})
