@@ -1,21 +1,17 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import {
-  Archive,
-  Check,
   ChevronsUpDown,
   Clock,
   Globe,
   Layers,
-  Pencil,
   Plus,
   Send,
   X,
 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
-import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
-import { cn } from "../../lib/utils"
 import { BrandMark } from "../ui/brand-mark"
+import { WorkspaceMenuItem } from "./WorkspaceMenuItem"
 import {
   setWorkspaceId,
   useWorkspaceId,
@@ -113,6 +109,7 @@ export function WorkspaceSwitcher() {
           <button
             type="button"
             aria-label={t("workspaceSwitcher.triggerAriaLabel")}
+            title={triggerLabel}
             className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-left text-sm hover:app-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 data-[state=open]:app-pressed"
           >
             <BrandMark size={14} />
@@ -135,7 +132,7 @@ export function WorkspaceSwitcher() {
           <DropdownMenu.Content
             align="start"
             sideOffset={6}
-            className="app-shadow-floating z-50 min-w-[300px] overflow-hidden rounded-lg border border-line bg-surface p-1 text-sm text-fg-muted animate-pop-in data-[state=closed]:animate-pop-out"
+            className="app-shadow-floating z-50 w-96 max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border border-line bg-surface p-1 text-sm text-fg-muted animate-pop-in data-[state=closed]:animate-pop-out"
           >
             <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-fg-subtle">
               <Layers className="h-3 w-3" strokeWidth={1.75} />
@@ -150,55 +147,15 @@ export function WorkspaceSwitcher() {
               </div>
             )}
 
-            {workspaces.map((ws) => {
-              const isActive = ws.id === wsId
-              const canManage = ws.role === "owner" || ws.role === "admin"
-              return (
-                <div
-                  key={ws.id}
-                  className="group/row flex items-center gap-1"
-                >
-                  <DropdownMenu.Item
-                    onSelect={() => {
-                      if (ws.id === wsId) return
-                      setWorkspaceId(ws.id)
-                    }}
-                    className={cn(
-                      "flex flex-1 cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 outline-none data-[highlighted]:bg-surface-muted",
-                      isActive && "font-medium text-fg"
-                    )}
-                  >
-                    <div className="flex flex-1 flex-col min-w-0">
-                      <span className="truncate">{ws.name}</span>
-                      <span className="truncate font-mono text-xs text-fg-faint">
-                        {ws.slug}
-                      </span>
-                    </div>
-                    <span className="text-xs font-medium text-fg-faint">
-                      {ws.role}
-                    </span>
-                    {isActive && (
-                      <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={2} />
-                    )}
-                  </DropdownMenu.Item>
-                  {canManage && (
-                    <>
-                      <RowAction
-                        title={t("workspaceCrud.workspace.renameTitle")}
-                        onSelect={() => setRenameWs(ws)}
-                        icon={<Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />}
-                      />
-                      <RowAction
-                        title={t("workspaceCrud.workspace.archiveTitle")}
-                        onSelect={() => setArchiveWs(ws)}
-                        icon={<Archive className="h-3.5 w-3.5" strokeWidth={1.75} />}
-                        danger
-                      />
-                    </>
-                  )}
-                </div>
-              )
-            })}
+            {workspaces.map((ws) => (
+              <WorkspaceMenuItem
+                key={ws.id}
+                workspace={ws}
+                active={ws.id === wsId}
+                onRename={() => setRenameWs(ws)}
+                onArchive={() => setArchiveWs(ws)}
+              />
+            ))}
 
             <DropdownMenu.Item
               onSelect={(e) => {
@@ -223,7 +180,7 @@ export function WorkspaceSwitcher() {
                     key={ws.id}
                     className="group/row flex items-center gap-1"
                   >
-                    <div className="flex flex-1 items-center gap-2 rounded-sm px-2 py-1.5">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-2 py-1.5">
                       <div className="flex flex-1 flex-col min-w-0">
                         <span className="truncate">{ws.name}</span>
                         <span className="truncate font-mono text-xs text-fg-faint">
@@ -424,31 +381,5 @@ export function WorkspaceSwitcher() {
         }}
       />
     </>
-  )
-}
-
-interface RowActionProps {
-  title: string
-  icon: ReactNode
-  onSelect: () => void
-  danger?: boolean
-}
-
-function RowAction({ title, icon, onSelect, danger }: RowActionProps) {
-  return (
-    <DropdownMenu.Item
-      onSelect={(e) => {
-        e.preventDefault()
-        onSelect()
-      }}
-      title={title}
-      aria-label={title}
-      className={cn(
-        "invisible flex h-7 w-7 cursor-pointer items-center justify-center rounded outline-none text-fg-faint hover:text-fg-muted data-[highlighted]:text-fg-muted group-hover/row:visible",
-        danger && "hover:text-danger data-[highlighted]:text-danger"
-      )}
-    >
-      {icon}
-    </DropdownMenu.Item>
   )
 }
