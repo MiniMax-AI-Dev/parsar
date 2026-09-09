@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 
 import { BrandMark } from "../components/ui/brand-mark"
 import { cn } from "../lib/utils"
 import { Button } from "../components/ui/button"
 import { EntryPage } from "../components/ui/entry-panel"
+import { ErrorDialog } from "../components/ui/error-dialog"
 import { InlineError } from "../components/ui/error-state"
 import { Input } from "../components/ui/input"
 import { Field } from "../components/ui/label"
@@ -52,6 +53,7 @@ function SignInView() {
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const submitRef = useRef<HTMLButtonElement>(null)
 
   const submitting = loginM.isPending
   const invalid = email.trim() === "" || password === ""
@@ -60,15 +62,8 @@ function SignInView() {
       (p) => p.enabled && p.id !== "password" && Boolean(p.login_url),
     ) ?? []
 
-  const errorMsg = (() => {
-    const err = loginM.error
-    if (!err) return ""
-    if (err instanceof ApiError) {
-      if (err.envelope.code === "invalid_credentials") return t("login.invalidCredentials")
-      return err.envelope.message || t("login.genericError")
-    }
-    return t("login.genericError")
-  })()
+  const invalidCredentials = loginM.error instanceof ApiError &&
+    (loginM.error.envelope.code === "invalid_credentials" || loginM.error.envelope.status === 401)
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -129,10 +124,8 @@ function SignInView() {
                 />
               </Field>
 
-              {errorMsg && <InlineError>{errorMsg}</InlineError>}
-
               <div className="mt-1 flex flex-col gap-2">
-                <Button type="submit" size="xl" className="w-full" disabled={invalid || submitting}>
+                <Button ref={submitRef} type="submit" size="xl" className="w-full" disabled={invalid || submitting}>
                   {submitting ? t("login.submitting") : t("login.submitButton")}
                 </Button>
                 <Button
@@ -174,6 +167,15 @@ function SignInView() {
           <InviteEntry onBack={() => setMode("signIn")} />
         )}
       </div>
+      {loginM.error && (
+        <ErrorDialog
+          title={t("login.failedTitle")}
+          message={t(invalidCredentials ? "login.invalidCredentials" : "login.genericError")}
+          detail={invalidCredentials ? undefined : loginM.error.message}
+          onClose={() => loginM.reset()}
+          onRestoreFocus={() => submitRef.current?.focus()}
+        />
+      )}
     </EntryPage>
   )
 }

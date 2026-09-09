@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "../components/ui/button"
 import { EntryFooter, EntryPage, EntryPanel } from "../components/ui/entry-panel"
+import { ErrorDialog } from "../components/ui/error-dialog"
 import { InlineError } from "../components/ui/error-state"
 import { Input } from "../components/ui/input"
 import { Field } from "../components/ui/label"
@@ -21,8 +22,7 @@ import { workspaceOwnerName } from "../lib/workspace-defaults"
  * AuthedRoot.
  *
  * Password policy is validated server-side by password.Validate. The client
- * mirrors the same simple checks so users get immediate feedback before the
- * server's bootstrap_weak_password envelope is surfaced inline.
+ * mirrors those checks to provide immediate field feedback.
  */
 export function SetupPage() {
   const { t } = useTranslation("common")
@@ -33,6 +33,7 @@ export function SetupPage() {
   const [workspace, setWorkspace] = useState(() => t("workspaceDefaults.generic"))
   const [workspaceEdited, setWorkspaceEdited] = useState(false)
   const [password, setPassword] = useState("")
+  const submitRef = useRef<HTMLButtonElement>(null)
 
   function suggestedWorkspaceName(nextName: string, nextEmail: string): string {
     const owner = workspaceOwnerName({ name: nextName, email: nextEmail })
@@ -149,13 +150,22 @@ export function SetupPage() {
             />
           </Field>
 
-          <EntryFooter message={errorMsg && <InlineError>{errorMsg}</InlineError>}>
-            <Button type="submit" disabled={invalid || submitting}>
+          <EntryFooter>
+            <Button ref={submitRef} type="submit" disabled={invalid || submitting}>
               {submitting ? t("setup.submitting") : t("setup.submitButton")}
             </Button>
           </EntryFooter>
         </form>
       </EntryPanel>
+      {errorMsg && (
+        <ErrorDialog
+          title={t("setup.failedTitle")}
+          message={t("errors.submitRetryHint")}
+          detail={errorMsg}
+          onClose={() => register.reset()}
+          onRestoreFocus={() => submitRef.current?.focus()}
+        />
+      )}
     </EntryPage>
   )
 }

@@ -1,0 +1,44 @@
+import { AlertTriangle } from "lucide-react"
+import { useTranslation } from "react-i18next"
+
+import { Button } from "./button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./dialog"
+import { VerbatimBlock } from "./verbatim"
+
+export function ErrorDialog({ title, message, detail, onClose, onRestoreFocus }: {
+  title: string
+  message: string
+  detail?: string
+  onClose: () => void
+  onRestoreFocus: () => void
+}) {
+  const { t } = useTranslation("common")
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent
+        showCloseButton={false}
+        onCloseAutoFocus={(event) => { event.preventDefault(); onRestoreFocus() }}
+        className="w-[calc(100%-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden"
+      >
+        <DialogHeader className="min-w-0 pr-4">
+          <DialogTitle className="flex items-start gap-2 break-all">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+            {title}
+          </DialogTitle>
+        </DialogHeader>
+        <DialogDescription className="break-all text-fg">{message}</DialogDescription>
+        {detail && (
+          <details className="min-w-0">
+            <summary className="cursor-pointer text-sm text-fg-muted focus-visible:outline-accent">
+              {t("errors.details")}
+            </summary>
+            <VerbatimBlock className="mt-3 max-h-52 w-full break-all">{detail}</VerbatimBlock>
+          </details>
+        )}
+        <DialogFooter>
+          <Button autoFocus onClick={onClose}>{t("actions.close")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

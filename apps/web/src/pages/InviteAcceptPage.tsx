@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "../components/ui/button"
 import { EntryFooter, EntryPage, EntryPanel } from "../components/ui/entry-panel"
+import { ErrorDialog } from "../components/ui/error-dialog"
 import { InlineError } from "../components/ui/error-state"
 import { Input } from "../components/ui/input"
 import { Field } from "../components/ui/label"
@@ -20,6 +21,9 @@ export function InviteAcceptPage({ token }: { token: string }) {
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
   const [errMsg, setErrMsg] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<{ action: "signIn" | "accept"; message: string } | null>(null)
+  const submitRef = useRef<HTMLButtonElement>(null)
+  const signInRef = useRef<HTMLButtonElement>(null)
   const [signInRequired, setSignInRequired] = useState(false)
   const passwordPolicyError = validateNewPassword(password)
   const passwordPolicyErrorMsg =
@@ -52,7 +56,7 @@ export function InviteAcceptPage({ token }: { token: string }) {
       if (user) await logout()
       else window.location.assign("/login")
     } catch (err) {
-      setErrMsg(err instanceof Error ? err.message : t("invite.acceptFailed"))
+      setSubmitError({ action: "signIn", message: err instanceof Error ? err.message : t("login.genericError") })
     }
   }
 
@@ -74,10 +78,9 @@ export function InviteAcceptPage({ token }: { token: string }) {
     } catch (err) {
       if (err instanceof ApiError && err.envelope.code === "invitation_sign_in_required") {
         setSignInRequired(true)
-        setErrMsg(t("invite.signInRequired"))
         return
       }
-      setErrMsg(err instanceof Error ? err.message : t("invite.acceptFailed"))
+      setSubmitError({ action: "accept", message: err instanceof Error ? err.message : t("invite.acceptFailed") })
     }
   }
 
@@ -85,7 +88,7 @@ export function InviteAcceptPage({ token }: { token: string }) {
     <EntryPage>
       <EntryPanel
         title={t("invite.title", { name: workspace_name })}
-        description={signInRequired ? undefined : isCurrentInvitee
+        description={signInRequired ? t("invite.signInRequired") : isCurrentInvitee
           ? t("invite.existingDescription", { email, role })
           : t("invite.description", { role })}
       >
@@ -135,20 +138,29 @@ export function InviteAcceptPage({ token }: { token: string }) {
 
           <EntryFooter message={errMsg && <InlineError>{errMsg}</InlineError>}>
             {signInRequired ? (
-              <Button type="button" onClick={() => void signIn()}>{t("invite.signIn")}</Button>
+              <Button ref={signInRef} type="button" onClick={() => void signIn()}>{t("invite.signIn")}</Button>
             ) : (
-              <Button type="submit" disabled={acceptMut.isPending || (!isCurrentInvitee && passwordPolicyError !== null)}>
+              <Button ref={submitRef} type="submit" disabled={acceptMut.isPending || (!isCurrentInvitee && passwordPolicyError !== null)}>
                 {acceptMut.isPending ? t("invite.submitting") : t(isCurrentInvitee ? "invite.accept" : "invite.submit")}
               </Button>
             )}
           </EntryFooter>
           {!isCurrentInvitee && !signInRequired && (
-            <Button type="button" variant="ghost" className="self-start" onClick={() => void signIn()} disabled={acceptMut.isPending}>
+            <Button ref={signInRef} type="button" variant="ghost" className="self-start" onClick={() => void signIn()} disabled={acceptMut.isPending}>
               {t("invite.signIn")}
             </Button>
           )}
         </form>
       </EntryPanel>
+      {submitError && (
+        <ErrorDialog
+          title={t(submitError.action === "signIn" ? "login.failedTitle" : "invite.acceptFailed")}
+          message={t("errors.submitRetryHint")}
+          detail={submitError.message}
+          onClose={() => setSubmitError(null)}
+          onRestoreFocus={() => (submitError.action === "signIn" ? signInRef : submitRef).current?.focus()}
+        />
+      )}
     </EntryPage>
   )
 }
