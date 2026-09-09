@@ -373,6 +373,7 @@ function ChatStream({
   // clock until the timeline carries the run's own started_at.
   const [liveStartedAt, setLiveStartedAt] = useState<number | null>(null)
   const startRun = useCallback((runId: string) => {
+    setChatToast(null)
     setLiveStartedAt(Date.now())
     setActiveRunId(runId)
   }, [])
@@ -408,12 +409,12 @@ function ChatStream({
   // persisted events before following new ones, so steps and partial output
   // catch up instead of falling back indefinitely to "Agent is replying…".
   useEffect(() => {
-    if (activeRunId) return
+    if (activeRunId || cancelRunMut.isPending || timelineQ.isError || timelineQ.isStale) return
     const runningRun = runs.find((r) => r.status === "running")
     if (!runningRun) return
     const timer = window.setTimeout(() => setActiveRunId(runningRun.id), 0)
     return () => window.clearTimeout(timer)
-  }, [activeRunId, runs])
+  }, [activeRunId, cancelRunMut.isPending, timelineQ.isError, timelineQ.isStale, runs])
 
   // Map output_message_id → runs[] so MessageRow can read the presentation
   // and the failed-run link from the run that produced the answer.
@@ -748,7 +749,7 @@ function streamTraceSteps(steps: StreamingStep[], known: ToolStep[]): TraceStep[
  * One run's WorkTrace. `live` carries the SSE steps while this run streams
  * (they replay the persisted events and then follow, so they supersede the
  * timeline snapshot); `run` is null only for a run the timeline has not
- * caught up with yet. Finished runs without steps render nothing.
+ * caught up with yet. Cancelled runs retain a neutral status without steps.
  */
 function RunTrace({
   run,
@@ -764,7 +765,7 @@ function RunTrace({
     if (live && live.steps.length > 0) return streamTraceSteps(live.steps, run?.steps ?? [])
     return run ? timelineTraceSteps(run) : []
   }, [live, run])
-  if (status !== "running" && status !== "queued" && steps.length === 0) return null
+  if (status !== "running" && status !== "queued" && status !== "cancelled" && steps.length === 0) return null
   if (status === "queued" && !live) return null
   return (
     <WorkTrace
