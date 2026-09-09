@@ -171,7 +171,7 @@ export function convertTimelineMessage(
   if (isRuntimeCapabilityError(msg.kind, msg.metadata)) {
     // Replace the plain text part with one that includes metadata marker
     const errorText = msg.content || ""
-    const metaJson = JSON.stringify(msg.metadata ?? {})
+    const metaJson = JSON.stringify({ ...msg.metadata, workspace_id: msg.workspace_id })
     const enrichedParts: typeof parts = [
       {
         type: "text" as const,
