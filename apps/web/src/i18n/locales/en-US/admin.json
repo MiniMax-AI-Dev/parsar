@@ -504,12 +504,14 @@
           "none": "No action needed."
         },
         "runtimeHealth": {
+          "unknown": "Unknown",
           "noSnapshot": "No snapshot",
           "offline": "Offline or unhealthy",
           "stale": "Stale heartbeat",
           "ready": "Ready"
         },
         "runtimeActions": {
+          "unknown": "Runtime health cannot be confirmed. Check the runtime connection.",
           "noSnapshot": "Check whether this run is bound to an agent_daemon runtime.",
           "offline": "Reconnect the daemon or switch to an available device.",
           "stale": "Confirm the daemon is running and reporting heartbeats.",
