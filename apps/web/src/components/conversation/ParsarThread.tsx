@@ -10,7 +10,7 @@
 
 import type { FC } from "react"
 import { useTranslation } from "react-i18next"
-import { AlertTriangle, ArrowDown, ChevronDown, ChevronRight, Loader2, Send, Square, Wrench } from "lucide-react"
+import { ArrowDown, ChevronDown, ChevronRight, Loader2, Send, Square, Wrench } from "lucide-react"
 import { useState } from "react"
 
 import {
@@ -28,6 +28,7 @@ import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown"
 
 import { ParsarToolCallCard } from "./ParsarToolCallCard"
 import { Button } from "../ui/button"
+import { ErrorState } from "../ui/error-state"
 import { credentialKindLabel } from "../../lib/credential-kind-ui"
 import { cn } from "../../lib/utils"
 
@@ -288,7 +289,7 @@ const AssistantToolCallPart: FC<ToolCallMessagePartProps> = (props) => {
 }
 
 // ---------------------------------------------------------------------------
-// Runtime error — a failed-red triangle and ink text, no red box
+// Runtime error — the same recovery panel used by the conversation timeline
 // ---------------------------------------------------------------------------
 
 function RuntimeErrorCard({ text, metadata }: { text: string; metadata: Record<string, unknown> }) {
@@ -326,19 +327,18 @@ function RuntimeErrorCard({ text, metadata }: { text: string; metadata: Record<s
   }
 
   return (
-    <div className="my-2 flex items-start gap-1.5 text-base text-fg">
-      <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-      <div className="min-w-0">
-        <p className="m-0 font-medium">{t("conversations.runtime_error.badge")}</p>
-        <p className="m-0 mt-1 break-words">{message}</p>
-        {href && action && (
-          <Button asChild variant="outline" size="sm" className="mt-2">
-            <a href={href}>{action}</a>
-          </Button>
-        )}
-        <p className="m-0 mt-2 text-xs text-fg-muted">{t("conversations.runtime_error.retryHint")}</p>
-      </div>
-    </div>
+    <ErrorState
+      appearance="panel"
+      announce={false}
+      className="my-2"
+      title={message}
+      hint={t("conversations.runtime_error.retryHint")}
+      action={href && action ? (
+        <Button asChild variant="outline" size="sm">
+          <a href={href}>{action}</a>
+        </Button>
+      ) : undefined}
+    />
   )
 }
 
