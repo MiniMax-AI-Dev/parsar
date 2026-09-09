@@ -311,6 +311,8 @@
       "send": "Send",
       "sending": "Sending…",
       "stopAria": "Stop generating",
+      "stopErrorTitle": "Could not confirm stop",
+      "stopError": "Check the current run status. If it is still running, try stopping it again.",
       "placeholderGeneric": "Send a message…"
     },
     "sandboxGuard": {
