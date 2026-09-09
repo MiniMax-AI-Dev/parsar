@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog"
+import { EmptyState } from "../../components/ui/empty-state"
 import { Input } from "../../components/ui/input"
 import { InitialTile, Ledger, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
 import { Skeleton } from "../../components/ui/skeleton"
@@ -492,9 +493,7 @@ function ConversationList(p: ListProps) {
           ))}
         </div>
       ) : p.conversations.length === 0 ? (
-        <p className="m-0 px-4 py-6 text-center text-sm text-fg-muted">
-          {t("conversations.sidebar.emptyForAgent")}
-        </p>
+        <EmptyState size="compact" title={t("conversations.sidebar.emptyForAgent")} />
       ) : (
         <Ledger columns={LIST_COLUMNS} role="listbox" aria-label={listLabel}>
           <ul className="m-0 list-none p-0">

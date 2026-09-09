@@ -116,7 +116,7 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
           {agentsQ.isLoading ? (
             <Skeleton className="mt-2 h-3 w-full" />
           ) : agents.length === 0 ? (
-            <p className="pt-1 text-sm text-fg-muted">{t("capabilities.marketplaceDetail.enabledAgents.empty")}</p>
+            <EmptyState size="compact" title={t("capabilities.marketplaceDetail.enabledAgents.empty")} />
           ) : (
             <Ledger columns={AGENT_COLUMNS} className="-mx-4" role="listbox" aria-label={t("capabilities.marketplaceDetail.enabledAgents.title", { count: agentCount })}>
               <ul className="m-0 list-none p-0">

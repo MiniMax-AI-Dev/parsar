@@ -6,6 +6,7 @@ import { PageHeader } from "../../components/layout/PageHeader"
 import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Badge } from "../../components/ui/badge"
 import { Ledger, LedgerHeader, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
+import { EmptyState } from "../../components/ui/empty-state"
 import { Property, PropertyList } from "../../components/ui/property-list"
 import { Skeleton } from "../../components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
@@ -80,7 +81,7 @@ export function SettingsPage() {
                   {t("settings.authentication.error")}
                 </p>
               ) : providers.length === 0 ? (
-                <p className="text-sm text-fg-muted">{tc("states.emptyTitle")}</p>
+                <EmptyState size="compact" title={tc("states.emptyTitle")} />
               ) : (
                 <Ledger
                   columns={PROVIDER_COLUMNS}

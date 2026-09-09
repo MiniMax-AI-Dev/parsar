@@ -574,6 +574,10 @@ Pages with a detail rail may opt into wrapping header actions through
 `PageHeader.actionClassName` and an auto-height header. Other pages retain
 the default single-row header layout.
 
+Use `EmptyState` with `size="compact"` for detail tabs, subsections, and
+compact result panels. Keep their alignment and spacing in that shared
+component; page-level empty states retain the default size.
+
 Structured `Ledger` columns own both header and cell alignment: numbers align
 right; text, identifiers, and dates align left. Keep widths and alignment in
 the shared column model, not separate page-specific header rules. Direct cell
@@ -584,6 +588,16 @@ their existing layout.
 When a list needs a compact presentation beside a detail rail, use container
 queries against the list width. Keep the same data and row actions, with
 explicit field labels when column headings are hidden.
+
+Property groups use the shared `PropertyList` label track: 8rem capped at 40%
+of the available width. Labels wrap and values retain their existing overflow
+behavior. Do not size individual groups from their longest label or add
+page-specific label widths; groups in the same context must align.
+
+Persistent execution failures use `ErrorState` with `appearance="panel"` to
+separate recovery guidance from expandable technical detail. Keep raw reasons
+in one place; historical conversation messages disable live announcements.
+Loading errors and field validation retain their existing presentation.
 
 ## Typography contract
 

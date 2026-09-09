@@ -118,7 +118,7 @@ export function ResourceAuditTimeline({
         description={t("audit.resourceTimeline.empty.description", {
           defaultValue: "This resource has not produced any audit records.",
         })}
-        className="py-8"
+        size="compact"
       />
     )
   }
