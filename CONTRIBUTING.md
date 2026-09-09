@@ -154,6 +154,10 @@ description and keep ownership on the side listed here.
 
 ### Server versus daemon ownership
 
+- Agent capability reads retain the stored binding version and expose its
+  pinning mode. Displayed current versions follow the runtime-resolved latest
+  metadata (including deprecation cutoffs) or the pinned version accordingly.
+
 - Cross-workspace installed capabilities remain visible and removable after
   unpublishing. Their installation metadata reports source visibility and only
   bound versions while private; marketplace discovery and new installs still

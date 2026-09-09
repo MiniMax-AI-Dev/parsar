@@ -702,7 +702,7 @@
       },
       "add": {
         "title": "{{name}} — 添加新版本",
-        "description": "保存时会自动生成下一个版本。已启用旧版本的 Agent 不受影响，需在 Agent 详情中手动切换。",
+        "description": "保存时会自动分配下一个版本号。跟随最新版的 Agent 将在下次运行时使用新版本；固定版本的 Agent 保持原版本。",
         "prefillFromLatest": "已用上一版（{{version}}）的内容预填。修改后会作为新版本提交。",
         "inlineSecretLostWarning": "上一版的 inline secret（{{keys}}）已隐藏。如需保留，请重新输入明文；或改成已托管的凭据。"
       },
@@ -1204,6 +1204,8 @@
           "missingShort": "需要「{{kind}}」，未设置"
         },
         "bindings": {
+          "followingLatest": "跟随最新版",
+          "pinnedVersion": "固定版本",
           "versionDeleted": {
             "warning": "版本已下线",
             "switchAction": "请切到可用版本"
@@ -1245,7 +1247,7 @@
         },
         "switchDialog": {
           "title": "切换「{{cap}}」版本",
-          "description": "切换后，该 Agent 下一次运行使用新版本（已在跑的运行不变）。",
+          "description": "选择一个版本后，此 Agent 的后续运行将固定使用它；进行中的运行不受影响。",
           "latest": "最新",
           "current": "当前",
           "notice": "切换仅影响本 Agent（{{agent}}）；其它装配此能力的 Agent 不受影响。下次运行生效。"
@@ -1269,7 +1271,7 @@
           "upgraded": "「{{cap}}」已升级到 v{{version}}，下次运行生效。"
         },
         "marketplace": {
-          "deprecatedBanner": "此能力已被来源工作区标记废弃。本 Agent 可以继续使用锁定的 v{{version}}，但无法升级到新版本。",
+          "deprecatedBanner": "来源工作区已弃用此能力。此 Agent 可以继续使用 v{{version}}，但不能升级。",
           "upgradeShort": "有新版本 v{{version}}"
         },
         "state": {

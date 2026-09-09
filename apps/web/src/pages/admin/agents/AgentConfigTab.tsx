@@ -40,6 +40,7 @@ import {
 } from "../../../lib/api-capabilities"
 import { useMyCredentials } from "../../../lib/api-credentials"
 import { useSecrets } from "../../../lib/api-secrets"
+import { agentCapabilityVersion } from "../../../lib/agent-capability-version"
 import { agentExecutionPlacement } from "../../../lib/agent-runtime"
 import { agentEngineLabel, agentEngineOf, agentEngineSupportsCapability, agentEnginesSupportingCapability } from "../../../lib/agent-view-model"
 import { credentialBinding, hasCredentialKind, sharedSecretsForKind } from "../../../lib/credential-bindings"
@@ -381,7 +382,7 @@ function CapabilityCard({
   const capability = item.capability
   const binding = item.binding
   const { latest, versions, versionsQ } = useCapabilityVersions(workspaceID, capability, mode === "enabled")
-  const boundVersion = versions.find((version) => version.id === binding?.capability_version_id) ?? (binding?.capability_version_id && capability?.pinned_version ? { id: binding.capability_version_id, capability_id: capability.id, version: capability.pinned_version, created_at: capability.latest_version_created_at ?? capability.created_at } as CapabilityVersion : undefined)
+  const boundVersion = agentCapabilityVersion(binding, capability, versions)
   const catalogID = catalogIDFromVersion(boundVersion ?? latest)
   const versionDeleted = !!binding && !versionsQ.isLoading && !boundVersion && !capability?.latest_version_id
   const fromMarketplace = !!capability?.from_marketplace || (!!capability?.source_workspace_id && capability.source_workspace_id !== workspaceID)
@@ -410,7 +411,7 @@ function CapabilityCard({
 
   const agentEngine = agentEngineOf(agent)
   const incompatible = !agentEngineSupportsCapability(agentEngine, capability.type)
-  const upgradable = mode === "enabled" && fromMarketplace && !!binding && !!latest && latest.id !== binding.capability_version_id
+  const upgradable = mode === "enabled" && fromMarketplace && !!binding && binding.pinning_mode !== "latest" && !!latest && latest.id !== binding.capability_version_id
 
   // One line per credential the capability needs and the reader has not set.
   // A credential that *is* set says nothing: the row's glyph already reports
@@ -420,7 +421,10 @@ function CapabilityCard({
     (rc) => !hasUsableCredential(agent, binding, credentials, sharedSecrets, rc.kind, catalogID),
   )
 
-  const notes: { key: string; text: React.ReactNode; action?: React.ReactNode }[] = []
+  const notes: { key: string; text: React.ReactNode; action?: React.ReactNode }[] = binding ? [{
+    key: "version-mode",
+    text: t(`agents.detail.capabilities.bindings.${binding.pinning_mode === "latest" ? "followingLatest" : "pinnedVersion"}`),
+  }] : []
   for (const rc of missingKinds) {
     notes.push({
       key: `cred:${rc.kind}`,
@@ -468,7 +472,7 @@ function CapabilityCard({
     notes.push({
       key: "deprecated",
       text: t("agents.detail.capabilities.marketplace.deprecatedBanner", {
-        version: boundVersion?.version ?? capability.pinned_version ?? "—",
+        version: boundVersion?.version ?? "—",
       }),
     })
   }
@@ -521,11 +525,7 @@ function CapabilityCard({
         </>
       }
       description={capability.description}
-      // The version the agent is actually pinned to. It used to be told three
-      // times over — a mono `v—`, a "current v2.0.0" in prose, a "published
-      // v2.0.0" in a banner — so it lives in one slot now, and says nothing
-      // rather than an em dash when there is nothing to say.
-      version={versionOf(boundVersion?.version ?? binding?.version ?? capability.pinned_version) ?? (mode === "available" ? versionOf(latest?.version) : undefined)}
+      version={versionOf(boundVersion?.version) ?? (mode === "available" ? versionOf(latest?.version) : undefined)}
       notes={notes}
       // In the add dialog the verb is the reason the list exists, so it does
       // not wait for a hover to appear.
@@ -595,9 +595,15 @@ function CapabilityVersionDialog({
   const { t } = useTranslation("admin")
   const [open, setOpen] = useState(false)
   const mut = useEnableAgentCapabilityMutation(workspaceID, agent.id)
-  const [selected, setSelected] = useState(binding?.capability_version_id ?? "")
+  const [selection, setSelected] = useState("")
+  const changeOpen = (next: boolean) => {
+    setOpen(next)
+    setSelected("")
+  }
   const [credentialBindingChoices, setCredentialBindingChoices] = useState<Record<string, string>>({})
   const { latest, versions, versionsQ } = useCapabilityVersions(workspaceID, capability, open)
+  const currentVersion = agentCapabilityVersion(binding, capability, versions)
+  const selected = selection || currentVersion?.id || ""
   const selectedVersion = selected
     ? versions.find((version) => version.id === selected) ?? (mode === "enable" ? latest : versions[0])
     : mode === "enable" ? latest : versions[0]
@@ -627,7 +633,7 @@ function CapabilityVersionDialog({
   const canSubmit = !!selectedVersion
     && !mut.isPending
     && !disabled
-    && (mode === "enable" ? !missingRequiredCredential : selectedVersion.id !== binding?.capability_version_id)
+    && (mode === "enable" ? !missingRequiredCredential : binding?.pinning_mode === "latest" || selectedVersion.id !== currentVersion?.id)
 
   const submit = () => {
     if (!selectedVersion) return
@@ -646,7 +652,7 @@ function CapabilityVersionDialog({
         : binding?.configuration,
     }, {
       onSuccess: () => {
-        setOpen(false)
+        changeOpen(false)
         onToast(mode === "enable"
           ? t("agents.detail.capabilities.toast.enabled", { cap: capability.name, agent: agent.name, version: selectedVersion.version })
           : t("agents.detail.capabilities.toast.switched", { cap: capability.name, version: selectedVersion.version }))
@@ -661,18 +667,18 @@ function CapabilityVersionDialog({
     : t("agents.detail.capabilities.actions.enableConfirm")
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       {trigger ? (
-        trigger(() => setOpen(true))
+        trigger(() => changeOpen(true))
       ) : isSwitch ? (
         <ActionIconButton
           icon={Replace}
           label={t("agents.detail.capabilities.actions.switchVersion")}
           disabled={disabled}
-          onClick={() => setOpen(true)}
+          onClick={() => changeOpen(true)}
         />
       ) : (
-        <Button variant="outline" size="sm" disabled={disabled} onClick={() => setOpen(true)}>
+        <Button variant="outline" size="sm" disabled={disabled} onClick={() => changeOpen(true)}>
           {t("agents.detail.capabilities.actions.enable")}
         </Button>
       )}
@@ -691,7 +697,7 @@ function CapabilityVersionDialog({
                       <input type="radio" name="capability-version" className="h-3.5 w-3.5 accent-accent" checked={selected === version.id} onChange={() => setSelected(version.id)} />
                       <span className="font-mono text-xs">v{version.version}</span>
                       {index === 0 && <span className="text-xs text-fg-muted">· {t("agents.detail.capabilities.switchDialog.latest")}</span>}
-                      {version.id === binding?.capability_version_id && <span className="text-xs text-fg-muted">· {t("agents.detail.capabilities.switchDialog.current")}</span>}
+                      {version.id === currentVersion?.id && <span className="text-xs text-fg-muted">· {t("agents.detail.capabilities.switchDialog.current")}</span>}
                     </label>
                   </li>
                 ))}
@@ -724,7 +730,7 @@ function CapabilityVersionDialog({
           <MutationError error={mut.error} />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={mut.isPending}>{t("agents.detail.capabilities.actions.cancel")}</Button>
+          <Button variant="outline" onClick={() => changeOpen(false)} disabled={mut.isPending}>{t("agents.detail.capabilities.actions.cancel")}</Button>
           <Button disabled={!canSubmit} onClick={submit}>{mut.isPending && <Loader2 className="animate-spin" strokeWidth={1.5} aria-hidden="true" />}{confirmLabel}</Button>
         </DialogFooter>
       </DialogContent>

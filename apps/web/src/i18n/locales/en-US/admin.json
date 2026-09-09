@@ -702,7 +702,7 @@
       },
       "add": {
         "title": "{{name}} — add version",
-        "description": "Saving assigns the next version automatically. Agents using older versions are unaffected until they switch from Agent detail.",
+        "description": "Saving assigns the next version automatically. Agents following latest use it on their next run; pinned Agents keep their selected version.",
         "prefillFromLatest": "Prefilled from the previous version ({{version}}). Edits become the new version on submit.",
         "inlineSecretLostWarning": "Inline secret(s) from the previous version ({{keys}}) are hidden. Re-enter the plaintext to keep them, or switch to a managed credential."
       },
@@ -1204,6 +1204,8 @@
           "missingShort": "Requires {{kind}}, not set"
         },
         "bindings": {
+          "followingLatest": "Following latest",
+          "pinnedVersion": "Pinned version",
           "versionDeleted": {
             "warning": "Version unavailable",
             "switchAction": "Switch to an available version"
@@ -1245,7 +1247,7 @@
         },
         "switchDialog": {
           "title": "Switch \"{{cap}}\" version",
-          "description": "The Agent uses the new version on its next run; in-flight runs are unchanged.",
+          "description": "Selecting a version pins this Agent to it for future runs. In-flight runs are unchanged.",
           "latest": "latest",
           "current": "current",
           "notice": "Only this Agent ({{agent}}) is affected. Other Agents using this capability are unchanged. Takes effect on the next run."
@@ -1269,7 +1271,7 @@
           "upgraded": "\"{{cap}}\" upgraded to v{{version}}. Takes effect on the next run."
         },
         "marketplace": {
-          "deprecatedBanner": "The source workspace marked this capability deprecated. This Agent can keep using pinned v{{version}}, but cannot upgrade.",
+          "deprecatedBanner": "The source workspace deprecated this capability. This Agent can keep using v{{version}}, but cannot upgrade.",
           "upgradeShort": "New version v{{version}}"
         },
         "state": {
