@@ -562,7 +562,7 @@ function ChatStream({
                   metadata={m.metadata}
                   outputRuns={runsByOutputMessage.get(m.id)}
                   stamp={fmtAgo(m.created_at)}
-                  agentName={agentName}
+                  agentName={agent?.name || (m.sender_id === convInfoQ.data?.primary_agent_id ? agentName : "")}
                   conversationId={conversationId}
                   onOpenRun={openRun}
                 />
