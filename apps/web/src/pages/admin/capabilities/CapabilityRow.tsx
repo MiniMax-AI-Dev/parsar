@@ -39,7 +39,7 @@ export function CapabilityRow({
   return (
     <LedgerRow selected={selected} onClick={onOpen} onKeyDown={onKeyDown} className="h-auto min-h-12 py-2">
       <div className="min-w-0 @max-xl/capability-list:col-span-full">
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 @max-xl/capability-list:min-h-7 @max-xl/capability-list:pr-20">
           <span className="min-w-0 max-w-full break-words font-medium">{capability.name}</span>
           <CapabilityTypeBadge type={capability.type} />
           {availabilityLabel && <Badge variant="neutral" className="shrink-0" dot>{availabilityLabel}</Badge>}
@@ -47,7 +47,7 @@ export function CapabilityRow({
         {capability.description && (
           <span className="block truncate text-xs text-fg-muted" title={capability.description}>{capability.description}</span>
         )}
-        <dl className="mt-2 hidden grid-cols-2 gap-x-4 gap-y-1 text-xs @max-xl/capability-list:grid">
+        <dl className="mt-2 hidden grid-cols-2 gap-x-4 gap-y-1 text-xs @max-xl/capability-list:grid @max-sm/capability-list:grid-cols-1">
           {[
             [t("capabilities.table.version"), version ?? "—"],
             [t("capabilities.marketplaceDetail.source.title"), source],
@@ -67,7 +67,7 @@ export function CapabilityRow({
       <LedgerNum className="@max-xl/capability-list:hidden">{enabledCount}</LedgerNum>
       <span className="break-words text-xs text-fg-muted @max-xl/capability-list:hidden">{credentials}</span>
       <span className="break-words text-right text-xs text-fg-muted @max-xl/capability-list:hidden">{age}</span>
-      <span className="@max-xl/capability-list:col-start-[-1] @max-xl/capability-list:row-start-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <span className="@max-xl/capability-list:absolute @max-xl/capability-list:right-0 @max-xl/capability-list:top-2 @max-xl/capability-list:h-7 @max-xl/capability-list:w-0" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
         {actions}
       </span>
     </LedgerRow>
