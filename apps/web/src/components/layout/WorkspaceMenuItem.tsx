@@ -6,9 +6,10 @@ import type { UserWorkspace } from "../../lib/api-types"
 import { cn } from "../../lib/utils"
 import { setWorkspaceId } from "../../lib/workspace"
 
-export function WorkspaceMenuItem({ workspace, active, onRename, onArchive }: {
+export function WorkspaceMenuItem({ workspace, active, showSlug, onRename, onArchive }: {
   workspace: UserWorkspace
   active: boolean
+  showSlug: boolean
   onRename: () => void
   onArchive: () => void
 }) {
@@ -25,7 +26,10 @@ export function WorkspaceMenuItem({ workspace, active, onRename, onArchive }: {
           active && "font-medium text-fg",
         )}
       >
-        <span className="min-w-0 flex-1 break-words">{workspace.name}</span>
+        <span className="min-w-0 flex-1 break-words">
+          {workspace.name}
+          {showSlug && <span className="block break-all font-mono text-xs font-normal text-fg-faint">{workspace.slug}</span>}
+        </span>
         <span className="w-14 shrink-0 text-right text-xs font-medium text-fg-faint">{workspace.role}</span>
         <span className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
           {active && <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={2} />}

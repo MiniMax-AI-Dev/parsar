@@ -152,6 +152,7 @@ export function WorkspaceSwitcher() {
                 key={ws.id}
                 workspace={ws}
                 active={ws.id === wsId}
+                showSlug={workspaces.some((other) => other.id !== ws.id && other.name === ws.name)}
                 onRename={() => setRenameWs(ws)}
                 onArchive={() => setArchiveWs(ws)}
               />
