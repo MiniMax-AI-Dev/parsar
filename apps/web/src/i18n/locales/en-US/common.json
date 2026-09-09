@@ -226,7 +226,8 @@
   "invite": {
     "loading": "Loading invitation...",
     "invalidTitle": "Invalid Invitation",
-    "invalidDescription": "This invitation link is invalid, expired, or has already been used.",
+    "invalidDescription": "This invitation link is invalid, expired, or has already been used. Ask the person who invited you for a new link.",
+    "backToConsole": "Back to console",
     "title": "Join {{name}}",
     "description": "You've been invited as {{role}}. Set a password to activate your account.",
     "existingDescription": "You're signed in as {{email}}. Accept this invitation to join as {{role}}.",
