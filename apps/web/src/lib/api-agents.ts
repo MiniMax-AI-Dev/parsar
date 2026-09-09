@@ -380,7 +380,10 @@ export function useCancelRun(workspaceID: string | null) {
       void qc.invalidateQueries({ queryKey: ["admin", "agentRuns"] })
       void qc.invalidateQueries({ queryKey: ["admin", "agentRun"] })
       void qc.invalidateQueries({ queryKey: ["admin", "agentRunEvents"] })
-      void qc.invalidateQueries({ queryKey: ["conversation"] })
+    },
+    onSettled: () => {
+      // Reconcile even when the server reports that the run already stopped.
+      return qc.invalidateQueries({ queryKey: ["admin", "conversationTimeline"] })
     },
   })
 }
