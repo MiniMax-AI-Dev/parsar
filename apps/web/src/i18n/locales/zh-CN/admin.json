@@ -1804,7 +1804,7 @@
       "model": "模型"
     },
     "search": {
-      "placeholder": "按事件 / actor / target ID 搜索"
+      "placeholder": "搜索事件、操作人或目标 ID…"
     },
     "table": {
       "time": "时间",
