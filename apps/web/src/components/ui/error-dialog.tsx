@@ -41,7 +41,7 @@ export function ErrorDialog({ title, message, detail, onClose, onRestoreFocus, f
             <summary className="cursor-pointer text-sm text-fg-muted focus-visible:outline-accent">
               {t("errors.details")}
             </summary>
-            <VerbatimBlock className="mt-3 max-h-52 w-full break-all">{detail}</VerbatimBlock>
+            <VerbatimBlock tabIndex={0} aria-label={t("errors.details")} className="mt-3 max-h-52 w-full break-all focus-visible:outline-accent">{detail}</VerbatimBlock>
           </details>
         )}
         <DialogFooter>

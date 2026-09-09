@@ -85,6 +85,10 @@ export function InviteAcceptPage({ token }: { token: string }) {
         setSignInRequired(true)
         return
       }
+      if (err instanceof ApiError && err.envelope.status === 400) {
+        setErrMsg(err.message)
+        return
+      }
       setSubmitError({ action: "accept", message: err instanceof Error ? err.message : t("invite.acceptFailed") })
     }
   }

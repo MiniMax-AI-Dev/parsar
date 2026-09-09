@@ -64,7 +64,7 @@ export function SetupPage() {
       : register.error instanceof Error
         ? register.error.message
         : ""
-  const fieldError = register.error instanceof ApiError && register.error.envelope.code === "bootstrap_invalid_input"
+  const fieldError = register.error instanceof ApiError && register.error.envelope.status === 400
 
   const passwordPolicyError = validateNewPassword(password)
   const passwordPolicyErrorMsg =
