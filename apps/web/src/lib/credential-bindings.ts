@@ -1,4 +1,4 @@
-import type { Secret, UserCredential } from "./api-types"
+import type { CapabilityVersion, Secret, UserCredential } from "./api-types"
 
 export type PerKindBindingChoice =
   | { source: "personal" }
@@ -44,4 +44,11 @@ export function credentialBinding(config: Record<string, unknown> | undefined, k
 
 export function hasCredentialKind(credentials: UserCredential[], kind: string) {
   return credentials.some((credential) => credential.kind === kind)
+}
+
+export function catalogIDFromVersion(version: CapabilityVersion | undefined) {
+  const payload = version?.source_payload
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return ""
+  const catalogID = (payload as Record<string, unknown>).catalog_id
+  return typeof catalogID === "string" ? catalogID.trim() : ""
 }

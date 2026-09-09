@@ -199,6 +199,9 @@ description and keep ownership on the side listed here.
 
 ### Agent CLI adapter contract
 
+- Agent cloning copies enabled capability bindings, version choices, and configuration.
+  Credential requirements come from each selected version; shared credentials remain
+  independent per capability, and personal or unavailable credentials require a new choice.
 - Agent creation and editing store behavior instructions in `system_prompt`.
   Preserve saved text when opening the form; clearing it sends an empty string.
 - OpenCode model selectors use `provider/model`. Its Anthropic SDK base URL

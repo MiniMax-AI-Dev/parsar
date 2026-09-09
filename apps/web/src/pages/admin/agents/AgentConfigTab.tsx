@@ -43,7 +43,7 @@ import { useSecrets } from "../../../lib/api-secrets"
 import { agentCapabilityFollowsLatest, agentCapabilityVersion } from "../../../lib/agent-capability-version"
 import { agentExecutionPlacement } from "../../../lib/agent-runtime"
 import { agentEngineLabel, agentEngineOf, agentEngineSupportsCapability, agentEnginesSupportingCapability } from "../../../lib/agent-view-model"
-import { credentialBinding, hasCredentialKind, sharedSecretsForKind } from "../../../lib/credential-bindings"
+import { catalogIDFromVersion, credentialBinding, hasCredentialKind, sharedSecretsForKind } from "../../../lib/credential-bindings"
 import type { Agent, AgentCapability, AgentDetail, Capability, CapabilityVersion, Secret, UserCredential } from "../../../lib/api-types"
 import { CredentialBindingSelect } from "../../../components/admin/CredentialBindingSelect"
 import { CapabilityTypeBadge } from "../CapabilitiesPage"
@@ -118,13 +118,6 @@ function hasUsableCredential(agent: Agent, binding: AgentCapability | undefined,
   const sharedID = boundSharedSecretID(agent, binding, kind)
   if (sharedID && sharedSecretsForKind(sharedSecrets, kind, catalogID).some((secret) => secret.id === sharedID)) return true
   return agent.visibility !== "public" && hasCredentialKind(credentials, kind)
-}
-
-function catalogIDFromVersion(version: CapabilityVersion | undefined) {
-  const payload = version?.source_payload
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return ""
-  const catalogID = (payload as Record<string, unknown>).catalog_id
-  return typeof catalogID === "string" ? catalogID.trim() : ""
 }
 
 function useCapabilityVersions(

@@ -1498,9 +1498,10 @@
       "clone": {
         "loading": "Loading the source Agent’s capabilities…",
         "loadFailed": "The source capabilities could not be loaded.",
-        "credentials": "Capabilities and their settings are copied. Select credentials for this new Agent; existing credential bindings are not copied.",
+        "credentials": "Capabilities and settings are copied, including available shared credentials. Personal or unavailable credentials need a new selection.",
         "unavailable": "These source capabilities are no longer available for creation. Remove them from this copy to continue.",
-        "remove": "Remove from copy"
+        "remove": "Remove from copy",
+        "manageCredentials": "Add or authorize credentials (opens a new tab)"
       }
     },
     "pendingCapability": {

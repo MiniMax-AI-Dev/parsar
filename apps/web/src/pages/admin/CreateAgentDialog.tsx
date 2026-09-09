@@ -20,6 +20,9 @@ import { Select, SelectOption } from "../../components/ui/select"
 import { AgentInstructionsField } from "./agents/AgentInstructionsField"
 import { AgentCloneNotice } from "./agents/AgentCloneNotice"
 import { useAgentCloneCapabilities } from "./agents/useAgentCloneCapabilities"
+import { useAgentCloneCredentials } from "./agents/useAgentCloneCredentials"
+import { AgentCloneCredentials } from "./agents/AgentCloneCredentials"
+import { sharedSecretsForKind } from "../../lib/credential-bindings"
 import { withoutCredentialBindings } from "../../lib/agent-clone"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
@@ -535,15 +538,18 @@ export function CreateAgentDialog({
       setVisibility("public")
       setDeviceID(cloneSource ? deviceIDFromAgent(cloneSource) : "")
       setWorkDir(cloneSource ? workDirFromAgent(cloneSource) || defaultWorkDir(initialExecutionMode) : defaultWorkDir(initialExecutionMode))
-      // Clones explicitly drop the source agent's credential bindings: the
-      // copy is a fresh agent and the user re-picks. Without these resets a
-      // previous clone's bindings would leak across dialog opens.
+      // Capability credentials are resolved separately for each cloned binding.
       setCredentialBindings({})
       setInitialCredentialBindings(undefined)
-      // Create is locked to public, so personal binding is disabled — start on
-      // shared. Left as a pending pick here (secrets may still be loading); the
-      // resolver effect below upgrades it to the first existing secret if any.
-      setModelBindingChoice({ source: "shared" })
+      // Public clones retain a shared model binding or wait for an explicit
+      // choice; only fresh creation uses the automatic default below.
+      const sourceModelBinding = agentConfig(cloneSource).model_credential_binding as { source?: string; secret_id?: string } | undefined
+      setModelBindingChoice(sourceModelBinding?.source === "shared" && sourceModelBinding.secret_id
+        ? { source: "shared", existing_secret_id: sourceModelBinding.secret_id }
+        : { source: "shared" })
+      setModelNewSecretExpanded(false)
+      setModelNewSecretDisplayName("")
+      setModelNewSecretPlaintext("")
       setInlineNewSecrets([])
     } else if (agent) {
       setName(agent.name)
@@ -605,8 +611,11 @@ export function CreateAgentDialog({
   const clone = useAgentCloneCapabilities(open, cloneSourceID,
     existingBindingsQ.isFetching || existingBindingsQ.isError ? undefined : existingBindingsQ.data?.installed,
     setSelectedCapabilityIDs, setCapabilityVersionChoices)
+  const cloneCredentials = useAgentCloneCredentials(cloneSourceID, workspaceID, agentConfig(agent),
+    clone.bindings, allCapabilitiesPool, selectedCapabilityIDs, capabilityVersionChoices, sharedSecrets)
   const cloneLoadFailed = Boolean(cloneSourceID) && (
-    (!clone.ready && existingBindingsQ.isError) || (!allCapabilitiesQ.data && allCapabilitiesQ.isError)
+    (!clone.ready && existingBindingsQ.isError) || (!allCapabilitiesQ.data && allCapabilitiesQ.isError) ||
+    cloneCredentials.failed || (cloneCredentials.needsCredentials && secretsQ.isError)
   )
   const unavailableCloneCapabilities = clone.bindings.filter((binding) =>
     selectedCapabilityIDs.includes(binding.capability_id) && (
@@ -732,13 +741,22 @@ export function CreateAgentDialog({
   // on the credential_ref UI so no-credential models stay untouched; with zero
   // secrets it stays pending and the inline new-secret form takes over.
   useEffect(() => {
-    if (mode !== "create") return
+    if (mode !== "create" || cloneSourceID) return
     if (!requiresModel || selectedModel?.credential_mode !== "credential_ref") return
     if (modelBindingChoice.source !== "shared") return
     if ("existing_secret_id" in modelBindingChoice || "new_secret" in modelBindingChoice) return
     if (modelNewSecretExpanded || sharedSecrets.length === 0) return
     setModelBindingChoice({ source: "shared", existing_secret_id: sharedSecrets[0].id })
-  }, [mode, requiresModel, selectedModel, modelBindingChoice, modelNewSecretExpanded, sharedSecrets])
+  }, [mode, cloneSourceID, requiresModel, selectedModel, modelBindingChoice, modelNewSecretExpanded, sharedSecrets])
+  const modelSharedSecrets = cloneSourceID
+    ? sharedSecretsForKind(sharedSecrets, selectedModel?.credential_kind_code || "model_api_key")
+    : sharedSecrets
+  const cloneModelCredentialValid = !cloneSourceID || !requiresModel || selectedModel?.credential_mode !== "credential_ref" || (
+    modelBindingChoice.source === "shared" && (
+      ("existing_secret_id" in modelBindingChoice && modelSharedSecrets.some((secret) => secret.id === modelBindingChoice.existing_secret_id)) ||
+      ("new_secret" in modelBindingChoice && !!modelBindingChoice.new_secret.plaintext.trim())
+    )
+  )
   const daemonExecutionEditable = connector === "agent_daemon"
   const showExecutionChoices = mode === "create" || daemonExecutionEditable
   const showDevicePicker = connector === "agent_daemon" && executionMode === "local_device" && Boolean(workspaceID)
@@ -817,7 +835,7 @@ export function CreateAgentDialog({
       // the user a clearer error tied to the input instead of a stream error.
       return
     }
-    if (mode === "create" && (allCapabilitiesQ.isLoading || !clone.ready || cloneLoadFailed || unavailableCloneCapabilities.length > 0)) return
+    if (mode === "create" && (allCapabilitiesQ.isLoading || !clone.ready || !cloneCredentials.valid || !cloneModelCredentialValid || cloneLoadFailed || unavailableCloneCapabilities.length > 0)) return
     const selectedCapabilities = mode === "create"
       ? allCapabilitiesPool.filter((cap) => selectedCapabilityIDs.includes(cap.id) && cap.latest_version_id)
       : []
@@ -835,7 +853,7 @@ export function CreateAgentDialog({
         ? (choice?.versionID || (cap.latest_version_id as string))
         : (cap.latest_version_id as string)
       return { capability_version_id: versionID, pinning_mode: pinningMode,
-        ...(source ? { configuration: withoutCredentialBindings(source.configuration) } : {}) }
+        ...(cloneSourceID ? { configuration: cloneCredentials.rows.find((row) => row.capabilityID === cap.id)?.configuration } : {}) }
     })
     const profile = {
       ...(requiresModel ? { model_id: selectedModelID } : {}),
@@ -1003,14 +1021,15 @@ export function CreateAgentDialog({
     (connector !== "agent_daemon" || executionMode !== "local_device" || deviceID !== "") &&
     workDirValid &&
     (mode !== "create" || (!allCapabilitiesQ.isLoading && clone.ready && !cloneLoadFailed && unavailableCloneCapabilities.length === 0)) &&
-    (aggregatedRequiredKinds.length === 0 || allCredentialsSatisfied)
+    cloneModelCredentialValid &&
+    (cloneSourceID ? cloneCredentials.valid : aggregatedRequiredKinds.length === 0 || allCredentialsSatisfied)
 
   const step1Valid =
     name.trim() !== "" &&
     hasConnector &&
     hasRequiredModel &&
     (connector !== "agent_daemon" || executionMode !== "local_device" || deviceID !== "") &&
-    workDirValid
+    workDirValid && cloneModelCredentialValid
   const totalSteps = 2
   const progressPercent = Math.round((step / totalSteps) * 100)
 
@@ -1350,8 +1369,8 @@ export function CreateAgentDialog({
                         onChange={() => {
                           // Default selection on flip-in: existing secret if any, else
                           // mark shared "pending" so the radio selects + form renders.
-                          if (sharedSecrets[0]) {
-                            setModelBindingChoice({ source: "shared", existing_secret_id: sharedSecrets[0].id })
+                          if (modelSharedSecrets[0]) {
+                            setModelBindingChoice({ source: "shared", existing_secret_id: modelSharedSecrets[0].id })
                           } else {
                             setModelBindingChoice({ source: "shared" })
                             setModelNewSecretExpanded(true)
@@ -1364,12 +1383,13 @@ export function CreateAgentDialog({
                         <span className="block">{t("credentialCheck.modelBindingShared")}</span>
                         {modelBindingChoice.source === "shared" && (
                           <div className="mt-1.5 flex flex-col gap-2">
-                            {sharedSecrets.length > 0 && (
+                            {modelSharedSecrets.length > 0 && (
                               <Select
                                 aria-label={t("credentialCheck.modelBindingShared")}
-                                value={"existing_secret_id" in modelBindingChoice ? modelBindingChoice.existing_secret_id : "__new__"}
+                                value={"existing_secret_id" in modelBindingChoice ? (modelSharedSecrets.some((secret) => secret.id === modelBindingChoice.existing_secret_id) ? modelBindingChoice.existing_secret_id : "") : "new_secret" in modelBindingChoice || modelNewSecretExpanded || !cloneSourceID ? "__new__" : ""}
                                 onValueChange={(nextValue) => {
                                   if (nextValue === "__new__") {
+                                    if (cloneSourceID) setModelBindingChoice({ source: "shared" })
                                     setModelNewSecretExpanded(true)
                                     if (!("new_secret" in modelBindingChoice)) {
                                       setModelNewSecretDisplayName("")
@@ -1382,13 +1402,14 @@ export function CreateAgentDialog({
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {sharedSecrets.map((s) => (
+                                {cloneSourceID && <SelectOption value="">{t("credentialCheck.sharedPlaceholder")}</SelectOption>}
+                                {modelSharedSecrets.map((s) => (
                                   <SelectOption key={s.id} value={s.id}>{s.name}</SelectOption>
                                 ))}
                                 <SelectOption value="__new__">{t("credentialCheck.createNewShared")}</SelectOption>
                               </Select>
                             )}
-                            {sharedSecrets.length === 0 && !modelNewSecretExpanded && !("new_secret" in modelBindingChoice) && (
+                            {modelSharedSecrets.length === 0 && !modelNewSecretExpanded && !("new_secret" in modelBindingChoice) && (
                               <Button
                                 type="button"
                                 variant="outline"
@@ -1473,8 +1494,8 @@ export function CreateAgentDialog({
                                       // fall the binding back to an existing one (if any) or to personal,
                                       // so we don't leave the shared radio "selected with nothing inside".
                                       if (!("new_secret" in modelBindingChoice)) {
-                                        if (sharedSecrets[0]) {
-                                          setModelBindingChoice({ source: "shared", existing_secret_id: sharedSecrets[0].id })
+                                        if (modelSharedSecrets[0]) {
+                                          setModelBindingChoice({ source: "shared", existing_secret_id: modelSharedSecrets[0].id })
                                         } else if (visibility !== "public") {
                                           setModelBindingChoice({ source: "personal" })
                                         }
@@ -1518,10 +1539,10 @@ export function CreateAgentDialog({
           {step === 2 && (
             <>
               {cloneSourceID && <AgentCloneNotice
-                ready={clone.ready && !allCapabilitiesQ.isLoading}
+                ready={clone.ready && cloneCredentials.ready && !allCapabilitiesQ.isLoading}
                 failed={cloneLoadFailed}
                 unavailable={unavailableCloneCapabilities}
-                onRetry={() => { void existingBindingsQ.refetch(); void allCapabilitiesQ.refetch() }}
+                onRetry={() => { void existingBindingsQ.refetch(); void allCapabilitiesQ.refetch(); void secretsQ.refetch(); cloneCredentials.retry() }}
                 onRemove={(id) => setSelectedCapabilityIDs((current) => current.filter((selected) => selected !== id))}
               />}
               <section className="flex flex-col gap-3">
@@ -1602,7 +1623,7 @@ export function CreateAgentDialog({
                 )}
               </section>
 
-              {aggregatedRequiredKinds.length > 0 && (
+              {cloneSourceID ? <AgentCloneCredentials credentials={cloneCredentials} workspaceID={workspaceID} /> : aggregatedRequiredKinds.length > 0 && (
                 <section className="flex flex-col gap-3">
                   <h3 className="text-sm font-medium text-fg">{t("agents.form.sections.credentials")}</h3>
                   <CredentialCheckPanel
