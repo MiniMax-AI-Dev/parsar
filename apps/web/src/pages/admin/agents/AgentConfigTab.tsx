@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react"
-import { Check, Loader2, Power, Replace, Search, Trash2 } from "lucide-react"
+import { Loader2, Power, Search, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { SandboxPanel } from "../../../components/admin/SandboxPanel"
@@ -8,8 +8,6 @@ import { Button } from "../../../components/ui/button"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
 import { Input } from "../../../components/ui/input"
-import { Field } from "../../../components/ui/label"
-import { Select, SelectOption } from "../../../components/ui/select"
 import { Skeleton } from "../../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../../components/ui/status-icon"
 import {
@@ -33,9 +31,7 @@ import { ApiError } from "../../../lib/api-client"
 import {
   useAgentCapabilitiesQuery,
   useCapabilitiesQuery,
-  useCapabilityVersionsQuery,
   useDeleteAgentCapabilityMutation,
-  useEnableAgentCapabilityMutation,
   useToggleBuiltinCapabilityMutation,
 } from "../../../lib/api-capabilities"
 import { useMyCredentials } from "../../../lib/api-credentials"
@@ -44,8 +40,7 @@ import { agentCapabilityFollowsLatest, agentCapabilityVersion } from "../../../l
 import { agentExecutionPlacement } from "../../../lib/agent-runtime"
 import { agentEngineLabel, agentEngineOf, agentEngineSupportsCapability, agentEnginesSupportingCapability } from "../../../lib/agent-view-model"
 import { credentialBinding, hasCredentialKind, sharedSecretsForKind } from "../../../lib/credential-bindings"
-import type { Agent, AgentCapability, AgentDetail, Capability, CapabilityVersion, Secret, UserCredential } from "../../../lib/api-types"
-import { CredentialBindingSelect } from "../../../components/admin/CredentialBindingSelect"
+import type { Agent, AgentCapability, AgentDetail, Capability, Secret, UserCredential } from "../../../lib/api-types"
 import { CapabilityTypeBadge } from "../CapabilitiesPage"
 import { UpgradeCapabilityDialog } from "../capabilities/UpgradeCapabilityDialog"
 import { credentialKindLabel } from "../capability-ui"
@@ -53,10 +48,10 @@ import { AgentConfigSummary } from "./AgentConfigSummary"
 import { DetailSection, InlineError } from "./DetailSection"
 import type { ShowToast } from "../../../components/ui/toast"
 
-type CapabilityCardItem = { capability?: Capability; binding?: AgentCapability }
+import { CapabilityVersionDialog } from "./CapabilityVersionDialog"
+import { catalogIDFromVersion, requiredCredentialKinds, useCapabilityVersions } from "../../../lib/capability-config"
 
-/* Native <select> inside the shared CredentialBindingSelect, dressed as ui/Select. */
-const SELECT_CLASS = "app-shadow-control h-7 w-full rounded-md border border-line-strong bg-surface px-2 text-sm text-fg focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+type CapabilityCardItem = { capability?: Capability; binding?: AgentCapability }
 
 function runtimeOf(agent: Agent): "local" | "sandbox" {
   const placement = agentExecutionPlacement(agent)
@@ -93,21 +88,6 @@ function tCapabilityFallback(capabilityID: string) {
   return `Capability ${capabilityID.slice(0, 8)}`
 }
 
-function latestCapabilityVersion(capability: Capability): CapabilityVersion | undefined {
-  return capability.latest_version_id
-    ? {
-        id: capability.latest_version_id,
-        capability_id: capability.id,
-        version: capability.latest_version ?? capability.latest_published_version ?? "—",
-        created_at: capability.latest_version_created_at ?? capability.created_at ?? new Date().toISOString(),
-      } as CapabilityVersion
-    : undefined
-}
-
-function requiredCredentialKinds(capability: Capability) {
-  return (capability.required_credentials ?? []).filter((rc) => rc.required)
-}
-
 function boundSharedSecretID(agent: Agent, binding: AgentCapability | undefined, kind: string) {
   const capabilityBinding = credentialBinding(binding?.configuration, kind)
   if (capabilityBinding) return capabilityBinding.secretID
@@ -118,24 +98,6 @@ function hasUsableCredential(agent: Agent, binding: AgentCapability | undefined,
   const sharedID = boundSharedSecretID(agent, binding, kind)
   if (sharedID && sharedSecretsForKind(sharedSecrets, kind, catalogID).some((secret) => secret.id === sharedID)) return true
   return agent.visibility !== "public" && hasCredentialKind(credentials, kind)
-}
-
-function catalogIDFromVersion(version: CapabilityVersion | undefined) {
-  const payload = version?.source_payload
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return ""
-  const catalogID = (payload as Record<string, unknown>).catalog_id
-  return typeof catalogID === "string" ? catalogID.trim() : ""
-}
-
-function useCapabilityVersions(
-  workspaceID: string | null,
-  capability: Capability | undefined,
-  enabled: boolean,
-) {
-  const versionsQ = useCapabilityVersionsQuery(workspaceID, enabled ? capability?.id ?? null : null)
-  const versions = versionsQ.data?.versions ?? []
-  const latest = versions[0] ?? (capability ? latestCapabilityVersion(capability) : undefined)
-  return { latest, versions, versionsQ }
 }
 
 /** One hairline-separated capability row: name and flags left, controls right. */
@@ -294,67 +256,6 @@ function mutationError(error: unknown) {
 function MutationError({ error }: { error: unknown }) {
   const message = mutationError(error)
   return message ? <InlineError>{message}</InlineError> : null
-}
-
-function VersionSelect({ versions, value, onChange }: { versions: CapabilityVersion[]; value: string; onChange: (value: string) => void }) {
-  const { t } = useTranslation("admin")
-  return (
-    <Select aria-label={t("agents.detail.capabilities.enableDialog.version")} value={value} onValueChange={(nextValue) => onChange(nextValue)}>
-      {versions.map((version, index) => (
-        <SelectOption key={version.id} value={version.id}>v{version.version}{index === 0 ? ` · ${t("agents.detail.capabilities.switchDialog.latest")}` : ""}</SelectOption>
-      ))}
-    </Select>
-  )
-}
-
-function EnableCredentialBindingList({
-  requiredKinds,
-  credentials,
-  sharedSecrets,
-  catalogID,
-  publicAgent,
-  bindings,
-  onChange,
-}: {
-  requiredKinds: { kind: string }[]
-  credentials: UserCredential[]
-  sharedSecrets: Secret[]
-  catalogID: string
-  publicAgent: boolean
-  bindings: Record<string, string>
-  onChange: (kind: string, secretID: string) => void
-}) {
-  const { t, i18n } = useTranslation("admin")
-  return (
-    <div className="flex flex-col gap-3">
-      {requiredKinds.map((rc) => {
-        const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind, catalogID)
-        const selectedSecretID = bindings[rc.kind] ?? ""
-        const hasPersonal = !publicAgent && hasCredentialKind(credentials, rc.kind)
-        const ready = !!selectedSecretID || hasPersonal
-        return (
-          <Field key={rc.kind} label={credentialKindLabel(rc.kind, i18n.language, rc.kind)}>
-            <CredentialBindingSelect
-              label={credentialKindLabel(rc.kind, i18n.language, rc.kind)}
-              value={selectedSecretID}
-              secrets={kindSecrets}
-              allowPersonal={!publicAgent}
-              personalLabel={t("credentialCheck.sourcePersonal")}
-              personalPlaceholder={t("credentialCheck.sharedPlaceholder")}
-              sharedLabel={t("credentialCheck.sourceShared")}
-              onChange={(value) => onChange(rc.kind, value)}
-              className={SELECT_CLASS}
-            />
-            {!ready && (
-              <InlineError className="mt-1 text-xs">
-                {publicAgent ? t("credentialCheck.sharedNoneAvailable") : t("credentialCheck.personalYouMissing")}
-              </InlineError>
-            )}
-          </Field>
-        )
-      })}
-    </div>
-  )
 }
 
 /** `v1.4.0`, or nothing at all — never a placeholder dash. */
@@ -566,176 +467,6 @@ function CapabilityCard({
         ) : undefined
       }
     />
-  )
-}
-
-function CapabilityVersionDialog({
-  mode,
-  agent,
-  capability,
-  credentials = [],
-  sharedSecrets = [],
-  workspaceID,
-  binding,
-  trigger,
-  disabled = false,
-  onToast,
-}: {
-  mode: "enable" | "switch"
-  agent: Agent
-  capability: Capability
-  credentials?: UserCredential[]
-  sharedSecrets?: Secret[]
-  workspaceID: string | null
-  binding?: AgentCapability
-  /** Draws the control that opens this dialog; defaults to a row action. */
-  trigger?: (open: () => void) => ReactNode
-  disabled?: boolean
-  onToast: ShowToast
-}) {
-  const { t } = useTranslation("admin")
-  const [open, setOpen] = useState(false)
-  const mut = useEnableAgentCapabilityMutation(workspaceID, agent.id)
-  const [selection, setSelected] = useState("")
-  const changeOpen = (next: boolean) => {
-    setOpen(next)
-    setSelected("")
-  }
-  const [credentialBindingChoices, setCredentialBindingChoices] = useState<Record<string, string>>({})
-  const { latest, versions, versionsQ } = useCapabilityVersions(workspaceID, capability, open)
-  const currentVersion = agentCapabilityVersion(binding, capability, versions)
-  const selected = selection || currentVersion?.id || ""
-  const selectedVersion = selected
-    ? versions.find((version) => version.id === selected) ?? (mode === "enable" ? latest : versions[0])
-    : mode === "enable" ? latest : versions[0]
-  const requiredKinds = useMemo(
-    () => mode === "enable" ? requiredCredentialKinds(capability) : [],
-    [capability, mode],
-  )
-  const catalogID = catalogIDFromVersion(selectedVersion)
-  const defaultCredentialBindings = useMemo(() => {
-    const defaults: Record<string, string> = {}
-    for (const rc of requiredKinds) {
-      const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind, catalogID)
-      const oauthSecret = kindSecrets.find(() => rc.kind === "mcp_oauth")
-      if (oauthSecret) defaults[rc.kind] = oauthSecret.id
-      else if (agent.visibility === "public" && kindSecrets[0]) defaults[rc.kind] = kindSecrets[0].id
-    }
-    return defaults
-  }, [agent.visibility, catalogID, requiredKinds, sharedSecrets])
-  const credentialBindings = { ...defaultCredentialBindings, ...credentialBindingChoices }
-  const missingRequiredCredential = requiredKinds.some((rc) => {
-    const selectedSecretID = credentialBindings[rc.kind]
-    if (selectedSecretID && sharedSecretsForKind(sharedSecrets, rc.kind, catalogID).some((secret) => secret.id === selectedSecretID)) {
-      return false
-    }
-    return agent.visibility === "public" || !hasCredentialKind(credentials, rc.kind)
-  })
-  const canSubmit = !!selectedVersion
-    && !mut.isPending
-    && !disabled
-    && (mode === "enable" ? !missingRequiredCredential : binding?.pinning_mode === "latest" || selectedVersion.id !== currentVersion?.id)
-
-  const submit = () => {
-    if (!selectedVersion) return
-    const capabilityBindings = Object.fromEntries(
-      requiredKinds.map(({ kind }) => {
-        const secretID = credentialBindings[kind]
-        return [kind, secretID
-          ? { source: "shared", secret_id: secretID }
-          : { source: "personal" }]
-      }),
-    )
-    mut.mutate({
-      capabilityVersionID: selectedVersion.id,
-      configuration: mode === "enable"
-        ? { credential_bindings: capabilityBindings }
-        : binding?.configuration,
-    }, {
-      onSuccess: () => {
-        changeOpen(false)
-        onToast(mode === "enable"
-          ? t("agents.detail.capabilities.toast.enabled", { cap: capability.name, agent: agent.name, version: selectedVersion.version })
-          : t("agents.detail.capabilities.toast.switched", { cap: capability.name, version: selectedVersion.version }))
-      },
-    })
-  }
-  const isSwitch = mode === "switch"
-  const confirmLabel = isSwitch
-    ? selectedVersion
-      ? t("agents.detail.capabilities.actions.switchConfirm", { version: selectedVersion.version })
-      : t("agents.detail.capabilities.actions.switchVersion")
-    : t("agents.detail.capabilities.actions.enableConfirm")
-
-  return (
-    <Dialog open={open} onOpenChange={changeOpen}>
-      {trigger ? (
-        trigger(() => changeOpen(true))
-      ) : isSwitch ? (
-        <ActionIconButton
-          icon={Replace}
-          label={t("agents.detail.capabilities.actions.switchVersion")}
-          disabled={disabled}
-          onClick={() => changeOpen(true)}
-        />
-      ) : (
-        <Button variant="outline" size="sm" disabled={disabled} onClick={() => changeOpen(true)}>
-          {t("agents.detail.capabilities.actions.enable")}
-        </Button>
-      )}
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t(isSwitch ? "agents.detail.capabilities.switchDialog.title" : "agents.detail.capabilities.enableDialog.title", { agent: agent.name, cap: capability.name })}</DialogTitle>
-          <DialogDescription>{t(isSwitch ? "agents.detail.capabilities.switchDialog.description" : "agents.detail.capabilities.enableDialog.description")}</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">
-          {isSwitch ? (
-            versionsQ.isLoading ? <Skeleton className="h-28 w-full" /> : (
-              <ul className="m-0 list-none p-0">
-                {versions.map((version, index) => (
-                  <li key={version.id}>
-                    <label className="flex h-7 cursor-pointer items-center gap-2 text-sm text-fg">
-                      <input type="radio" name="capability-version" className="h-3.5 w-3.5 accent-accent" checked={selected === version.id} onChange={() => setSelected(version.id)} />
-                      <span className="font-mono text-xs">v{version.version}</span>
-                      {index === 0 && <span className="text-xs text-fg-muted">· {t("agents.detail.capabilities.switchDialog.latest")}</span>}
-                      {version.id === currentVersion?.id && <span className="text-xs text-fg-muted">· {t("agents.detail.capabilities.switchDialog.current")}</span>}
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )
-          ) : (
-            <>
-              <Field label={t("agents.detail.capabilities.enableDialog.version")}>
-                {versionsQ.isLoading ? <Skeleton className="h-7 w-full" /> : <VersionSelect versions={versions} value={selectedVersion?.id ?? ""} onChange={setSelected} />}
-              </Field>
-              {requiredKinds.length > 0 ? (
-                <EnableCredentialBindingList
-                  requiredKinds={requiredKinds}
-                  credentials={credentials}
-                  sharedSecrets={sharedSecrets}
-                  catalogID={catalogID}
-                  publicAgent={agent.visibility === "public"}
-                  bindings={credentialBindings}
-                  onChange={(kind, secretID) => setCredentialBindingChoices((current) => ({ ...current, [kind]: secretID }))}
-                />
-              ) : (
-                <p className="flex items-center gap-1.5 text-sm text-fg">
-                  <Check className="h-3.5 w-3.5 shrink-0 text-status-completed" strokeWidth={1.5} aria-hidden="true" />
-                  {t("agents.detail.capabilities.enableDialog.noCredential")}
-                </p>
-              )}
-            </>
-          )}
-          {isSwitch && <p className="text-sm text-fg-muted">{t("agents.detail.capabilities.switchDialog.notice", { agent: agent.name })}</p>}
-          <MutationError error={mut.error} />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => changeOpen(false)} disabled={mut.isPending}>{t("agents.detail.capabilities.actions.cancel")}</Button>
-          <Button disabled={!canSubmit} onClick={submit}>{mut.isPending && <Loader2 className="animate-spin" strokeWidth={1.5} aria-hidden="true" />}{confirmLabel}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }
 

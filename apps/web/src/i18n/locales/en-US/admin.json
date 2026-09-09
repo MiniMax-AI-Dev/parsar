@@ -1516,10 +1516,20 @@
       }
     },
     "pendingCapability": {
-      "banner": "You are preparing to add \"{{name}}\" (from {{source}}). Choose an Agent to enable it.",
-      "detailBanner": "You are adding \"{{name}}\" (from {{source}}). Use Enable in the Available section below to finish.",
-      "loading": "Loading the capability you are preparing to add…",
-      "cancel": "Cancel"
+      "title": "Add {{cap}} to an Agent",
+      "capability": "capability",
+      "description": "Choose an Agent, then confirm the version and credentials.",
+      "chooseAgent": "Choose an Agent",
+      "chooseAnother": "Choose another Agent",
+      "continue": "Continue",
+      "manageCredentials": "Manage my credentials and return",
+      "notAllowed": "Your workspace role cannot add capabilities to Agents.",
+      "loadError": "Could not load installation options",
+      "notFound": "This capability is no longer available in the marketplace.",
+      "alreadyAdded": "This capability is already added to {{agent}}.",
+      "viewConfig": "View Agent configuration",
+      "empty": "No compatible Agents",
+      "emptyDescription": "Create an Agent with an engine that supports this capability, then return here."
     },
     "listActions": {
       "cancel": "Cancel",

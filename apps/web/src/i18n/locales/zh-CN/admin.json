@@ -1516,10 +1516,20 @@
       }
     },
     "pendingCapability": {
-      "banner": "你正在准备装「{{name}}」（来自 {{source}}）。请选择一个 Agent 启用此能力。",
-      "detailBanner": "你正在装「{{name}}」（来自 {{source}}）。在下方工作区可装段点击启用即可完成。",
-      "loading": "正在加载准备装到 Agent 的能力…",
-      "cancel": "取消"
+      "title": "将 {{cap}} 添加到 Agent",
+      "capability": "能力",
+      "description": "选择 Agent，然后确认版本和凭据。",
+      "chooseAgent": "选择 Agent",
+      "chooseAnother": "重新选择 Agent",
+      "continue": "继续",
+      "manageCredentials": "管理我的凭据并返回",
+      "notAllowed": "你的工作区角色无法为 Agent 添加能力。",
+      "loadError": "无法加载安装选项",
+      "notFound": "此能力已不在商城中。",
+      "alreadyAdded": "此能力已添加到 {{agent}}。",
+      "viewConfig": "查看 Agent 配置",
+      "empty": "没有兼容的 Agent",
+      "emptyDescription": "请先创建支持此能力的 Agent，再回到这里安装。"
     },
     "listActions": {
       "cancel": "取消",

@@ -537,6 +537,13 @@ split relevant pieces out first rather than growing the file further.
 
 ### Frontend shared logic
 
+- Marketplace-to-Agent installation uses the same capability version and
+  credential confirmation dialog as Agent configuration. Keep pending install
+  intent in the existing route until completion or cancellation; clear it before
+  showing the installed Agent configuration. Confirm a marketplace capability
+  using its published version metadata; its source workspace version history is
+  not a cross-workspace read API. Do not duplicate credential rules.
+
 - Agent management opts into disabled records with a separate query-cache key.
   Ordinary Agent selectors keep active-only reads; status mutations invalidate
   both list variants and the detail before their pending state ends. Agent status
