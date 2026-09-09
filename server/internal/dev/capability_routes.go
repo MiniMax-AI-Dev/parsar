@@ -1243,7 +1243,7 @@ func deleteMyCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 // (including built-ins) plus what else is available to install.
 //
 //	@Summary		List agent capabilities
-//	@Description	Returns installed capabilities, their pinning_mode and bound/latest version metadata, plus available workspace and marketplace capabilities. Latest metadata respects the runtime deprecation cutoff.
+//	@Description	Returns installed capabilities, their pinning_mode and bound/latest version metadata, plus available workspace and marketplace capabilities. Latest metadata respects the runtime deprecation cutoff. Installed MCP credential requirements match the selected runtime version.
 //	@Tags			capabilities
 //	@ID				listDevAgentCapabilities
 //	@Produce		json
@@ -1302,38 +1302,7 @@ func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 				installedAny = append(installedAny, binding)
 				continue
 			}
-			installedAny = append(installedAny, map[string]any{
-				"id":                    binding.ID,
-				"agent_id":              binding.AgentID,
-				"capability_id":         binding.CapabilityID,
-				"capability_version_id": binding.CapabilityVersionID,
-				"pinning_mode":          binding.PinningMode,
-				"enabled":               binding.Enabled,
-				"configuration":         binding.Configuration,
-				"created_at":            binding.CreatedAt,
-				"updated_at":            binding.UpdatedAt,
-				"capability": map[string]any{
-					"id":                        capability.CapabilityID,
-					"workspace_id":              capability.WorkspaceID,
-					"type":                      capability.Type,
-					"name":                      capability.Name,
-					"description":               capability.Description,
-					"visibility":                capability.Visibility,
-					"status":                    capability.Status,
-					"required_credentials":      capability.RequiredCredentials,
-					"deprecated_at":             capability.DeprecatedAt,
-					"from_marketplace":          capability.WorkspaceID != agent.WorkspaceID,
-					"source_workspace_id":       capability.WorkspaceID,
-					"source_workspace_name":     capability.SourceWorkspaceName,
-					"latest_version_id":         capability.LatestVersionID,
-					"latest_version":            capability.LatestVersion,
-					"latest_version_created_at": capability.LatestVersionCreatedAt,
-					"pinned_version_id":         binding.CapabilityVersionID,
-					"pinned_version":            capability.Version,
-					"created_at":                capability.LatestVersionCreatedAt,
-					"updated_at":                capability.LatestVersionCreatedAt,
-				},
-			})
+			installedAny = append(installedAny, installedAgentCapabilityResponse(binding, capability, agent.WorkspaceID))
 		}
 		// Surface runtime-injected built-ins as installed, default-ON cards.
 		// These have no capability_version row; the enabled flag comes from
@@ -1437,7 +1406,8 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			})
 			return
 		}
-		if err := validateCapabilityCredentialBindings(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{
+		if err := validateBoundCapabilityCredentials(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{
+			PinningMode:     body.PinningMode,
 			WorkspaceID:     agent.WorkspaceID,
 			AgentVisibility: agentRecord.Visibility,
 			AgentConfig:     agentRecord.Config,
@@ -1620,7 +1590,8 @@ func upgradeAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent capability not found"})
 			return
 		}
-		if err := validateCapabilityCredentialBindings(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{
+		if err := validateBoundCapabilityCredentials(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{
+			PinningMode:     body.PinningMode,
 			WorkspaceID:     agent.WorkspaceID,
 			AgentVisibility: agent.Visibility,
 			AgentConfig:     agent.Config,

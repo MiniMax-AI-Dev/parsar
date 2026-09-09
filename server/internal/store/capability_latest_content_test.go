@@ -47,6 +47,13 @@ func TestEnabledCapabilityLatestContent(t *testing.T) {
 	if row.CapabilityVersionID != versions[0].ID || row.LatestVersionID != v2.ID || row.PinningMode != PinningModeLatest {
 		t.Fatalf("unexpected version metadata: %+v", row)
 	}
+	if _, err := st.UpdateAgentVisibility(ctx, created.Agent.ID, "public", ids.UserID); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := st.GetEnabledCapabilitiesForAgent(ctx, created.Agent.ID)
+	if err != nil || len(updated) != 1 || updated[0].AgentVisibility != "public" {
+		t.Fatalf("Agent visibility was not read with its enabled capabilities: %+v (%v)", updated, err)
+	}
 	for _, field := range []struct {
 		name        string
 		raw         []byte

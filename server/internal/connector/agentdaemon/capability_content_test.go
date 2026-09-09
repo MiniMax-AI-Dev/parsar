@@ -90,3 +90,56 @@ func TestMCPLatestVersionCredentials(t *testing.T) {
 		})
 	}
 }
+
+func TestMCPLatestPublicCredentials(t *testing.T) {
+	svc := testSecretsService(t)
+	v2 := newMCPRow(t, "cap", "versioned", []canonical.MCPServer{{Name: "versioned", Command: "echo", Env: map[string]canonical.EnvValue{
+		"TOKEN": {Mode: canonical.EnvModeCredentialRef, CredentialKindCode: "github_pat"},
+	}}}, []store.RequiredCredential{{Kind: "github_pat", Required: true}})
+	for _, tc := range []struct {
+		name, visibility, mode, token string
+		shared, disabled              bool
+	}{
+		{name: "workspace latest", visibility: "workspace", mode: store.PinningModeLatest, token: "private-token"},
+		{name: "public latest unbound", visibility: "public", mode: store.PinningModeLatest, disabled: true},
+		{name: "public latest shared", visibility: "public", mode: store.PinningModeLatest, shared: true, token: "sk-shared"},
+		{name: "public pinned", visibility: "public", mode: store.PinningModePinned},
+		{name: "public omitted mode", visibility: "public"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			row := newMCPRow(t, "cap", "versioned", []canonical.MCPServer{{Name: "versioned", Command: "echo"}}, nil)
+			row.AgentVisibility, row.PinningMode = tc.visibility, tc.mode
+			row.CapabilityVersionID, row.LatestVersionID = "v1", "v2"
+			row.LatestCanonicalSpec, row.LatestRequiredCredentials = v2.CanonicalSpec, v2.RequiredCredentials
+			if tc.shared {
+				row.Configuration = map[string]any{"credential_bindings": map[string]any{"github_pat": map[string]any{"source": "shared", "secret_id": "secret-shared"}}}
+			}
+			c := &Connector{capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{row}, credentials: map[string]store.UserCredentialRead{
+				"user-1:github_pat": {ID: "personal", UserID: "user-1", Kind: "github_pat", Ciphertext: encryptPayload(t, svc, map[string]any{"token": "private-token"})},
+			}}, secrets: svc, modelResolver: sharedBindingResolver(t, svc), log: discardLogger()}
+			got, err := c.resolveCapabilityAdditions(t.Context(), defaultPromptInput(), "claude_code")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.disabled {
+				if len(got.MCPServers) != 0 || len(got.CredentialEmits) != 0 || len(got.Disabled) != 1 || got.Disabled[0].CapabilityVersionID != "v2" {
+					t.Fatalf("public MCP with an unbound required credential was not disabled: %+v", got)
+				}
+				return
+			}
+			if len(got.Disabled) != 0 || len(got.MCPServers) != 1 {
+				t.Fatalf("expected available MCP: %+v", got)
+			}
+			if tc.token == "" {
+				if len(got.CredentialEmits) != 0 {
+					t.Fatal("credential-free stored version emitted a credential")
+				}
+				return
+			}
+			server := got.MCPServers["versioned"].(map[string]any)
+			if server["env"].(map[string]string)["TOKEN"] != tc.token || len(got.CredentialEmits) != 1 || got.CredentialEmits[0].CapabilityVersionID != "v2" {
+				t.Fatal("selected version credential or audit did not match")
+			}
+		})
+	}
+}

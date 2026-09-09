@@ -158,7 +158,10 @@ description and keep ownership on the side listed here.
   pinning mode. Displayed current versions match the daemon's resolver:
   Skill, Plugin, Bundle, MCP, and System Prompt follow their binding mode and
   the existing deprecation cutoff. MCP content and required credentials must
-  come from the same selected version, including legacy content.
+  come from the same selected version, including legacy content. Installed
+  credential hints and binding validation use that selection too. Advancing
+  a public Agent's latest binding must not fall back to personal credentials
+  for a newly required kind; require a shared binding before delivery.
 
 - Cross-workspace installed capabilities remain visible and removable after
   unpublishing. Their installation metadata reports source visibility and only

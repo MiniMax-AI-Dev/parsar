@@ -5223,6 +5223,7 @@ const getEnabledCapabilitiesForAgent = `-- name: GetEnabledCapabilitiesForAgent 
 select
   ac.id::text as agent_capability_id,
   ac.agent_id::text as agent_id,
+  a.visibility as agent_visibility,
   ac.enabled,
   ac.configuration,
   ac.pinning_mode,
@@ -5267,6 +5268,7 @@ select
   -- lets the runtime fail closed if a legacy row slips through.
   coalesce(c.creator_id::text, '')::text as capability_creator_id
 from agent_capabilities ac
+join agents a on a.id = ac.agent_id
 join capability c on c.id = ac.capability_id
 join capability_version cv on cv.id = ac.capability_version_id
 join workspaces src_ws on src_ws.id = c.workspace_id
@@ -5295,6 +5297,7 @@ order by c.name asc
 type GetEnabledCapabilitiesForAgentRow struct {
 	AgentCapabilityID         string             `json:"agent_capability_id"`
 	AgentID                   string             `json:"agent_id"`
+	AgentVisibility           string             `json:"agent_visibility"`
 	Enabled                   bool               `json:"enabled"`
 	Configuration             []byte             `json:"configuration"`
 	PinningMode               string             `json:"pinning_mode"`
@@ -5343,6 +5346,7 @@ func (q *Queries) GetEnabledCapabilitiesForAgent(ctx context.Context, agentID pg
 		if err := rows.Scan(
 			&i.AgentCapabilityID,
 			&i.AgentID,
+			&i.AgentVisibility,
 			&i.Enabled,
 			&i.Configuration,
 			&i.PinningMode,

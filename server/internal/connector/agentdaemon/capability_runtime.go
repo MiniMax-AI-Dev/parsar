@@ -741,10 +741,15 @@ func (c *Connector) resolveCredentialValues(
 	var (
 		personalKinds []store.RequiredCredential
 		sharedTargets []sharedTarget
+		missing       []MissingCredentialRef
 	)
 	for _, rc := range cap.RequiredCredentials {
 		if b, ok := bindings[rc.Kind]; ok && b.IsShared() {
 			sharedTargets = append(sharedTargets, sharedTarget{Kind: rc.Kind, SecretID: b.SecretID})
+			continue
+		}
+		if strings.TrimSpace(cap.AgentVisibility) == "public" && rc.Required {
+			missing = append(missing, MissingCredentialRef{Kind: rc.Kind})
 			continue
 		}
 		personalKinds = append(personalKinds, rc)
@@ -758,7 +763,6 @@ func (c *Connector) resolveCredentialValues(
 
 	values := map[string]string{}
 	sharedSecretIDs := map[string]string{}
-	var missing []MissingCredentialRef
 
 	// Shared bindings: resolve once via the model resolver's secret
 	// payload reader (already wired for inline_secret models).

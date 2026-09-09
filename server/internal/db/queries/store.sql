@@ -3986,6 +3986,7 @@ where id = @id::uuid;
 select
   ac.id::text as agent_capability_id,
   ac.agent_id::text as agent_id,
+  a.visibility as agent_visibility,
   ac.enabled,
   ac.configuration,
   ac.pinning_mode,
@@ -4030,6 +4031,7 @@ select
   -- lets the runtime fail closed if a legacy row slips through.
   coalesce(c.creator_id::text, '')::text as capability_creator_id
 from agent_capabilities ac
+join agents a on a.id = ac.agent_id
 join capability c on c.id = ac.capability_id
 join capability_version cv on cv.id = ac.capability_version_id
 join workspaces src_ws on src_ws.id = c.workspace_id

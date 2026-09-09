@@ -20,6 +20,7 @@ type RequiredCredential struct {
 }
 
 type EnabledCapabilityRead struct {
+	AgentVisibility   string         `json:"-"`
 	AgentCapabilityID string         `json:"agent_capability_id"`
 	AgentID           string         `json:"agent_id"`
 	Enabled           bool           `json:"enabled"`
@@ -1174,6 +1175,7 @@ func enabledCapabilityFromRow(row sqlc.GetEnabledCapabilitiesForAgentRow) (Enabl
 	}
 	return EnabledCapabilityRead{
 		AgentCapabilityID:         row.AgentCapabilityID,
+		AgentVisibility:           row.AgentVisibility,
 		AgentID:                   row.AgentID,
 		Enabled:                   row.Enabled,
 		Configuration:             configuration,

@@ -17,7 +17,7 @@ type credentialBindingSecretStore interface {
 }
 
 type agentCapabilityCredentialBindingStore interface {
-	credentialBindingSecretStore
+	capabilityBindingVersionStore
 	ListAgentCapabilities(ctx context.Context, agentID string) ([]store.AgentCapabilityRead, error)
 	GetCapabilityVersion(ctx context.Context, capabilityVersionID string) (store.CapabilityVersionRead, error)
 }
@@ -31,6 +31,7 @@ func (e *capabilityCredentialValidationError) Error() string {
 }
 
 type capabilityCredentialBindingValidationInput struct {
+	PinningMode     string
 	WorkspaceID     string
 	AgentVisibility string
 	AgentConfig     map[string]any
@@ -103,7 +104,8 @@ func validateAgentCapabilityBindingsForVisibility(
 		if err != nil {
 			return fmt.Errorf("get capability version %s: %w", binding.CapabilityVersionID, err)
 		}
-		if err := validateCapabilityCredentialBindings(ctx, credentialStore, capabilityCredentialBindingValidationInput{
+		if err := validateBoundCapabilityCredentials(ctx, credentialStore, capabilityCredentialBindingValidationInput{
+			PinningMode:     binding.PinningMode,
 			WorkspaceID:     agent.WorkspaceID,
 			AgentVisibility: visibility,
 			AgentConfig:     agent.Config,
