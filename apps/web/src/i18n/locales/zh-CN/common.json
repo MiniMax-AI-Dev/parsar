@@ -81,8 +81,8 @@
       "createTitle": "新建工作区",
       "renameTitle": "重命名工作区",
       "archiveTitle": "归档工作区",
-      "archiveDescription": "确认归档「{{name}}」？归档后将从切换器中消失，原有成员和 Agent 保留在数据库中，但通过工作区维度的查询都不会再返回。",
-      "archiveMarketplaceDependents": "如果这个工作区发布的市场能力仍被其它工作区的 Agent 使用，归档会被阻止。请先取消发布并等待对方移除后再归档。",
+      "archiveDescription": "归档「{{name}}」后，工作区将被隐藏，无法继续访问。成员和 Agent 数据会保留。",
+      "archiveMarketplaceDependents": "若其他工作区仍在使用这里发布的能力，请先取消发布，并联系对方移除这些能力后再归档。",
       "namePlaceholder": "例如：平台团队"
     },
     "join": {
