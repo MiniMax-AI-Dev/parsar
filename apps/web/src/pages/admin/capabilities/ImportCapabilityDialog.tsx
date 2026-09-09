@@ -32,6 +32,7 @@ import { InlineNotice } from "./notices"
 import type {
   CanonicalSpec,
   ImportCommitRequest,
+  ImportCommitResponse,
   ImportInlineSecretInput,
   SourceFormat,
 } from "./types"
@@ -42,7 +43,7 @@ interface Props {
   onOpenChange: (open: boolean) => void
   /** Optional callback after a successful import — the page can navigate to
    *  the new capability detail view, etc. */
-  onCreated?: (capabilityID: string) => void
+  onCreated?: (capability: ImportCommitResponse["capability"]) => void
 }
 
 type AddCapabilityKind = "mcp" | "skill"
@@ -161,7 +162,7 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
     commitMut.mutate(payload, {
       onSuccess: (res) => {
         onOpenChange(false)
-        onCreated?.(res.capability.id)
+        onCreated?.(res.capability)
       },
     })
   }
