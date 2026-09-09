@@ -1243,7 +1243,7 @@ func deleteMyCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 // (including built-ins) plus what else is available to install.
 //
 //	@Summary		List agent capabilities
-//	@Description	Returns the capabilities installed on the agent (own + marketplace + built-ins) and what else is available to install from the workspace and the marketplace.
+//	@Description	Returns installed capabilities, their pinning_mode and bound/latest version metadata, plus available workspace and marketplace capabilities. Latest metadata respects the runtime deprecation cutoff.
 //	@Tags			capabilities
 //	@ID				listDevAgentCapabilities
 //	@Produce		json
@@ -1307,6 +1307,7 @@ func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 				"agent_id":              binding.AgentID,
 				"capability_id":         binding.CapabilityID,
 				"capability_version_id": binding.CapabilityVersionID,
+				"pinning_mode":          binding.PinningMode,
 				"enabled":               binding.Enabled,
 				"configuration":         binding.Configuration,
 				"created_at":            binding.CreatedAt,

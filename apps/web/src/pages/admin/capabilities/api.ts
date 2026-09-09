@@ -186,6 +186,7 @@ export function useImportCapabilityVersionMutation(
       return postImportCapabilityVersionCommit(workspaceID, capabilityID, body)
     },
     onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: ["admin", "agentCapabilities"] })
       void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID ?? "_none") })
       void qc.invalidateQueries({ queryKey: ["admin", "capability"] })
       if (workspaceID) {
