@@ -29,6 +29,7 @@ type FormMode = "create" | "rename"
 
 interface WorkspaceFormDialogProps {
   open: boolean
+  onCloseAutoFocus?: (event: Event) => void
   onOpenChange: (open: boolean) => void
   mode: FormMode
   initialName?: string
@@ -53,6 +54,7 @@ function extractErrorMessage(err: unknown): string | null {
 
 export function WorkspaceFormDialog({
   open,
+  onCloseAutoFocus,
   onOpenChange,
   mode,
   initialName = "",
@@ -86,7 +88,7 @@ export function WorkspaceFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent aria-describedby={undefined}>
+      <DialogContent aria-describedby={undefined} onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -140,6 +142,7 @@ export function WorkspaceFormDialog({
 
 interface ConfirmArchiveDialogProps {
   open: boolean
+  onCloseAutoFocus?: (event: Event) => void
   onOpenChange: (open: boolean) => void
   title: string
   description: string
@@ -150,6 +153,7 @@ interface ConfirmArchiveDialogProps {
 
 export function ConfirmArchiveDialog({
   open,
+  onCloseAutoFocus,
   onOpenChange,
   title,
   description,
@@ -161,7 +165,7 @@ export function ConfirmArchiveDialog({
   const errMsg = extractErrorMessage(error)
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+      <AlertDialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
@@ -185,6 +189,7 @@ export function ConfirmArchiveDialog({
 
 interface JoinRequestDialogProps {
   open: boolean
+  onCloseAutoFocus?: (event: Event) => void
   onOpenChange: (open: boolean) => void
   workspaceName: string
   pending: boolean
@@ -194,6 +199,7 @@ interface JoinRequestDialogProps {
 
 export function JoinRequestDialog({
   open,
+  onCloseAutoFocus,
   onOpenChange,
   workspaceName,
   pending,
@@ -214,7 +220,7 @@ export function JoinRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent aria-describedby={undefined}>
+      <DialogContent aria-describedby={undefined} onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>
             {t("workspaceCrud.join.title", { name: workspaceName })}
