@@ -148,8 +148,9 @@ export function useInstallSkill(workspaceID: string | null) {
       return installSkill(workspaceID, skill)
     },
     retry: noUnreachableRetry,
-    onSuccess: (result, skill) => {
+    onSuccess: async (result, skill) => {
       const installedWorkspaceID = result.capability.workspace_id
+      await qc.cancelQueries({ queryKey: KEY_INSTALLED_SKILLS(installedWorkspaceID) })
       qc.setQueryData<Record<string, string>>(KEY_INSTALLED_SKILLS(installedWorkspaceID), (current) => ({
         ...current, [skill.id]: result.capability.id,
       }))
