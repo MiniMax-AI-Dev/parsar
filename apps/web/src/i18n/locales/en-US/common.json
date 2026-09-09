@@ -41,6 +41,8 @@
     "demoWorkspace": "Demo Workspace",
     "workspaceLabel": "Workspace",
     "noWorkspaces": "No workspaces available",
+    "loadFailed": "Workspaces could not be loaded. Try again.",
+    "refreshFailed": "Workspaces could not be refreshed. Showing the last loaded list.",
     "discoverLabel": "Other workspaces",
     "memberCount": "{{count}} members",
     "requestJoinAction": "Request to join",

@@ -40,6 +40,8 @@
     "triggerAriaLabel": "切换工作区",
     "demoWorkspace": "演示工作区",
     "workspaceLabel": "工作区",
+    "loadFailed": "工作区加载失败，请重试。",
+    "refreshFailed": "工作区刷新失败，当前显示上次加载的列表。",
     "noWorkspaces": "暂无可用工作区",
     "discoverLabel": "其他工作区",
     "memberCount": "{{count}} 人",

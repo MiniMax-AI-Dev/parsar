@@ -10,6 +10,7 @@ import { SharedConversationPage } from "./pages/SharedConversationPage"
 import { AuthProvider, useAuth } from "./lib/auth-context"
 import { ThemeProvider } from "./lib/theme-provider"
 import { ToastProvider } from "./components/ui/toast"
+import { ErrorState } from "./components/ui/error-state"
 import { useMyWorkspaces } from "./lib/api-workspaces"
 import { SingleSlot } from "./components/plugin/SlotRenderer"
 import { usePluginClients } from "./lib/use-plugins"
@@ -30,7 +31,17 @@ function AuthedRoot() {
   usePluginClients(wsId)
 
   if (wsQuery.isLoading) {
-    return <LoadingScreen message={t("login.loading")} />
+    return <LoadingScreen message={t("states.loading")} />
+  }
+  if (wsQuery.isError && !wsQuery.data?.workspaces.length) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-surface p-6">
+        <ErrorState
+          title={t("workspaceSwitcher.loadFailed")}
+          onRetry={() => void wsQuery.refetch()}
+        />
+      </main>
+    )
   }
   if ((wsQuery.data?.workspaces.length ?? 0) === 0) {
     return <OnboardingPage />

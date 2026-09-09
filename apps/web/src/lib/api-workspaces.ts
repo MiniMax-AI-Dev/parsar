@@ -1,9 +1,7 @@
 /**
  * Workspace picker data + CRUD for the admin header switcher.
  *
- * `useMyWorkspaces` falls back to a single "Demo Workspace" *placeholder*
- * when `/api/v1/me/workspaces` is unreachable so the header switcher still
- * renders something.
+ * Failed requests preserve cached workspace data and expose the query error.
  */
 import {
   useMutation,
@@ -35,18 +33,6 @@ const KEY_DISCOVERABLE_WORKSPACES_PAGE = (
 const KEY_PENDING_JOIN_REQUESTS = (wsId: string) =>
   ["admin", "pendingJoinRequests", wsId] as const
 
-const MOCK_WORKSPACES: UserWorkspace[] = [
-  {
-    id: "mock-ws-1",
-    name: "Demo Workspace",
-    slug: "demo",
-    visibility: "private",
-    role: "owner",
-    created_at: new Date(Date.now() - 86_400_000 * 30).toISOString(),
-    updated_at: new Date(Date.now() - 86_400_000 * 30).toISOString(),
-  },
-]
-
 async function listMyWorkspacesRequest(): Promise<ListMyWorkspacesResponse> {
   return apiRequest<ListMyWorkspacesResponse>("/api/v1/me/workspaces", {
     method: "GET",
@@ -56,18 +42,7 @@ async function listMyWorkspacesRequest(): Promise<ListMyWorkspacesResponse> {
 export function useMyWorkspaces() {
   return useQuery({
     queryKey: KEY_MY_WORKSPACES,
-    queryFn: async () => {
-      try {
-        return await listMyWorkspacesRequest()
-      } catch {
-        // Switcher must always render something — fall back to mock so the
-        // popover doesn't show a permanent "empty" state when API is down.
-        return {
-          user_id: "mock-user",
-          workspaces: MOCK_WORKSPACES,
-        } satisfies ListMyWorkspacesResponse
-      }
-    },
+    queryFn: listMyWorkspacesRequest,
     retry: noUnreachableRetry,
     staleTime: 60_000,
     // Membership can be granted from another account while this tab is open.
