@@ -1429,8 +1429,8 @@
         "description": "Go to Models to onboard one. The fields you typed here will be carried over so you can come back.",
         "cta": "Configure Model"
       },
-      "noTagsAdmin": "This workspace has no reusable capability tags yet.",
-      "noTagsMember": "This workspace has no reusable capability tags yet.",
+      "noTagsAdmin": "No skills or MCP tools are available yet. These are optional: save the Agent now, then add capabilities on the Capabilities page and enable them in the Agent’s Config tab.",
+      "noTagsMember": "No skills or MCP tools are available yet. These are optional: save the Agent now, then ask a workspace administrator to add capabilities and enable them in the Agent’s Config tab.",
       "noCapabilityVersion": "No version",
       "deprecatedCapabilityBadge": "Deprecated",
       "deprecatedCapabilityTooltip": "This capability has been deprecated. Existing bindings keep working; once you uncheck it you cannot re-add it.",
