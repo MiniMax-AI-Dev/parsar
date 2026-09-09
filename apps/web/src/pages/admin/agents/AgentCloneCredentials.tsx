@@ -3,10 +3,14 @@ import { CredentialBindingSelect } from "../../../components/admin/CredentialBin
 import { Field } from "../../../components/ui/label"
 import { credentialKindLabel } from "../../../lib/credential-kind-ui"
 import type { useAgentCloneCredentials } from "./useAgentCloneCredentials"
+import { AgentCloneCredentialRefresh } from "./AgentCloneCredentialRefresh"
 
-export function AgentCloneCredentials({ credentials, workspaceID }: {
+export function AgentCloneCredentials({ credentials, workspaceID, failed, fetching, onRefresh }: {
   credentials: ReturnType<typeof useAgentCloneCredentials>
   workspaceID: string | null
+  failed: boolean
+  fetching: boolean
+  onRefresh: () => void
 }) {
   const { t, i18n } = useTranslation("admin")
   if (!credentials.needsCredentials) return null
@@ -30,5 +34,6 @@ export function AgentCloneCredentials({ credentials, workspaceID }: {
     ))}
     <a href={`/?ws=${encodeURIComponent(workspaceID ?? "")}&admin=credentials`} target="_blank" rel="noopener noreferrer"
       className="text-sm text-fg underline underline-offset-4">{t("agents.form.clone.manageCredentials")}</a>
+    <AgentCloneCredentialRefresh failed={failed} fetching={fetching} onRefresh={onRefresh} />
   </section>
 }

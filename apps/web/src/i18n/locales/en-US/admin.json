@@ -1501,7 +1501,9 @@
         "credentials": "Capabilities and settings are copied, including available shared credentials. Personal or unavailable credentials need a new selection.",
         "unavailable": "These source capabilities are no longer available for creation. Remove them from this copy to continue.",
         "remove": "Remove from copy",
-        "manageCredentials": "Add or authorize credentials (opens a new tab)"
+        "manageCredentials": "Add or authorize credentials (opens a new tab)",
+        "refreshCredentials": "Refresh credentials",
+        "credentialsFailed": "Credentials could not be loaded."
       }
     },
     "pendingCapability": {

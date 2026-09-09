@@ -22,6 +22,7 @@ import { AgentCloneNotice } from "./agents/AgentCloneNotice"
 import { useAgentCloneCapabilities } from "./agents/useAgentCloneCapabilities"
 import { useAgentCloneCredentials } from "./agents/useAgentCloneCredentials"
 import { AgentCloneCredentials } from "./agents/AgentCloneCredentials"
+import { AgentCloneCredentialRefresh } from "./agents/AgentCloneCredentialRefresh"
 import { sharedSecretsForKind } from "../../lib/credential-bindings"
 import { withoutCredentialBindings } from "../../lib/agent-clone"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
@@ -847,9 +848,8 @@ export function CreateAgentDialog({
     // a fallback for the daemon).
     const initialCapabilities = selectedCapabilities.map((cap) => {
       const choice = capabilityVersionChoices[cap.id]
-      const source = clone.bindings.find((binding) => binding.capability_id === cap.id)
       const pinningMode: "latest" | "pinned" = choice?.pinningMode ?? "latest"
-      const versionID = pinningMode === "pinned" || source
+      const versionID = pinningMode === "pinned" || cloneSourceID
         ? (choice?.versionID || (cap.latest_version_id as string))
         : (cap.latest_version_id as string)
       return { capability_version_id: versionID, pinning_mode: pinningMode,
@@ -1343,6 +1343,8 @@ export function CreateAgentDialog({
               )}
               {requiresModel && selectedModel && selectedModel.credential_mode === "credential_ref" && (
                 <Field label={t("credentialCheck.modelBindingTitle")}>
+                  {cloneSourceID && <AgentCloneCredentialRefresh failed={secretsQ.isError} fetching={secretsQ.isFetching}
+                    onRefresh={() => { void secretsQ.refetch() }} />}
                   <div className="flex flex-col gap-1" role="radiogroup">
                     <label className={cn("flex items-start gap-2 py-1", visibility === "public" ? "cursor-not-allowed opacity-50" : "cursor-pointer")}>
                       <input
@@ -1493,7 +1495,9 @@ export function CreateAgentDialog({
                                       // If the user cancels and no existing secret has been chosen yet,
                                       // fall the binding back to an existing one (if any) or to personal,
                                       // so we don't leave the shared radio "selected with nothing inside".
-                                      if (!("new_secret" in modelBindingChoice)) {
+                                      if (cloneSourceID) {
+                                        setModelBindingChoice({ source: "shared" })
+                                      } else if (!("new_secret" in modelBindingChoice)) {
                                         if (modelSharedSecrets[0]) {
                                           setModelBindingChoice({ source: "shared", existing_secret_id: modelSharedSecrets[0].id })
                                         } else if (visibility !== "public") {
@@ -1623,7 +1627,8 @@ export function CreateAgentDialog({
                 )}
               </section>
 
-              {cloneSourceID ? <AgentCloneCredentials credentials={cloneCredentials} workspaceID={workspaceID} /> : aggregatedRequiredKinds.length > 0 && (
+              {cloneSourceID ? <AgentCloneCredentials credentials={cloneCredentials} workspaceID={workspaceID}
+                failed={secretsQ.isError} fetching={secretsQ.isFetching} onRefresh={() => { void secretsQ.refetch() }} /> : aggregatedRequiredKinds.length > 0 && (
                 <section className="flex flex-col gap-3">
                   <h3 className="text-sm font-medium text-fg">{t("agents.form.sections.credentials")}</h3>
                   <CredentialCheckPanel
