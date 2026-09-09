@@ -114,6 +114,7 @@ export function useScheduledTasksByWorkspace(
     enabled: Boolean(workspaceID),
     retry: noUnreachableRetry,
     staleTime: 15_000,
+    refetchInterval: 5_000,
     // Keep pagination placeholders within one workspace so task rows never cross boundaries.
     placeholderData: (prev, previousQuery) =>
       previousQuery?.queryKey[2] === (workspaceID ?? "_none") ? prev : undefined,
