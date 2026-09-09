@@ -317,6 +317,7 @@ export function CredentialCheckPanel({
                     <div className="mt-1.5 space-y-1.5">
                       {kindSecrets.length > 0 && (
                         <CredentialBindingSelect
+                          label={displayName}
                           value={"existing_secret_id" in choice ? choice.existing_secret_id : "__new__"}
                           secrets={kindSecrets}
                           allowPersonal={false}

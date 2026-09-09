@@ -299,7 +299,7 @@ function MutationError({ error }: { error: unknown }) {
 function VersionSelect({ versions, value, onChange }: { versions: CapabilityVersion[]; value: string; onChange: (value: string) => void }) {
   const { t } = useTranslation("admin")
   return (
-    <Select value={value} onValueChange={(nextValue) => onChange(nextValue)}>
+    <Select aria-label={t("agents.detail.capabilities.enableDialog.version")} value={value} onValueChange={(nextValue) => onChange(nextValue)}>
       {versions.map((version, index) => (
         <SelectOption key={version.id} value={version.id}>v{version.version}{index === 0 ? ` · ${t("agents.detail.capabilities.switchDialog.latest")}` : ""}</SelectOption>
       ))}
@@ -335,6 +335,7 @@ function EnableCredentialBindingList({
         return (
           <Field key={rc.kind} label={credentialKindLabel(rc.kind, i18n.language, rc.kind)}>
             <CredentialBindingSelect
+              label={credentialKindLabel(rc.kind, i18n.language, rc.kind)}
               value={selectedSecretID}
               secrets={kindSecrets}
               allowPersonal={!publicAgent}

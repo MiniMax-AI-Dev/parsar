@@ -2,6 +2,7 @@ import { Select, SelectOption } from "../ui/select"
 import type { Secret } from "../../lib/api-types"
 
 interface CredentialBindingSelectProps {
+  label: string
   value: string
   secrets: Secret[]
   allowPersonal: boolean
@@ -16,6 +17,7 @@ interface CredentialBindingSelectProps {
 
 /** Shared source selector used by Agent creation and Capability enabling. */
 export function CredentialBindingSelect({
+  label,
   value,
   secrets,
   allowPersonal,
@@ -29,6 +31,7 @@ export function CredentialBindingSelect({
 }: CredentialBindingSelectProps) {
   return (
     <Select
+      aria-label={label}
       value={value}
       onValueChange={(nextValue) => onChange(nextValue)}
       onClick={(event) => event.stopPropagation()}
