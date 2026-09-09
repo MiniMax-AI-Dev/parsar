@@ -71,7 +71,7 @@ import {
   useAgentRun,
   useAgentRunEvents,
   useAgentRuns,
-  useRequeueRun,
+  useRetryRun,
 } from "../../lib/api-agents"
 import { formatRawRunEvents } from "../../lib/agent-run-event-format"
 import type { AgentRunDetail, AgentRunEvent, AgentRunStatus, AgentRunSummary } from "../../lib/api-types"
@@ -413,7 +413,7 @@ function RunDetailRail({
   const runQ = useAgentRun(id, wsId)
   const workspacesQ = useMyWorkspaces()
   const cancelRun = useCancelRun(wsId)
-  const requeueRun = useRequeueRun(wsId)
+  const retryRun = useRetryRun(wsId)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("steps")
@@ -480,13 +480,16 @@ function RunDetailRail({
   const role = workspacesQ.data?.workspaces.find((w) => w.id === run.workspace_id)?.role
   const canCancel = role === "owner" || role === "admin" || role === "member"
   const isCancellable = canCancel && (run.status === "running" || run.status === "queued")
-  const isRetryable = !run.agent_deleted && (run.status === "failed" || run.status === "interrupted" || run.status === "cancelled")
+  const isRetryable = canCancel && !run.agent_deleted && (run.status === "failed" || run.status === "interrupted" || run.status === "cancelled")
 
   function handleRetry() {
     setCancelError(null)
-    requeueRun.mutate(
+    retryRun.mutate(
       { runID: run.id, reason: "user_clicked_retry" },
-      { onError: (e) => setCancelError(e instanceof Error ? e.message : String(e)) },
+      {
+        onSuccess: (result) => navigate("runs", { id: result.run_id }),
+        onError: (e) => setCancelError(e instanceof Error ? e.message : String(e)),
+      },
     )
   }
 
@@ -518,8 +521,8 @@ function RunDetailRail({
       footer={
         <>
           {isRetryable && (
-            <Button variant="outline" onClick={handleRetry} disabled={requeueRun.isPending}>
-              {requeueRun.isPending && <Loader2 className="animate-spin" />}
+            <Button variant="outline" onClick={handleRetry} disabled={retryRun.isPending}>
+              {retryRun.isPending && <Loader2 className="animate-spin" />}
               {t("runs.actions.retry")}
             </Button>
           )}

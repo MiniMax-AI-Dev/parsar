@@ -589,6 +589,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 				r.Get("/connections/github/callback", githubConnectionCallbackHandler(runtimeStore, *cfg.githubConnectionDeps))
 			}
 			r.Post("/agent-runs/{runID}/requeue", requeueAgentRun(runtimeStore))
+			r.Post("/agent-runs/{runID}/retry", retryAgentRun(runtimeStore))
 			r.Post("/agents/{agentID}/connector", configureAgentConnector(runtimeStore))
 			r.Post("/agents/{agentID}/profile", configureAgentProfile(runtimeStore))
 			r.Post("/agents/{agentID}/disable", disableAgent(runtimeStore))

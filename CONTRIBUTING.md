@@ -224,6 +224,12 @@ description and keep ownership on the side listed here.
   dispatch deadline or cancellation may stop connector work, but it must not
   prevent the server from recording the resulting completed, failed, or
   cancelled state.
+- Manual run retries create a new Run ID through `/agent-runs/{runID}/retry`.
+  Preserve the source run's terminal status, events and output; reuse its trigger
+  message, and execute as the current requester. One source run maps to one retry
+  (`retry_run_id` / `retry_of_run_id`), so repeated requests cannot create duplicate
+  attempts. Dispatch only after commit, independently of HTTP cancellation. Keep
+  the legacy same-ID `/requeue` endpoint separate from this user-facing workflow.
 - When an engine supports resume, persist the upstream session id through
   `agent_engine_sessions` and pass `AgentSessionID` plus `AgentStateKey` over
   the daemon protocol. Do not keep resume ids only in adapter memory, files

@@ -118,9 +118,9 @@ async function listAgentRunEvents(
   )
 }
 
-async function requeueRunRequest(runID: string, reason?: string) {
-  return apiRequest<unknown>(
-    `/api/v1/agent-runs/${encodeURIComponent(runID)}/requeue`,
+async function retryRunRequest(runID: string, reason?: string) {
+  return apiRequest<{ run_id: string; conversation_id: string }>(
+    `/api/v1/agent-runs/${encodeURIComponent(runID)}/retry`,
     { method: "POST", body: reason ? { reason } : {} }
   )
 }
@@ -354,12 +354,12 @@ export function useAgentRunEvents(
   })
 }
 
-export function useRequeueRun(workspaceID: string | null) {
+export function useRetryRun(workspaceID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ runID, reason }: { runID: string; reason?: string }) => {
       if (!workspaceID) throw noWorkspaceError()
-      return requeueRunRequest(runID, reason)
+      return retryRunRequest(runID, reason)
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["admin", "agentRuns"] })
