@@ -40,7 +40,7 @@ const dispatchRunTimeout = 30 * time.Minute
 // streamFirstEventTimeout protects /stream from hanging when no producer
 // ever publishes (e.g. /start failed or runID is stale). After this window
 // with zero events, refreshes run status: terminal → synthesize an error;
-// still queued → emit timeout error.
+// queued or running → keep waiting for the producer.
 //
 // var (not const) so tests can shrink it; production never reassigns.
 var streamFirstEventTimeout = 30 * time.Second
@@ -208,7 +208,7 @@ func startConversationAgentRun(runtimeStore RuntimeStore, cfg *routerConfig) htt
 // browser.
 //
 //	@Summary		Stream agent run events (SSE)
-//	@Description	Server-Sent Events stream that forwards the connector's PromptEvents (deltas, tool calls, permission requests, final message) for the run. Content-Type is text/event-stream; each event's data field is a JSON-encoded PromptEvent.
+//	@Description	Server-Sent Events stream that forwards the connector's PromptEvents (deltas, tool calls, permission requests, final message) for the run. Queued and running tasks may wait for their first event without failing the stream. Content-Type is text/event-stream; each event's data field is a JSON-encoded PromptEvent.
 //	@Tags			agent-runs
 //	@ID				streamDevConversationAgentRun
 //	@Produce		text/event-stream
@@ -289,10 +289,10 @@ func streamConversationAgentRun(runtimeStore RuntimeStore, cfg *routerConfig) ht
 			case <-r.Context().Done():
 				return
 			case <-firstEventTimer.C:
-				// A queued run can legitimately sit unbounded while
-				// an older sibling finishes. Re-arm the timer and
-				// keep waiting silently in that case.
-				if run, err := runtimeStore.GetAgentRun(r.Context(), runID); err == nil && run.Status == "queued" {
+				// Queued runs wait for siblings; running engines may
+				// take time to produce their first event. Neither is
+				// an execution failure while the stored run is active.
+				if run, err := runtimeStore.GetAgentRun(r.Context(), runID); err == nil && (run.Status == "queued" || run.Status == "running") {
 					firstEventTimer.Reset(streamFirstEventTimeout)
 					continue
 				}
