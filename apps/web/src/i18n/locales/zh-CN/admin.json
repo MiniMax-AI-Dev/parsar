@@ -1566,7 +1566,8 @@
     },
     "filters": {
       "label": "筛选",
-      "allConnectors": "全部连接方式"
+      "allConnectors": "全部连接方式",
+      "allStatuses": "全部状态"
     },
     "exposure": {
       "conversation": {
@@ -1587,6 +1588,13 @@
         "off": "未配置",
         "notYet": "即将支持"
       }
+    },
+    "statusAction": {
+      "enable": "启用",
+      "disable": "停用",
+      "enabled": "已启用“{{name}}”。",
+      "disabled": "已停用“{{name}}”。",
+      "failed": "未能更新 Agent 状态"
     }
   },
   "connectors": {

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { Loader2, MessageSquare, Pencil, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -18,6 +18,7 @@ export function AgentDetailActions({
   workspaceRole,
   models,
   onToast,
+  statusAction,
 }: {
   agent: Agent
   workspaceID: string | null
@@ -25,6 +26,7 @@ export function AgentDetailActions({
   workspaceRole?: UserWorkspace["role"]
   models: Model[]
   onToast: ShowToast
+  statusAction: ReactNode
 }) {
   const { t } = useTranslation("admin")
   const { navigate } = useAdminView()
@@ -44,7 +46,7 @@ export function AgentDetailActions({
   }
 
   return (
-    <>
+    <div className="flex min-w-0 w-full flex-wrap items-center gap-2">
       <Button
         variant="outline"
         disabled={agent.status !== "active" || chatPending}
@@ -58,6 +60,7 @@ export function AgentDetailActions({
         {t("agents.actions.chat")}
       </Button>
       {canManage && <>
+      {statusAction}
       <Button
         variant="outline"
         disabled={deleteMut.isPending}
@@ -127,6 +130,6 @@ export function AgentDetailActions({
         }}
       />
       </>}
-    </>
+    </div>
   )
 }

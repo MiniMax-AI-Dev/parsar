@@ -1566,7 +1566,8 @@
     },
     "filters": {
       "label": "Filter",
-      "allConnectors": "All connectors"
+      "allConnectors": "All connectors",
+      "allStatuses": "All statuses"
     },
     "exposure": {
       "conversation": {
@@ -1587,6 +1588,13 @@
         "off": "Not configured",
         "notYet": "Coming"
       }
+    },
+    "statusAction": {
+      "enable": "Enable",
+      "disable": "Disable",
+      "enabled": "“{{name}}” enabled.",
+      "disabled": "“{{name}}” disabled.",
+      "failed": "Could not update Agent status"
     }
   },
   "connectors": {
