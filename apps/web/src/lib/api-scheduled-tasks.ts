@@ -128,6 +128,7 @@ export function useScheduledTaskRuns(taskID: string | null) {
     enabled: Boolean(taskID),
     retry: noUnreachableRetry,
     staleTime: 10_000,
+    refetchInterval: 5_000,
   })
 }
 
