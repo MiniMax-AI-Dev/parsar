@@ -100,10 +100,11 @@ function fmtTime(iso: string): string {
   return d.toLocaleString(undefined, { hour12: false })
 }
 
+const METRIC_COLUMNS = [col.num(104, 0), col.num(104, 0), col.num(96, 0)]
 /** provider · model · calls · input · output · cost */
-const MODEL_COLUMNS = [col.meta(128), col.id(200, 2), col.num(72), col.num(104), col.num(104), col.num(96)]
+const MODEL_COLUMNS = [col.meta(0), col.id(0, 2), col.num(72, 0), ...METRIC_COLUMNS]
 /** time · run · provider · model · input · output · cost */
-const RECENT_COLUMNS = [col.id(148, 0.5), col.id(156, 0.7), col.meta(128), col.id(200, 2), col.num(104), col.num(104), col.num(96)]
+const RECENT_COLUMNS = [col.age(0, 1), col.id(0, 1), col.meta(0), col.id(0, 1.2), ...METRIC_COLUMNS]
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -173,8 +174,8 @@ export function UsagePage() {
               <ul className="m-0 list-none p-0">
                 {byModel.map((m) => (
                   <LedgerRow key={m.key} role="listitem" tabIndex={-1}>
-                    <span className="truncate text-xs text-fg-muted">{m.provider}</span>
-                    <span className="truncate font-mono text-xs text-fg">{m.model}</span>
+                    <span className="truncate text-xs text-fg-muted" title={m.provider}>{m.provider}</span>
+                    <span className="truncate font-mono text-xs text-fg" title={m.model}>{m.model}</span>
                     <LedgerNum>{fmtInt(m.callCount)}</LedgerNum>
                     <LedgerNum>{fmtInt(m.inputTokens)}</LedgerNum>
                     <LedgerNum>{fmtInt(m.outputTokens)}</LedgerNum>
@@ -198,7 +199,7 @@ export function UsagePage() {
               <ul className="m-0 list-none p-0">
                 {logs.map((u) => (
                   <LedgerRow key={u.id} role="listitem" tabIndex={-1}>
-                    <span className="truncate font-mono text-xs tabular-nums text-fg-muted">{fmtTime(u.created_at)}</span>
+                    <span className="truncate font-mono text-xs tabular-nums text-fg-muted" title={fmtTime(u.created_at)}>{fmtTime(u.created_at)}</span>
                     {u.agent_run_id ? (
                       <button
                         type="button"
@@ -211,8 +212,8 @@ export function UsagePage() {
                     ) : (
                       <span className="text-xs text-fg-muted" title={t("usage.recent.noRun")}>—</span>
                     )}
-                    <span className="truncate text-xs text-fg-muted">{u.provider}</span>
-                    <span className="truncate font-mono text-xs text-fg">{u.model}</span>
+                    <span className="truncate text-xs text-fg-muted" title={u.provider}>{u.provider}</span>
+                    <span className="truncate font-mono text-xs text-fg" title={u.model}>{u.model}</span>
                     <LedgerNum>{fmtInt(u.input_tokens)}</LedgerNum>
                     <LedgerNum>{fmtInt(u.output_tokens)}</LedgerNum>
                     <LedgerNum>{fmtUsd(u.cost_usd)}</LedgerNum>
