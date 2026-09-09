@@ -72,9 +72,9 @@ function Root() {
   useEffect(() => {
     if (isLoading || !isAuthenticated) return
     if (joinWsId !== null) return
-    const pending = popPendingJoinIntent()
-    if (pending) {
-      window.location.replace(pending)
+    const destination = popPendingJoinIntent() ?? (window.location.pathname === "/login" ? "/" : null)
+    if (destination) {
+      window.location.replace(destination)
     }
   }, [isLoading, isAuthenticated, joinWsId])
 
@@ -88,9 +88,8 @@ function Root() {
     return <LoadingScreen message={t("login.loading")} />
   }
   if (!isAuthenticated) {
-    // Sign-in can leave by SSO redirect as well as by the form, and only the
-    // form comes back to the same address on its own.
-    if (sharedConversationId !== null) stashReturnTo()
+    // Preserve the destination before either password or SSO sign-in.
+    stashReturnTo()
     return <LoginPage />
   }
   // A shared conversation needs a signed-in workspace member and nothing else,
