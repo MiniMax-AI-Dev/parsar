@@ -485,8 +485,8 @@ export function CapabilitiesPage() {
         workspaceID={wid}
         open={importOpen}
         onOpenChange={setImportOpen}
-        onCreated={(capabilityID) => {
-          toast.show(t("capabilities.toast.created", { name: capabilityID }))
+        onCreated={(capability) => {
+          toast.show(t("capabilities.toast.created", { name: capability.name }))
         }}
       />
       {addVersionCapability && (
