@@ -37,7 +37,8 @@ commits to `main` are forbidden.**
   back into it.
 - After implementing and verifying, push the feature branch and open a PR
   against `main`. **Merging into `main` requires PR review** — local
-  fast-forward or local merge to bypass review is not allowed.
+  fast-forward or local merge to bypass review is not allowed. Self-review
+  qualifies for low-impact changes under the review policy below.
 - Run `make check` (and any relevant E2E target) before requesting review.
 - Place worktrees under `.worktrees/<feature-name>/` so they don't litter
   the repo root.
@@ -55,15 +56,22 @@ Fix one issue per PR. State the expected behavior, acceptance criteria, and
 explicit scope exclusions before implementation. Keep unrelated refactors,
 features, formatting, and dependency updates in separate PRs.
 
+Small, low-impact changes may use developer self-review and relevant
+verification without a subagent. Examples include isolated copy, spacing,
+documentation, and local corrections to an already-reviewed change.
+
+Substantial changes, shared interaction behavior, security-sensitive changes,
+and changes whose impact is uncertain require an independent blind review.
 After implementation and required checks, ask one fresh subagent to review
-the entire diff. Give it the requirements, acceptance criteria, project rules,
-and scope boundaries. Do not share the developer's conversation, implementation
+the entire diff. Give it requirements, acceptance criteria, project rules,
+and scope boundaries, without the developer's conversation, implementation
 summary, suspected defects, or previous review findings.
 
-Address blocking findings within the same scope, rerun the relevant checks,
-and repeat the blind review with a fresh subagent after each revision. Merge
-only after checks pass and the review has no unresolved blocking findings.
-Record verification and the PR outcome in the linked issue.
+Address blocking findings within the same scope and rerun the relevant checks.
+Revisions with material behavior changes need a fresh blind reviewer; small
+local corrections may be self-reviewed. Required checks still apply to every
+PR. Merge only after checks pass and all blocking findings are resolved.
+Record the review method, verification, and PR outcome in the linked issue.
 
 If review and fixes keep cycling, stop patching and reassess the design. If
 the design still does not converge, document the unresolved problem and defer
@@ -566,6 +574,10 @@ Three concrete rules:
 When a dialog uses a multi-column grid, give every column `min-w-0` —
 otherwise long children push the grid track wider instead of wrapping.
 
+Authentication submission failures use the shared `ErrorDialog`, preserving
+form input and restoring action focus on dismissal. Field validation stays
+inline; sign-in-required invitation guidance stays visible as a guided step.
+
 Pages with a detail rail may opt into wrapping header actions through
 `PageHeader.actionClassName` and an auto-height header. Other pages retain
 the default single-row header layout.
@@ -596,6 +608,11 @@ DOM change events. Keep option values, labels and disabled rules in the caller,
 and popup styling, keyboard navigation and focus behavior in the shared control.
 Keep its Radix dismissal and focus dependencies compatible with `Dialog` so
 nested menus share one layer stack.
+
+Persistent execution failures use `ErrorState` with `appearance="panel"` to
+separate recovery guidance from expandable technical detail. Keep raw reasons
+in one place; historical conversation messages disable live announcements.
+Loading errors and field validation retain their existing presentation.
 
 ## Typography contract
 

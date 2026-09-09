@@ -427,6 +427,8 @@
       "description": "在 IM 群或 Web 对话里 @Agent，运行记录会出现在这里。"
     },
     "detail": {
+      "errorTitle": "本次运行需要处理",
+      "actionError": "操作未完成",
       "duration": "耗时",
       "conversation": "对话",
       "tabs": {

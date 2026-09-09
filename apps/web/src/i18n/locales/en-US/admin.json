@@ -427,6 +427,8 @@
       "description": "@Agent in IM groups or Web conversations and runs will appear here."
     },
     "detail": {
+      "errorTitle": "This run needs attention",
+      "actionError": "The action could not be completed",
       "duration": "Duration",
       "conversation": "Conversation",
       "tabs": {
