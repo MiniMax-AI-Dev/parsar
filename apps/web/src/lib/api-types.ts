@@ -143,7 +143,7 @@ export interface Agent {
   enabled_at?: string
   /**
    * Explicit runtime binding. When set, the admin list renders "{kind} ·
-   * {name}". Empty → "unbound" warning (dispatch is blocked).
+   * {name}". Local daemon Agents may use legacy config.device_id when empty.
    *
    * `runtime_kind` mirrors `runtimes.type`; distinct from the legacy
    * top-level `runtime` field above (pre-v5 placement metadata).
