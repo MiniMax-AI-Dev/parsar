@@ -1209,12 +1209,14 @@ export function CreateAgentDialog({
                 <Field
                   label={t("agents.form.fields.workDir")}
                   hint={t(executionMode === "sandbox" ? "agents.form.workDir.hintSandbox" : "agents.form.workDir.hintLocal")}
-                  error={submitAttempted && workDir.trim() !== "" && !isUsableWorkDir(workDir.trim()) ? t("agents.form.errors.workDirAbsolute") : undefined}
+                  error={!workDirValid ? t("agents.form.errors.workDirAbsolute") : undefined}
                 >
                   <Input
                     value={workDir}
                     onChange={(e) => setWorkDir(e.target.value)}
                     placeholder={t("agents.form.workDir.placeholder")}
+                    aria-label={t("agents.form.fields.workDir")}
+                    aria-invalid={!workDirValid}
                     disabled={pending}
                     spellCheck={false}
                     autoCapitalize="off"
