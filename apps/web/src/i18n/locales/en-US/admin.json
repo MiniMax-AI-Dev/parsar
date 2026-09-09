@@ -1201,8 +1201,9 @@
         },
         "capabilities": {
           "title": "Capabilities",
-          "add": "+ Add",
-          "empty": "No capability enabled yet. Click \"+ Add\" to install one from the workspace.",
+          "add": "Add capability",
+          "pickerHint": "Choose a Skill or tool for this Agent. Enabling it takes effect on the next run; runtime availability is checked during execution.",
+          "empty": "No capability enabled yet. Choose “Add capability” to enable one from this workspace.",
           "loadError": "Failed to load capabilities."
         }
       },
@@ -1292,7 +1293,8 @@
           "upgradeShort": "New version v{{version}}"
         },
         "state": {
-          "ready": "Ready",
+          "ready": "Enabled in configuration",
+          "available": "Available to enable",
           "attention": "Update available",
           "blocked": "Not usable",
           "deprecated": "Deprecated"

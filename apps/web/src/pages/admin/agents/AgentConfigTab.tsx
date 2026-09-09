@@ -502,14 +502,14 @@ function CapabilityCard({
   // flight, and a capability with a newer version is doing nothing at all —
   // it would have spun forever inside the rail.
   const needsAttention = deprecated || upgradable
-  const status: StatusKind = blocked ? "failed" : needsAttention ? "interrupted" : "completed"
+  const status: StatusKind = blocked ? "failed" : needsAttention ? "interrupted" : mode === "available" ? "queued" : "completed"
   const statusLabel = blocked
     ? t("agents.detail.capabilities.state.blocked")
     : deprecated
       ? t("agents.detail.capabilities.state.deprecated")
       : upgradable
         ? t("agents.detail.capabilities.state.attention")
-        : t("agents.detail.capabilities.state.ready")
+        : t(`agents.detail.capabilities.state.${mode === "available" ? "available" : "ready"}`)
 
   return (
     <CapabilityLine
@@ -999,6 +999,7 @@ function AddCapabilityDialog({
       <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto]">
         <DialogHeader>
           <DialogTitle>{t("agents.detail.config.capabilities.add")}</DialogTitle>
+          <DialogDescription>{t("agents.detail.config.capabilities.pickerHint")}</DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
           <div className="relative shrink-0">
@@ -1007,15 +1008,15 @@ function AddCapabilityDialog({
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder={t("agents.detail.config.capabilities.add")}
-              aria-label={t("agents.detail.config.capabilities.add")}
+              placeholder={t("capabilities.filters.search")}
+              aria-label={t("capabilities.filters.search")}
               className="pl-7"
               autoFocus
             />
           </div>
           <div className="min-h-0 max-h-80 overflow-y-auto">
             {filtered.length === 0 ? (
-              <EmptyState size="compact" title={t("agents.detail.capabilities.emptyAvailable")} />
+              <EmptyState size="compact" title={t(q.trim() ? "capabilities.emptyFiltered.title" : "agents.detail.capabilities.emptyAvailable")} />
             ) : (
               <ul className="m-0 list-none border-t border-line p-0">
                 {filtered.map((capability) => (
