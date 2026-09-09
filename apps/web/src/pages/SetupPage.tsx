@@ -34,6 +34,7 @@ export function SetupPage() {
   const [workspaceEdited, setWorkspaceEdited] = useState(false)
   const [password, setPassword] = useState("")
   const submitRef = useRef<HTMLButtonElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
 
   function suggestedWorkspaceName(nextName: string, nextEmail: string): string {
     const owner = workspaceOwnerName({ name: nextName, email: nextEmail })
@@ -63,6 +64,7 @@ export function SetupPage() {
       : register.error instanceof Error
         ? register.error.message
         : ""
+  const fieldError = register.error instanceof ApiError && register.error.envelope.code === "bootstrap_invalid_input"
 
   const passwordPolicyError = validateNewPassword(password)
   const passwordPolicyErrorMsg =
@@ -93,7 +95,7 @@ export function SetupPage() {
   return (
     <EntryPage>
       <EntryPanel title={t("setup.title")} description={t("setup.subtitle")}>
-        <form className="flex flex-col gap-3" onSubmit={onSubmit} noValidate>
+        <form ref={formRef} className="flex flex-col gap-3" onSubmit={onSubmit} noValidate>
           <Field label={t("setup.nameLabel")} htmlFor="setup-name">
             <Input
               id="setup-name"
@@ -150,20 +152,21 @@ export function SetupPage() {
             />
           </Field>
 
-          <EntryFooter>
+          <EntryFooter message={fieldError && <InlineError>{errorMsg}</InlineError>}>
             <Button ref={submitRef} type="submit" disabled={invalid || submitting}>
               {submitting ? t("setup.submitting") : t("setup.submitButton")}
             </Button>
           </EntryFooter>
         </form>
       </EntryPanel>
-      {errorMsg && (
+      {errorMsg && !fieldError && (
         <ErrorDialog
           title={t("setup.failedTitle")}
           message={t("errors.submitRetryHint")}
           detail={errorMsg}
           onClose={() => register.reset()}
           onRestoreFocus={() => submitRef.current?.focus()}
+          focusScopeRef={formRef}
         />
       )}
     </EntryPage>

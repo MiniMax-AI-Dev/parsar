@@ -24,6 +24,7 @@ export function InviteAcceptPage({ token }: { token: string }) {
   const [submitError, setSubmitError] = useState<{ action: "signIn" | "accept"; message: string } | null>(null)
   const submitRef = useRef<HTMLButtonElement>(null)
   const signInRef = useRef<HTMLButtonElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const [signInRequired, setSignInRequired] = useState(false)
   const passwordPolicyError = validateNewPassword(password)
   const passwordPolicyErrorMsg =
@@ -96,7 +97,7 @@ export function InviteAcceptPage({ token }: { token: string }) {
           ? t("invite.existingDescription", { email, role })
           : t("invite.description", { role })}
       >
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-3">
           <Field label={t("login.emailLabel")} htmlFor="invite-email">
             <Input id="invite-email" type="email" value={email} readOnly disabled />
           </Field>
@@ -163,6 +164,7 @@ export function InviteAcceptPage({ token }: { token: string }) {
           detail={submitError.message}
           onClose={() => setSubmitError(null)}
           onRestoreFocus={() => (submitError.action === "signIn" ? signInRef : submitRef).current?.focus()}
+          focusScopeRef={formRef}
         />
       )}
     </EntryPage>

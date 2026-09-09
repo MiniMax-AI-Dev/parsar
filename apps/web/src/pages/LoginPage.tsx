@@ -54,6 +54,7 @@ function SignInView() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const submitRef = useRef<HTMLButtonElement>(null)
+  const formScopeRef = useRef<HTMLDivElement>(null)
 
   const submitting = loginM.isPending
   const invalid = email.trim() === "" || password === ""
@@ -82,7 +83,7 @@ function SignInView() {
 
   return (
     <EntryPage>
-      <div className="w-full max-w-[400px]">
+      <div ref={formScopeRef} className="w-full max-w-[400px]">
         <header className="mb-8 flex flex-col items-center text-center">
           <BrandMark size={44} />
           <h1 className="font-display mt-6 text-3xl leading-tight text-fg" translate="no">
@@ -174,6 +175,7 @@ function SignInView() {
           detail={invalidCredentials ? undefined : loginM.error.message}
           onClose={() => loginM.reset()}
           onRestoreFocus={() => submitRef.current?.focus()}
+          focusScopeRef={formScopeRef}
         />
       )}
     </EntryPage>

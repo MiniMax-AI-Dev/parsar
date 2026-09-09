@@ -1,23 +1,32 @@
 import { AlertTriangle } from "lucide-react"
+import type { RefObject } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "./button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./dialog"
 import { VerbatimBlock } from "./verbatim"
 
-export function ErrorDialog({ title, message, detail, onClose, onRestoreFocus }: {
+export function ErrorDialog({ title, message, detail, onClose, onRestoreFocus, focusScopeRef }: {
   title: string
   message: string
   detail?: string
   onClose: () => void
   onRestoreFocus: () => void
+  focusScopeRef: RefObject<HTMLElement | null>
 }) {
   const { t } = useTranslation("common")
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent
         showCloseButton={false}
-        onCloseAutoFocus={(event) => { event.preventDefault(); onRestoreFocus() }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          onRestoreFocus()
+          const scope = focusScopeRef.current
+          if (scope && !scope.contains(document.activeElement)) {
+            scope.querySelector<HTMLElement>('input:not(:disabled), button:not(:disabled), a[href]')?.focus()
+          }
+        }}
         className="w-[calc(100%-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden"
       >
         <DialogHeader className="min-w-0 pr-4">
