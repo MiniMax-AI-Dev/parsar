@@ -1732,6 +1732,13 @@ definitions:
       required:
         type: boolean
     type: object
+  store.RetryAgentRunResult:
+    properties:
+      conversation_id:
+        type: string
+      run_id:
+        type: string
+    type: object
   store.SecretRead:
     properties:
       auth_type:
@@ -2053,6 +2060,71 @@ paths:
               type: string
             type: object
       summary: Re-queue an agent run
+      tags:
+      - agent-runs
+  /api/v1/agent-runs/{runID}/retry:
+    post:
+      consumes:
+      - application/json
+      description: Creates and dispatches one replacement execution for a failed,
+        cancelled, or interrupted run, preserving its history. Repeated requests return
+        the same replacement. Workspace owner/admin/member only.
+      operationId: retryAgentRun
+      parameters:
+      - description: Source run UUID
+        in: path
+        name: runID
+        required: true
+        type: string
+      - description: Retry reason
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/dev.requeueAgentRunBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/store.RetryAgentRunResult'
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Caller cannot execute runs
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Run not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Run cannot be retried
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Retry failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Retry store unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Retry an agent run
       tags:
       - agent-runs
   /api/v1/agent-runtime/injection/incremental:
