@@ -116,6 +116,15 @@ export function convertTimelineMessage(
     }
   }
 
+  if (msg.sender_type === "system" && msg.kind !== "runtime_error") {
+    return {
+      id: msg.id,
+      role: "system",
+      content: [{ type: "text", text: msg.content }],
+      createdAt: new Date(msg.created_at),
+    }
+  }
+
   // --- Assistant message ---
   const parts: Array<
     | { readonly type: "text"; readonly text: string }

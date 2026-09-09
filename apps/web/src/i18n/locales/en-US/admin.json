@@ -282,7 +282,8 @@
       "unnamed": "Untitled conversation",
       "emptyTimeline": "No messages yet",
       "viewRunLink": "View run details",
-      "externalUser": "IM user"
+      "externalUser": "IM user",
+      "systemSender": "System"
     },
     "runtime_error": {
       "badge": "Run failed",

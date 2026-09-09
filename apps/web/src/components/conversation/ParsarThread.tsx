@@ -105,7 +105,7 @@ export function ParsarThread({
 const ThreadMessage: FC = () => {
   const role = useAuiState((s) => s.message.role)
   if (role === "user") return <UserMessage />
-  return <AssistantMessage />
+  return <AssistantMessage system={role === "system"} />
 }
 
 // ---------------------------------------------------------------------------
@@ -147,9 +147,11 @@ const UserMessage: FC = () => {
 // NOTE: "View run →" link for failed runs is not yet ported.
 // ---------------------------------------------------------------------------
 
-const AssistantMessage: FC = () => {
+const AssistantMessage: FC<{ system?: boolean }> = ({ system }) => {
+  const { t } = useTranslation("admin")
   return (
     <MessagePrimitive.Root className="relative">
+      {system && <div className="mb-1 text-xs text-fg-muted">{t("conversations.detail.systemSender")}</div>}
       <div className="text-base text-fg">
         <MessagePrimitive.GroupedParts
           groupBy={groupPartByType({
