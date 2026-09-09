@@ -15,6 +15,7 @@ import {
 import { PageHeader } from "../layout/PageHeader"
 import { ApprovalBar } from "./ApprovalBar"
 import { ConversationInteractionCards } from "./ConversationInteractionCards"
+import { MessageMarkdown } from "./MessageMarkdown"
 import { WorkTrace, type TraceStep } from "./WorkTrace"
 import { Button } from "../ui/button"
 import { EmptyState } from "../ui/empty-state"
@@ -876,7 +877,9 @@ const MessageRow = memo(function MessageRow({
       <ToolCardSlot
         presentation={presentation}
         content={content}
-        fallback={<p className="m-0 whitespace-pre-wrap break-words text-base text-fg">{content}</p>}
+        fallback={senderType === "agent"
+          ? <MessageMarkdown content={content} />
+          : <p className="m-0 whitespace-pre-wrap break-words text-base text-fg">{content}</p>}
       />
       {failedRun && onOpenRun && (
         <Button variant="link" size="sm" className="mt-1 px-0" onClick={() => onOpenRun(failedRun.id)}>
