@@ -164,6 +164,9 @@ description and keep ownership on the side listed here.
   workspace; cross-workspace upgrades still require a public, available source.
 - The server owns auth, workspaces, agent records, runtime bindings, run
   records, audit/usage persistence, and upstream engine session ids.
+- Soft-deleting an Agent preserves workspace-authorized conversation and run
+  history, including its identity. History reads expose deletion state; they
+  must not allow new messages or retries to execute the deleted Agent.
 - Successful explicit Agent capability enable, upgrade, removal, and built-in
   toggle requests emit Agent-targeted audit events with the authenticated actor
   and capability identifiers. Never include configuration or credential values.

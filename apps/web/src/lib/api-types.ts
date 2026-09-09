@@ -438,6 +438,7 @@ export interface AgentRunSummary {
   agent_id?: string
   agent_name?: string
   agent_slug?: string
+  agent_deleted?: boolean
   connector_type: string
   status: AgentRunStatus
   error_summary?: string
@@ -734,10 +735,11 @@ export interface Conversation {
   metadata: Record<string, unknown>
   /**
    * Derived from metadata.primary_agent_id via a JOIN. Empty string when no
-   * primary agent is bound or the bound agent has been soft-deleted.
+   * primary agent is bound. Deleted Agents remain identifiable in history.
    */
   primary_agent_id?: string
   primary_agent_name?: string
+  primary_agent_deleted?: boolean
   created_at: string
   updated_at: string
 }
@@ -803,6 +805,7 @@ export interface ConversationTimelineRun {
   user_facing_reason?: string
   agent_name?: string
   agent_slug?: string
+  agent_deleted?: boolean
   trigger_message_id?: string
   output_message_id?: string
   connector_type?: string

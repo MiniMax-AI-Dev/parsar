@@ -1910,8 +1910,8 @@ paths:
       - agent-daemon
   /api/v1/agent-runs/{runID}:
     get:
-      description: Returns the full record for a single agent run. Caller must belong
-        to the run's workspace.
+      description: Returns a run, including retained history and agent_deleted state
+        after Agent deletion. Caller must belong to the run's workspace.
       operationId: getDevAgentRun
       parameters:
       - description: Agent run UUID
@@ -3346,6 +3346,46 @@ paths:
       summary: Start GitHub personal OAuth connection
       tags:
       - connections
+  /api/v1/conversations/{conversationID}:
+    get:
+      description: Returns a conversation with primary_agent_deleted when its retained
+        primary Agent has been deleted. Caller must belong to the workspace.
+      operationId: getDevConversation
+      parameters:
+      - description: Conversation UUID
+        in: path
+        name: conversationID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Conversation
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid UUID
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Caller lacks permission
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Conversation not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a conversation
+      tags:
+      - conversations
   /api/v1/conversations/{conversationID}/cancel-all:
     post:
       consumes:
@@ -3633,8 +3673,8 @@ paths:
       - agent-runs
   /api/v1/conversations/{conversationID}/timeline:
     get:
-      description: Returns the ordered timeline (messages, tool calls, events) for
-        a conversation.
+      description: Returns the ordered timeline, including run history and Agent identity
+        retained after Agent deletion.
       operationId: getDevConversationTimeline
       parameters:
       - description: Conversation UUID
@@ -4692,8 +4732,8 @@ paths:
       - workspaces
   /api/v1/workspaces/{workspaceID}/agent-runs:
     get:
-      description: Returns agent-run rows for the workspace. Caller must be a workspace
-        member.
+      description: Returns agent-run rows, including retained history and agent_deleted
+        state after Agent deletion. Caller must be a workspace member.
       operationId: listDevWorkspaceAgentRuns
       parameters:
       - description: Workspace UUID

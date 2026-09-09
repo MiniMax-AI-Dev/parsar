@@ -79,8 +79,13 @@ export function SharedConversationPage({ conversationId }: { conversationId: str
     )
   }
 
+  const headerAgent = agent ?? (conv.primary_agent_name ? {
+    name: conv.primary_agent_name,
+    description: conv.primary_agent_deleted ? t("conversations.composer.agentDeleted") : "",
+  } : undefined)
+
   return (
-    <SharedShell agent={agent ? { name: agent.name, description: agent.description } : undefined}>
+    <SharedShell agent={headerAgent}>
       <ConversationMain
         conv={conv}
         canWrite={canWrite}

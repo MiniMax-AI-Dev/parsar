@@ -299,6 +299,7 @@
     },
     "composer": {
       "readOnly": "当前为只读权限，无法发送消息。",
+      "agentDeleted": "这个 Agent 已删除。你仍可查看历史对话，但无法继续发送消息。",
       "label": "发送消息",
       "placeholder": "和 {{agent}} 聊聊…",
       "send": "发送",
@@ -977,6 +978,7 @@
     }
   },
   "agents": {
+    "deletedLabel": "Agent 已删除",
     "page": {
       "title": "Agent"
     },

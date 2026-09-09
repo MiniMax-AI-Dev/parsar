@@ -299,6 +299,7 @@
     },
     "composer": {
       "readOnly": "Read-only access. You cannot send messages.",
+      "agentDeleted": "This Agent was deleted. You can read this conversation, but cannot send new messages.",
       "label": "Send message",
       "placeholder": "Chat with {{agent}}…",
       "send": "Send",
@@ -977,6 +978,7 @@
     }
   },
   "agents": {
+    "deletedLabel": "Deleted Agent",
     "page": {
       "title": "Agents"
     },

@@ -197,7 +197,7 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
     )
   }
 
-  if (p.messageCount === 0) {
+  if (p.messageCount === 0 && !p.conv.primary_agent_deleted) {
     // 0 messages: same empty surface as the no-conversation state until
     // the first send; interaction cards still show for this conv.
     return (
@@ -360,6 +360,8 @@ function ChatStream({
   // without threading the id through every parent prop bag.
   const convInfoQ = useConversation(conversationId, null)
   const convWorkspaceId = convInfoQ.data?.workspace_id ?? null
+  const agentDeleted = convInfoQ.data?.primary_agent_deleted === true
+  const agentName = agent?.name || convInfoQ.data?.primary_agent_name || ""
   const cancelRunMut = useCancelRun(convWorkspaceId)
 
   // SSE state: ComposerForm hands us a run_id after send; we open the
@@ -560,7 +562,7 @@ function ChatStream({
                   metadata={m.metadata}
                   outputRuns={runsByOutputMessage.get(m.id)}
                   stamp={fmtAgo(m.created_at)}
-                  agentName={agent?.name ?? ""}
+                  agentName={agentName}
                   conversationId={conversationId}
                   onOpenRun={openRun}
                 />
@@ -588,7 +590,7 @@ function ChatStream({
               senderType="agent"
               content={stream.deltaText}
               stamp={t("conversations.stream.caretHint")}
-              agentName={agent?.name ?? ""}
+              agentName={agentName}
               conversationId={conversationId}
             />
           )}
@@ -660,9 +662,9 @@ function ChatStream({
         ) : (
           <ComposerForm
             conversationId={conversationId}
-            agentName={agent?.name}
-            placeholder={t("conversations.composer.placeholder", { agent: agent?.name ?? "" })}
-            disabled={!canWrite || !agent || sandboxGuard?.blocked}
+            agentName={agentName}
+            placeholder={agentDeleted ? t("agents.deletedLabel") : t("conversations.composer.placeholder", { agent: agentName })}
+            disabled={!canWrite || !agent || agentDeleted || sandboxGuard?.blocked}
             onRunStarted={startRun}
             onStartError={(message: string) => setChatToast({ text: message })}
             activeRunId={activeRunId}
@@ -682,7 +684,7 @@ function ChatStream({
                 : undefined
             }
             cancelling={cancelRunMut.isPending}
-            blockReason={!canWrite ? t("conversations.composer.readOnly") : sandboxGuard?.blocked ? sandboxGuard.message : undefined}
+            blockReason={agentDeleted ? t("conversations.composer.agentDeleted") : !canWrite ? t("conversations.composer.readOnly") : sandboxGuard?.blocked ? sandboxGuard.message : undefined}
           />
         )}
       </ComposerFooter>

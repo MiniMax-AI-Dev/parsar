@@ -89,7 +89,7 @@ func configureConversationExternalRef(runtimeStore RuntimeStore) http.HandlerFun
 // getConversationTimeline returns the ordered timeline for a conversation.
 //
 //	@Summary		Get a conversation's timeline
-//	@Description	Returns the ordered timeline (messages, tool calls, events) for a conversation.
+//	@Description	Returns the ordered timeline, including run history and Agent identity retained after Agent deletion.
 //	@Tags			conversations
 //	@ID				getDevConversationTimeline
 //	@Produce		json
@@ -304,6 +304,19 @@ func createWorkspaceConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// getConversation reads a conversation and its retained primary Agent identity.
+//
+//	@Summary		Get a conversation
+//	@Description	Returns a conversation with primary_agent_deleted when its retained primary Agent has been deleted. Caller must belong to the workspace.
+//	@Tags			conversations
+//	@ID				getDevConversation
+//	@Produce		json
+//	@Param			conversationID	path	string	true	"Conversation UUID"
+//	@Success		200 {object} map[string]interface{} "Conversation"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller lacks permission"
+//	@Failure		404 {object} map[string]string "Conversation not found"
+//	@Router			/api/v1/conversations/{conversationID} [get]
 func getConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {

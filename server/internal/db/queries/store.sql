@@ -536,12 +536,13 @@ select
     limit 1
   ), '')::text as last_message_sender_type,
   coalesce(a.id::text, '')::text as primary_agent_id,
-  coalesce(a.name, '')::text as primary_agent_name
+  coalesce(a.name, '')::text as primary_agent_name,
+  (a.deleted_at is not null)::boolean as primary_agent_deleted
 from conversations c
 left join agents a
   on a.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
-  and a.deleted_at is null
-  and a.status = 'active'
+  and a.workspace_id = c.workspace_id
+  and (a.status = 'active' or a.deleted_at is not null)
 where c.workspace_id = @workspace_id::uuid
   and c.deleted_at is null
   and (@agent_id::text = '' or c.metadata->>'primary_agent_id' = @agent_id::text)
@@ -566,12 +567,13 @@ select
   c.created_at,
   c.updated_at,
   coalesce(a.id::text, '')::text as primary_agent_id,
-  coalesce(a.name, '')::text as primary_agent_name
+  coalesce(a.name, '')::text as primary_agent_name,
+  (a.deleted_at is not null)::boolean as primary_agent_deleted
 from conversations c
 left join agents a
   on a.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
-  and a.deleted_at is null
-  and a.status = 'active'
+  and a.workspace_id = c.workspace_id
+  and (a.status = 'active' or a.deleted_at is not null)
 where c.id = @id::uuid
   and c.deleted_at is null;
 
@@ -809,6 +811,16 @@ set status = 'queued',
     updated_at = @now
 where id = @id::uuid
   and status = 'failed'
+  and exists (
+    select 1 from agents a
+    join conversations c on c.id = agent_runs.conversation_id
+    where a.id = agent_runs.agent_id
+      and a.workspace_id = agent_runs.workspace_id
+      and c.workspace_id = agent_runs.workspace_id
+      and a.deleted_at is null
+      and c.deleted_at is null
+      and c.status = 'active'
+  )
 returning
   id::text,
   workspace_id::text,
@@ -970,6 +982,7 @@ select
   r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
+  (a.deleted_at is not null)::boolean as agent_deleted,
   r.connector_type,
   r.status,
   r.metadata,
@@ -984,7 +997,6 @@ where r.conversation_id = @conversation_id::uuid
   and r.workspace_id = a.workspace_id
   and c.status = 'active'
   and c.deleted_at is null
-  and a.deleted_at is null
 order by r.created_at asc, r.id asc
 limit @item_limit;
 
@@ -1019,6 +1031,7 @@ select
   r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
+  (a.deleted_at is not null)::boolean as agent_deleted,
   r.connector_type,
   r.external_run_id,
   r.status,
@@ -1053,8 +1066,7 @@ where r.id = @id::uuid
   and r.workspace_id = c.workspace_id
   and r.workspace_id = a.workspace_id
   and c.status = 'active'
-  and c.deleted_at is null
-  and a.deleted_at is null;
+  and c.deleted_at is null;
 
 -- name: GetOutputMessageByRunID :one
 select
@@ -1866,6 +1878,7 @@ select
   r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
+  (a.deleted_at is not null)::boolean as agent_deleted,
   r.connector_type,
   r.status,
   r.metadata,
@@ -1879,7 +1892,6 @@ where r.workspace_id = @workspace_id::uuid
   and r.workspace_id = c.workspace_id
   and r.workspace_id = a.workspace_id
   and c.deleted_at is null
-  and a.deleted_at is null
   and (@search::text = '' or strpos(lower(concat_ws(' ', a.name, a.slug, r.id::text, r.conversation_id::text)), lower(@search::text)) > 0)
   and (cardinality(@statuses::text[]) = 0
        or r.status = ANY(@statuses::text[]))
@@ -1899,7 +1911,6 @@ where r.workspace_id = @workspace_id::uuid
   and r.workspace_id = c.workspace_id
   and r.workspace_id = a.workspace_id
   and c.deleted_at is null
-  and a.deleted_at is null
   and (@search::text = '' or strpos(lower(concat_ws(' ', a.name, a.slug, r.id::text, r.conversation_id::text)), lower(@search::text)) > 0)
   and (cardinality(@statuses::text[]) = 0
        or r.status = ANY(@statuses::text[]));

@@ -341,6 +341,7 @@ function RunRow({
   age: string
   onSelect: () => void
 }) {
+  const { t } = useTranslation("admin")
   const agent = run.agent_name ?? run.agent_slug ?? "—"
   const errorSummary = run.error_summary ?? run.user_facing_reason
   const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
@@ -355,7 +356,8 @@ function RunRow({
       <LedgerId>{shortId(run.id, 16)}</LedgerId>
       <span className="flex min-w-0 items-center gap-1.5">
         <InitialTile name={agent} />
-        <span className="shrink-0 truncate font-medium">{agent}</span>
+        <span className="min-w-0 truncate font-medium">{agent}</span>
+        {run.agent_deleted && <span className="shrink-0 text-xs text-fg-muted">{t("agents.deletedLabel")}</span>}
         {errorSummary && (
           <span className="min-w-0 truncate text-xs text-fg-muted max-[1360px]:hidden">· {errorSummary}</span>
         )}
@@ -466,7 +468,7 @@ function RunDetailRail({
   }
 
   const run = runData
-  const agent = run.agent_name ?? run.agent_slug ?? "—"
+  const agent = (run.agent_name ?? run.agent_slug ?? "—") + (run.agent_deleted ? ` · ${t("agents.deletedLabel")}` : "")
   const errorSummary = run.error_summary ?? run.user_facing_reason
   const translateDetail = (key: string, options?: Record<string, unknown>) => t(key as never, options as never) as unknown as string
   const diagnosis = buildRunDiagnosis(run, events, translateDetail)
@@ -475,7 +477,7 @@ function RunDetailRail({
   const role = workspacesQ.data?.workspaces.find((w) => w.id === run.workspace_id)?.role
   const canCancel = role === "owner" || role === "admin" || role === "member"
   const isCancellable = canCancel && (run.status === "running" || run.status === "queued")
-  const isRetryable = run.status === "failed" || run.status === "interrupted" || run.status === "cancelled"
+  const isRetryable = !run.agent_deleted && (run.status === "failed" || run.status === "interrupted" || run.status === "cancelled")
 
   function handleRetry() {
     setCancelError(null)
