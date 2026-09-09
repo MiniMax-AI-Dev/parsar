@@ -14,7 +14,8 @@ import {
   agentEngineOf,
   defaultModelOf,
 } from "../../../lib/agent-view-model"
-import type { Agent, Model } from "../../../lib/api-types"
+import { agentActionPermissions } from "../../../lib/agent-actions"
+import type { Agent, Model, UserWorkspace } from "../../../lib/api-types"
 import { cn } from "../../../lib/utils"
 import { AgentRowActions } from "./AgentRowActions"
 import { AgentRuntimeCell } from "./AgentRuntimeCell"
@@ -25,6 +26,7 @@ export const AGENTS_LEDGER_COLUMNS = [col.icon(), col.title(0), col.meta(0), col
 
 export function AgentsListTable({
   agents,
+  workspaceRole,
   models,
   keyword,
   connectorFilter,
@@ -40,6 +42,7 @@ export function AgentsListTable({
   onDelete,
 }: {
   agents: Agent[]
+  workspaceRole?: UserWorkspace["role"]
   models: Model[]
   keyword: string
   connectorFilter: string
@@ -55,6 +58,8 @@ export function AgentsListTable({
   onDelete: (agent: Agent) => void
 }) {
   const { t } = useTranslation("admin")
+  const { canManage, canChat } = agentActionPermissions(workspaceRole)
+  const columns = [...AGENTS_LEDGER_COLUMNS.slice(0, -1), ...(canChat ? [col.actions(canManage ? 2 : 1)] : [])]
   const unavailable = t("agents.modelUnavailable")
   const filtered = searchAgents(agents, keyword, models, t).filter(
     (agent) => !connectorFilter || agentConnectorKey(agent.connector_type) === connectorFilter,
@@ -76,7 +81,7 @@ export function AgentsListTable({
   }
 
   return (
-    <Ledger columns={AGENTS_LEDGER_COLUMNS} className="@container/agent-list" role="listbox" aria-label={t("agents.page.title")}>
+    <Ledger columns={columns} className="@container/agent-list" role="listbox" aria-label={t("agents.page.title")}>
       <LedgerHeader className="@max-3xl/agent-list:hidden">
         <span />
         <span>{t("agents.table.agent")}</span>
@@ -85,7 +90,7 @@ export function AgentsListTable({
         <span>{t("agents.table.connector")}</span>
         <span>{t("agents.table.model")}</span>
         <span className="text-right">{t("agents.table.updated")}</span>
-        <span />
+        {canChat && <span />}
       </LedgerHeader>
       <ul className="m-0 list-none p-0">
         {filtered.map((agent) => {
@@ -108,7 +113,7 @@ export function AgentsListTable({
             <LedgerRow key={agent.id} selected={agent.id === selectedID} onClick={() => onOpenAgent(agent)} onKeyDown={onKeyDown} className="@max-3xl/agent-list:h-auto @max-3xl/agent-list:py-2">
               <span className="@max-3xl/agent-list:hidden"><AgentStatusIcon status={agent.status} /></span>
               <div className="min-w-0 @max-3xl/agent-list:col-span-full">
-                <div className="flex min-w-0 items-center gap-1.5 @max-3xl/agent-list:min-h-7 @max-3xl/agent-list:items-start @max-3xl/agent-list:pr-20">
+                <div className={cn("flex min-w-0 items-center gap-1.5 @max-3xl/agent-list:min-h-7 @max-3xl/agent-list:items-start", canChat && (canManage ? "@max-3xl/agent-list:pr-20" : "@max-3xl/agent-list:pr-12"))}>
                   <span className="mt-0.5 hidden @max-3xl/agent-list:block"><AgentStatusIcon status={agent.status} /></span>
                   <InitialTile name={agent.name} />
                   <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden @max-3xl/agent-list:flex-col @max-3xl/agent-list:items-start @max-3xl/agent-list:gap-1">
@@ -126,9 +131,10 @@ export function AgentsListTable({
                 </dl>
               </div>
               {fields.map(({ label, value, className }) => <span key={label} className={cn("truncate @max-3xl/agent-list:hidden", className)}>{value}</span>)}
-              <span className="@max-3xl/agent-list:absolute @max-3xl/agent-list:right-0 @max-3xl/agent-list:top-2 @max-3xl/agent-list:h-7 @max-3xl/agent-list:w-0" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+              {canChat && <span className="@max-3xl/agent-list:absolute @max-3xl/agent-list:right-0 @max-3xl/agent-list:top-2 @max-3xl/agent-list:h-7 @max-3xl/agent-list:w-0" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                 <AgentRowActions
                   agent={agent}
+                  canManage={canManage}
                   chatPending={chatPendingID === agent.id}
                   deletePending={deletePending}
                   onChat={() => onChat(agent)}
@@ -136,7 +142,7 @@ export function AgentsListTable({
                   onClone={() => onClone(agent)}
                   onDelete={() => onDelete(agent)}
                 />
-              </span>
+              </span>}
             </LedgerRow>
           )
         })}

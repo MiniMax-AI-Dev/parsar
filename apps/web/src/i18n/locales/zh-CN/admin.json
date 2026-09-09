@@ -995,6 +995,8 @@
       "title": "Agent"
     },
     "actions": {
+      "chatReadOnly": "当前为只读权限。请联系工作区管理员，获得成员权限后即可发起对话。",
+      "chatFailed": "无法开始对话，请重试。",
       "create": "新建 Agent",
       "chat": "聊一下",
       "edit": "编辑",

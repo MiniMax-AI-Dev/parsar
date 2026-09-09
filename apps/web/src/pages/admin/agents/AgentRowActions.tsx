@@ -8,6 +8,7 @@ import type { Agent } from "../../../lib/api-types"
 
 export function AgentRowActions({
   agent,
+  canManage,
   chatPending,
   deletePending,
   onChat,
@@ -16,6 +17,7 @@ export function AgentRowActions({
   onDelete,
 }: {
   agent: Agent
+  canManage: boolean
   chatPending: boolean
   deletePending: boolean
   onChat: () => void
@@ -35,7 +37,7 @@ export function AgentRowActions({
         disabled={!enabled}
         onClick={onChat}
       />
-      <DropdownMenu.Root>
+      {canManage && <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button
             variant="ghost"
@@ -61,7 +63,7 @@ export function AgentRowActions({
             <MenuItem icon={Trash2} label={t("agents.actions.delete")} disabled={deletePending} onSelect={onDelete} />
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
-      </DropdownMenu.Root>
+      </DropdownMenu.Root>}
     </RowActions>
   )
 }

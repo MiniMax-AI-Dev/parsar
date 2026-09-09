@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next"
 
 import { Button } from "../../../components/ui/button"
 import { useDeleteAgent, useUpdateAgent, useUpdateAgentProfile } from "../../../lib/api-agents"
-import { createAgentConversation } from "../../../lib/api-conversations"
+import { agentActionPermissions, useAgentChat } from "../../../lib/agent-actions"
 import type { Agent, Model, UserWorkspace } from "../../../lib/api-types"
 import { useAdminView } from "../../../lib/admin-router"
 import { CreateAgentDialog } from "../CreateAgentDialog"
@@ -26,24 +26,21 @@ export function AgentDetailActions({
   models: Model[]
   onToast: ShowToast
 }) {
-  const { t, i18n } = useTranslation("admin")
+  const { t } = useTranslation("admin")
   const { navigate } = useAdminView()
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [chatPending, setChatPending] = useState(false)
+  const { canManage, canChat } = agentActionPermissions(workspaceRole)
+  const { startChat, pendingID } = useAgentChat(workspaceID, canChat)
+  const chatPending = pendingID !== null
   const updateMut = useUpdateAgent(workspaceID)
   const updateProfileMut = useUpdateAgentProfile(workspaceID)
   const deleteMut = useDeleteAgent(workspaceID)
 
-  async function startChat() {
-    if (!workspaceID || chatPending) return
-    setChatPending(true)
-    try {
-      const conversation = await createAgentConversation(workspaceID, agent, i18n.language)
-      navigate("conversations", { id: conversation.id, focus: "compose" })
-    } finally {
-      setChatPending(false)
-    }
+  if (!canChat) {
+    return workspaceRole === "viewer"
+      ? <p className="text-sm text-fg-muted">{t("agents.actions.chatReadOnly")}</p>
+      : null
   }
 
   return (
@@ -51,7 +48,7 @@ export function AgentDetailActions({
       <Button
         variant="outline"
         disabled={agent.status !== "active" || chatPending}
-        onClick={() => void startChat()}
+        onClick={() => void startChat(agent)}
       >
         {chatPending ? (
           <Loader2 className="animate-spin" strokeWidth={1.5} aria-hidden="true" />
@@ -60,6 +57,7 @@ export function AgentDetailActions({
         )}
         {t("agents.actions.chat")}
       </Button>
+      {canManage && <>
       <Button
         variant="outline"
         disabled={deleteMut.isPending}
@@ -128,6 +126,7 @@ export function AgentDetailActions({
           })
         }}
       />
+      </>}
     </>
   )
 }
