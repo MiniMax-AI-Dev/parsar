@@ -548,10 +548,13 @@ function RunDetailRail({
       </h2>
 
       {(errorSummary || cancelError) && (
-        <p className="mb-3 flex items-start gap-1.5 break-words text-sm text-fg">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-          <span>{cancelError ?? errorSummary}</span>
-        </p>
+        <ErrorState
+          appearance="panel"
+          className="mb-3"
+          title={t(cancelError ? "runs.detail.actionError" : "runs.detail.errorTitle")}
+          description={cancelError ? undefined : diagnosis.action}
+          detail={cancelError ?? errorSummary ?? undefined}
+        />
       )}
 
       <PropertyList>
@@ -609,13 +612,17 @@ function RunDetailRail({
               {diagnosis.title !== t(`runStatus.${run.status}`) && (
                 <Property label={t("runs.detail.diagnostics.fields.result")}>{diagnosis.title}</Property>
               )}
-              <Property label={t("runs.detail.diagnostics.fields.reason")} className="h-auto min-h-7 whitespace-normal py-1 [overflow-wrap:anywhere]">
-                {diagnosis.reason}
-              </Property>
+              {(cancelError || diagnosis.reason !== errorSummary) && (
+                <Property label={t("runs.detail.diagnostics.fields.reason")} className="h-auto min-h-7 whitespace-normal py-1 [overflow-wrap:anywhere]">
+                  {diagnosis.reason}
+                </Property>
+              )}
               <Property label={t("runs.detail.diagnostics.fields.source")}>{enumLabel(translateDetail, diagnosis.source)}</Property>
-              <Property label={t("runs.detail.diagnostics.fields.nextAction")} className="h-auto min-h-7 whitespace-normal py-1">
-                {diagnosis.action}
-              </Property>
+              {(!errorSummary || cancelError) && (
+                <Property label={t("runs.detail.diagnostics.fields.nextAction")} className="h-auto min-h-7 whitespace-normal py-1">
+                  {diagnosis.action}
+                </Property>
+              )}
               <Property label={t("runs.detail.diagnostics.fields.latestEvent")}>{diagnosis.latest}</Property>
             </PropertyList>
           </RailSection>

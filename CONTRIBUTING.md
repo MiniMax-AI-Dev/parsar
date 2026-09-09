@@ -590,6 +590,11 @@ of the available width. Labels wrap and values retain their existing overflow
 behavior. Do not size individual groups from their longest label or add
 page-specific label widths; groups in the same context must align.
 
+Persistent execution failures use `ErrorState` with `appearance="panel"` to
+separate recovery guidance from expandable technical detail. Keep raw reasons
+in one place; historical conversation messages disable live announcements.
+Loading errors and field validation retain their existing presentation.
+
 ## Typography contract
 
 The type scale has 7 defined steps. Arbitrary pixel sizes (`text-[Npx]`) are
