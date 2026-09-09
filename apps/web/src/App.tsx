@@ -30,7 +30,7 @@ function AuthedRoot() {
   const wsId = useWorkspaceId()
   usePluginClients(wsId)
 
-  if (wsQuery.isLoading) {
+  if (wsQuery.isPending) {
     return <LoadingScreen message={t("states.loading")} />
   }
   if (wsQuery.isError && !wsQuery.data?.workspaces.length) {
@@ -43,7 +43,7 @@ function AuthedRoot() {
       </main>
     )
   }
-  if ((wsQuery.data?.workspaces.length ?? 0) === 0) {
+  if (wsQuery.data?.workspaces.length === 0) {
     return <OnboardingPage />
   }
   // workspace.main slot: when a plugin registers here, it takes over
