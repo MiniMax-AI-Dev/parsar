@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
-  AlertTriangle,
   ArrowUp,
   ArrowUpRight,
   Loader2,
@@ -54,7 +53,6 @@ const THREAD_STYLE = { ["--thread-max-width" as string]: "48rem" }
 /** title · conversation id · age (actions replace the age on hover) */
 
 import type { SandboxSendGuard } from "../../lib/sandbox-send-guard"
-import { VerbatimBlock } from "../ui/verbatim"
 
 /* ============================================================== */
 /*  The conversation thread, mounted by the console and by /c/<id> */
@@ -603,15 +601,7 @@ function ChatStream({
             omitPermission
           />
           {stream.status === "error" && (
-            <div className="flex flex-col gap-1">
-              <p className="m-0 flex items-start gap-1.5 text-sm text-fg">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-                <span>{streamErrorMessage?.text}</span>
-              </p>
-              {streamErrorMessage?.detail && (
-                <VerbatimBlock className="ml-5 max-h-32">{streamErrorMessage.detail}</VerbatimBlock>
-              )}
-            </div>
+            <ErrorState appearance="panel" title={streamErrorMessage?.text} detail={streamErrorMessage?.detail} />
           )}
           {/*
             Queued runs render one "queued" line per run, distinct from the
@@ -785,21 +775,12 @@ function RunTrace({
   )
 }
 
-/**
- * Inline error line above the chat composer: a failed-red triangle, the
- * message in ink, one ghost dismiss button. Ad-hoc on purpose — it is
- * rendered in one place today.
- */
 function ChatErrorToast({ message, onDismiss }: { message: { text: string; detail?: string }; onDismiss: () => void }) {
   const { t: tc } = useTranslation("common")
   return (
-    <div className="mb-2 flex items-start gap-1.5 text-sm text-fg">
-      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-      <span className="min-w-0 flex-1 break-words">
-        {message.text}
-        {message.detail && <VerbatimBlock className="mt-1 max-h-24">{message.detail}</VerbatimBlock>}
-      </span>
-      <Button variant="ghost" size="icon" className="-my-1.5 h-6 w-6" onClick={onDismiss} aria-label={tc("actions.close")}>
+    <div className="relative mb-2">
+      <ErrorState appearance="panel" className="pr-10" title={message.text} detail={message.detail} />
+      <Button variant="ghost" size="icon" className="absolute right-2 top-2 h-6 w-6" onClick={onDismiss} aria-label={tc("actions.close")}>
         <X strokeWidth={1.5} aria-hidden="true" />
       </Button>
     </div>
@@ -859,21 +840,17 @@ const MessageRow = memo(function MessageRow({
     return (
       <div className="max-w-[85%]">
         <div className="mb-1 text-xs text-fg-muted">{byline}</div>
-        <div className="flex items-start gap-1.5 text-base text-fg">
-          <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-          <div className="min-w-0">
-            {/* No "Run failed" heading over it: the red triangle says failure
-                and the sentence beneath says it again in words — three
-                statements of one fact in four lines. */}
-            <p className="m-0 break-words font-medium">{runtimeError.message}</p>
-            {runtimeError.href && runtimeError.action && (
-              <Button asChild variant="outline" size="sm" className="mt-2">
-                <a href={runtimeError.href}>{runtimeError.action}</a>
-              </Button>
-            )}
-            <p className="m-0 mt-2 text-xs text-fg-muted">{t("conversations.runtime_error.retryHint")}</p>
-          </div>
-        </div>
+        <ErrorState
+          appearance="panel"
+          announce={false}
+          title={runtimeError.message}
+          hint={t("conversations.runtime_error.retryHint")}
+          action={runtimeError.href && runtimeError.action ? (
+            <Button asChild variant="outline" size="sm">
+              <a href={runtimeError.href}>{runtimeError.action}</a>
+            </Button>
+          ) : undefined}
+        />
       </div>
     )
   }

@@ -249,6 +249,7 @@
     "next": "Next"
   },
   "errors": {
-    "loadFailed": "Failed to load"
+    "loadFailed": "Failed to load",
+    "details": "Technical details"
   }
 }
