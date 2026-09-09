@@ -5053,7 +5053,8 @@ paths:
     get:
       description: Returns installed capabilities, their pinning_mode and bound/latest
         version metadata, plus available workspace and marketplace capabilities. Latest
-        metadata respects the runtime deprecation cutoff.
+        metadata respects the runtime deprecation cutoff. Installed MCP credential
+        requirements match the selected runtime version.
       operationId: listDevAgentCapabilities
       parameters:
       - description: Workspace UUID

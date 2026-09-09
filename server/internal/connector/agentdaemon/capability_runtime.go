@@ -207,16 +207,19 @@ func disabledForUnavailableVersion(cap store.EnabledCapabilityRead) DisabledCapa
 	}
 }
 
-// resolvedVersionFields collects the four storage-relevant fields the
+// resolvedVersionFields collects the version fields the
 // daemon resolver needs from cap, picking either the pinned-column
 // fields or the joined latest-* fields based on cap.PinningMode.
 // Centralising the switch keeps the per-kind resolve functions free of
 // pinning_mode awareness.
 type resolvedVersionFields struct {
-	OssKey        string
-	SHA256        string
-	CanonicalSpec []byte
-	Version       string // capability_version.version literal, surfaced to the daemon for log / wire purposes
+	ID                  string
+	Content             []byte
+	RequiredCredentials []store.RequiredCredential
+	OssKey              string
+	SHA256              string
+	CanonicalSpec       []byte
+	Version             string // capability_version.version literal, surfaced to the daemon for log / wire purposes
 }
 
 // resolveVersionFields returns the storage / version fields to use for
@@ -227,17 +230,23 @@ type resolvedVersionFields struct {
 func resolveVersionFields(cap store.EnabledCapabilityRead) resolvedVersionFields {
 	if strings.TrimSpace(cap.PinningMode) == store.PinningModeLatest {
 		return resolvedVersionFields{
-			OssKey:        cap.LatestOssKey,
-			SHA256:        cap.LatestSHA256,
-			CanonicalSpec: cap.LatestCanonicalSpec,
-			Version:       cap.LatestVersion,
+			ID:                  cap.LatestVersionID,
+			Content:             cap.LatestContent,
+			RequiredCredentials: cap.LatestRequiredCredentials,
+			OssKey:              cap.LatestOssKey,
+			SHA256:              cap.LatestSHA256,
+			CanonicalSpec:       cap.LatestCanonicalSpec,
+			Version:             cap.LatestVersion,
 		}
 	}
 	return resolvedVersionFields{
-		OssKey:        cap.OssKey,
-		SHA256:        cap.SHA256,
-		CanonicalSpec: cap.CanonicalSpec,
-		Version:       cap.Version,
+		ID:                  cap.CapabilityVersionID,
+		Content:             cap.Content,
+		RequiredCredentials: cap.RequiredCredentials,
+		OssKey:              cap.OssKey,
+		SHA256:              cap.SHA256,
+		CanonicalSpec:       cap.CanonicalSpec,
+		Version:             cap.Version,
 	}
 }
 
@@ -561,8 +570,11 @@ func (c *Connector) resolveMCPCapability(
 	renderer render.Renderer,
 	credentialCache map[string]store.UserCredentialRead,
 ) (map[string]any, *DisabledCapability, []CredentialEmit, error) {
-	// Render canonical spec (or legacy content) into the Claude Code
-	// MCP JSON shape: {"mcpServers": {"name": {"command","args","env"}}}
+	version := resolveVersionFields(cap)
+	cap.CapabilityVersionID = version.ID
+	cap.CanonicalSpec = version.CanonicalSpec
+	cap.Content = version.Content
+	cap.RequiredCredentials = version.RequiredCredentials
 	content, err := resolveCapabilityMCPContent(cap, renderer)
 	if err != nil {
 		return nil, nil, nil, err
@@ -729,10 +741,15 @@ func (c *Connector) resolveCredentialValues(
 	var (
 		personalKinds []store.RequiredCredential
 		sharedTargets []sharedTarget
+		missing       []MissingCredentialRef
 	)
 	for _, rc := range cap.RequiredCredentials {
 		if b, ok := bindings[rc.Kind]; ok && b.IsShared() {
 			sharedTargets = append(sharedTargets, sharedTarget{Kind: rc.Kind, SecretID: b.SecretID})
+			continue
+		}
+		if strings.TrimSpace(cap.AgentVisibility) == "public" && rc.Required {
+			missing = append(missing, MissingCredentialRef{Kind: rc.Kind})
 			continue
 		}
 		personalKinds = append(personalKinds, rc)
@@ -746,7 +763,6 @@ func (c *Connector) resolveCredentialValues(
 
 	values := map[string]string{}
 	sharedSecretIDs := map[string]string{}
-	var missing []MissingCredentialRef
 
 	// Shared bindings: resolve once via the model resolver's secret
 	// payload reader (already wired for inline_secret models).
@@ -893,27 +909,6 @@ func credentialPayloadValue(payload map[string]any) string {
 	return ""
 }
 
-// resolveCapabilityMCPContent picks the right content source for an MCP
-// capability and renders it via the Claude Code renderer.
-//
-// Precedence:
-//  1. CanonicalSpec (M1+ imports) → render through TargetClaudeCode
-//  2. Content (legacy hand-authored) → returned verbatim
-func resolveCapabilityMCPContent(cap store.EnabledCapabilityRead, renderer render.Renderer) ([]byte, error) {
-	if len(cap.CanonicalSpec) > 0 {
-		var spec canonical.Spec
-		if err := json.Unmarshal(cap.CanonicalSpec, &spec); err != nil {
-			return nil, fmt.Errorf("agent_daemon: capability %s canonical_spec decode: %w", cap.CapabilityID, err)
-		}
-		out, err := renderer.Render(context.Background(), spec)
-		if err != nil {
-			return nil, fmt.Errorf("agent_daemon: capability %s render: %w", cap.CapabilityID, err)
-		}
-		return out.Content, nil
-	}
-	return cap.Content, nil
-}
-
 // claudeCodeMCPDocument mirrors the JSON shape emitted by
 // render.claudeCodeRenderer for KindMCP.
 type claudeCodeMCPDocument struct {
@@ -1024,43 +1019,6 @@ func (c *Connector) resolveSkillCapability(
 		Version:     resolved.Version,
 		DownloadURL: url,
 		SHA256:      sha256,
-	}, nil
-}
-
-// resolveSystemPromptCapability decodes a capability_version.canonical_spec
-// into a ResolvedSystemPrompt. The render call is kept for wire-shape
-// consistency only (mirrors resolveSkillCapability); the prompt text is
-// read straight from the canonical spec because the daemon consumes
-// agent_options.system_prompt / override_system_prompt, not a rendered
-// capability blob.
-func (c *Connector) resolveSystemPromptCapability(
-	ctx context.Context,
-	cap store.EnabledCapabilityRead,
-	renderer render.Renderer,
-) (*ResolvedSystemPrompt, error) {
-	if len(cap.CanonicalSpec) == 0 {
-		c.log.Warn("agent_daemon: system_prompt capability has empty canonical_spec, skipping",
-			"capability_id", cap.CapabilityID,
-			"capability_name", cap.Name)
-		return nil, nil
-	}
-	var spec canonical.Spec
-	if err := json.Unmarshal(cap.CanonicalSpec, &spec); err != nil {
-		return nil, fmt.Errorf("agent_daemon: system_prompt capability %s canonical_spec decode: %w", cap.CapabilityID, err)
-	}
-	if spec.Kind != canonical.KindSystemPrompt {
-		return nil, fmt.Errorf("agent_daemon: capability %s has type=system_prompt but canonical_spec.kind=%q", cap.CapabilityID, spec.Kind)
-	}
-	if spec.SystemPrompt == nil {
-		return nil, fmt.Errorf("agent_daemon: capability %s canonical_spec.system_prompt is nil", cap.CapabilityID)
-	}
-	if _, err := renderer.Render(ctx, spec); err != nil {
-		return nil, fmt.Errorf("agent_daemon: render system_prompt %s: %w", cap.CapabilityID, err)
-	}
-	return &ResolvedSystemPrompt{
-		Name:    strings.TrimSpace(cap.Name),
-		Mode:    spec.SystemPrompt.ResolvedMode(),
-		Content: spec.SystemPrompt.Prompt,
 	}, nil
 }
 

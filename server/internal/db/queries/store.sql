@@ -3997,6 +3997,7 @@ where id = @id::uuid;
 select
   ac.id::text as agent_capability_id,
   ac.agent_id::text as agent_id,
+  a.visibility as agent_visibility,
   ac.enabled,
   ac.configuration,
   ac.pinning_mode,
@@ -4021,6 +4022,8 @@ select
   latest.oss_key        as latest_oss_key,
   latest.sha256         as latest_sha256,
   latest.canonical_spec as latest_canonical_spec,
+  latest.content as latest_content,
+  latest.required_credentials as latest_required_credentials,
   latest.schema_version as latest_schema_version,
   cv.git_repo_url,
   cv.git_ref,
@@ -4039,12 +4042,13 @@ select
   -- lets the runtime fail closed if a legacy row slips through.
   coalesce(c.creator_id::text, '')::text as capability_creator_id
 from agent_capabilities ac
+join agents a on a.id = ac.agent_id
 join capability c on c.id = ac.capability_id
 join capability_version cv on cv.id = ac.capability_version_id
 join workspaces src_ws on src_ws.id = c.workspace_id
 join lateral (
   select id, version, created_at,
-    oss_key, sha256, canonical_spec, schema_version
+    oss_key, sha256, canonical_spec, content, required_credentials, schema_version
   from capability_version
   where capability_id = c.id
     -- After a capability is deprecated, latest bindings should freeze

@@ -364,7 +364,8 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "marketplace capability is unavailable"})
 				return
 			}
-			if err := validateCapabilityCredentialBindings(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{
+			if err := validateBoundCapabilityCredentials(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{
+				PinningMode:     requested.PinningMode,
 				WorkspaceID:     workspaceID,
 				AgentVisibility: req.Visibility,
 				AgentConfig:     req.Config,
@@ -664,7 +665,8 @@ func syncAgentCapabilities(
 				"capability_id", cap.capabilityID, "name", name, "version_id", latestVersionID, "err", err)
 			continue
 		}
-		if err := validateCapabilityCredentialBindings(ctx, rs, capabilityCredentialBindingValidationInput{
+		if err := validateBoundCapabilityCredentials(ctx, rs, capabilityCredentialBindingValidationInput{
+			PinningMode:     mode,
 			WorkspaceID:     workspaceID,
 			AgentVisibility: agent.Visibility,
 			AgentConfig:     agent.Config,

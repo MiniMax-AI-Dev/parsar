@@ -5227,6 +5227,7 @@ const getEnabledCapabilitiesForAgent = `-- name: GetEnabledCapabilitiesForAgent 
 select
   ac.id::text as agent_capability_id,
   ac.agent_id::text as agent_id,
+  a.visibility as agent_visibility,
   ac.enabled,
   ac.configuration,
   ac.pinning_mode,
@@ -5251,6 +5252,8 @@ select
   latest.oss_key        as latest_oss_key,
   latest.sha256         as latest_sha256,
   latest.canonical_spec as latest_canonical_spec,
+  latest.content as latest_content,
+  latest.required_credentials as latest_required_credentials,
   latest.schema_version as latest_schema_version,
   cv.git_repo_url,
   cv.git_ref,
@@ -5269,12 +5272,13 @@ select
   -- lets the runtime fail closed if a legacy row slips through.
   coalesce(c.creator_id::text, '')::text as capability_creator_id
 from agent_capabilities ac
+join agents a on a.id = ac.agent_id
 join capability c on c.id = ac.capability_id
 join capability_version cv on cv.id = ac.capability_version_id
 join workspaces src_ws on src_ws.id = c.workspace_id
 join lateral (
   select id, version, created_at,
-    oss_key, sha256, canonical_spec, schema_version
+    oss_key, sha256, canonical_spec, content, required_credentials, schema_version
   from capability_version
   where capability_id = c.id
     -- After a capability is deprecated, latest bindings should freeze
@@ -5295,40 +5299,43 @@ order by c.name asc
 `
 
 type GetEnabledCapabilitiesForAgentRow struct {
-	AgentCapabilityID      string             `json:"agent_capability_id"`
-	AgentID                string             `json:"agent_id"`
-	Enabled                bool               `json:"enabled"`
-	Configuration          []byte             `json:"configuration"`
-	PinningMode            string             `json:"pinning_mode"`
-	CapabilityID           string             `json:"capability_id"`
-	WorkspaceID            string             `json:"workspace_id"`
-	SourceWorkspaceName    string             `json:"source_workspace_name"`
-	Type                   string             `json:"type"`
-	Name                   string             `json:"name"`
-	Description            string             `json:"description"`
-	Visibility             string             `json:"visibility"`
-	Status                 string             `json:"status"`
-	DeprecatedAt           pgtype.Timestamptz `json:"deprecated_at"`
-	RequiredCredentials    []byte             `json:"required_credentials"`
-	CapabilityVersionID    string             `json:"capability_version_id"`
-	Version                string             `json:"version"`
-	LatestVersionID        string             `json:"latest_version_id"`
-	LatestVersion          string             `json:"latest_version"`
-	LatestVersionCreatedAt pgtype.Timestamptz `json:"latest_version_created_at"`
-	LatestOssKey           string             `json:"latest_oss_key"`
-	LatestSha256           string             `json:"latest_sha256"`
-	LatestCanonicalSpec    []byte             `json:"latest_canonical_spec"`
-	LatestSchemaVersion    int16              `json:"latest_schema_version"`
-	GitRepoUrl             pgtype.Text        `json:"git_repo_url"`
-	GitRef                 pgtype.Text        `json:"git_ref"`
-	Path                   pgtype.Text        `json:"path"`
-	Content                []byte             `json:"content"`
-	CanonicalSpec          []byte             `json:"canonical_spec"`
-	SchemaVersion          int16              `json:"schema_version"`
-	OssKey                 string             `json:"oss_key"`
-	Sha256                 string             `json:"sha256"`
-	Tags                   []byte             `json:"tags"`
-	CapabilityCreatorID    string             `json:"capability_creator_id"`
+	AgentCapabilityID         string             `json:"agent_capability_id"`
+	AgentID                   string             `json:"agent_id"`
+	AgentVisibility           string             `json:"agent_visibility"`
+	Enabled                   bool               `json:"enabled"`
+	Configuration             []byte             `json:"configuration"`
+	PinningMode               string             `json:"pinning_mode"`
+	CapabilityID              string             `json:"capability_id"`
+	WorkspaceID               string             `json:"workspace_id"`
+	SourceWorkspaceName       string             `json:"source_workspace_name"`
+	Type                      string             `json:"type"`
+	Name                      string             `json:"name"`
+	Description               string             `json:"description"`
+	Visibility                string             `json:"visibility"`
+	Status                    string             `json:"status"`
+	DeprecatedAt              pgtype.Timestamptz `json:"deprecated_at"`
+	RequiredCredentials       []byte             `json:"required_credentials"`
+	CapabilityVersionID       string             `json:"capability_version_id"`
+	Version                   string             `json:"version"`
+	LatestVersionID           string             `json:"latest_version_id"`
+	LatestVersion             string             `json:"latest_version"`
+	LatestVersionCreatedAt    pgtype.Timestamptz `json:"latest_version_created_at"`
+	LatestOssKey              string             `json:"latest_oss_key"`
+	LatestSha256              string             `json:"latest_sha256"`
+	LatestCanonicalSpec       []byte             `json:"latest_canonical_spec"`
+	LatestContent             []byte             `json:"latest_content"`
+	LatestRequiredCredentials []byte             `json:"latest_required_credentials"`
+	LatestSchemaVersion       int16              `json:"latest_schema_version"`
+	GitRepoUrl                pgtype.Text        `json:"git_repo_url"`
+	GitRef                    pgtype.Text        `json:"git_ref"`
+	Path                      pgtype.Text        `json:"path"`
+	Content                   []byte             `json:"content"`
+	CanonicalSpec             []byte             `json:"canonical_spec"`
+	SchemaVersion             int16              `json:"schema_version"`
+	OssKey                    string             `json:"oss_key"`
+	Sha256                    string             `json:"sha256"`
+	Tags                      []byte             `json:"tags"`
+	CapabilityCreatorID       string             `json:"capability_creator_id"`
 }
 
 func (q *Queries) GetEnabledCapabilitiesForAgent(ctx context.Context, agentID pgtype.UUID) ([]GetEnabledCapabilitiesForAgentRow, error) {
@@ -5343,6 +5350,7 @@ func (q *Queries) GetEnabledCapabilitiesForAgent(ctx context.Context, agentID pg
 		if err := rows.Scan(
 			&i.AgentCapabilityID,
 			&i.AgentID,
+			&i.AgentVisibility,
 			&i.Enabled,
 			&i.Configuration,
 			&i.PinningMode,
@@ -5364,6 +5372,8 @@ func (q *Queries) GetEnabledCapabilitiesForAgent(ctx context.Context, agentID pg
 			&i.LatestOssKey,
 			&i.LatestSha256,
 			&i.LatestCanonicalSpec,
+			&i.LatestContent,
+			&i.LatestRequiredCredentials,
 			&i.LatestSchemaVersion,
 			&i.GitRepoUrl,
 			&i.GitRef,

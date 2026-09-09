@@ -5,9 +5,8 @@ export function agentCapabilityFollowsLatest(
   capability: Capability | undefined,
 ): boolean {
   const kind = capability?.type ?? binding?.type
-  // Match the daemon resolvers: MCP and System Prompt still use stored fields.
   return binding?.pinning_mode === "latest"
-    && (kind === "skill" || kind === "plugin" || kind === "bundle")
+    && (kind === "skill" || kind === "plugin" || kind === "bundle" || kind === "mcp" || kind === "system_prompt")
 }
 
 export function agentCapabilityVersion(

@@ -17,7 +17,7 @@ type credentialBindingSecretStore interface {
 }
 
 type agentCapabilityCredentialBindingStore interface {
-	credentialBindingSecretStore
+	capabilityBindingVersionStore
 	ListAgentCapabilities(ctx context.Context, agentID string) ([]store.AgentCapabilityRead, error)
 	GetCapabilityVersion(ctx context.Context, capabilityVersionID string) (store.CapabilityVersionRead, error)
 }
@@ -31,11 +31,13 @@ func (e *capabilityCredentialValidationError) Error() string {
 }
 
 type capabilityCredentialBindingValidationInput struct {
-	WorkspaceID     string
-	AgentVisibility string
-	AgentConfig     map[string]any
-	Version         store.CapabilityVersionRead
-	Configuration   map[string]any
+	PinningMode         string
+	AllowUnusedBindings bool
+	WorkspaceID         string
+	AgentVisibility     string
+	AgentConfig         map[string]any
+	Version             store.CapabilityVersionRead
+	Configuration       map[string]any
 }
 
 func validateCapabilityCredentialBindings(
@@ -55,7 +57,7 @@ func validateCapabilityCredentialBindings(
 		}
 	}
 	for kind := range bindings {
-		if !requiredKinds[kind] {
+		if !requiredKinds[kind] && !input.AllowUnusedBindings {
 			return errors.New("credential binding kind is not required by this capability")
 		}
 	}
@@ -103,12 +105,14 @@ func validateAgentCapabilityBindingsForVisibility(
 		if err != nil {
 			return fmt.Errorf("get capability version %s: %w", binding.CapabilityVersionID, err)
 		}
-		if err := validateCapabilityCredentialBindings(ctx, credentialStore, capabilityCredentialBindingValidationInput{
-			WorkspaceID:     agent.WorkspaceID,
-			AgentVisibility: visibility,
-			AgentConfig:     agent.Config,
-			Version:         version,
-			Configuration:   binding.Configuration,
+		if err := validateBoundCapabilityCredentials(ctx, credentialStore, capabilityCredentialBindingValidationInput{
+			PinningMode:         binding.PinningMode,
+			AllowUnusedBindings: true,
+			WorkspaceID:         agent.WorkspaceID,
+			AgentVisibility:     visibility,
+			AgentConfig:         agent.Config,
+			Version:             version,
+			Configuration:       binding.Configuration,
 		}); err != nil {
 			return &capabilityCredentialValidationError{err: err}
 		}
