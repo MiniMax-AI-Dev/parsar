@@ -39,6 +39,7 @@ import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useRelativeTime } from "../../lib/relative-time"
 import { useNow } from "../../lib/use-now"
 import { useWorkspaceId } from "../../lib/workspace"
+import { useAppRoute, useNavigateAdmin } from "../../lib/admin-router"
 import { SectionHead } from "../../components/ui/section"
 
 type SortKey = "last_active" | "created_at" | "agent"
@@ -92,8 +93,9 @@ export function RuntimePage() {
   const sandboxesQuery = useWorkspaceSandboxes(workspaceID)
   const workspacesQ = useMyWorkspaces()
 
-  type RuntimeTab = "environments" | "instances"
-  const [tab, setTab] = useState<RuntimeTab>("environments")
+  const route = useAppRoute()
+  const navigate = useNavigateAdmin()
+  const tab = route.tab === "instances" ? "instances" : "environments"
   const [pairOpen, setPairOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sortKey, setSortKey] = useState<SortKey>("last_active")
@@ -157,7 +159,7 @@ export function RuntimePage() {
       {/* Two objects, two shapes: a runtime is a registered place an agent can
           run, an instance is a live sandbox that will be reclaimed. Tabs are
           for different shapes; the placements within a runtime are groups. */}
-      <Tabs value={tab} onValueChange={(v) => setTab(v as RuntimeTab)} className="flex min-h-0 flex-1 flex-col">
+      <Tabs value={tab} onValueChange={(v) => navigate("runtime", { tab: v })} className="flex min-h-0 flex-1 flex-col">
         <PageHeader
           className="static mx-0 mb-0"
           title={t("runtime.page.title")}
