@@ -204,7 +204,7 @@ function StepRow({ step, now }: { step: TraceStep; now: number }) {
       <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-muted" title={target || undefined}>
         {target}
       </span>
-      {step.status !== "completed" && <StatusIcon status={step.status} />}
+      {step.status !== "completed" && <StatusIcon status={step.status} title={step.status === "failed" ? t("runs.detail.steps.toolFailed") : undefined} />}
       {elapsed && <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">{elapsed}</span>}
       {expandable && (
         <ChevronRight

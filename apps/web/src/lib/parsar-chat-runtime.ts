@@ -25,6 +25,7 @@ import type {
 import { startAgentRun } from "./api-conversations"
 import { isUserMessageSender } from "./message-sender"
 import { isRuntimeCapabilityError } from "./message-kind"
+import { isFailedToolResult } from "./tool-result"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,7 +56,7 @@ export interface ParsarRuntimeConfig {
 export interface StreamingToolStep {
   tool_call_id: string
   name: string
-  status: "running" | "completed"
+  status: "running" | "completed" | "failed"
   args?: Record<string, unknown>
   started_at: number
   ended_at?: number
@@ -199,6 +200,7 @@ function deriveToolStatus(
   step: ToolStep,
   runStatus: string | undefined,
 ): "running" | "completed" | "failed" {
+  if (isFailedToolResult(step.result)) return "failed"
   if (step.status === "completed") return "completed"
   if (runStatus === "failed") return "failed"
   return step.status
@@ -235,7 +237,7 @@ function buildStreamingMessage(stream: StreamState): ThreadMessageLike | null {
       toolCallId: step.tool_call_id,
       toolName: step.name,
       args: step.args ?? {},
-      result: step.status === "completed" ? { _completed: true } : undefined,
+      result: step.status === "failed" ? { is_error: true } : step.status === "completed" ? { _completed: true } : undefined,
     })
   }
 
@@ -378,13 +380,14 @@ export function useParsarChatRuntime(config: ParsarRuntimeConfig) {
             const id = tool.id
             const idx = id ? steps.findIndex((s) => s.tool_call_id === id) : -1
             const endedAt = performance.now()
+            const status = isFailedToolResult(tool.result) ? "failed" : "completed"
             if (idx >= 0) {
-              steps[idx] = { ...steps[idx], status: "completed", ended_at: endedAt }
+              steps[idx] = { ...steps[idx], status, ended_at: endedAt }
             } else {
               steps.push({
                 tool_call_id: id ?? `anon-${steps.length}`,
                 name: tool.name ?? "",
-                status: "completed",
+                status,
                 args: tool.args,
                 started_at: endedAt,
                 ended_at: endedAt,
