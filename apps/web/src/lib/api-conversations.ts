@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiRequest, noUnreachableRetry } from "./api-client"
+import { isFailedToolResult } from "./tool-result"
 import type {
   AgentRunStreamEvent,
   Conversation,
@@ -105,7 +106,7 @@ export async function deleteConversation(cid: string): Promise<void> {
 export interface StreamingStep {
   tool_call_id: string
   name: string
-  status: "running" | "completed"
+  status: "running" | "completed" | "failed"
   // Tool input arguments captured on `before` so the live card can show a
   // one-line command summary (e.g. `BASH find / -maxdepth 4 ...`). Optional
   // because some connectors don't surface args.
@@ -284,13 +285,14 @@ export function useAgentRunStream(
         } else if (stage === "after") {
           const idx = id ? steps.findIndex((s) => s.tool_call_id === id) : -1
           const endedAt = performance.now()
+          const status = isFailedToolResult(parsed.tool?.result) ? "failed" : "completed"
           if (idx >= 0) {
-            steps[idx] = { ...steps[idx], status: "completed", ended_at: endedAt }
+            steps[idx] = { ...steps[idx], status, ended_at: endedAt }
           } else {
             steps.push({
               tool_call_id: id ?? `anon-${steps.length}`,
               name: name ?? "",
-              status: "completed",
+              status,
               args,
               // No `before` was seen — fall back to endedAt so the elapsed
               // pill renders as ~0ms rather than 'NaNs'.

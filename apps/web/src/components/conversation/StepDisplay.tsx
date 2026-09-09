@@ -15,6 +15,7 @@ import { Button } from "../ui/button"
 import { StatusIcon } from "../ui/status-icon"
 import type { ToolStep } from "../../lib/api-types"
 import type { StreamingStep } from "../../lib/api-conversations"
+import { isFailedToolResult } from "../../lib/tool-result"
 
 const TOOL_ICONS: Record<string, typeof TerminalSquare> = {
   bash: TerminalSquare,
@@ -108,11 +109,12 @@ export function StepItem({
   /** Pass for completed steps; live-tick from caller for running ones. */
   durationMs?: number
 }) {
+  const { t } = useTranslation("admin")
   const upper = (name || "tool").toUpperCase()
   const summary = detail ? ellipsizeMiddle(detail) : ""
   return (
     <div className="flex h-8 items-center gap-2 border-b border-line text-sm last:border-b-0">
-      <StatusIcon status={status} />
+      <StatusIcon status={status} title={status === "failed" ? t("runs.detail.steps.toolFailed") : undefined} />
       <ToolIcon name={name} />
       <span className="shrink-0 font-medium text-fg">{upper}</span>
       <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-muted" title={detail}>
@@ -146,6 +148,7 @@ export function WorkingSteps({
   const runningSteps = steps.filter((s) => s.status === "running")
   const completedSteps = steps.filter((s) => s.status === "completed")
   const completedCount = completedSteps.length
+  const failedCount = steps.filter((s) => s.status === "failed").length
   const runningCount = runningSteps.length
   const total = steps.length
   const current = runningSteps[runningSteps.length - 1]
@@ -153,7 +156,7 @@ export function WorkingSteps({
   // From first step's started_at until now (if running) or last ended_at.
   const firstStart = steps.length > 0 ? steps[0].started_at : null
   const lastEnded = !active
-    ? Math.max(...completedSteps.map((s) => s.ended_at ?? s.started_at), 0)
+    ? Math.max(...steps.filter((s) => s.status !== "running").map((s) => s.ended_at ?? s.started_at), 0)
     : null
   const overallMs = firstStart === null ? 0 : (lastEnded ?? now) - firstStart
 
@@ -184,11 +187,15 @@ export function WorkingSteps({
         <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">
           {active && completedCount > 0 &&
             t("conversations.steps.completedInline", { count: completedCount, defaultValue: "{{count}} completed" })}
-          {active && completedCount > 0 && runningCount > 0 && " · "}
+          {active && completedCount > 0 && (failedCount > 0 || runningCount > 0) && " · "}
+          {active && failedCount > 0 && t("conversations.steps.failedInline", { count: failedCount })}
+          {active && failedCount > 0 && runningCount > 0 && " · "}
           {active && runningCount > 0 &&
             t("conversations.steps.runningInline", { count: runningCount, defaultValue: "{{count}} running" })}
           {!active && completedCount > 0 &&
             t("conversations.steps.doneInline", { count: completedCount, defaultValue: "{{count}} done" })}
+          {!active && completedCount > 0 && failedCount > 0 && " · "}
+          {!active && failedCount > 0 && t("conversations.steps.failedInline", { count: failedCount })}
         </span>
         {overallMs > 0 && (
           <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">
@@ -262,7 +269,7 @@ export function StepTrace({ steps }: { steps: ToolStep[] }) {
             <StepItem
               key={step.tool_call_id || i}
               name={step.name}
-              status={step.status}
+              status={isFailedToolResult(step.result) ? "failed" : step.status}
               detail={summarizeArgs(step.name, step.args)}
             />
           ))}

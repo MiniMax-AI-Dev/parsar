@@ -74,6 +74,7 @@ import {
   useRetryRun,
 } from "../../lib/api-agents"
 import { formatRawRunEvents } from "../../lib/agent-run-event-format"
+import { isFailedToolResult } from "../../lib/tool-result"
 import type { AgentRunDetail, AgentRunEvent, AgentRunStatus, AgentRunSummary } from "../../lib/api-types"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useWorkspaceId } from "../../lib/workspace"
@@ -884,7 +885,7 @@ function eventTitle(ev: AgentRunEvent | undefined, t: AdminText): string {
     case "tool.call":
       return t("runs.detail.steps.toolCall")
     case "tool.result":
-      return t("runs.detail.steps.toolResult")
+      return t(isFailedToolResult(ev.payload?.result) ? "runs.detail.steps.toolFailed" : "runs.detail.steps.toolResult")
     case "permission.asked":
       return t("runs.detail.steps.permission")
     case "permission.replied":
@@ -1119,7 +1120,7 @@ function stepForEvent(ev: AgentRunEvent, t: RunStepT) {
     case "tool.call":
       return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.toolCall"), detail: payloadValue(ev, "name") || payloadValue(ev, "action") || "tool", icon: TerminalSquare, color: "text-fg-muted", ...withTime }
     case "tool.result":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.toolResult"), detail: payloadValue(ev, "name") || "tool", icon: Wrench, color: "text-fg-muted", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: eventTitle(ev, t), detail: payloadValue(ev, "name") || "tool", icon: isFailedToolResult(ev.payload?.result) ? AlertTriangle : Wrench, color: isFailedToolResult(ev.payload?.result) ? "text-status-failed" : "text-fg-muted", ...withTime }
     case "permission.asked":
       return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permission"), detail: payloadValue(ev, "resource") || payloadValue(ev, "action") || "approval", icon: KeyRound, color: "text-status-running", ...withTime }
     case "permission.replied":

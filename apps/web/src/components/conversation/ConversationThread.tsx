@@ -47,6 +47,7 @@ import type {
 import { isUserMessageSender } from "../../lib/message-sender"
 import { isRuntimeCapabilityError } from "../../lib/message-kind"
 import { conversationRecoveryLinks } from "../../lib/conversation-recovery-links"
+import { isFailedToolResult } from "../../lib/tool-result"
 import { useRelativeTime } from "../../lib/relative-time"
 import { credentialKindLabel } from "../../pages/admin/capability-ui"
 import { ToolCardSlot, SingleSlot, ListSlot } from "../plugin/SlotRenderer"
@@ -752,9 +753,8 @@ function timelineTraceSteps(run: ConversationTimelineRun): TraceStep[] {
   return (run.steps ?? []).map((s) => ({
     id: s.tool_call_id,
     name: s.name,
-    // Server never emits step.status="failed": a step still "running" in a
-    // failed run is the one that took the run down (see store.buildToolSteps).
-    status: run.status === "failed" && s.status === "running" ? "failed" : s.status,
+    // A completed tool event may record failure even when the run succeeds.
+    status: isFailedToolResult(s.result) || (run.status === "failed" && s.status === "running") ? "failed" : s.status,
     args: s.args,
     result: s.result,
     startedAt: isoMs(s.occurred_at),

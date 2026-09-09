@@ -537,6 +537,9 @@ split relevant pieces out first rather than growing the file further.
 
 ### Frontend shared logic
 
+- Tool-result failure is independent of the run's final status. Live and
+  persisted tool views share the explicit result-failure predicate; ending a
+  tool event does not itself imply success. Do not infer failure from prose.
 - Inbound messages with `sender_type=external` are user turns. Web conversation
   presenters must not assign them the Agent identity or imply they are from the
   current viewer.
