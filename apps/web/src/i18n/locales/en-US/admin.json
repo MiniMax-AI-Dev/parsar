@@ -995,6 +995,8 @@
       "title": "Agents"
     },
     "actions": {
+      "chatReadOnly": "Read-only access. Ask a workspace administrator for Member access to start conversations.",
+      "chatFailed": "Could not start the conversation. Please try again.",
       "create": "New Agent",
       "chat": "Chat",
       "edit": "Edit",

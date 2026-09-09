@@ -22,6 +22,7 @@ import {
 } from "../../components/ui/tabs"
 import { useAdminView, useAppRoute } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
+import { agentActionPermissions, useAgentChat } from "../../lib/agent-actions"
 import { createAgentConversation } from "../../lib/api-conversations"
 import {
   useCreateAgent,
@@ -98,7 +99,6 @@ export function AgentsPage() {
   const [cloneAgent, setCloneAgent] = useState<Agent | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null)
   const toast = useToast()
-  const [chatPendingID, setChatPendingID] = useState<string | null>(null)
   const fmtAgo = useRelativeTime()
 
   const query = useAgents(wid)
@@ -137,6 +137,8 @@ export function AgentsPage() {
   const currentWorkspace = workspacesQ.data?.workspaces.find((w) => w.id === wid)
   const workspaceRole = currentWorkspace?.role
   const workspaceName = currentWorkspace?.name
+  const { canManage, canChat } = agentActionPermissions(workspaceRole)
+  const { startChat: startChatWith, pendingID: chatPendingID } = useAgentChat(wid, canChat)
   const pendingCapability = usePendingCapability(wid)
 
   const err = query.error
@@ -155,19 +157,6 @@ export function AgentsPage() {
       onClosed={() => setRailID(null)}
     />
   ) : null
-
-  async function startChatWith(a: Agent) {
-    if (!wid || chatPendingID) return
-    setChatPendingID(a.id)
-    try {
-      const conversation = await createAgentConversation(wid, a, i18n.language)
-      navigate("conversations", { id: conversation.id, focus: "compose" })
-    } catch {
-      navigate("agents", { id: a.id })
-    } finally {
-      setChatPendingID(null)
-    }
-  }
 
   return (
     <AdminLayout activeMenu="agents" fullBleed>
@@ -210,10 +199,10 @@ export function AgentsPage() {
                   ))}
                 </FilterGroup>
               </FilterMenu>
-              <Button onClick={() => setCreateOpen(true)}>
+              {canManage && <Button onClick={() => setCreateOpen(true)}>
                 <Plus strokeWidth={1.5} aria-hidden="true" />
                 {t("agents.actions.create")}
-              </Button>
+              </Button>}
             </>
           }
         />
@@ -258,6 +247,7 @@ export function AgentsPage() {
         ) : (
           <AgentsListTable
             agents={agents}
+            workspaceRole={workspaceRole}
             models={models}
             keyword={keyword}
             connectorFilter={connectorFilter}
@@ -279,7 +269,7 @@ export function AgentsPage() {
       </RailLayout>
 
       <CreateAgentDialog
-        open={createOpen}
+        open={createOpen && canManage}
         mode="create"
         workspaceID={wid}
         workspaceName={workspaceName}
@@ -313,7 +303,7 @@ export function AgentsPage() {
       />
 
       <CreateAgentDialog
-        open={editAgent !== null}
+        open={editAgent !== null && canManage}
         mode="edit"
         workspaceID={wid}
         workspaceName={workspaceName}
@@ -346,7 +336,7 @@ export function AgentsPage() {
       />
 
       <CreateAgentDialog
-        open={cloneAgent !== null}
+        open={cloneAgent !== null && canManage}
         mode="create"
         workspaceID={wid}
         workspaceName={workspaceName}
@@ -372,7 +362,7 @@ export function AgentsPage() {
       />
 
       <DeleteAgentDialog
-        agent={deleteTarget}
+        agent={canManage ? deleteTarget : null}
         pending={deleteMut.isPending}
         error={deleteMut.error}
         onCancel={() => {
