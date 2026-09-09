@@ -1494,6 +1494,13 @@
         "placeholder": "/Users/me/code/my-app",
         "hintLocal": "The directory the agent runs in on your local device — an absolute path, or one starting with `~/`. Leave blank to use a per-conversation scratch dir; created if it does not exist.",
         "hintSandbox": "The directory the agent runs in inside the sandbox container (e.g. /workspace/my-app) — an absolute path, or one starting with `~/`. Leave blank to use a per-conversation scratch dir; created if it does not exist."
+      },
+      "clone": {
+        "loading": "Loading the source Agent’s capabilities…",
+        "loadFailed": "The source capabilities could not be loaded.",
+        "credentials": "Capabilities and their settings are copied. Select credentials for this new Agent; existing credential bindings are not copied.",
+        "unavailable": "These source capabilities are no longer available for creation. Remove them from this copy to continue.",
+        "remove": "Remove from copy"
       }
     },
     "pendingCapability": {

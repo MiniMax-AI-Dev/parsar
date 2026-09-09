@@ -1494,6 +1494,13 @@
         "placeholder": "/Users/me/code/my-app",
         "hintLocal": "Agent 在你这台本地设备上运行时的目录，填绝对路径或以 ~/ 开头的路径。留空则每个会话各用一个临时目录；路径不存在时自动创建。",
         "hintSandbox": "Agent 在沙盒容器内运行时的目录（如 /workspace/my-app），填绝对路径或以 ~/ 开头的路径。留空则每个会话各用一个临时目录；路径不存在时自动创建。"
+      },
+      "clone": {
+        "loading": "正在读取源 Agent 的能力…",
+        "loadFailed": "无法读取源 Agent 的能力。",
+        "credentials": "已复制能力及其设置。请为新 Agent 选择凭证，原有凭证绑定不会复制。",
+        "unavailable": "以下源能力已无法用于创建 Agent，请从本次克隆中移除后继续。",
+        "remove": "从克隆中移除"
       }
     },
     "pendingCapability": {

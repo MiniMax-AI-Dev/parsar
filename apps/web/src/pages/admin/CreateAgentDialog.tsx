@@ -18,6 +18,9 @@ import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Select, SelectOption } from "../../components/ui/select"
 import { AgentInstructionsField } from "./agents/AgentInstructionsField"
+import { AgentCloneNotice } from "./agents/AgentCloneNotice"
+import { useAgentCloneCapabilities } from "./agents/useAgentCloneCapabilities"
+import { withoutCredentialBindings } from "../../lib/agent-clone"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
 import { cn } from "../../lib/utils"
@@ -327,10 +330,8 @@ export function CreateAgentDialog({
 
   const capabilitiesQ = useCapabilitiesQuery(workspaceID, capabilitySearch)
   const allCapabilitiesQ = useCapabilitiesQuery(workspaceID, "")
-  // In edit mode, fetch existing per-agent bindings so we can
-  // hydrate the version dropdowns with the current pinning_mode +
-  // capability_version_id. In create mode the response is empty.
-  const existingBindingsQ = useAgentCapabilitiesQuery(workspaceID, mode === "edit" ? agent?.id ?? null : null)
+  const cloneSourceID = mode === "create" && open ? agent?.id ?? null : null
+  const existingBindingsQ = useAgentCapabilitiesQuery(workspaceID, mode === "edit" ? agent?.id ?? null : cloneSourceID)
   const enableBindingMut = useEnableAgentCapabilityMutation(workspaceID, agent?.id ?? null)
   const secretsQ = useSecrets(workspaceID)
   const sharedSecrets: Secret[] = useMemo(
@@ -527,8 +528,6 @@ export function CreateAgentDialog({
       setHighlightedModelID(null)
       setSystemPrompt(params.get("agent_prompt") ?? (cloneSource ? promptFromAgent(cloneSource, defaultSystemPrompt) : defaultSystemPrompt))
       setCapabilities(cloneSource ? capabilitiesFromAgent(cloneSource) : [])
-      // Capability IDs aren't prefilled on clone: mapping installed names back
-      // to IDs needs an extra round-trip, so users re-pick from the marketplace.
       setSelectedCapabilityIDs([])
       setCapabilityVersionChoices({})
       setCapabilitySearch("")
@@ -602,6 +601,17 @@ export function CreateAgentDialog({
     setStep(1)
     setCapabilityTypeFilter("all")
   }, [open, mode, agent, agent?.id, defaultAgentDescription, defaultAgentName, defaultSystemPrompt, firstModelID])
+
+  const clone = useAgentCloneCapabilities(open, cloneSourceID,
+    existingBindingsQ.isFetching || existingBindingsQ.isError ? undefined : existingBindingsQ.data?.installed,
+    setSelectedCapabilityIDs, setCapabilityVersionChoices)
+  const cloneLoadFailed = Boolean(cloneSourceID) && (
+    (!clone.ready && existingBindingsQ.isError) || (!allCapabilitiesQ.data && allCapabilitiesQ.isError)
+  )
+  const unavailableCloneCapabilities = clone.bindings.filter((binding) =>
+    selectedCapabilityIDs.includes(binding.capability_id) && (
+      !binding.capability_version_id || !allCapabilitiesPool.some((cap) => cap.id === binding.capability_id && cap.latest_version_id)
+    ))
 
   function selectExecutionMode(nextMode: ExecutionMode) {
     setExecutionMode(nextMode)
@@ -807,7 +817,7 @@ export function CreateAgentDialog({
       // the user a clearer error tied to the input instead of a stream error.
       return
     }
-    if (mode === "create" && allCapabilitiesQ.isLoading) return
+    if (mode === "create" && (allCapabilitiesQ.isLoading || !clone.ready || cloneLoadFailed || unavailableCloneCapabilities.length > 0)) return
     const selectedCapabilities = mode === "create"
       ? allCapabilitiesPool.filter((cap) => selectedCapabilityIDs.includes(cap.id) && cap.latest_version_id)
       : []
@@ -819,11 +829,13 @@ export function CreateAgentDialog({
     // a fallback for the daemon).
     const initialCapabilities = selectedCapabilities.map((cap) => {
       const choice = capabilityVersionChoices[cap.id]
+      const source = clone.bindings.find((binding) => binding.capability_id === cap.id)
       const pinningMode: "latest" | "pinned" = choice?.pinningMode ?? "latest"
-      const versionID = pinningMode === "pinned"
+      const versionID = pinningMode === "pinned" || source
         ? (choice?.versionID || (cap.latest_version_id as string))
         : (cap.latest_version_id as string)
-      return { capability_version_id: versionID, pinning_mode: pinningMode }
+      return { capability_version_id: versionID, pinning_mode: pinningMode,
+        ...(source ? { configuration: withoutCredentialBindings(source.configuration) } : {}) }
     })
     const profile = {
       ...(requiresModel ? { model_id: selectedModelID } : {}),
@@ -831,7 +843,7 @@ export function CreateAgentDialog({
       skills: capabilityNames,
     }
     const mergedConfig: Record<string, unknown> = {
-      ...configBaseForSubmit(agent, connector),
+      ...(cloneSourceID ? withoutCredentialBindings(configBaseForSubmit(agent, connector)) : configBaseForSubmit(agent, connector)),
       profile,
       ...(connector === "agent_daemon" ? {
         agent_kind: agentEngine,
@@ -990,7 +1002,7 @@ export function CreateAgentDialog({
     hasRequiredModel &&
     (connector !== "agent_daemon" || executionMode !== "local_device" || deviceID !== "") &&
     workDirValid &&
-    (mode !== "create" || !allCapabilitiesQ.isLoading) &&
+    (mode !== "create" || (!allCapabilitiesQ.isLoading && clone.ready && !cloneLoadFailed && unavailableCloneCapabilities.length === 0)) &&
     (aggregatedRequiredKinds.length === 0 || allCredentialsSatisfied)
 
   const step1Valid =
@@ -1505,6 +1517,13 @@ export function CreateAgentDialog({
 
           {step === 2 && (
             <>
+              {cloneSourceID && <AgentCloneNotice
+                ready={clone.ready && !allCapabilitiesQ.isLoading}
+                failed={cloneLoadFailed}
+                unavailable={unavailableCloneCapabilities}
+                onRetry={() => { void existingBindingsQ.refetch(); void allCapabilitiesQ.refetch() }}
+                onRemove={(id) => setSelectedCapabilityIDs((current) => current.filter((selected) => selected !== id))}
+              />}
               <section className="flex flex-col gap-3">
                 <Input value={capabilitySearch} onChange={(e) => setCapabilitySearch(e.target.value)} placeholder={t("agents.form.placeholders.capabilitySearch")} />
                 {capabilityOptions.length === 0 ? (
@@ -1538,7 +1557,7 @@ export function CreateAgentDialog({
                               const checked = mode === "create" ? selectedCapabilityIDs.includes(cap.id) : capabilities.includes(cap.name)
                               const lockedNoVersion = mode === "create" && !cap.latestVersionID
                               const lockedDeprecatedAndUnchecked = cap.deprecated && !checked
-                              const disabled = lockedNoVersion || lockedDeprecatedAndUnchecked
+                              const disabled = lockedNoVersion || lockedDeprecatedAndUnchecked || !clone.ready
                               const ghostTitle = cap.deprecated ? t("agents.form.deprecatedCapabilityTooltip") : undefined
                               return (
                                 <label key={`${sec}:${cap.id || cap.name}`} title={ghostTitle} data-row-index={index} className={cn("flex w-full min-w-0 items-start gap-2 border-b border-line py-2 text-left", disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:app-hover")}>
