@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
 type RequiredCredential struct {
@@ -20,10 +20,10 @@ type RequiredCredential struct {
 }
 
 type EnabledCapabilityRead struct {
-	AgentCapabilityID      string               `json:"agent_capability_id"`
-	AgentID                string               `json:"agent_id"`
-	Enabled                bool                 `json:"enabled"`
-	Configuration          map[string]any       `json:"configuration"`
+	AgentCapabilityID string         `json:"agent_capability_id"`
+	AgentID           string         `json:"agent_id"`
+	Enabled           bool           `json:"enabled"`
+	Configuration     map[string]any `json:"configuration"`
 	// PinningMode is 'latest' or 'pinned'. In 'latest' mode the daemon
 	// resolver ignores OssKey/SHA256/CanonicalSpec/Version on this struct
 	// and uses LatestOssKey/LatestSHA256/LatestCanonicalSpec/LatestVersion
@@ -51,14 +51,16 @@ type EnabledCapabilityRead struct {
 	// version (resolved at query time via the lateral subquery on
 	// capability_version). The daemon resolver reads these when
 	// PinningMode == "latest".
-	LatestOssKey        string `json:"latest_oss_key,omitempty"`
-	LatestSHA256        string `json:"latest_sha256,omitempty"`
-	LatestCanonicalSpec []byte `json:"latest_canonical_spec,omitempty"`
-	LatestSchemaVersion int16  `json:"latest_schema_version,omitempty"`
-	GitRepoURL          string `json:"git_repo_url,omitempty"`
-	GitRef              string `json:"git_ref,omitempty"`
-	Path                string `json:"path,omitempty"`
-	Content             []byte `json:"content,omitempty"`
+	LatestOssKey              string               `json:"latest_oss_key,omitempty"`
+	LatestSHA256              string               `json:"latest_sha256,omitempty"`
+	LatestCanonicalSpec       []byte               `json:"latest_canonical_spec,omitempty"`
+	LatestContent             []byte               `json:"-"`
+	LatestRequiredCredentials []RequiredCredential `json:"-"`
+	LatestSchemaVersion       int16                `json:"latest_schema_version,omitempty"`
+	GitRepoURL                string               `json:"git_repo_url,omitempty"`
+	GitRef                    string               `json:"git_ref,omitempty"`
+	Path                      string               `json:"path,omitempty"`
+	Content                   []byte               `json:"content,omitempty"`
 	// CanonicalSpec carries the scaffold-agnostic capability description
 	// (see server/internal/capability/canonical). Empty for legacy rows;
 	// the connector falls back to interpreting Content directly. Reflects
@@ -1171,40 +1173,42 @@ func enabledCapabilityFromRow(row sqlc.GetEnabledCapabilitiesForAgentRow) (Enabl
 		return EnabledCapabilityRead{}, fmt.Errorf("capability %s: decode tags: %w", row.CapabilityID, err)
 	}
 	return EnabledCapabilityRead{
-		AgentCapabilityID:      row.AgentCapabilityID,
-		AgentID:                row.AgentID,
-		Enabled:                row.Enabled,
-		Configuration:          configuration,
-		PinningMode:            row.PinningMode,
-		CapabilityID:           row.CapabilityID,
-		WorkspaceID:            row.WorkspaceID,
-		SourceWorkspaceName:    row.SourceWorkspaceName,
-		Type:                   row.Type,
-		Name:                   row.Name,
-		Description:            row.Description,
-		Visibility:             row.Visibility,
-		Status:                 row.Status,
-		DeprecatedAt:           pgOptionalTime(row.DeprecatedAt),
-		RequiredCredentials:    decodeRequiredCredentials(row.RequiredCredentials),
-		CapabilityVersionID:    row.CapabilityVersionID,
-		Version:                row.Version,
-		LatestVersionID:        row.LatestVersionID,
-		LatestVersion:          row.LatestVersion,
-		LatestVersionCreatedAt: pgOptionalTime(row.LatestVersionCreatedAt),
-		LatestOssKey:           row.LatestOssKey,
-		LatestSHA256:           row.LatestSha256,
-		LatestCanonicalSpec:    append([]byte(nil), row.LatestCanonicalSpec...),
-		LatestSchemaVersion:    row.LatestSchemaVersion,
-		GitRepoURL:             textValue(row.GitRepoUrl),
-		GitRef:                 textValue(row.GitRef),
-		Path:                   textValue(row.Path),
-		Content:                append([]byte(nil), row.Content...),
-		CanonicalSpec:          append([]byte(nil), row.CanonicalSpec...),
-		SchemaVersion:          row.SchemaVersion,
-		OssKey:                 row.OssKey,
-		SHA256:                 row.Sha256,
-		Tags:                   tags,
-		CapabilityCreatorID:    row.CapabilityCreatorID,
+		AgentCapabilityID:         row.AgentCapabilityID,
+		AgentID:                   row.AgentID,
+		Enabled:                   row.Enabled,
+		Configuration:             configuration,
+		PinningMode:               row.PinningMode,
+		CapabilityID:              row.CapabilityID,
+		WorkspaceID:               row.WorkspaceID,
+		SourceWorkspaceName:       row.SourceWorkspaceName,
+		Type:                      row.Type,
+		Name:                      row.Name,
+		Description:               row.Description,
+		Visibility:                row.Visibility,
+		Status:                    row.Status,
+		DeprecatedAt:              pgOptionalTime(row.DeprecatedAt),
+		RequiredCredentials:       decodeRequiredCredentials(row.RequiredCredentials),
+		CapabilityVersionID:       row.CapabilityVersionID,
+		Version:                   row.Version,
+		LatestVersionID:           row.LatestVersionID,
+		LatestVersion:             row.LatestVersion,
+		LatestVersionCreatedAt:    pgOptionalTime(row.LatestVersionCreatedAt),
+		LatestOssKey:              row.LatestOssKey,
+		LatestSHA256:              row.LatestSha256,
+		LatestCanonicalSpec:       append([]byte(nil), row.LatestCanonicalSpec...),
+		LatestContent:             append([]byte(nil), row.LatestContent...),
+		LatestRequiredCredentials: decodeRequiredCredentials(row.LatestRequiredCredentials),
+		LatestSchemaVersion:       row.LatestSchemaVersion,
+		GitRepoURL:                textValue(row.GitRepoUrl),
+		GitRef:                    textValue(row.GitRef),
+		Path:                      textValue(row.Path),
+		Content:                   append([]byte(nil), row.Content...),
+		CanonicalSpec:             append([]byte(nil), row.CanonicalSpec...),
+		SchemaVersion:             row.SchemaVersion,
+		OssKey:                    row.OssKey,
+		SHA256:                    row.Sha256,
+		Tags:                      tags,
+		CapabilityCreatorID:       row.CapabilityCreatorID,
 	}, nil
 }
 

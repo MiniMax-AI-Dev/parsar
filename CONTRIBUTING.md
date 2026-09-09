@@ -156,8 +156,9 @@ description and keep ownership on the side listed here.
 
 - Agent capability reads retain the stored binding version and expose its
   pinning mode. Displayed current versions match the daemon's resolver:
-  Skill, Plugin, and Bundle can follow latest metadata (including deprecation
-  cutoffs); MCP and System Prompt currently use the stored binding version.
+  Skill, Plugin, Bundle, MCP, and System Prompt follow their binding mode and
+  the existing deprecation cutoff. MCP content and required credentials must
+  come from the same selected version, including legacy content.
 
 - Cross-workspace installed capabilities remain visible and removable after
   unpublishing. Their installation metadata reports source visibility and only
