@@ -702,7 +702,7 @@
       "table": {
         "version": "版本号",
         "createdAt": "创建时间",
-        "enabledAgents": "在用 Agent 数"
+        "enabledAgents": "Agent 数"
       },
       "add": {
         "title": "{{name}} — 添加新版本",
