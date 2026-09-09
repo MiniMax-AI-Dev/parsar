@@ -132,7 +132,7 @@ export function WorkspaceSwitcher() {
           <DropdownMenu.Content
             align="start"
             sideOffset={6}
-            className="app-shadow-floating z-50 w-96 max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border border-line bg-surface p-1 text-sm text-fg-muted animate-pop-in data-[state=closed]:animate-pop-out"
+            className="app-shadow-floating z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] w-96 max-w-[calc(100vw-1rem)] overflow-x-hidden overflow-y-auto rounded-lg border border-line bg-surface p-1 text-sm text-fg-muted animate-pop-in data-[state=closed]:animate-pop-out"
           >
             <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-fg-subtle">
               <Layers className="h-3 w-3" strokeWidth={1.75} />
@@ -178,21 +178,19 @@ export function WorkspaceSwitcher() {
                 {discoverable.map((ws) => (
                   <div
                     key={ws.id}
-                    className="group/row flex items-center gap-1"
+                    className="group/row grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-2 py-1.5"
                   >
-                    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-2 py-1.5">
-                      <div className="flex flex-1 flex-col min-w-0">
-                        <span className="truncate">{ws.name}</span>
-                        <span className="truncate font-mono text-xs text-fg-faint">
-                          {ws.slug}
-                        </span>
-                      </div>
-                      <span className="text-xs text-fg-faint">
-                        {t("workspaceSwitcher.memberCount", {
-                          count: ws.member_count,
-                        })}
+                    <div className="col-span-2 flex min-w-0 flex-col">
+                      <span className="break-words">{ws.name}</span>
+                      <span className="truncate font-mono text-xs text-fg-faint">
+                        {ws.slug}
                       </span>
                     </div>
+                    <span className="text-xs text-fg-faint">
+                      {t("workspaceSwitcher.memberCount", {
+                        count: ws.member_count,
+                      })}
+                    </span>
                     {ws.has_pending_request ? (
                       <div className="flex items-center gap-1">
                         <span
