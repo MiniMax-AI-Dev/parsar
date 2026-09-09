@@ -34,7 +34,7 @@ export function ErrorState({
 }: ErrorStateProps) {
   const { t } = useTranslation("common")
   const resolvedTitle = title ?? t("errors.loadFailed", { defaultValue: "Failed to load" })
-  const detailBlock = detail && <VerbatimBlock className="max-h-40 w-fit max-w-[min(52rem,100%)]">{detail}</VerbatimBlock>
+  const detailBlock = detail && <VerbatimBlock tabIndex={appearance === "panel" ? 0 : undefined} aria-label={appearance === "panel" ? t("errors.details") : undefined} className="max-h-40 w-fit max-w-[min(52rem,100%)] focus-visible:outline-accent">{detail}</VerbatimBlock>
   return (
     <div
       role={appearance === "panel" && announce ? "alert" : undefined}
