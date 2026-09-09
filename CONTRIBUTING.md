@@ -570,6 +570,10 @@ Pages with a detail rail may opt into wrapping header actions through
 `PageHeader.actionClassName` and an auto-height header. Other pages retain
 the default single-row header layout.
 
+Use `EmptyState` with `size="compact"` for detail tabs, subsections, and
+compact result panels. Keep their alignment and spacing in that shared
+component; page-level empty states retain the default size.
+
 Structured `Ledger` columns own both header and cell alignment: numbers align
 right; text, identifiers, and dates align left. Keep widths and alignment in
 the shared column model, not separate page-specific header rules. Direct cell

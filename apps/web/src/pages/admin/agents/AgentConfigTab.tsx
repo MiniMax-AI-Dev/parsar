@@ -922,7 +922,7 @@ function ConfigCapabilitiesSection({
       }
     >
       {enabledCaps.length === 0 ? (
-        <EmptyState title={t("agents.detail.config.capabilities.empty")} className="py-8" />
+        <EmptyState size="compact" title={t("agents.detail.config.capabilities.empty")} />
       ) : (
         <ul className="m-0 list-none border-t border-line p-0">
           {enabledCaps.map((item) =>
@@ -1014,9 +1014,7 @@ function AddCapabilityDialog({
           </div>
           <div className="min-h-0 max-h-80 overflow-y-auto">
             {filtered.length === 0 ? (
-              <p className="py-6 text-center text-sm text-fg-muted">
-                {t("agents.detail.capabilities.emptyAvailable")}
-              </p>
+              <EmptyState size="compact" title={t("agents.detail.capabilities.emptyAvailable")} />
             ) : (
               <ul className="m-0 list-none border-t border-line p-0">
                 {filtered.map((capability) => (

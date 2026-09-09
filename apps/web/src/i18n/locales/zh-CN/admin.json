@@ -527,8 +527,10 @@
           "days": "约 {{count}} 天前"
         }
       },
+      "artifactsEmpty": "暂无产物",
       "steps": {
-        "empty": "这条 run 还没有持久化事件。新运行会在这里显示 token、工具、审批和完成状态。",
+        "emptyTitle": "暂无执行步骤",
+        "empty": "新运行的生成内容、工具调用、审批与完成事件会显示在这里。",
         "viewRaw": "查看原始事件",
         "hideRaw": "收起原始事件",
         "generated": "生成了 {{count}} 个字符",

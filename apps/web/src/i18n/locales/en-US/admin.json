@@ -527,8 +527,10 @@
           "days": "{{count}}d ago"
         }
       },
+      "artifactsEmpty": "No artifacts yet",
       "steps": {
-        "empty": "No persisted events yet. New runs will show token generation, tools, approvals, and completion here.",
+        "emptyTitle": "No steps yet",
+        "empty": "New runs will show token generation, tools, approvals, and completion here.",
         "viewRaw": "View raw events",
         "hideRaw": "Hide raw events",
         "generated": "Generated {{count}} characters",
