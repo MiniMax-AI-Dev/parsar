@@ -28,9 +28,10 @@ const KEY_RUNS = (
   statuses?: AgentRunStatus[] | null,
   offset: number = 0,
   limit: number = 100,
+  search: string = "",
 ) => {
   const statusKey = statuses && statuses.length > 0 ? [...statuses].sort().join(",") : "_all"
-  return ["admin", "agentRuns", workspaceID, statusKey, offset, limit] as const
+  return ["admin", "agentRuns", workspaceID, statusKey, search, offset, limit] as const
 }
 const KEY_RUN = (runID: string) => ["admin", "agentRun", runID] as const
 const KEY_RUN_EVENTS = (workspaceID: string, runID: string) => ["admin", "agentRunEvents", workspaceID, runID] as const
@@ -78,6 +79,7 @@ async function listAgentRuns(
   statuses?: AgentRunStatus[] | null,
   offset?: number,
   limit?: number,
+  search?: string,
 ): Promise<ListAgentRunsResponse> {
   if (!workspaceID) {
     return { agent_runs: [], total: 0, limit: limit ?? 100, offset: offset ?? 0 }
@@ -87,6 +89,7 @@ async function listAgentRuns(
   const query: Record<string, string | number | boolean | undefined> = {
     limit: limit ?? 100,
     offset: offset ?? 0,
+    q: search || undefined,
   }
   if (statuses && statuses.length > 0) {
     query.status = statuses.join(",")
@@ -259,20 +262,23 @@ export interface UseAgentRunsOptions {
   statuses?: AgentRunStatus[] | null
   offset?: number
   limit?: number
+  search?: string
 }
 
 export function useAgentRuns(
   workspaceID: string | null,
   options: UseAgentRunsOptions = {},
 ) {
-  const { statuses, offset = 0, limit = 100 } = options
+  const { statuses, offset = 0, limit = 100, search = "" } = options
+  const queryKey = KEY_RUNS(workspaceID ?? "_none", statuses, offset, limit, search)
   return useQuery({
-    queryKey: KEY_RUNS(workspaceID ?? "_none", statuses, offset, limit),
-    queryFn: () => listAgentRuns(workspaceID, statuses, offset, limit),
+    queryKey,
+    queryFn: () => listAgentRuns(workspaceID, statuses, offset, limit, search),
     retry: noUnreachableRetry,
     staleTime: 15_000,
-    // Keep the previous page on screen while the next one fetches.
-    placeholderData: (prev) => prev,
+    // Keep prior pages only when the workspace and filters still match.
+    placeholderData: (prev, previousQuery) =>
+      previousQuery?.queryKey.slice(0, 5).every((value, index) => value === queryKey[index]) ? prev : undefined,
   })
 }
 

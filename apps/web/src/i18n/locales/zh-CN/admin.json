@@ -558,7 +558,7 @@
     },
     "emptyFiltered": {
       "title": "没有匹配的运行",
-      "description": "调整筛选条件，或切到「全部」tab 查看所有运行。"
+      "description": "试试其他关键词，或在「筛选」菜单中选择「全部」。"
     },
     "filter": {
       "label": "筛选"

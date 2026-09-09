@@ -4701,6 +4701,25 @@ paths:
         name: workspaceID
         required: true
         type: string
+      - description: Case-insensitive literal search over run ID, Agent name/slug,
+          and conversation ID
+        in: query
+        name: q
+        type: string
+      - description: Comma-separated run statuses
+        in: query
+        name: status
+        type: string
+      - default: 100
+        description: Page size
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Result offset
+        in: query
+        name: offset
+        type: integer
       produces:
       - application/json
       responses:

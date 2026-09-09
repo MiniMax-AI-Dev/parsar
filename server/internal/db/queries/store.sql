@@ -1880,6 +1880,7 @@ where r.workspace_id = @workspace_id::uuid
   and r.workspace_id = a.workspace_id
   and c.deleted_at is null
   and a.deleted_at is null
+  and (@search::text = '' or strpos(lower(concat_ws(' ', a.name, a.slug, r.id::text, r.conversation_id::text)), lower(@search::text)) > 0)
   and (cardinality(@statuses::text[]) = 0
        or r.status = ANY(@statuses::text[]))
 order by r.created_at desc, r.id desc
@@ -1899,6 +1900,7 @@ where r.workspace_id = @workspace_id::uuid
   and r.workspace_id = a.workspace_id
   and c.deleted_at is null
   and a.deleted_at is null
+  and (@search::text = '' or strpos(lower(concat_ws(' ', a.name, a.slug, r.id::text, r.conversation_id::text)), lower(@search::text)) > 0)
   and (cardinality(@statuses::text[]) = 0
        or r.status = ANY(@statuses::text[]));
 

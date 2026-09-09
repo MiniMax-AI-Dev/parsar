@@ -76,6 +76,7 @@ import { formatRawRunEvents } from "../../lib/agent-run-event-format"
 import type { AgentRunDetail, AgentRunEvent, AgentRunStatus, AgentRunSummary } from "../../lib/api-types"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useWorkspaceId } from "../../lib/workspace"
+import { useDebouncedValue } from "../../lib/use-debounced-value"
 import { useRelativeTime } from "../../lib/relative-time"
 import { cn } from "../../lib/utils"
 
@@ -116,20 +117,21 @@ export function RunsPage({ selectedId }: { selectedId?: string | null }) {
   const fmtAgo = useRelativeTime()
   const [filter, setFilter] = useState<RunFilter>("all")
   const [keyword, setKeyword] = useState("")
+  const search = useDebouncedValue(keyword.trim(), 250)
   const [offset, setOffset] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
 
   // Status filter is server-side (?status=a,b for the union case), so the
   // page always asks for exactly RUNS_PAGE_SIZE rows of the right kind.
   const statuses = FILTER_STATUSES[filter]
-  const query = useAgentRuns(wsId, { statuses, offset, limit: RUNS_PAGE_SIZE })
+  const query = useAgentRuns(wsId, { statuses, offset, limit: RUNS_PAGE_SIZE, search })
   const runs = useMemo(() => query.data?.agent_runs ?? [], [query.data])
   const total = query.data?.total ?? 0
 
-  // Offset is keyed by (filter, workspace): switching either starts from
+  // Offset is keyed by the search, filter, and workspace: changing any starts from
   // page one so we never point past the end of the new result set.
-  const [offsetKey, setOffsetKey] = useState(`${filter}:${wsId ?? ""}`)
-  const currentKey = `${filter}:${wsId ?? ""}`
+  const [offsetKey, setOffsetKey] = useState(JSON.stringify([filter, wsId, search]))
+  const currentKey = JSON.stringify([filter, wsId, search])
   if (offsetKey !== currentKey) {
     setOffsetKey(currentKey)
     setOffset(0)
@@ -138,26 +140,13 @@ export function RunsPage({ selectedId }: { selectedId?: string | null }) {
   const err = query.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
 
-  // Keyword search is client-side over the current page; backend has no
-  // free-text index on agent_name / conversation_id.
-  const filtered = useMemo(() => {
-    if (!keyword) return runs
-    const q = keyword.toLowerCase()
-    return runs.filter((r) =>
-      [r.agent_name ?? "", r.agent_slug ?? "", r.id, r.conversation_id ?? ""]
-        .join(" ")
-        .toLowerCase()
-        .includes(q),
-    )
-  }, [runs, keyword])
-
   const groups = useMemo(
     () =>
       GROUP_ORDER.map((status) => ({
         status,
-        runs: filtered.filter((r) => r.status === status),
+        runs: runs.filter((r) => r.status === status),
       })).filter((g) => g.runs.length > 0),
-    [filtered],
+    [runs],
   )
 
   // The rail outlives the selection by one animation: `railId` holds the
@@ -282,9 +271,9 @@ export function RunsPage({ selectedId }: { selectedId?: string | null }) {
                 onRetry={() => void query.refetch()}
               />
             </div>
-          ) : total === 0 ? (
+          ) : total === 0 && !search && filter === "all" ? (
             <EmptyState icon={Play} title={t("runs.empty.title")} description={t("runs.empty.description")} />
-          ) : filtered.length === 0 ? (
+          ) : runs.length === 0 ? (
             <EmptyState icon={Play} title={t("runs.emptyFiltered.title")} description={t("runs.emptyFiltered.description")} />
           ) : (
             <Ledger columns={LEDGER_COLUMNS} role="listbox" aria-label={pageTitle}>

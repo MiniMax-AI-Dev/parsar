@@ -558,7 +558,7 @@
     },
     "emptyFiltered": {
       "title": "No matching runs",
-      "description": "Adjust the filter or switch to the All tab to see every run."
+      "description": "Try another search or choose All in the Filter menu."
     },
     "filter": {
       "label": "Filter"
