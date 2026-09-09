@@ -18,6 +18,7 @@ import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Select, SelectOption } from "../../components/ui/select"
 import { AgentInstructionsField } from "./agents/AgentInstructionsField"
+import { AgentCloudPreflight } from "./agents/AgentCloudPreflight"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
 import { cn } from "../../lib/utils"
@@ -730,6 +731,11 @@ export function CreateAgentDialog({
     setModelBindingChoice({ source: "shared", existing_secret_id: sharedSecrets[0].id })
   }, [mode, requiresModel, selectedModel, modelBindingChoice, modelNewSecretExpanded, sharedSecrets])
   const daemonExecutionEditable = connector === "agent_daemon"
+  const needsCloudPreflight = daemonExecutionEditable && executionMode === "sandbox"
+    && (mode === "create" || executionModeFromAgent(agent) !== "sandbox")
+  const cloudReady = !needsCloudPreflight || (!runtimeStatus.isError
+    && runtimeStatus.data?.available === true
+    && (runtimeStatus.data.profile === "managed" || runtimeStatus.data.has_credential))
   const showExecutionChoices = mode === "create" || daemonExecutionEditable
   const showDevicePicker = connector === "agent_daemon" && executionMode === "local_device" && Boolean(workspaceID)
   const errMsg = extractErrorMessage(error)
@@ -795,6 +801,7 @@ export function CreateAgentDialog({
 
   async function submit() {
     setSubmitAttempted(true)
+    if (!cloudReady) return
     if (!hasRequiredModel) {
       modelFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
       return
@@ -988,6 +995,7 @@ export function CreateAgentDialog({
     name.trim() !== "" &&
     hasConnector &&
     hasRequiredModel &&
+    cloudReady &&
     (connector !== "agent_daemon" || executionMode !== "local_device" || deviceID !== "") &&
     workDirValid &&
     (mode !== "create" || !allCapabilitiesQ.isLoading) &&
@@ -997,6 +1005,7 @@ export function CreateAgentDialog({
     name.trim() !== "" &&
     hasConnector &&
     hasRequiredModel &&
+    cloudReady &&
     (connector !== "agent_daemon" || executionMode !== "local_device" || deviceID !== "") &&
     workDirValid
   const totalSteps = 2
@@ -1049,6 +1058,10 @@ export function CreateAgentDialog({
           stepOfLabel={t("agents.form.wizard.stepOf", { current: step, total: totalSteps })}
           completeLabel={t("agents.form.wizard.complete", { percent: progressPercent })}
         />
+
+        {needsCloudPreflight && !cloudReady && workspaceID && (
+          <AgentCloudPreflight workspaceID={workspaceID} checking={runtimeStatus.isFetching} failed={runtimeStatus.isError} onRetry={() => void runtimeStatus.refetch()} />
+        )}
 
         <form
           className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden pr-1"

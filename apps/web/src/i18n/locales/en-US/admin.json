@@ -1399,6 +1399,11 @@
         "label": "Instructions",
         "hint": "Describe what this Agent should do, how it should respond, and when it should ask for clarification."
       },
+      "cloudPreflight": {
+        "hint": "Cloud execution must be configured before continuing. Open cloud settings in a new tab, then return here and check again. Your Agent settings stay in this form.",
+        "configure": "Open cloud settings",
+        "retry": "Check again"
+      },
       "defaults": {
         "workspaceName": "My Workspace",
         "name": "{{workspace}}'s agent",

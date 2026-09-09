@@ -591,6 +591,11 @@ Pages with a detail rail may opt into wrapping header actions through
 `PageHeader.actionClassName` and an auto-height header. Other pages retain
 the default single-row header layout.
 
+The Agent form checks workspace runtime status before creating or switching to
+cloud execution. Unknown or unavailable status blocks advancing and submitting;
+ordinary edits to an existing cloud Agent and local execution stay independent.
+Cloud setup opens Runtime's Instances tab separately so form input is retained.
+
 Use `EmptyState` with `size="compact"` for detail tabs, subsections, and
 compact result panels. Keep their alignment and spacing in that shared
 component; page-level empty states retain the default size.
