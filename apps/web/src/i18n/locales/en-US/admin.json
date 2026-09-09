@@ -2484,6 +2484,16 @@
       "agentRequired": "Select an executing agent",
       "promptRequired": "Prompt is required",
       "cronInvalid": "cron must have 5 fields (min hour dom mon dow)"
+    },
+    "history": {
+      "title": "Run history",
+      "description": "{{name}} · Up to 50 recent runs",
+      "open": "View run history for {{name}}",
+      "empty": "No runs yet",
+      "emptyDescription": "Run this task or wait for its next scheduled time.",
+      "loadError": "Could not load run history",
+      "openRun": "View run",
+      "openConversation": "View conversation"
     }
   },
   "shared": {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { AlertTriangle, CalendarClock, Loader2, Pencil, Play, Plus, Power, Trash2 } from "lucide-react"
@@ -44,11 +44,14 @@ import { OffsetPagination } from "../../components/ui/offset-pagination"
 import { Property, PropertyList } from "../../components/ui/property-list"
 import { Select, SelectOption } from "../../components/ui/select"
 import { Skeleton } from "../../components/ui/skeleton"
-import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
+import { StatusIcon } from "../../components/ui/status-icon"
 import { Textarea } from "../../components/ui/textarea"
 import { ApiError } from "../../lib/api-client"
 import { useAgents } from "../../lib/api-agents"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
+import { useNavigateAdmin } from "../../lib/admin-router"
+import { scheduledTaskStatusIcon, formatScheduledTaskTime } from "../../lib/scheduled-task-format"
+import { ScheduledTaskHistoryDialog } from "./scheduled/ScheduledTaskHistoryDialog"
 import { useWorkspaceId } from "../../lib/workspace"
 import type { Agent } from "../../lib/api-types"
 import {
@@ -173,33 +176,6 @@ function describeCron(cron: string, t: TFunction<"admin">, weekdays: string[]): 
   return ""
 }
 
-/** The last run's outcome as the ledger's status icon; a task that never ran is "queued". */
-function lastStatusIcon(status: string): StatusKind {
-  switch (status) {
-    case "running":
-      return "running"
-    case "completed":
-      return "completed"
-    case "failed":
-      return "failed"
-    case "cancelled":
-    case "skipped_overlap":
-      return "cancelled"
-    case "interrupted":
-    case "auto_disabled":
-      return "interrupted"
-    default:
-      return "queued"
-  }
-}
-
-function fmtWhen(iso: string | null): string {
-  if (!iso) return "—"
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
@@ -208,6 +184,9 @@ export function ScheduledTasksPage() {
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   const workspaceID = useWorkspaceId()
+  const navigate = useNavigateAdmin()
+  const [historyTask, setHistoryTask] = useState<ScheduledTask | null>(null)
+  const historyTrigger = useRef<HTMLButtonElement | null>(null)
   const workspacesQ = useMyWorkspaces()
   const [offset, setOffset] = useState(0)
   const tasksQ = useScheduledTasksByWorkspace(workspaceID, { offset, limit: SCHED_PAGE_SIZE })
@@ -228,6 +207,7 @@ export function ScheduledTasksPage() {
   if (offsetKey !== (workspaceID ?? "")) {
     setOffsetKey(workspaceID ?? "")
     setOffset(0)
+    setHistoryTask(null)
   }
 
   const weekdays = (t("scheduledTasks.weekdays", { returnObjects: true }) as unknown as string[]) ?? []
@@ -366,9 +346,18 @@ export function ScheduledTasksPage() {
                     data-testid="scheduled-row"
                     data-task-name={task.name}
                   >
-                    <StatusIcon status={lastStatusIcon(task.last_status)} title={t(`scheduledTasks.status.${statusKey}` as never)} />
+                    <StatusIcon status={scheduledTaskStatusIcon(task.last_status)} title={t(`scheduledTasks.status.${statusKey}` as never)} />
                     <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate font-medium" title={task.prompt}>{task.name}</span>
+                      <button
+                        className="min-w-0 truncate rounded-sm text-left font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                        title={task.prompt}
+                        aria-label={t("scheduledTasks.history.open", { name: task.name })}
+                        aria-haspopup="dialog"
+                        onClick={(event) => {
+                          historyTrigger.current = event.currentTarget
+                          setHistoryTask(task)
+                        }}
+                      >{task.name}</button>
                       {!task.enabled && (
                         <Badge variant="neutral" dot className="shrink-0">{t("scheduledTasks.disabled")}</Badge>
                       )}
@@ -384,8 +373,14 @@ export function ScheduledTasksPage() {
                       <InitialTile name={agent} />
                       <span className="truncate">{agent}</span>
                     </span>
-                    <LedgerNum muted={!task.next_run_at}>{fmtWhen(task.next_run_at)}</LedgerNum>
-                    <LedgerNum muted={!task.last_run_at}>{fmtWhen(task.last_run_at)}</LedgerNum>
+                    <LedgerNum muted={!task.next_run_at}>{formatScheduledTaskTime(task.next_run_at)}</LedgerNum>
+                    <LedgerNum muted={!task.last_run_at}>
+                      {task.last_run_id ? (
+                        <Button variant="link" className="h-auto p-0 font-mono font-normal" title={t("scheduledTasks.history.openRun")} onClick={() => navigate("runs", { id: task.last_run_id })}>
+                          {formatScheduledTaskTime(task.last_run_at)}
+                        </Button>
+                      ) : formatScheduledTaskTime(task.last_run_at)}
+                    </LedgerNum>
                     {canManageTasks ? (
                     <RowActions>
                       <ActionIconButton
@@ -434,6 +429,19 @@ export function ScheduledTasksPage() {
           />
         )}
       </div>
+
+      {historyTask && (
+        <ScheduledTaskHistoryDialog
+          task={historyTask}
+          onClose={() => setHistoryTask(null)}
+          onCloseAutoFocus={(event) => {
+            if (historyTrigger.current?.isConnected) {
+              event.preventDefault()
+              historyTrigger.current.focus()
+            }
+          }}
+        />
+      )}
 
       {dialogOpen && canManageTasks && (
         <ScheduledTaskDialog

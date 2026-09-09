@@ -2484,6 +2484,16 @@
       "agentRequired": "请选择执行 Agent",
       "promptRequired": "请填写 Prompt",
       "cronInvalid": "cron 表达式需为 5 段（分 时 日 月 周）"
+    },
+    "history": {
+      "title": "执行历史",
+      "description": "{{name}} · 最近 50 次执行",
+      "open": "查看「{{name}}」的执行历史",
+      "empty": "暂无执行记录",
+      "emptyDescription": "执行此任务，或等待下一次计划时间。",
+      "loadError": "无法加载执行历史",
+      "openRun": "查看执行详情",
+      "openConversation": "查看会话"
     }
   },
   "shared": {
