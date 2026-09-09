@@ -143,10 +143,18 @@ function useColumns() {
   return React.useContext(LedgerContext)
 }
 
+function flattenCells(children: React.ReactNode): React.ReactNode[] {
+  return React.Children.toArray(React.Children.map(children, (child) => (
+    React.isValidElement<{ children?: React.ReactNode }>(child) && child.type === React.Fragment
+      ? flattenCells(child.props.children)
+      : child
+  )))
+}
+
 function alignCells(children: React.ReactNode, columns?: LedgerColumn[]) {
   if (!columns) return children
-  const cells = React.Children.toArray(children)
-  // Spanning editors and composed rows retain their own layout.
+  const cells = flattenCells(children)
+  // Spanning editors retain their own layout.
   if (cells.length !== columns.length) return children
   return cells.map((cell, index) => {
     const kind = columns[index].kind
