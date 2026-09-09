@@ -702,7 +702,7 @@
       },
       "add": {
         "title": "{{name}} — add version",
-        "description": "Saving assigns the next version automatically. Agents following latest use it on their next run; pinned Agents keep their selected version.",
+        "description": "Saving assigns the next version automatically. Unless the capability is deprecated, Agents following latest use it on their next run; pinned Agents keep their selected version.",
         "prefillFromLatest": "Prefilled from the previous version ({{version}}). Edits become the new version on submit.",
         "inlineSecretLostWarning": "Inline secret(s) from the previous version ({{keys}}) are hidden. Re-enter the plaintext to keep them, or switch to a managed credential."
       },
