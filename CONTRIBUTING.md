@@ -577,8 +577,9 @@ Three concrete rules:
    user to scroll sideways. Exception: append-only terminal log streams may
    keep `overflow-x-auto`, but only when nested inside an
    `overflow-hidden` parent so the scrollbar can't escape the dialog.
-3. Error / warning banners always carry `break-all` so long tokens, URLs,
-   or stack traces can't blow the container open.
+3. Reader-facing error / warning copy uses `overflow-wrap: anywhere` to
+   preserve normal word boundaries while containing long unbroken strings.
+   Verbatim technical details keep the code-block wrapping rules above.
 
 When a dialog uses a multi-column grid, give every column `min-w-0` —
 otherwise long children push the grid track wider instead of wrapping.
