@@ -1804,7 +1804,7 @@
       "model": "Model"
     },
     "search": {
-      "placeholder": "Search by event / actor / target ID"
+      "placeholder": "Search events, actors or IDs…"
     },
     "table": {
       "time": "Time",
