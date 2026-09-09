@@ -25,6 +25,7 @@ import { Skeleton } from "../ui/skeleton"
 
 interface DiscoverWorkspacesDialogProps {
   open: boolean
+  onCloseAutoFocus?: (event: Event) => void
   onOpenChange: (open: boolean) => void
   /** Parent opens JoinRequestDialog (reason input); nesting two
    *  Radix dialogs would fight over focus trap. */
@@ -38,6 +39,7 @@ const LEDGER_COLUMNS = [col.title(), col.num(64), col.actions(1)]
 
 export function DiscoverWorkspacesDialog({
   open,
+  onCloseAutoFocus,
   onOpenChange,
   onSelectToJoin,
 }: DiscoverWorkspacesDialogProps) {
@@ -79,6 +81,7 @@ export function DiscoverWorkspacesDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        onCloseAutoFocus={onCloseAutoFocus}
         aria-describedby={undefined}
         className="flex max-h-[80vh] max-w-[640px] flex-col"
       >

@@ -37,6 +37,7 @@ import {
   WorkspaceFormDialog,
 } from "./WorkspaceCrudDialogs"
 import { DiscoverWorkspacesDialog } from "./DiscoverWorkspacesDialog"
+import { useWorkspaceDialogFocus } from "./useWorkspaceDialogFocus"
 
 function shortId(id: string | null | undefined): string {
   if (!id) return ""
@@ -79,6 +80,9 @@ export function WorkspaceSwitcher() {
   const [joinTarget, setJoinTarget] = useState<DiscoverableWorkspace | null>(
     null
   )
+  const dialogFocus = useWorkspaceDialogFocus(
+    createWsOpen || !!renameWs || !!archiveWs || !!joinTarget || discoverDialogOpen
+  )
   // Toast rendered next to the trigger (not page-top) since the switcher
   // is inside a dropdown. Auto-dismiss after 3s.
   const [joinToast, setJoinToast] = useState<string | null>(null)
@@ -109,6 +113,7 @@ export function WorkspaceSwitcher() {
       >
         <DropdownMenu.Trigger asChild>
           <button
+            ref={dialogFocus.triggerRef}
             type="button"
             aria-label={t("workspaceSwitcher.triggerAriaLabel")}
             title={triggerLabel}
@@ -132,6 +137,8 @@ export function WorkspaceSwitcher() {
 
         <DropdownMenu.Portal>
           <DropdownMenu.Content
+            ref={dialogFocus.menuRef}
+            onFocusCapture={dialogFocus.rememberFocus}
             align="start"
             sideOffset={6}
             className="app-shadow-floating z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] w-96 max-w-[calc(100vw-1rem)] overflow-x-hidden overflow-y-auto rounded-lg border border-line bg-surface p-1 text-sm text-fg-muted animate-pop-in data-[state=closed]:animate-pop-out"
@@ -281,6 +288,7 @@ export function WorkspaceSwitcher() {
 
       <WorkspaceFormDialog
         open={createWsOpen}
+        onCloseAutoFocus={dialogFocus.restoreFocus}
         onOpenChange={(open) => {
           if (!open) createWorkspaceMut.reset()
           setCreateWsOpen(open)
@@ -303,6 +311,7 @@ export function WorkspaceSwitcher() {
 
       <WorkspaceFormDialog
         open={renameWs !== null}
+        onCloseAutoFocus={dialogFocus.restoreFocus}
         onOpenChange={(open) => {
           if (!open) {
             updateWorkspaceMut.reset()
@@ -337,6 +346,7 @@ export function WorkspaceSwitcher() {
 
       <ConfirmArchiveDialog
         open={archiveWs !== null}
+        onCloseAutoFocus={dialogFocus.restoreFocus}
         onOpenChange={(open) => {
           if (!open) {
             archiveWorkspaceMut.reset()
@@ -365,6 +375,7 @@ export function WorkspaceSwitcher() {
 
       <JoinRequestDialog
         open={joinTarget !== null}
+        onCloseAutoFocus={dialogFocus.restoreFocus}
         onOpenChange={(open) => {
           if (!open) {
             requestJoinMut.reset()
@@ -393,6 +404,7 @@ export function WorkspaceSwitcher() {
 
       <DiscoverWorkspacesDialog
         open={discoverDialogOpen}
+        onCloseAutoFocus={dialogFocus.restoreFocus}
         onOpenChange={setDiscoverDialogOpen}
         onSelectToJoin={(ws) => {
           setDiscoverDialogOpen(false)
