@@ -31,12 +31,13 @@ func (e *capabilityCredentialValidationError) Error() string {
 }
 
 type capabilityCredentialBindingValidationInput struct {
-	PinningMode     string
-	WorkspaceID     string
-	AgentVisibility string
-	AgentConfig     map[string]any
-	Version         store.CapabilityVersionRead
-	Configuration   map[string]any
+	PinningMode         string
+	AllowUnusedBindings bool
+	WorkspaceID         string
+	AgentVisibility     string
+	AgentConfig         map[string]any
+	Version             store.CapabilityVersionRead
+	Configuration       map[string]any
 }
 
 func validateCapabilityCredentialBindings(
@@ -56,7 +57,7 @@ func validateCapabilityCredentialBindings(
 		}
 	}
 	for kind := range bindings {
-		if !requiredKinds[kind] {
+		if !requiredKinds[kind] && !input.AllowUnusedBindings {
 			return errors.New("credential binding kind is not required by this capability")
 		}
 	}
@@ -105,12 +106,13 @@ func validateAgentCapabilityBindingsForVisibility(
 			return fmt.Errorf("get capability version %s: %w", binding.CapabilityVersionID, err)
 		}
 		if err := validateBoundCapabilityCredentials(ctx, credentialStore, capabilityCredentialBindingValidationInput{
-			PinningMode:     binding.PinningMode,
-			WorkspaceID:     agent.WorkspaceID,
-			AgentVisibility: visibility,
-			AgentConfig:     agent.Config,
-			Version:         version,
-			Configuration:   binding.Configuration,
+			PinningMode:         binding.PinningMode,
+			AllowUnusedBindings: true,
+			WorkspaceID:         agent.WorkspaceID,
+			AgentVisibility:     visibility,
+			AgentConfig:         agent.Config,
+			Version:             version,
+			Configuration:       binding.Configuration,
 		}); err != nil {
 			return &capabilityCredentialValidationError{err: err}
 		}

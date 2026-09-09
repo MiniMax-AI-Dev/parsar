@@ -15,6 +15,7 @@ type capabilityBindingVersionStore interface {
 }
 
 func validateBoundCapabilityCredentials(ctx context.Context, source capabilityBindingVersionStore, input capabilityCredentialBindingValidationInput) error {
+	boundVersionID := input.Version.ID
 	if strings.TrimSpace(input.PinningMode) == store.PinningModeLatest {
 		capability, err := source.GetCapability(ctx, input.Version.CapabilityID)
 		if err != nil {
@@ -37,5 +38,7 @@ func validateBoundCapabilityCredentials(ctx context.Context, source capabilityBi
 			}
 		}
 	}
+	// A newer version may retire credentials retained in an existing binding.
+	input.AllowUnusedBindings = input.AllowUnusedBindings && input.Version.ID != boundVersionID
 	return validateCapabilityCredentialBindings(ctx, source, input)
 }
