@@ -30,7 +30,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
   const installedQ = useInstalledSkills(workspaceID)
   const installMut = useInstallSkill(workspaceID)
   const installed = installedQ.data ?? {}
-  const loading = catalogQ.isLoading || installedQ.isLoading
+  const loading = catalogQ.isPending || installedQ.isPending
   const loadError = catalogQ.error ?? installedQ.error
   const [success, setSuccess] = useState<{ name: string; capabilityID: string } | null>(null)
   const numberFormatter = useMemo(() => new Intl.NumberFormat(i18n.language), [i18n.language])
