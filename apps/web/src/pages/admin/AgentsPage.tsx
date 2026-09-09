@@ -1,6 +1,6 @@
 import { type ReactNode, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Bot, Plus, Search, Wrench } from "lucide-react"
+import { Bot, Plus, Search } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
@@ -33,7 +33,6 @@ import {
 } from "../../lib/api-agents"
 import { useModels } from "../../lib/api-models"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
-import { useMarketplaceList } from "../../lib/api-marketplace"
 import {
   searchAgents,
   defaultModelOf,
@@ -45,6 +44,7 @@ import { useRelativeTime } from "../../lib/relative-time"
 import { CreateAgentDialog } from "./CreateAgentDialog"
 import { AgentConfigTab } from "./agents/AgentConfigTab"
 import { AgentDetailActions } from "./agents/AgentDetailActions"
+import { MarketplaceInstallDialog } from "./agents/MarketplaceInstallDialog"
 import { AgentStatusControl } from "./agents/AgentStatusControl"
 import { AgentExposureTab } from "./agents/AgentExposureTab"
 import { AgentDynamicsTab } from "./agents/AgentDynamicsTab"
@@ -53,38 +53,6 @@ import { AgentsFilters, type AgentStatusFilter } from "./agents/AgentsFilters"
 import { AgentStatusBadge } from "./agents/AgentStatusBadge"
 import { DeleteAgentDialog } from "./agents/DeleteAgentDialog"
 import { DetailSection } from "./agents/DetailSection"
-
-function usePendingCapability(workspaceID: string | null) {
-  const id = new URLSearchParams(window.location.search).get("pendingCapability")
-  const marketplaceQ = useMarketplaceList(workspaceID)
-  const capability = (marketplaceQ.data ?? []).find((item) => item.id === id)
-  return { id, capability }
-}
-
-/**
- * One-line notice under the topbar: a 14px icon (state lives there), ink
- * text, an optional control on the right. A hairline, never a tinted box.
- */
-function InlineNotice({ icon, children, action }: { icon: ReactNode; children: ReactNode; action?: ReactNode }) {
-  return (
-    <div className="flex min-h-9 shrink-0 items-center gap-2 border-b border-line px-4 py-1.5 text-sm text-fg" role="status">
-      {icon}
-      <span className="min-w-0 flex-1">{children}</span>
-      {action}
-    </div>
-  )
-}
-
-function PendingCapabilityBanner({ children, onCancel, cancelLabel }: { children: ReactNode; onCancel: () => void; cancelLabel: string }) {
-  return (
-    <InlineNotice
-      icon={<Wrench className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />}
-      action={<Button variant="outline" size="sm" onClick={onCancel}>{cancelLabel}</Button>}
-    >
-      {children}
-    </InlineNotice>
-  )
-}
 
 export function AgentsPage() {
   const { t, i18n } = useTranslation("admin")
@@ -124,7 +92,7 @@ export function AgentsPage() {
   const models = useMemo(() => modelsQ.data?.models ?? [], [modelsQ.data])
   const searched = useMemo(() => searchAgents(agents, keyword, models, t), [agents, keyword, models, t])
   const { startChat: startChatWith, pendingID: chatPendingID } = useAgentChat(wid, canChat)
-  const pendingCapability = usePendingCapability(wid)
+  const pendingCapabilityID = new URLSearchParams(window.location.search).get("pendingCapability")
 
   const err = query.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
@@ -186,16 +154,6 @@ export function AgentsPage() {
             </>
           }
         />
-        {pendingCapability.id && (
-          <PendingCapabilityBanner
-            cancelLabel={t("agents.pendingCapability.cancel")}
-            onCancel={() => navigate("agents", { pendingCapability: null })}
-          >
-            {pendingCapability.capability
-              ? t("agents.pendingCapability.banner", { name: pendingCapability.capability.name, source: pendingCapability.capability.source_workspace_name ?? "—" })
-              : t("agents.pendingCapability.loading")}
-          </PendingCapabilityBanner>
-        )}
         {!wid ? (
           <div className="px-6"><ScopeRequiredState scope="workspace" resourceName={pageTitle} /></div>
         ) : query.isLoading ? (
@@ -248,6 +206,16 @@ export function AgentsPage() {
           />
         )}
       </RailLayout>
+
+      {pendingCapabilityID && <MarketplaceInstallDialog
+        capabilityID={pendingCapabilityID}
+        workspaceID={wid}
+        agentID={entityId}
+        workspaceRole={workspaceRole}
+        onSelectAgent={(id) => navigate("agents", { id, tab: id ? "config" : null })}
+        onDismiss={() => navigate("agents", { pendingCapability: null })}
+        onInstalled={(id) => navigate("agents", { id, tab: "config", pendingCapability: null })}
+      />}
 
       <CreateAgentDialog
         open={createOpen && canManage}
@@ -409,7 +377,6 @@ export function AgentDetailRail({ id, open, onClose, onClosed, renderStatusActio
   const models = modelsQ.data?.models ?? []
   const currentWorkspace = workspacesQ.data?.workspaces.find((w) => w.id === wid)
   const workspaceRole = currentWorkspace?.role
-  const pendingCapability = usePendingCapability(wid)
 
   // Switching to another agent swaps the rail's content rather than replaying
   // its entrance, so the per-agent state is reset here instead of by a remount.
@@ -469,18 +436,6 @@ export function AgentDetailRail({ id, open, onClose, onClosed, renderStatusActio
         />
       }
     >
-      {pendingCapability.id && (
-        <PendingCapabilityBanner
-          cancelLabel={t("agents.pendingCapability.cancel")}
-          onCancel={() => navigate("agents", { id: agent.id, tab: "config", pendingCapability: null, view: railView })}
-        >
-          {t("agents.pendingCapability.detailBanner", {
-            name: pendingCapability.capability?.name ?? pendingCapability.id,
-            source: pendingCapability.capability?.source_workspace_name ?? "—",
-          })}
-        </PendingCapabilityBanner>
-      )}
-
       <Tabs
         value={requestedTab ?? "dynamics"}
         onValueChange={(tab) => navigate("agents", { id: agent.id, tab, view: railView })}
