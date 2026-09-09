@@ -24,7 +24,6 @@ import {
 import { Field } from "../ui/label"
 import { Input } from "../ui/input"
 import { InlineError } from "./InlineError"
-import { PropertyList, Property } from "../ui/property-list"
 import { Skeleton } from "../ui/skeleton"
 import { ApiError } from "../../lib/api-client"
 import {
@@ -32,7 +31,6 @@ import {
   useRuntimeStatus,
   useSaveRuntimeCredential,
 } from "../../lib/api-runtime"
-import { SectionHead } from "../ui/section"
 
 interface RuntimeCredentialCardProps {
   workspaceID: string | null
@@ -41,10 +39,6 @@ interface RuntimeCredentialCardProps {
   className?: string
 }
 
-/**
- * Workspace sandbox credential: a 12px/500 head with the actions on its
- * right, then a property row with the masked key.
- */
 export function RuntimeCredentialCard({ workspaceID, isAdmin, className }: RuntimeCredentialCardProps) {
   const { t } = useTranslation("admin")
   const statusQ = useRuntimeStatus(workspaceID)
@@ -70,39 +64,33 @@ export function RuntimeCredentialCard({ workspaceID, isAdmin, className }: Runti
 
   return (
     <section className={className} data-testid="runtime-credential-card">
-      {/* The shared head, not a second implementation of it: the panel above
-          this one on the same page already uses `SectionHead`. */}
-      <SectionHead
-        title={t("runtime.credential.title")}
-        action={
-          isAdmin && (
-            <div className="flex items-center gap-1">
-              {hasCredential ? (
-                <>
-                  <Button size="sm" variant="outline" onClick={() => setSaveOpen(true)} data-testid="runtime-credential-reset">
-                    {t("runtime.credential.actions.reset")}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setConfirmClear(true)} data-testid="runtime-credential-delete">
-                    {t("runtime.credential.actions.delete")}
-                  </Button>
-                </>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => setSaveOpen(true)} data-testid="runtime-credential-save">
-                  {t("runtime.credential.actions.save")}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-medium text-fg">{t("runtime.credential.title")}</h3>
+          <p className="mt-1 text-xs text-fg-muted">
+            {hasCredential ? t("runtime.credential.state.hasCredential") : t("runtime.credential.state.noCredential")}
+            {hasCredential && <span className="ml-2 break-all font-mono"> {masked ?? "•••"}</span>}
+          </p>
+        </div>
+        {isAdmin && (
+          <div className="flex flex-wrap items-center gap-1">
+            {hasCredential ? (
+              <>
+                <Button size="sm" variant="outline" onClick={() => setSaveOpen(true)} data-testid="runtime-credential-reset">
+                  {t("runtime.credential.actions.reset")}
                 </Button>
-              )}
+                <Button size="sm" variant="ghost" onClick={() => setConfirmClear(true)} data-testid="runtime-credential-delete">
+                  {t("runtime.credential.actions.delete")}
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setSaveOpen(true)} data-testid="runtime-credential-save">
+                {t("runtime.credential.actions.save")}
+              </Button>
+            )}
             </div>
-          )
-        }
-      />
-      <PropertyList>
-        <Property
-          label={hasCredential ? t("runtime.credential.state.hasCredential") : t("runtime.credential.state.noCredential")}
-          mono
-        >
-          {hasCredential ? masked ?? "•••" : "—"}
-        </Property>
-      </PropertyList>
+        )}
+      </div>
 
       <SaveDialog
         key={String(saveOpen)}

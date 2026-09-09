@@ -6,10 +6,9 @@ import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ConnectivityResultPanel } from "../../components/runtime/ConnectivityResultPanel"
-import { RuntimeCredentialCard } from "../../components/runtime/RuntimeCredentialCard"
-import { RuntimeStatusBanner } from "../../components/runtime/RuntimeStatusBanner"
 import { PairDaemonDialog } from "../../components/admin/PairDaemonDialog"
 import { RuntimeLedger } from "./runtimes/RuntimeLedger"
+import { RuntimeCloudPanel, RuntimeInstancesError } from "./runtimes/RuntimeCloudPanel"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,13 +22,12 @@ import {
 import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
-import { ErrorState } from "../../components/ui/error-state"
 import type { StatusKind } from "../../components/ui/status-icon"
 import { Ledger, LedgerHeader, LedgerId, LedgerRow, SelectableStatus, col } from "../../components/ui/ledger"
 import { Select } from "../../components/ui/select"
 import { Skeleton } from "../../components/ui/skeleton"
 import { ApiError } from "../../lib/api-client"
-import { useRuntimeStatus, type ConnectivityResult, type RuntimeStatus } from "../../lib/api-runtime"
+import { useRuntimeStatus, type ConnectivityResult } from "../../lib/api-runtime"
 import {
   killSandboxRequestRaw,
   useSandboxConnectivityTest,
@@ -43,7 +41,6 @@ import { useNow } from "../../lib/use-now"
 import { useWorkspaceId } from "../../lib/workspace"
 import { SectionHead } from "../../components/ui/section"
 
-type CloudState = "loading" | "notConfigured" | "ready" | "error" | "unknown"
 type SortKey = "last_active" | "created_at" | "agent"
 
 
@@ -110,11 +107,6 @@ export function RuntimePage() {
 
   const role = workspacesQ.data?.workspaces.find((w) => w.id === workspaceID)?.role
   const isAdmin = role === "owner" || role === "admin"
-  const cloudState = resolveCloudState({
-    status: statusQuery.data,
-    statusLoading: statusQuery.isLoading,
-    statusError: Boolean(statusQuery.error),
-  })
 
   const bindings = useMemo(
     () => sortBindings(sandboxesQuery.data ?? [], sortKey),
@@ -190,29 +182,34 @@ export function RuntimePage() {
         </TabsContent>
 
         <TabsContent value="instances" className="mt-0">
-          <CloudSandboxPanel
+          <RuntimeCloudPanel
             workspaceID={workspaceID}
             status={statusQuery.data}
+            statusLoading={statusQuery.isLoading}
             statusError={Boolean(statusQuery.error)}
-            cloudState={cloudState}
             isAdmin={isAdmin}
-            bindings={activeBindings}
-            listLoading={sandboxesQuery.isLoading}
-            listError={sandboxesQuery.error}
-            sortKey={sortKey}
-            selected={selected}
-            bulkPending={bulkPending}
-            bulkErrors={bulkErrors}
-            onRefresh={() => {
-              void statusQuery.refetch()
-              void sandboxesQuery.refetch()
-            }}
-            onSortChange={setSortKey}
-            onToggleOne={toggleOne}
-            onToggleAll={toggleAll}
-            onClearBulkErrors={() => setBulkErrors([])}
-            onConfirmBulkKill={() => setConfirming(true)}
-          />
+          >
+            <CloudInstancesPanel
+              workspaceID={workspaceID}
+              isAdmin={isAdmin}
+              bindings={activeBindings}
+              loading={sandboxesQuery.isLoading}
+              error={sandboxesQuery.error}
+              sortKey={sortKey}
+              selected={selected}
+              bulkPending={bulkPending}
+              bulkErrors={bulkErrors}
+              onRefresh={() => {
+                void statusQuery.refetch()
+                void sandboxesQuery.refetch()
+              }}
+              onSortChange={setSortKey}
+              onToggleOne={toggleOne}
+              onToggleAll={toggleAll}
+              onClearBulkErrors={() => setBulkErrors([])}
+              onConfirmBulkKill={() => setConfirming(true)}
+            />
+          </RuntimeCloudPanel>
         </TabsContent>
         </div>
       </Tabs>
@@ -235,81 +232,6 @@ export function RuntimePage() {
     </AdminLayout>
   )
 }
-
-function CloudSandboxPanel({
-  workspaceID,
-  status,
-  statusError,
-  cloudState,
-  isAdmin,
-  bindings,
-  listLoading,
-  listError,
-  sortKey,
-  selected,
-  bulkPending,
-  bulkErrors,
-  onRefresh,
-  onSortChange,
-  onToggleOne,
-  onToggleAll,
-  onClearBulkErrors,
-  onConfirmBulkKill,
-}: {
-  workspaceID: string | null
-  status: RuntimeStatus | undefined
-  statusError: boolean
-  cloudState: CloudState
-  isAdmin: boolean
-  bindings: SandboxBinding[]
-  listLoading: boolean
-  listError: unknown
-  sortKey: SortKey
-  selected: Set<string>
-  bulkPending: boolean
-  bulkErrors: { sandboxID: string; status: number | string; message: string }[]
-  onRefresh: () => void
-  onSortChange: (next: SortKey) => void
-  onToggleOne: (bindingID: string) => void
-  onToggleAll: () => void
-  onClearBulkErrors: () => void
-  onConfirmBulkKill: () => void
-}) {
-  const showCredentialControl =
-    cloudState !== "loading" && cloudState !== "unknown" && status?.profile !== "managed"
-  const showInstances = !statusError && Boolean(workspaceID)
-
-  return (
-    <div className="pt-4">
-      <RuntimeStatusBanner workspaceID={workspaceID} />
-
-      {showCredentialControl && (
-        <RuntimeCredentialCard workspaceID={workspaceID} isAdmin={isAdmin} className="mt-4" />
-      )}
-
-      {showInstances ? (
-        <CloudInstancesPanel
-          workspaceID={workspaceID}
-          isAdmin={isAdmin}
-          bindings={bindings}
-          loading={listLoading}
-          error={listError}
-          sortKey={sortKey}
-          selected={selected}
-          bulkPending={bulkPending}
-          bulkErrors={bulkErrors}
-          onRefresh={onRefresh}
-          onSortChange={onSortChange}
-          onToggleOne={onToggleOne}
-          onToggleAll={onToggleAll}
-          onClearBulkErrors={onClearBulkErrors}
-          onConfirmBulkKill={onConfirmBulkKill}
-        />
-      ) : null}
-    </div>
-  )
-}
-
 
 function LedgerSkeleton({ rows = 3 }: { rows?: number }) {
   return (
@@ -443,11 +365,7 @@ function CloudInstancesPanel({
       {loading ? (
         <LedgerSkeleton />
       ) : error ? (
-        <ErrorState
-          title={t("runtime.list.errors.loadFailed")}
-          detail={error instanceof Error ? error.message : String(error)}
-          onRetry={onRefresh}
-        />
+        <RuntimeInstancesError error={error} onRetry={onRefresh} />
       ) : bindings.length === 0 ? (
         <EmptyState
           title={t("runtime.cloud.instances.emptyTitle")}
@@ -607,20 +525,3 @@ function ConfirmBulkKillDialog({
     </AlertDialog>
   )
 }
-
-function resolveCloudState({
-  status,
-  statusLoading,
-  statusError,
-}: {
-  status: RuntimeStatus | undefined
-  statusLoading: boolean
-  statusError: boolean
-}): CloudState {
-  if (statusLoading && !status) return "loading"
-  if (statusError || !status) return "unknown"
-  if (status.profile === "managed") return status.available ? "ready" : "error"
-  if (!status.has_credential) return "notConfigured"
-  return status.available ? "ready" : "error"
-}
-
