@@ -112,7 +112,8 @@
     "passwordPlaceholder": "Your password",
     "submitButton": "Sign in",
     "submitting": "Signing in...",
-    "invalidCredentials": "Invalid email or password",
+    "failedTitle": "Sign-in failed",
+    "invalidCredentials": "The email or password is incorrect. Check them and try again.",
     "genericError": "Something went wrong. Please try again.",
     "headline": "Your team's agent console.",
     "headlineSub": "Log in to your Parsar account",
@@ -137,6 +138,7 @@
     }
   },
   "setup": {
+    "failedTitle": "Account could not be created",
     "title": "Welcome to Parsar",
     "subtitle": "This install has no owner yet. Create the first account to get started — you will become the workspace owner.",
     "nameLabel": "Your name",
@@ -249,7 +251,8 @@
     "next": "Next"
   },
   "errors": {
-    "loadFailed": "Failed to load",
-    "details": "Technical details"
+    "details": "Technical details",
+    "submitRetryHint": "Please try again. If the problem continues, contact your administrator.",
+    "loadFailed": "Failed to load"
   }
 }

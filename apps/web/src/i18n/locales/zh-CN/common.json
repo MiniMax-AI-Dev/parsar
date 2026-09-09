@@ -112,7 +112,8 @@
     "passwordPlaceholder": "请输入密码",
     "submitButton": "登录",
     "submitting": "登录中...",
-    "invalidCredentials": "邮箱或密码错误",
+    "failedTitle": "登录失败",
+    "invalidCredentials": "邮箱或密码不正确，请检查后重试。",
     "genericError": "发生错误,请稍后重试。",
     "headline": "团队的 Agent 控制台。",
     "headlineSub": "登录你的 Parsar 账号",
@@ -137,6 +138,7 @@
     }
   },
   "setup": {
+    "failedTitle": "账号创建失败",
     "title": "欢迎使用 Parsar",
     "subtitle": "本实例尚未创建拥有者。请注册第一位账号 — 你将成为工作区 Owner。",
     "nameLabel": "你的姓名",
@@ -249,7 +251,8 @@
     "next": "下一页"
   },
   "errors": {
-    "loadFailed": "加载失败",
-    "details": "技术详情"
+    "details": "技术详情",
+    "submitRetryHint": "请重试；如果问题持续，请联系管理员。",
+    "loadFailed": "加载失败"
   }
 }

@@ -574,6 +574,10 @@ Three concrete rules:
 When a dialog uses a multi-column grid, give every column `min-w-0` —
 otherwise long children push the grid track wider instead of wrapping.
 
+Authentication submission failures use the shared `ErrorDialog`, preserving
+form input and restoring action focus on dismissal. Field validation stays
+inline; sign-in-required invitation guidance stays visible as a guided step.
+
 Pages with a detail rail may opt into wrapping header actions through
 `PageHeader.actionClassName` and an auto-height header. Other pages retain
 the default single-row header layout.
