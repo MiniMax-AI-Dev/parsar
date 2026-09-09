@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "../components/ui/button"
 import { EntryFooter, EntryPage, EntryPanel } from "../components/ui/entry-panel"
@@ -30,6 +30,10 @@ export function InviteAcceptPage({ token }: { token: string }) {
     password === "" || passwordPolicyError === null
       ? null
       : t(`passwordPolicy.errors.${passwordPolicyError}`)
+
+  useEffect(() => {
+    if (signInRequired) signInRef.current?.focus()
+  }, [signInRequired])
 
   if (infoQ.isLoading || authLoading) {
     return (
@@ -88,7 +92,7 @@ export function InviteAcceptPage({ token }: { token: string }) {
     <EntryPage>
       <EntryPanel
         title={t("invite.title", { name: workspace_name })}
-        description={signInRequired ? t("invite.signInRequired") : isCurrentInvitee
+        description={signInRequired ? <span role="status">{t("invite.signInRequired")}</span> : isCurrentInvitee
           ? t("invite.existingDescription", { email, role })
           : t("invite.description", { role })}
       >
