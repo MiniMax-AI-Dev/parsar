@@ -416,6 +416,9 @@ description and keep ownership on the side listed here.
 
 ### API, DB, and generated surfaces
 
+- Workspace run search matches run IDs, Agent names/slugs, and conversation IDs
+  as case-insensitive literal text before pagination. Page rows and totals use
+  the same search, status, and workspace filters.
 - Secret disabling is authorized by `secrets.management_workspace_id`, set
   from the creation workspace. This ownership must not restrict shared reads
   or runtime use. Legacy rows inherit unambiguous creation metadata or runtime

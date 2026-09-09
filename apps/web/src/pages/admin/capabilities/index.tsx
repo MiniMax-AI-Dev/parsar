@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react"
 import { useQueries } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
+import { useDebouncedValue } from "../../../lib/use-debounced-value"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import {
   ArrowUpRight,
@@ -724,19 +725,6 @@ function CapabilitiesFilterMenu({
           )}
     </FilterMenu>
   )
-}
-
-/**
- * Debounce a fast-changing value so the React Query key behind
- * `useCapabilitiesQuery` doesn't fire per keystroke.
- */
-function useDebouncedValue<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const handle = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(handle)
-  }, [value, delay])
-  return debounced
 }
 
 /**

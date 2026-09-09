@@ -3501,7 +3501,7 @@ func (stubRuntimeStore) MarkGatewayOutboundDelivered(ctx context.Context, input 
 	return store.MarkGatewayOutboundDeliveredResult{MessageID: input.MessageID, Metadata: map[string]any{"gateway_delivered_at": "2026-06-12T18:00:00Z"}}, nil
 }
 
-func (stubRuntimeStore) ListWorkspaceAgentRuns(ctx context.Context, workspaceID string, statuses []string, limit, offset int32) (store.ListWorkspaceAgentRunsResult, error) {
+func (stubRuntimeStore) ListWorkspaceAgentRuns(ctx context.Context, workspaceID string, statuses []string, limit, offset int32, search string) (store.ListWorkspaceAgentRunsResult, error) {
 	// Stub mirrors the real SQL ordering (created_at DESC, id DESC)
 	// so route tests pin "newest first" pagination semantics.
 	runs := []store.AgentRunBriefRead{

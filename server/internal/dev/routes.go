@@ -144,7 +144,7 @@ type RuntimeStore interface {
 	ListAgentRunEvents(ctx context.Context, runID string, afterSequence int64) ([]store.AgentRunEventRead, error)
 	ListActiveFeishuInflightConversations(ctx context.Context, cutoff time.Time, limit int32) ([]store.FeishuInflightConversation, error)
 	MarkGatewayOutboundDelivered(ctx context.Context, input store.MarkGatewayOutboundDeliveredInput) (store.MarkGatewayOutboundDeliveredResult, error)
-	ListWorkspaceAgentRuns(ctx context.Context, workspaceID string, statuses []string, limit, offset int32) (store.ListWorkspaceAgentRunsResult, error)
+	ListWorkspaceAgentRuns(ctx context.Context, workspaceID string, statuses []string, limit, offset int32, search string) (store.ListWorkspaceAgentRunsResult, error)
 	GetAgentMetrics(ctx context.Context, agentID string, windowDays int32) (store.AgentMetricsRead, error)
 	ListAuditRecords(ctx context.Context, filter store.ListAuditRecordsFilter, limit int32) ([]store.AuditRecordRead, error)
 	ListWorkspaceUsageLogs(ctx context.Context, workspaceID string, agentRunID string, limit int32) ([]store.UsageLogRead, error)

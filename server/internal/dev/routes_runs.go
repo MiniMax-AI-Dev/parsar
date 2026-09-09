@@ -135,6 +135,10 @@ func getAgentRun(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@ID				listDevWorkspaceAgentRuns
 //	@Produce		json
 //	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Param			q			query	string	false	"Case-insensitive literal search over run ID, Agent name/slug, and conversation ID"
+//	@Param			status		query	string	false	"Comma-separated run statuses"
+//	@Param			limit		query	int		false	"Page size" default(100)
+//	@Param			offset		query	int		false	"Result offset" default(0)
 //	@Success		200 {object} map[string]interface{} "Agent run rows"
 //	@Failure		400 {object} map[string]string "Invalid UUID"
 //	@Failure		403 {object} map[string]string "Caller is not a workspace member"
@@ -163,7 +167,7 @@ func listWorkspaceAgentRuns(runtimeStore RuntimeStore) http.HandlerFunc {
 		limit := parseLimit(r, 100)
 		offset := parseOffset(r)
 
-		result, err := runtimeStore.ListWorkspaceAgentRuns(r.Context(), workspaceID, statuses, limit, offset)
+		result, err := runtimeStore.ListWorkspaceAgentRuns(r.Context(), workspaceID, statuses, limit, offset, strings.TrimSpace(r.URL.Query().Get("q")))
 		if err != nil {
 			writeReadError(w, err, "failed to list agent runs")
 			return

@@ -1617,12 +1617,14 @@ where r.workspace_id = $1::uuid
   and r.workspace_id = a.workspace_id
   and c.deleted_at is null
   and a.deleted_at is null
-  and (cardinality($2::text[]) = 0
-       or r.status = ANY($2::text[]))
+  and ($2::text = '' or strpos(lower(concat_ws(' ', a.name, a.slug, r.id::text, r.conversation_id::text)), lower($2::text)) > 0)
+  and (cardinality($3::text[]) = 0
+       or r.status = ANY($3::text[]))
 `
 
 type CountWorkspaceAgentRunsParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Search      string      `json:"search"`
 	Statuses    []string    `json:"statuses"`
 }
 
@@ -1631,7 +1633,7 @@ type CountWorkspaceAgentRunsParams struct {
 // decide when to disable the "next page" button. Joins mirror the list
 // query so counts and rows never disagree.
 func (q *Queries) CountWorkspaceAgentRuns(ctx context.Context, arg CountWorkspaceAgentRunsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countWorkspaceAgentRuns, arg.WorkspaceID, arg.Statuses)
+	row := q.db.QueryRow(ctx, countWorkspaceAgentRuns, arg.WorkspaceID, arg.Search, arg.Statuses)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
@@ -9579,14 +9581,16 @@ where r.workspace_id = $1::uuid
   and r.workspace_id = a.workspace_id
   and c.deleted_at is null
   and a.deleted_at is null
-  and (cardinality($2::text[]) = 0
-       or r.status = ANY($2::text[]))
+  and ($2::text = '' or strpos(lower(concat_ws(' ', a.name, a.slug, r.id::text, r.conversation_id::text)), lower($2::text)) > 0)
+  and (cardinality($3::text[]) = 0
+       or r.status = ANY($3::text[]))
 order by r.created_at desc, r.id desc
-limit $4 offset $3
+limit $5 offset $4
 `
 
 type ListWorkspaceAgentRunsPageParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Search      string      `json:"search"`
 	Statuses    []string    `json:"statuses"`
 	ItemOffset  int32       `json:"item_offset"`
 	ItemLimit   int32       `json:"item_limit"`
@@ -9621,6 +9625,7 @@ type ListWorkspaceAgentRunsPageRow struct {
 func (q *Queries) ListWorkspaceAgentRunsPage(ctx context.Context, arg ListWorkspaceAgentRunsPageParams) ([]ListWorkspaceAgentRunsPageRow, error) {
 	rows, err := q.db.Query(ctx, listWorkspaceAgentRunsPage,
 		arg.WorkspaceID,
+		arg.Search,
 		arg.Statuses,
 		arg.ItemOffset,
 		arg.ItemLimit,
