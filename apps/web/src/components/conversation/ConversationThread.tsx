@@ -20,6 +20,7 @@ import { WorkTrace, type TraceStep } from "./WorkTrace"
 import { RunFailureNotice } from "./RunFailureNotice"
 import { Button } from "../ui/button"
 import { EmptyState } from "../ui/empty-state"
+import { ErrorDialog } from "../ui/error-dialog"
 import { ErrorState, InlineError } from "../ui/error-state"
 import { InitialTile } from "../ui/ledger"
 import { Skeleton } from "../ui/skeleton"
@@ -365,6 +366,7 @@ function ChatStream({
   const agentDeleted = convInfoQ.data?.primary_agent_deleted === true
   const agentName = agent?.name || convInfoQ.data?.primary_agent_name || ""
   const cancelRunMut = useCancelRun(convWorkspaceId)
+  const cancelScopeRef = useRef<HTMLDivElement>(null)
 
   // SSE state: ComposerForm hands us a run_id after send; we open the
   // EventSource and append delta tokens into the streaming message. While
@@ -552,7 +554,7 @@ function ChatStream({
   }, [stream.status, streamErrorMessage, activeRunId, conversationId, qc])
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col" style={THREAD_STYLE}>
+    <div ref={cancelScopeRef} className="flex min-w-0 flex-1 flex-col" style={THREAD_STYLE}>
       {chrome !== "bare" && <ThreadHeader
         folded={folded}
         onExpand={onExpand}
@@ -651,6 +653,19 @@ function ChatStream({
         </div>
       </div>
 
+      {cancelRunMut.error && !runs.some((run) => run.id === cancelRunMut.variables?.runID && run.status === "cancelled") && <ErrorDialog
+        title={t("conversations.composer.stopErrorTitle")}
+        message={t("conversations.composer.stopError")}
+        detail={cancelRunMut.error.message}
+        onClose={() => cancelRunMut.reset()}
+        focusScopeRef={cancelScopeRef}
+        onRestoreFocus={() => {
+          const scope = cancelScopeRef.current
+          const target = scope?.querySelector<HTMLButtonElement>(`button[aria-label="${CSS.escape(t("conversations.composer.stopAria"))}"]`)
+            ?? scope?.querySelector<HTMLTextAreaElement>("textarea")
+          target?.focus()
+        }}
+      />}
       <ComposerFooter>
         <ListSlot slotId="conversation.input.dock" context={{ conversationId }} />
         {chatToast && !runs.some((run) => run.id === chatToast.runID && (run.status === "failed" || run.status === "interrupted")) && (
