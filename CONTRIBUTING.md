@@ -312,6 +312,11 @@ description and keep ownership on the side listed here.
 
 ### Human interaction lifecycle
 
+- Interaction reads expose the run's recorded requester type and ID. Resolve
+  current user names only through active membership in that interaction's
+  workspace; missing names retain the recorded identity. Web decision surfaces
+  share operation and argument presentation without inferring unreported scope.
+
 - `agent_interactions` is the canonical durable record for permission prompts
   and `AskUserQuestion` / `requestUserInput` requests. The Web approval inbox,
   conversation SSE notices, and IM cards are presentation surfaces over that

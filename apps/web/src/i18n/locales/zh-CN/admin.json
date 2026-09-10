@@ -226,14 +226,19 @@
     "detail": {
       "agent": "Agent",
       "conversation": "关联对话",
-      "payload": "Payload 摘要",
+      "payload": "操作参数",
       "createdAt": "创建于",
       "expiresIn": "剩余时间",
       "alreadyDecided": "这条审批已经处理过，不能再操作。",
       "readOnly": "当前为只读模式。工作区所有者、管理员和成员可以处理。",
       "openRun": "打开 Run Detail",
       "openConversation": "打开 Conversation",
-      "decidedBy": "决定人"
+      "decidedBy": "决定人",
+      "requester": "申请人",
+      "requesterUnknown": "申请人未知",
+      "operation": "操作",
+      "noParameters": "执行层未上报操作参数。",
+      "viewRequest": "查看请求详情"
     },
     "empty": {
       "title": "暂时没有审批",

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { Check, Loader2, Square, Terminal, Wrench, X } from "lucide-react"
 
+import { interactionRequester, readableInteractionOperation } from "../../lib/interaction-presentation"
 import { useResolveAgentInteraction } from "../../lib/api-interactions"
 import type { AgentInteraction } from "../../lib/api-types"
 import { cn } from "../../lib/utils"
@@ -85,7 +86,8 @@ export function ApprovalBar({
 
   if (!current) return null
 
-  const { tool, summary, detail } = describe(current, t("conversations.permission.unknownTool"))
+  const { tool: rawTool, summary, detail } = describe(current, t("conversations.permission.unknownTool"))
+  const tool = readableInteractionOperation(rawTool)
   const ToolIcon = tool.toLowerCase() === "bash" ? Terminal : Wrench
   const agent = current.agent_name || t("approvals.detail.agent")
   const errorText = error?.id === current.id ? error.message : ""
@@ -145,7 +147,7 @@ export function ApprovalBar({
     >
       <div className="flex h-7 items-center gap-2 text-xs text-fg-muted">
         <ToolIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} aria-hidden="true" />
-        <span className="min-w-0 flex-1 truncate">{tool}</span>
+        <span className="min-w-0 flex-1 truncate" title={rawTool}>{tool}</span>
         {!isNaN(remaining) && (
           <span role="timer" className="shrink-0 font-mono tabular-nums">
             {interactions.length > 1 ? `1 / ${interactions.length} · ` : ""}
@@ -157,7 +159,10 @@ export function ApprovalBar({
       <p className="m-0 mt-1 text-sm text-fg">
         {t("conversations.approval.body", { agent, tool })}
       </p>
-      {summary && (
+      <p className="m-0 mt-1 break-words text-xs text-fg-muted">
+        {t("approvals.detail.requester")}: {interactionRequester(current, t)}
+      </p>
+      {summary && summary !== rawTool && (
         <p
           className="m-0 mt-1 truncate font-mono text-xs text-fg-muted"
           title={detail && detail !== summary ? `${summary}\n${detail}` : summary}
@@ -166,7 +171,12 @@ export function ApprovalBar({
         </p>
       )}
 
-      <div className="mt-3 flex items-center justify-end gap-2">
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+        <Button asChild variant="link" size="sm" className="mr-auto">
+          <a href={`/?ws=${encodeURIComponent(workspaceID)}&admin=approvals&id=${encodeURIComponent(current.id)}`}>
+            {t("approvals.detail.viewRequest")}
+          </a>
+        </Button>
         {errorText && <InlineError className="mr-auto min-w-0 flex-1">{errorText}</InlineError>}
         <Button
           variant="outline"

@@ -621,6 +621,9 @@ export type AgentInteractionStatus =
   "pending" | "resolving" | "approved" | "denied" | "answered" | "cancelled" | "expired"
 
 export interface AgentInteraction {
+  requested_by_type?: string
+  requested_by_id?: string
+  requested_by_name?: string
   id: string
   workspace_id: string
   conversation_id: string

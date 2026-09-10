@@ -46,6 +46,9 @@ var (
 )
 
 type AgentInteractionRead struct {
+	RequestedByType   string         `json:"requested_by_type"`
+	RequestedByID     string         `json:"requested_by_id,omitempty"`
+	RequestedByName   string         `json:"requested_by_name,omitempty"`
 	ID                string         `json:"id"`
 	WorkspaceID       string         `json:"workspace_id"`
 	ConversationID    string         `json:"conversation_id"`
@@ -117,7 +120,7 @@ func (s *Store) ListWorkspaceAgentInteractions(ctx context.Context, workspaceID,
 			row.RequestID, row.Kind, row.Status, row.Request, row.Response,
 			row.ResolutionSource, row.ResolvedActor, row.ResolvedBy,
 			row.CreatedAt, row.ExpiresAt, row.ResolvedAt, row.UpdatedAt,
-			row.AgentName, row.ConversationTitle,
+			row.AgentName, row.ConversationTitle, row.RequestedByType, row.RequestedByID, row.RequestedByName,
 		))
 	}
 	return out, nil
@@ -140,7 +143,7 @@ func (s *Store) GetAgentInteraction(ctx context.Context, interactionID string) (
 		row.RequestID, row.Kind, row.Status, row.Request, row.Response,
 		row.ResolutionSource, row.ResolvedActor, row.ResolvedBy,
 		row.CreatedAt, row.ExpiresAt, row.ResolvedAt, row.UpdatedAt,
-		row.AgentName, row.ConversationTitle,
+		row.AgentName, row.ConversationTitle, row.RequestedByType, row.RequestedByID, row.RequestedByName,
 	), nil
 }
 
@@ -163,7 +166,7 @@ func (s *Store) GetAgentInteractionByRequestID(ctx context.Context, kind, reques
 		row.RequestID, row.Kind, row.Status, row.Request, row.Response,
 		row.ResolutionSource, row.ResolvedActor, row.ResolvedBy,
 		row.CreatedAt, row.ExpiresAt, row.ResolvedAt, row.UpdatedAt,
-		row.AgentName, row.ConversationTitle,
+		row.AgentName, row.ConversationTitle, row.RequestedByType, row.RequestedByID, row.RequestedByName,
 	), nil
 }
 
@@ -334,7 +337,7 @@ func interactionRead(
 	id, workspaceID, conversationID, agentRunID, requestID, kind, status string,
 	request, response []byte, resolutionSource, resolvedActor, resolvedBy string,
 	createdAt, expiresAt, resolvedAt, updatedAt pgtype.Timestamptz,
-	agentName, conversationTitle string,
+	agentName, conversationTitle, requestedByType, requestedByID, requestedByName string,
 ) AgentInteractionRead {
 	var resolvedAtPtr *time.Time
 	if resolvedAt.Valid {
@@ -348,6 +351,6 @@ func interactionRead(
 		ResolutionSource: resolutionSource, ResolvedActor: resolvedActor, ResolvedBy: resolvedBy,
 		CreatedAt: pgTime(createdAt), ExpiresAt: pgTime(expiresAt),
 		ResolvedAt: resolvedAtPtr, UpdatedAt: pgTime(updatedAt), AgentName: agentName,
-		ConversationTitle: conversationTitle,
+		ConversationTitle: conversationTitle, RequestedByType: requestedByType, RequestedByID: requestedByID, RequestedByName: requestedByName,
 	}
 }
