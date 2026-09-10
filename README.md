@@ -54,8 +54,8 @@ make docker-build
 ./install.sh --image parsar:dev
 ```
 
-> **Platform.** Docker-managed agent sandboxes require Linux. Non-Linux hosts
-> can start the web control plane with `--no-sandbox`.
+The default Compose stack starts PostgreSQL, the Parsar web control plane,
+and a shared agent runtime together.
 
 ## Contributing
 
