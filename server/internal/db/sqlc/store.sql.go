@@ -6712,6 +6712,8 @@ select
   $5
 from agent_runs r
 where r.id = $6::uuid
+  and not (r.status = 'cancelled' and $2::text in ('run.completed', 'run.failed'))
+for share of r
 on conflict (agent_run_id, sequence) do nothing
 returning
   id::text,
