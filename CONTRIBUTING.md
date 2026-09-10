@@ -632,6 +632,12 @@ cloud execution. Unknown or unavailable status blocks advancing and submitting;
 ordinary edits to an existing cloud Agent and local execution stay independent.
 Cloud setup opens Runtime's Instances tab separately so form input is retained.
 
+New and cloned Agent forms default invocation scope to workspace, matching the
+server default. Scope choices explain the existing Feishu gate without implying
+anonymous Web/API access. Public creation clears personal model credential choices
+and requires a shared binding for credential-reference models; existing Agents
+and their edit forms keep their stored scope.
+
 Use `EmptyState` with `size="compact"` for detail tabs, subsections, and
 compact result panels. Keep their alignment and spacing in that shared
 component; page-level empty states retain the default size.
