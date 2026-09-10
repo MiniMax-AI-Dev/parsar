@@ -356,6 +356,9 @@ description and keep ownership on the side listed here.
 - Markdown Skill imports and new versions must store an engine-neutral ZIP
   containing `SKILL.md`, with its storage reference and SHA-256 persisted before
   reporting success. Existing versions without archives require a new import.
+  Generic capability creation may create Skill metadata, but Skill versions
+  must use the import commit endpoints; generic version writes reject them
+  rather than storing a version the runtime cannot load.
 - Skill ZIP preview and commit must reject duplicate paths, including
   normalized separator/dot-segment and case aliases, so approved file contents
   cannot differ because an extractor chooses a different duplicate entry.
