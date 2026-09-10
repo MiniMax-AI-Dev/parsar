@@ -739,7 +739,8 @@
         "title": "{{name}} — 添加新版本",
         "description": "保存后会自动生成下一个版本。请在各 Agent 的配置页查看实际使用的版本。",
         "prefillFromLatest": "已用上一版（{{version}}）的内容预填。修改后会作为新版本提交。",
-        "inlineSecretLostWarning": "上一版的 inline secret（{{keys}}）已隐藏。如需保留，请重新输入明文；或改成已托管的凭据。"
+        "inlineSecretLostWarning": "上一版的 inline secret（{{keys}}）已隐藏。如需保留，请重新输入明文；或改成已托管的凭据。",
+        "reuseExistingZip": "当前版本的文件包：{{filename}}。如果不重新上传，新版本将沿用这个文件包。"
       },
       "viewContent": {
         "title": "查看 {{version}} 内容",
@@ -983,7 +984,12 @@
       "dialog": {
         "description": "粘贴第三方 MCP 配置(JSON / TOML),会自动解析并预览。普通 env 值原样导入;只有 env 值以 $ 开头时需要选择凭据来源。",
         "descriptionSkill": "粘贴 SKILL.md 或上传 zip 包。Skill 的名称和描述由 frontmatter 决定,正文会作为 instruction 注入模型。",
-        "descriptionPlaceholder": "用一句话说明这个能力做什么,Claude 会用它判断是否调用"
+        "descriptionPlaceholder": "用一句话说明这个能力做什么,Claude 会用它判断是否调用",
+        "title": "导入能力",
+        "name": "名称",
+        "namePlaceholder": "例如 github-mcp",
+        "descriptionLabel": "描述",
+        "submit": "导入"
       },
       "skill": {
         "missingName": "名称待完善",
@@ -1008,7 +1014,76 @@
           "references": "references/",
           "scripts": "scripts/",
           "other": "其它文件"
-        }
+        },
+        "markdown": "Markdown 内容",
+        "placeholder": "---\nname: code-reviewer\ndescription: 审查代码差异并指出有风险的改动\n---\n\n你是一名谨慎的代码审查者。用户粘贴代码差异后，请依次检查：\n\n1. 正确性：改动是否实现了预期行为？\n2. 风险：哪些地方可能在生产环境中出错？\n3. 风格：是否符合现有代码约定？\n\n请简洁作答。",
+        "pasteHelp": "支持带 YAML frontmatter 的 Markdown。名称和描述取自顶部的 name、description 字段，正文作为 Agent 指令。",
+        "trigger": "触发条件",
+        "instruction": "Agent 指令"
+      },
+      "kindPicker": {
+        "placeholder": "选择凭据类型",
+        "search": "搜索…",
+        "loading": "加载中…",
+        "empty": "没有匹配的凭据类型",
+        "createNew": "新建凭据类型…"
+      },
+      "tab": {
+        "mcp": "MCP",
+        "skill": "Skill"
+      },
+      "preview": {
+        "errorFallback": "解析失败",
+        "idle": "粘贴或上传内容后，在这里查看预览",
+        "loading": "解析中…",
+        "warnings": "解析提示"
+      },
+      "mcp": {
+        "format": "格式",
+        "tomlPlaceholder": "[mcp_servers.github]\ncommand = \"docker\"\nargs = [\"run\", \"-i\", \"ghcr.io/github/github-mcp-server\"]\n\n[mcp_servers.github.env]\nGITHUB_PERSONAL_ACCESS_TOKEN = \"ghp_xxx\"",
+        "jsonPlaceholder": "{\n  \"mcpServers\": {\n    \"github\": {\n      \"command\": \"docker\",\n      \"args\": [\"run\", \"-i\", \"ghcr.io/github/github-mcp-server\"],\n      \"env\": {\n        \"GITHUB_PERSONAL_ACCESS_TOKEN\": \"ghp_xxx\"\n      }\n    }\n  }\n}",
+        "pasteHelp": "支持 Claude Code 的 env 配置、OpenCode 的 environment JSON 配置，以及 Codex 的 TOML 配置。也可以只粘贴 mcpServers 对象内的内容。"
+      },
+      "plugin": {
+        "errors": {
+          "notZip": "请选择 .zip 文件",
+          "tooLarge": "文件超过 32 MiB，请缩小后重新上传"
+        },
+        "uploadLabel": "上传 Plugin zip",
+        "dropHint": "拖拽或点击上传 .zip 文件",
+        "sizeHint": "最大 32 MiB",
+        "uploading": "上传中…",
+        "validating": "校验中…",
+        "previewLabel": "校验结果",
+        "previewEmpty": "上传 zip 文件后，在这里查看校验结果",
+        "passed": "校验通过",
+        "failed": "校验失败，请修正问题后重新上传",
+        "errorsHeader": "错误",
+        "warningsHeader": "提示"
+      },
+      "systemPrompt": {
+        "versionLabel": "版本",
+        "modeLabel": "注入方式",
+        "modeAppend": "追加（放在用户系统提示词之前）",
+        "modeOverride": "覆盖（替换默认系统提示词）",
+        "promptLabel": "提示词内容",
+        "promptPlaceholder": "填写要提供给 Agent 的系统提示词。覆盖模式会替换默认系统提示词；追加模式会将内容放在用户提供的 system_prompt 之前。"
+      },
+      "newKind": {
+        "title": "新建凭据类型",
+        "code": {
+          "label": "标识",
+          "help": "使用小写字母、数字和下划线，例如 linear_api_key",
+          "invalid": "标识须以小写字母开头，且只能包含小写字母、数字和下划线"
+        },
+        "displayName": {
+          "label": "显示名称"
+        },
+        "description": {
+          "label": "描述",
+          "placeholder": "可选，说明如何获取此 token"
+        },
+        "submit": "创建"
       }
     }
   },
