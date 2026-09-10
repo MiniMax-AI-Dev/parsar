@@ -190,8 +190,8 @@ func TestCapabilityImportCommit_InlineSecretLandsInSecretsTable(t *testing.T) {
 	// payload is genuinely encrypted (cleartext bytes must NOT appear in
 	// the column).
 	row := lookupImportedSecret(t, db, secretID)
-	if row.workspaceID != store.DefaultDevFixtureIDs().WorkspaceID {
-		t.Fatalf("secret.workspace_id = %q, want %q", row.workspaceID, store.DefaultDevFixtureIDs().WorkspaceID)
+	if row.managementWorkspaceID != store.DefaultDevFixtureIDs().WorkspaceID {
+		t.Fatalf("secret.management_workspace_id = %q, want %q", row.managementWorkspaceID, store.DefaultDevFixtureIDs().WorkspaceID)
 	}
 	if row.kind != "capability_inline" {
 		t.Fatalf("secret.kind = %q, want capability_inline", row.kind)
@@ -322,23 +322,23 @@ func TestCapabilityImportCommit_CustomCredentialKind(t *testing.T) {
 // commit assertion. Pulled into a struct so the test body reads as plain
 // `row.kind` rather than multi-return Scan acrobatics.
 type importedSecretRow struct {
-	workspaceID      string
-	kind             string
-	provider         string
-	authType         string
-	encryptedPayload []byte
-	metadata         []byte
-	status           string
+	managementWorkspaceID string
+	kind                  string
+	provider              string
+	authType              string
+	encryptedPayload      []byte
+	metadata              []byte
+	status                string
 }
 
 func lookupImportedSecret(t *testing.T, db *pgxpool.Pool, secretID string) importedSecretRow {
 	t.Helper()
 	var r importedSecretRow
 	if err := db.QueryRow(context.Background(),
-		`select workspace_id::text, kind, provider, auth_type, encrypted_payload, metadata, status
+		`select management_workspace_id::text, kind, provider, auth_type, encrypted_payload, metadata, status
 		 from secrets where id = $1 and deleted_at is null`,
 		secretID,
-	).Scan(&r.workspaceID, &r.kind, &r.provider, &r.authType, &r.encryptedPayload, &r.metadata, &r.status); err != nil {
+	).Scan(&r.managementWorkspaceID, &r.kind, &r.provider, &r.authType, &r.encryptedPayload, &r.metadata, &r.status); err != nil {
 		t.Fatalf("lookup secret %s: %v", secretID, err)
 	}
 	return r
