@@ -354,15 +354,16 @@ function SinglePreview({
 }) {
   const { t } = useTranslation("admin")
   return (
-    <section className="border-t border-line pt-3">
-      <h4 className="text-sm font-medium text-fg">{skill.title || skill.slug || t("capabilities.import.skill.missingName")}</h4>
-      {skill.slug && <code className="font-mono text-xs text-fg-muted">{skill.slug}</code>}
+    <section className="grid gap-3 border-t border-line pt-3">
+      {(!skill.slug || (skill.title && skill.title !== skill.slug)) && (
+        <h4 className="text-sm font-medium text-fg">{skill.title || t("capabilities.import.skill.missingName")}</h4>
+      )}
 
       {/* description intentionally omitted — ImportPreview above already
        *  surfaces it on the "ready" line, repeating it here was noisy. */}
 
       {skill.trigger && (
-        <div className="mt-3">
+        <div>
           <p className="mb-1 text-xs text-fg-muted">{t("capabilities.import.skill.trigger", "Trigger")}</p>
           <code className="block whitespace-pre-wrap rounded-md bg-surface-muted p-2 font-mono text-xs text-fg">
             {skill.trigger}
@@ -370,7 +371,7 @@ function SinglePreview({
         </div>
       )}
 
-      <div className="mt-3">
+      <div>
         <p className="mb-1 text-xs text-fg-muted">
           {t("capabilities.import.skill.instruction", "Instruction (injected into the model)")}
         </p>
