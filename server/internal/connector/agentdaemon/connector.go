@@ -367,7 +367,7 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 		"allow_remote", allowRemote)
 	agentKind := resolveAgentKind(in)
 
-	agentOptions, err := c.buildAgentOptions(ctx, in)
+	agentOptions, modelProvider, err := c.buildAgentOptions(ctx, in)
 	if err != nil {
 		c.log.Warn("agent_daemon: buildAgentOptions failed", "run_id", in.RunID, "err", err.Error())
 		return errorChannel(in.RunID, err.Error()), nil
@@ -545,7 +545,7 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 	c.log.Info("agent_daemon: spawning runStreamLoop (will push prompt_request to daemon)",
 		"run_id", in.RunID, "device_id", bind.DeviceID, "agent_kind", agentKind)
 	out := make(chan connector.PromptEvent, 32)
-	go c.runStreamLoop(ctx, sess, in, bind, req, upstream, out)
+	go c.runStreamLoop(ctx, sess, in, bind, req, upstream, out, usageAttribution{agentKind: agentKind, modelProvider: modelProvider})
 	return out, nil
 }
 
@@ -641,6 +641,7 @@ func (c *Connector) runStreamLoop(
 	req proto.Envelope,
 	upstream <-chan proto.Envelope,
 	out chan<- connector.PromptEvent,
+	attribution usageAttribution,
 ) {
 	defer close(out)
 	defer sess.Unsubscribe(in.RunID)
@@ -679,7 +680,7 @@ func (c *Connector) runStreamLoop(
 				// channel was closed.
 				return
 			}
-			c.handleUpstream(ctx, env, in, bind, &seq, out)
+			c.handleUpstream(ctx, env, in, bind, &seq, out, attribution)
 			if env.Type == proto.TypeDone {
 				return
 			}
@@ -698,6 +699,7 @@ func (c *Connector) handleUpstream(
 	bind binding.Binding,
 	seq *uint64,
 	out chan<- connector.PromptEvent,
+	attribution usageAttribution,
 ) {
 	switch env.Type {
 	case proto.TypeDelta:
@@ -791,7 +793,7 @@ func (c *Connector) handleUpstream(
 			c.log.Warn("agent_daemon: decode usage", "err", err, "run_id", in.RunID)
 			return
 		}
-		u := usageFromProto(p.Usage)
+		u := attribution.fromProto(p.Usage)
 		out <- connector.PromptEvent{Type: connector.EventUsage, Usage: &u}
 
 	case proto.TypeError:
@@ -810,7 +812,7 @@ func (c *Connector) handleUpstream(
 		final := &connector.PromptOutput{
 			Content:    p.Content,
 			Transcript: p.Transcript,
-			Usage:      usageFromProto(p.Usage),
+			Usage:      attribution.fromProto(p.Usage),
 			Metadata:   p.Metadata,
 		}
 		// Best-effort: persist the engine session id so the next turn can resume.
@@ -1201,21 +1203,6 @@ func errorChannel(_ string, message string) <-chan connector.PromptEvent {
 	ch <- connector.PromptEvent{Type: connector.EventDone, Final: &connector.PromptOutput{}}
 	close(ch)
 	return ch
-}
-
-// usageFromProto translates wire-stable proto.Usage into the server's
-// store.UsageInput. The indirection exists so the proto package can
-// stay at module root (importable by apps/parsar-daemon) without depending
-// on server/internal/store.
-func usageFromProto(u proto.Usage) store.UsageInput {
-	return store.UsageInput{
-		Provider:     u.Provider,
-		Model:        u.Model,
-		InputTokens:  u.InputTokens,
-		OutputTokens: u.OutputTokens,
-		CostUSD:      u.CostUSD,
-		Raw:          u.Raw,
-	}
 }
 
 // promptAttachmentsFromStore translates server-side

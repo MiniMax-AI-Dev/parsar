@@ -429,7 +429,7 @@ func TestInjectManagedModel_DefaultAuthScheme_InjectsAPIKey(t *testing.T) {
 	in.AgentConfig = map[string]any{"model_id": "model-default"}
 	opts := renderStaticAgentOptions(in)
 
-	if err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
+	if _, err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
 		t.Fatalf("injectManagedModel: %v", err)
 	}
 
@@ -484,7 +484,7 @@ func TestInjectManagedModel_BearerAuthScheme_InjectsAuthToken(t *testing.T) {
 	in.AgentConfig = map[string]any{"model_id": "model-bearer"}
 	opts := renderStaticAgentOptions(in)
 
-	if err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
+	if _, err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
 		t.Fatalf("injectManagedModel: %v", err)
 	}
 
@@ -689,7 +689,7 @@ func TestInjectManagedModel_CredentialRef_EmitsNoticeOnUserLookupErr(t *testing.
 	in.AgentConfig = map[string]any{"model_id": "model-byok"}
 	opts := renderStaticAgentOptions(in)
 
-	err = c.injectManagedModel(context.Background(), in, opts, "claude_code")
+	_, err = c.injectManagedModel(context.Background(), in, opts, "claude_code")
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -756,7 +756,7 @@ func TestInjectManagedModel_CredentialRef_EmitsNoticeOnEmptyPayload(t *testing.T
 	in.AgentConfig = map[string]any{"model_id": "model-byok"}
 	opts := renderStaticAgentOptions(in)
 
-	err = c.injectManagedModel(context.Background(), in, opts, "claude_code")
+	_, err = c.injectManagedModel(context.Background(), in, opts, "claude_code")
 	if !errors.Is(err, ErrManagedModelPersonalCredMissing) {
 		t.Fatalf("err = %v, want wrapped ErrManagedModelPersonalCredMissing", err)
 	}
@@ -799,7 +799,7 @@ func TestInjectManagedModel_CredentialRef_UserIDMissingDoesNotEmit(t *testing.T)
 	in.AgentConfig = map[string]any{"model_id": "model-byok"}
 	opts := renderStaticAgentOptions(in)
 
-	err = c.injectManagedModel(context.Background(), in, opts, "claude_code")
+	_, err = c.injectManagedModel(context.Background(), in, opts, "claude_code")
 	if !errors.Is(err, ErrManagedModelUserIDMissing) {
 		t.Fatalf("err = %v, want wrapped ErrManagedModelUserIDMissing", err)
 	}
@@ -1384,7 +1384,7 @@ func TestInjectManagedModel_PiSwitchWired(t *testing.T) {
 	in.AgentConfig = map[string]any{"model_id": "model-pi"}
 	opts := renderStaticAgentOptions(in)
 
-	if err := c.injectManagedModel(context.Background(), in, opts, "pi"); err != nil {
+	if _, err := c.injectManagedModel(context.Background(), in, opts, "pi"); err != nil {
 		t.Fatalf("injectManagedModel(pi): %v", err)
 	}
 	if got := opts["model"]; got != "parsar/claude-opus-4-7" {
@@ -1466,7 +1466,7 @@ func TestInjectManagedModel_SharedBinding_BypassesUserResolver(t *testing.T) {
 	in.AgentConfig = sharedBindingConfig()
 	opts := renderStaticAgentOptions(in)
 
-	if err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
+	if _, err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
 		t.Fatalf("injectManagedModel: %v", err)
 	}
 	if resolver.resolveUserCalls != 0 {
@@ -1509,7 +1509,7 @@ func TestInjectManagedModel_SharedBinding_GuestCallerSucceeds(t *testing.T) {
 	in.AgentConfig = sharedBindingConfig()
 	opts := renderStaticAgentOptions(in)
 
-	if err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
+	if _, err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
 		t.Fatalf("injectManagedModel: %v", err)
 	}
 	if resolver.resolveUserCalls != 0 {
@@ -1567,7 +1567,7 @@ func TestInjectManagedModel_NoBinding_PersonalPathUsesUserResolver(t *testing.T)
 	in.AgentConfig = map[string]any{"model_id": "model-byok"}
 	opts := renderStaticAgentOptions(in)
 
-	if err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
+	if _, err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
 		t.Fatalf("injectManagedModel: %v", err)
 	}
 	if resolver.resolveUserCalls != 1 {

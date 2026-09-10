@@ -60,7 +60,7 @@ func TestKnowledgeAbsentAndCombinedLimit(t *testing.T) {
 
 func TestBuildAgentOptionsInjectsKnowledge(t *testing.T) {
 	c := &Connector{log: discardLogger(), capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{{CapabilityID: "kb", Type: "knowledge", CanonicalSpec: knowledgeSpecJSON(t, "PARSAR-KNOWLEDGE-OK")}}}}
-	opts, err := c.buildAgentOptions(t.Context(), defaultPromptInput())
+	opts, _, err := c.buildAgentOptions(t.Context(), defaultPromptInput())
 	if err != nil {
 		t.Fatal(err)
 	}

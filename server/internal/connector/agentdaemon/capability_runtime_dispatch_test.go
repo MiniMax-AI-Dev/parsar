@@ -211,7 +211,7 @@ func TestBuildAgentOptions_CodexSkillIsEnabled(t *testing.T) {
 		AgentConfig:             map[string]any{"agent_kind": "codex"},
 	}
 
-	opts, err := c.buildAgentOptions(context.Background(), in)
+	opts, _, err := c.buildAgentOptions(context.Background(), in)
 	if err != nil {
 		t.Fatalf("buildAgentOptions: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestBuildAgentOptions_OpenCodeMCPDoesNotNotice(t *testing.T) {
 		AgentConfig:             map[string]any{"agent_kind": "opencode"},
 	}
 
-	opts, err := c.buildAgentOptions(context.Background(), in)
+	opts, _, err := c.buildAgentOptions(context.Background(), in)
 	if err != nil {
 		t.Fatalf("buildAgentOptions: %v", err)
 	}

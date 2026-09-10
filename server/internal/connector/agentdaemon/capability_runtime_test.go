@@ -208,7 +208,7 @@ func TestResolveCapabilityAdditions_NilStoreNoOp(t *testing.T) {
 
 func TestBuildAgentOptions_DefaultClaudeCodeUsesBypassPermissions(t *testing.T) {
 	c := &Connector{log: discardLogger()}
-	opts, err := c.buildAgentOptions(context.Background(), defaultPromptInput())
+	opts, _, err := c.buildAgentOptions(context.Background(), defaultPromptInput())
 	if err != nil {
 		t.Fatalf("buildAgentOptions: %v", err)
 	}
