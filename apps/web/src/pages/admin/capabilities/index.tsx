@@ -225,6 +225,8 @@ export function CapabilitiesPage() {
     [agentCapabilityQueries.map((q) => q.dataUpdatedAt).join(":")],
   )
 
+  const countsUnavailable = agentsQ.isLoading || !!agentsQ.error || agentCapabilityQueries.some((q) => q.isLoading || q.error)
+
   const err = capsQ.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
   const marketPendingID = marketTarget && (publishMut.isPending || unpublishMut.isPending || deprecateMut.isPending || undeprecateMut.isPending)
@@ -292,8 +294,8 @@ export function CapabilitiesPage() {
   const renderRow = (cap: Capability, fromMarketplace: boolean) => {
     const marketCap = cap as TargetMarketplaceInstall
     const enabledCount = fromMarketplace
-      ? marketCap.enabled_agent_count ?? enabledCounts.get(cap.id) ?? 0
-      : enabledCounts.get(cap.id) ?? 0
+      ? marketCap.enabled_agent_count ?? (countsUnavailable ? null : enabledCounts.get(cap.id) ?? 0)
+      : countsUnavailable ? null : enabledCounts.get(cap.id) ?? 0
     const version = fromMarketplace
       ? marketCap.pinned_version ?? marketCap.latest_version ?? marketCap.latest_published_version
       : latestVersions.get(cap.id)?.version
@@ -854,6 +856,9 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
   const latestVersion = versions[0]
   const installationSummary = useCapabilityEnabledAgents(wid, agentsQ.data?.agents ?? [], capability, versions)
   const enabledCount = installationSummary.installations.length
+  const installationsLoading = agentsQ.isLoading || installationSummary.isLoading
+  const installationsError = agentsQ.error || installationSummary.error
+  const installationsUnavailable = installationsLoading || !!installationsError
 
   const closeLabel = t("capabilities.detail.backToList")
 
@@ -978,7 +983,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
                   key={version.id}
                   version={version}
                   latestLabel={index === 0 ? t("capabilities.versions.latest") : undefined}
-                  count={installationSummary.versionCounts.get(version.id) ?? 0}
+                  count={installationsUnavailable ? null : installationSummary.versionCounts.get(version.id) ?? 0}
                   onOpen={() => setViewVersion(version)}
                 />
               ))}
@@ -987,9 +992,11 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
         )}
       </RailSection>
 
-      <RailSection title={t("capabilities.detail.enabledAgents.title", { count: enabledCount })} className="mt-6">
-        {installationSummary.isLoading ? (
+      <RailSection title={installationsUnavailable ? t("capabilities.table.enabledAgents") : t("capabilities.detail.enabledAgents.title", { count: enabledCount })} className="mt-6">
+        {installationsLoading ? (
           <Skeleton className="mt-2 h-3 w-full max-w-lg" />
+        ) : installationsError ? (
+          <ErrorState onRetry={() => { void agentsQ.refetch(); void installationSummary.refetch() }} />
         ) : enabledCount === 0 ? (
           <EmptyState size="compact" title={t("capabilities.detail.enabledAgents.empty")} />
         ) : (
@@ -1085,7 +1092,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
   )
 }
 
-function VersionRow({ version, latestLabel, count, onOpen }: { version: CapabilityVersion; latestLabel?: string; count: number; onOpen: () => void }) {
+function VersionRow({ version, latestLabel, count, onOpen }: { version: CapabilityVersion; latestLabel?: string; count: number | null; onOpen: () => void }) {
   const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault()
@@ -1099,7 +1106,7 @@ function VersionRow({ version, latestLabel, count, onOpen }: { version: Capabili
         {latestLabel && <span className="shrink-0 text-xs text-fg-muted">{latestLabel}</span>}
       </span>
       <span className="break-words font-mono text-xs text-fg">{formatDate(version.created_at)}</span>
-      <LedgerNum muted={count === 0}>{count}</LedgerNum>
+      <LedgerNum muted={count === 0}>{count ?? "—"}</LedgerNum>
     </LedgerRow>
   )
 }

@@ -21,7 +21,7 @@ export function CapabilityRow({
   version?: string
   source: string
   availabilityLabel: string
-  enabledCount: number
+  enabledCount: number | null
   credentials: string
   age: string
   selected: boolean
@@ -51,7 +51,7 @@ export function CapabilityRow({
           {[
             [t("capabilities.table.version"), version ?? "—"],
             [t("capabilities.marketplaceDetail.source.title"), source],
-            [t("capabilities.table.enabledAgents"), String(enabledCount)],
+            [t("capabilities.table.enabledAgents"), String(enabledCount ?? "—")],
             [t("capabilities.table.credentialsShort"), credentials],
             [t("capabilities.table.updated"), age],
           ].map(([label, value]) => (
@@ -64,7 +64,7 @@ export function CapabilityRow({
       </div>
       <span className="break-all font-mono text-xs @max-xl/capability-list:hidden">{version ?? "—"}</span>
       <span className="break-words text-xs text-fg-muted @max-xl/capability-list:hidden">{source}</span>
-      <LedgerNum className="@max-xl/capability-list:hidden">{enabledCount}</LedgerNum>
+      <LedgerNum className="@max-xl/capability-list:hidden">{enabledCount ?? "—"}</LedgerNum>
       <span className="break-words text-xs text-fg-muted @max-xl/capability-list:hidden">{credentials}</span>
       <span className="break-words text-right text-xs text-fg-muted @max-xl/capability-list:hidden">{age}</span>
       <span className="@max-xl/capability-list:absolute @max-xl/capability-list:right-0 @max-xl/capability-list:top-2 @max-xl/capability-list:h-7 @max-xl/capability-list:w-0" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
