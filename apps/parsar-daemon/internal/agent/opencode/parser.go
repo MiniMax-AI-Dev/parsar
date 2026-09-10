@@ -19,6 +19,7 @@ type translator struct {
 	rawLines  []string
 	usage     proto.Usage
 	stepUsage usageInfo
+	toolsSeen map[string]bool
 }
 
 type translation struct {
@@ -52,6 +53,8 @@ func (t *translator) Translate(line []byte) (translation, error) {
 		return t.translatePartDelta(head.Properties)
 	case "text":
 		return t.translateTextPart(head.Part)
+	case "tool_use":
+		return t.translateToolPart(head.Part)
 	case "message.updated", "message.updated.1":
 		t.captureUsage(head.Properties)
 		return translation{}, nil
@@ -62,6 +65,48 @@ func (t *translator) Translate(line []byte) (translation, error) {
 		t.captureGenericUsage(line)
 		return translation{}, nil
 	}
+}
+
+func (t *translator) translateToolPart(raw json.RawMessage) (translation, error) {
+	var p struct {
+		Type   string `json:"type"`
+		CallID string `json:"callID"`
+		Tool   string `json:"tool"`
+		State  struct {
+			Status string         `json:"status"`
+			Input  map[string]any `json:"input"`
+			Output string         `json:"output"`
+			Error  string         `json:"error"`
+		} `json:"state"`
+	}
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return translation{}, fmt.Errorf("opencode: parse tool part: %w", err)
+	}
+	if p.Type != "tool" || p.CallID == "" || p.Tool == "" ||
+		(p.State.Status != "completed" && p.State.Status != "error") || t.toolsSeen[p.CallID] {
+		return translation{}, nil
+	}
+	result := map[string]any{"output": p.State.Output, "is_error": p.State.Status == "error"}
+	if p.State.Status == "error" {
+		result["output"] = p.State.Error
+	}
+	// JSON CLI tool parts arrive only after execution. Pair the call and
+	// result for existing trace consumers; neither frame requests approval.
+	call := proto.ToolCallPayload{ID: p.CallID, Name: p.Tool, Stage: "before", Args: p.State.Input}
+	before, err := proto.NewEnvelope(proto.TypeToolCall, t.runID, call)
+	if err != nil {
+		return translation{}, err
+	}
+	call.Stage, call.Result = "after", result
+	after, err := proto.NewEnvelope(proto.TypeToolCall, t.runID, call)
+	if err != nil {
+		return translation{}, err
+	}
+	if t.toolsSeen == nil {
+		t.toolsSeen = make(map[string]bool)
+	}
+	t.toolsSeen[p.CallID] = true
+	return translation{Envelopes: []proto.Envelope{before, after}}, nil
 }
 
 func (t *translator) translatePartDelta(raw json.RawMessage) (translation, error) {
