@@ -242,6 +242,7 @@
     "submit": "Set Password & Join"
   },
   "layout": {
+    "details": "Details",
     "adjusted": "Width adjusted",
     "temporary": "This session only",
     "restore": "Restore"
