@@ -12,6 +12,7 @@
       "title": "模型"
     },
     "actions": {
+      "selectAll": "全选",
       "addModel": "新建模型",
       "importModels": "导入模型",
       "test": "测试连接",
