@@ -410,8 +410,8 @@ function PendingJoinRequestsGroup({ wsId, requests }: { wsId: string; requests: 
             <LedgerRow key={req.id}>
               <span className="flex min-w-0 items-center gap-1.5">
                 <InitialTile name={name} />
-                <span className="shrink-0 truncate font-medium">{name}</span>
-                <span className="min-w-0 truncate text-xs text-fg-muted" title={req.request_reason || undefined}>
+                <span className="min-w-0 truncate font-medium" title={name}>{name}</span>
+                <span className="min-w-0 flex-1 truncate text-xs text-fg-muted" title={req.request_reason || undefined}>
                   · {req.request_reason || t("members.pendingRequests.noReason")}
                 </span>
               </span>
