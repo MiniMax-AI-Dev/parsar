@@ -753,6 +753,9 @@ The Agent form checks workspace runtime status before creating or switching to
 cloud execution. Unknown or unavailable status blocks advancing and submitting;
 ordinary edits to an existing cloud Agent and local execution stay independent.
 Cloud setup opens Runtime's Instances tab separately so form input is retained.
+Missing-model setup follows the same pattern: open Models separately and refresh
+the catalog from the still-open Agent form. Keep its draft in the mounted form;
+do not serialize it into prerequisite URLs or add a second draft lifecycle.
 
 New and cloned Agent forms default invocation scope to workspace, matching the
 server default. Scope choices explain the existing Feishu gate without implying

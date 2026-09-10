@@ -1575,8 +1575,10 @@
       },
       "emptyModel": {
         "title": "No usable Model yet",
-        "description": "Go to Models to onboard one. The fields you typed here will be carried over so you can come back.",
-        "cta": "Configure Model"
+        "description": "Configure a model in a new tab, then return here and refresh. Your Agent form stays open with all input preserved.",
+        "cta": "Configure Model (new tab)",
+        "refresh": "Refresh models",
+        "refreshError": "Models could not be refreshed. Please try again."
       },
       "noTagsAdmin": "No skills or MCP tools are available yet. These are optional: save the Agent now, then add capabilities on the Capabilities page and enable them in the Agent’s Config tab.",
       "noTagsMember": "No skills or MCP tools are available yet. These are optional: save the Agent now, then ask a workspace administrator to add capabilities and enable them in the Agent’s Config tab.",
