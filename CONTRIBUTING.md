@@ -640,6 +640,15 @@ split relevant pieces out first rather than growing the file further.
   their domain instead of writing a parallel one, and must not inline an
   ad hoc `switch { case errors.Is(...) }` in the handler body.
 
+### Usage attribution
+
+- Managed daemon runs record the provider type from the same successful model
+  resolution that builds the prompt options. Never re-read the catalog when usage
+  arrives. Preserve adapter measurements and raw fields; `raw.parsar_usage` records
+  `agent_kind`, `reported_provider`, and `provider_source` (`managed_model` or
+  `adapter`). Unmanaged runs retain adapter provider labels, and completions with
+  no reported usage remain empty. Historical rows are not inferred or rewritten.
+
 ### Frontend shared logic
 
 - Capability usage views distinguish loading, failed, and successful empty reads.
