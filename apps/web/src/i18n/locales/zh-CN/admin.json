@@ -1509,6 +1509,16 @@
       "clear": "清除筛选"
     },
     "form": {
+      "clone": {
+        "loading": "正在读取源 Agent 的能力…",
+        "loadFailed": "无法读取源 Agent 的能力。",
+        "credentials": "已复制能力、设置及可用的共享凭证。个人或已失效的凭证需要重新选择。",
+        "unavailable": "以下源能力已无法用于创建 Agent，请从本次克隆中移除后继续。",
+        "remove": "从克隆中移除",
+        "manageCredentials": "添加或授权凭证（在新标签页打开）",
+        "refreshCredentials": "刷新凭证",
+        "credentialsFailed": "无法加载凭证。"
+      },
       "title": {
         "create": "新建 Agent",
         "edit": "编辑 Agent"

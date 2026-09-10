@@ -274,6 +274,10 @@ description and keep ownership on the side listed here.
   Explicit engine approval requests still use the durable interaction lifecycle;
   user-input requests continue to wait for a human answer.
 
+- Agent cloning copies enabled capability bindings, version choices, and configuration.
+  Pinned clones retain the stored version; latest choices resolve from the current catalog.
+  Display, credential checks, and submission use the same version. Shared credentials remain
+  independent per capability, and personal or unavailable credentials require a new choice.
 - Agent creation and editing store behavior instructions in `system_prompt`.
   Preserve saved text when opening the form; clearing it sends an empty string.
 - Property-only Agent edits omit the legacy `capabilities` replacement field
