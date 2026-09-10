@@ -10,6 +10,7 @@ import { PairDaemonDialog } from "../../components/admin/PairDaemonDialog"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -39,7 +40,7 @@ import {
   protocolListLabel,
   type WireProtocol,
 } from "../../lib/model-protocol"
-import { useCapabilitiesQuery, aggregateRequiredCredentials, aggregateRequiredCredentialsByID, useCapabilityVersionsQuery, useAgentCapabilitiesQuery, useEnableAgentCapabilityMutation } from "../../lib/api-capabilities"
+import { useCapabilitiesQuery, aggregateRequiredCredentialsByID, useCapabilityVersionsQuery, useAgentCapabilitiesQuery } from "../../lib/api-capabilities"
 import { CredentialCheckPanel } from "../../components/admin/CredentialCheckPanel"
 import { useSecrets } from "../../lib/api-secrets"
 import { useRuntimeStatus } from "../../lib/api-runtime"
@@ -192,13 +193,6 @@ function defaultWorkDir(executionMode: ExecutionMode): string {
   return executionMode === "sandbox" ? DEFAULT_WORK_DIR : ""
 }
 
-function capabilitiesFromAgent(a?: Agent | null): string[] {
-  const cfg = agentConfig(a)
-  const profile = profileConfig(a)
-  const caps = cfg.capabilities ?? profile.capabilities ?? profile.skills
-  return Array.isArray(caps) ? caps.filter((v): v is string => typeof v === "string") : []
-}
-
 function runtimeFromAgent(a?: Agent | null): RuntimeChoice {
   // Legacy rows predating the per-agent runtime field default to "sandbox",
   // matching the migration backfill so server and UI agree.
@@ -295,15 +289,12 @@ export function CreateAgentDialog({
   }, [modelDropdownOpen])
   const [highlightedModelID, setHighlightedModelID] = useState<string | null>(null)
   const [systemPrompt, setSystemPrompt] = useState(defaultSystemPrompt)
-  const [capabilities, setCapabilities] = useState<string[]>([])
-  const capabilitySelectionEdited = useRef(false)
   const [selectedCapabilityIDs, setSelectedCapabilityIDs] = useState<string[]>([])
   // capabilityVersionChoices keys on capability_id and stores the user's
   // per-binding version + mode pick. The dropdown default is "latest"
   // (tracks reuploads at dispatch time); switching to a specific version
-  // record sets mode="pinned" + versionID=<that version>. Used by both
-  // create and edit. In edit mode we hydrate it from the existing
-  // bindings so the dropdown shows the agent's current state.
+  // record sets mode="pinned" + versionID=<that version> during creation.
+  // Existing bindings are managed in the Agent Config tab.
   //
   // pinnedVersion (optional) caches the version literal (e.g. "1.0.3")
   // matching versionID. Carries forward through hydration so the
@@ -319,11 +310,6 @@ export function CreateAgentDialog({
   const [submitAttempted, setSubmitAttempted] = useState(false)
   const [allCredentialsSatisfied, setAllCredentialsSatisfied] = useState(true)
   const [credentialBindings, setCredentialBindings] = useState<Record<string, { source: "shared"; secret_id: string }>>({})
-  // Frozen snapshot of the bindings the agent was opened with (edit mode).
-  // CredentialCheckPanel hydrates from this — NOT from credentialBindings —
-  // because credentialBindings changes every time the panel reports up,
-  // which would re-fire the hydration effect and loop (React error #185).
-  const [initialCredentialBindings, setInitialCredentialBindings] = useState<Record<string, { source: "shared"; secret_id: string }> | undefined>(undefined)
   const [inlineNewSecrets, setInlineNewSecrets] = useState<AgentInlineNewSecret[]>([])
   /** "personal" or "shared:<secret_id>" or "shared:new:<displayName>|<plaintext>". */
   const [modelBindingChoice, setModelBindingChoice] = useState<
@@ -342,11 +328,10 @@ export function CreateAgentDialog({
   const [modelNewSecretExpanded, setModelNewSecretExpanded] = useState(false)
   const [step, setStep] = useState<WizardStep>(1)
 
-  const capabilitiesQ = useCapabilitiesQuery(workspaceID, capabilitySearch)
-  const allCapabilitiesQ = useCapabilitiesQuery(workspaceID, "")
+  const capabilitiesQ = useCapabilitiesQuery(mode === "create" ? workspaceID : null, capabilitySearch)
+  const allCapabilitiesQ = useCapabilitiesQuery(mode === "create" ? workspaceID : null, "")
   const cloneSourceID = mode === "create" && open ? agent?.id ?? null : null
-  const existingBindingsQ = useAgentCapabilitiesQuery(workspaceID, mode === "edit" ? agent?.id ?? null : cloneSourceID)
-  const enableBindingMut = useEnableAgentCapabilityMutation(workspaceID, agent?.id ?? null)
+  const existingBindingsQ = useAgentCapabilitiesQuery(workspaceID, cloneSourceID)
   const secretsQ = useSecrets(workspaceID)
   const sharedSecrets: Secret[] = useMemo(
     () => (secretsQ.data?.secrets ?? []).filter((s) => s.kind === "capability_inline" && s.status === "active"),
@@ -403,31 +388,8 @@ export function CreateAgentDialog({
     }))
     marketplace.sort((a, b) => a.name.localeCompare(b.name))
     const live: PickerOption[] = [...workspace, ...marketplace]
-    // Ghost bindings (edit mode): when an admin deprecates a capability the
-    // agent still binds, ListCapabilities hides it and the row would silently
-    // vanish from the picker. Merge it back as a disabled row so the user can
-    // deliberately unbind. The agent profile only stores names (not types),
-    // so type is left empty and treated as wildcard downstream.
-    if (mode === "edit") {
-      const known = new Set(live.map((c) => c.name))
-      for (const name of capabilities) {
-        if (!known.has(name)) {
-          live.push({
-            id: `ghost:${name}`,
-            name,
-            type: "",
-            description: "",
-            latestVersionID: "",
-            latestVersion: "",
-            deprecated: true,
-            section: "workspace",
-            requiredCredentials: [],
-          })
-        }
-      }
-    }
     return live
-  }, [capabilitiesQ.data, mode, capabilities, cloneSourceID])
+  }, [capabilitiesQ.data, cloneSourceID])
   const capabilityTypeCounts = useMemo(() => {
     // Ghost rows have unknown type, so they're excluded from per-type tallies
     // (still count toward "all").
@@ -502,10 +464,8 @@ export function CreateAgentDialog({
     return [...own, ...(cloneSourceID ? cloneMarketplaceCapabilities(installed) : installed), ...available]
   }, [allCapabilitiesQ.data, cloneSourceID])
   const aggregatedRequiredKinds = useMemo(
-    () => mode === "create"
-      ? aggregateRequiredCredentialsByID(selectedCapabilityIDs, allCapabilitiesPool)
-      : aggregateRequiredCredentials(capabilities, allCapabilitiesPool),
-    [capabilities, mode, selectedCapabilityIDs, allCapabilitiesPool]
+    () => aggregateRequiredCredentialsByID(selectedCapabilityIDs, allCapabilitiesPool),
+    [selectedCapabilityIDs, allCapabilitiesPool]
   )
   const admin = isAdminRole(workspaceRole)
 
@@ -523,7 +483,6 @@ export function CreateAgentDialog({
     }
     if (wasOpenRef.current) return
     wasOpenRef.current = true
-    capabilitySelectionEdited.current = false
     const params = new URLSearchParams(window.location.search.replace(/^\?+/, "?"))
     if (mode === "create") {
       // Clone path: an `agent` prop in create mode means prefill from that
@@ -544,7 +503,6 @@ export function CreateAgentDialog({
       setModelDropdownOpen(false)
       setHighlightedModelID(null)
       setSystemPrompt(params.get("agent_prompt") ?? (cloneSource ? promptFromAgent(cloneSource, defaultSystemPrompt) : defaultSystemPrompt))
-      setCapabilities(cloneSource ? capabilitiesFromAgent(cloneSource) : [])
       setSelectedCapabilityIDs([])
       setCapabilityVersionChoices({})
       setCapabilitySearch("")
@@ -553,7 +511,6 @@ export function CreateAgentDialog({
       setWorkDir(cloneSource ? workDirFromAgent(cloneSource) || defaultWorkDir(initialExecutionMode) : defaultWorkDir(initialExecutionMode))
       // Capability credentials are resolved separately for each cloned binding.
       setCredentialBindings({})
-      setInitialCredentialBindings(undefined)
       // Clones keep valid shared references without choosing a different secret.
       const sourceModelBinding = agentConfig(cloneSource).model_credential_binding as { source?: string; secret_id?: string } | undefined
       setModelBindingChoice(sourceModelBinding?.source === "shared" && sourceModelBinding.secret_id
@@ -576,35 +533,13 @@ export function CreateAgentDialog({
       setModelDropdownOpen(false)
       setHighlightedModelID(null)
       setSystemPrompt(promptFromAgent(agent, ""))
-      setCapabilities(capabilitiesFromAgent(agent))
       setSelectedCapabilityIDs([])
-      // capabilityVersionChoices for edit mode is hydrated by a separate
-      // useEffect once existingBindingsQ resolves — the hook may still be
-      // loading when this open-effect runs.
       setCapabilityVersionChoices({})
       setCapabilitySearch("")
       setVisibility(agent.visibility ?? "workspace")
       setDeviceID(deviceIDFromAgent(agent))
       setWorkDir(workDirFromAgent(agent))
-      // Hydrate credential bindings from agent_config so step 3 shows what
-      // the agent already has wired up. Only shared+secret_id is recoverable
-      // — pasted-token (`new_secret`) is ephemeral and never round-trips.
       const ac = agentConfig(agent)
-      const hydrated: Record<string, { source: "shared"; secret_id: string }> = {}
-      const rawBindings = (ac.credential_bindings ?? {}) as Record<string, unknown>
-      for (const [kind, raw] of Object.entries(rawBindings)) {
-        const o = raw as { source?: string; secret_id?: string }
-        if (o?.source === "shared" && typeof o.secret_id === "string" && o.secret_id) {
-          hydrated[kind] = { source: "shared", secret_id: o.secret_id }
-        }
-      }
-      setCredentialBindings(hydrated)
-      // Freeze the same payload for the panel to hydrate from. We keep two
-      // states deliberately: credentialBindings tracks the live picker output
-      // (changes on every panel onChange), while initialCredentialBindings is
-      // immutable per dialog-open so panel's hydration effect doesn't fire
-      // when the parent re-renders from setCredentialBindings.
-      setInitialCredentialBindings(hydrated)
       const mb = ac.model_credential_binding as { source?: string; secret_id?: string } | undefined
       setModelBindingChoice(
         mb?.source === "shared" && typeof mb.secret_id === "string" && mb.secret_id
@@ -640,36 +575,6 @@ export function CreateAgentDialog({
       current === defaultWorkDir(executionMode) ? defaultWorkDir(nextMode) : current
     )
   }
-
-  // Hydrate edit-mode binding choices when the listAgentCapabilities
-  // response lands. We only seed entries the user hasn't touched (i.e.
-  // key not already present) so a hot reload of the bindings query won't
-  // clobber an in-flight version pick.
-  useEffect(() => {
-    if (!open || mode !== "edit") return
-    const installed = existingBindingsQ.data?.installed ?? []
-    if (installed.length === 0) return
-    setCapabilityVersionChoices((prev) => {
-      const next = { ...prev }
-      for (const binding of installed) {
-        if (!binding.capability_id) continue
-        if (next[binding.capability_id]) continue
-        // pinning_mode is a fresh field; rows written before this change
-        // default to "pinned" on the server side via the migration default.
-        const pinningMode: "latest" | "pinned" = binding.pinning_mode === "latest" ? "latest" : "pinned"
-        next[binding.capability_id] = {
-          pinningMode,
-          versionID: binding.capability_version_id,
-          // binding.version is the pinned version literal; carry it so
-          // CapabilityVersionPicker can label the loading-state option
-          // with the correct version number instead of the capability's
-          // latest version number.
-          pinnedVersion: binding.version,
-        }
-      }
-      return next
-    })
-  }, [open, mode, existingBindingsQ.data])
 
   useEffect(() => {
     if (!modelDropdownOpen) return
@@ -780,35 +685,6 @@ export function CreateAgentDialog({
   const showDevicePicker = connector === "agent_daemon" && executionMode === "local_device" && Boolean(workspaceID)
   const errMsg = extractErrorMessage(error)
 
-  function toggleCapability(cap: string, capabilityID?: string, latestVersionID?: string) {
-    capabilitySelectionEdited.current = true
-    let wasChecked = false
-    setCapabilities((prev) => {
-      wasChecked = prev.includes(cap)
-      return wasChecked ? prev.filter((c) => c !== cap) : [...prev, cap]
-    })
-    // Keep the per-binding version choice map in sync with the checkbox
-    // so a freshly-checked row gets a "latest" default and an unchecked
-    // row stops carrying stale dropdown state into the submit payload.
-    // We read `wasChecked` (set inside the functional update above) so
-    // both batches see consistent "before-this-toggle" state — relying
-    // on the closure-captured `capabilities` instead would drift if
-    // React batched two toggles in the same tick.
-    if (capabilityID) {
-      setCapabilityVersionChoices((prev) => {
-        if (wasChecked) {
-          // We're toggling OFF — drop the choice.
-          const { [capabilityID]: _, ...rest } = prev
-          return rest
-        }
-        // Toggling ON: default to latest with the latest version id as the
-        // fallback "last seen" pointer the server stores.
-        if (prev[capabilityID]) return prev
-        return { ...prev, [capabilityID]: { pinningMode: "latest", versionID: latestVersionID ?? "" } }
-      })
-    }
-  }
-
   function toggleInitialCapability(capabilityID: string, latestVersionID?: string) {
     let wasChecked = false
     setSelectedCapabilityIDs((prev) => {
@@ -829,7 +705,7 @@ export function CreateAgentDialog({
     setCapabilityVersionChoices((prev) => ({ ...prev, [capabilityID]: choice }))
   }
 
-  async function submit() {
+  function submit() {
     setSubmitAttempted(true)
     if (!cloudReady) return
     if (!hasRequiredModel || !publicModelBindingValid) {
@@ -848,7 +724,7 @@ export function CreateAgentDialog({
     const selectedCapabilities = mode === "create"
       ? allCapabilitiesPool.filter((cap) => selectedCapabilityIDs.includes(cap.id) && cap.latest_version_id)
       : []
-    const capabilityNames = mode === "create" ? selectedCapabilities.map((cap) => cap.name) : capabilities
+    const capabilityNames = selectedCapabilities.map((cap) => cap.name)
     // initialCapabilities carries the per-binding pin choice. Empty
     // versionID falls back to the capability's latest_version_id so the
     // server's NOT NULL capability_version_id constraint is satisfied
@@ -865,8 +741,7 @@ export function CreateAgentDialog({
     })
     const profile = {
       ...(requiresModel ? { model_id: selectedModelID } : {}),
-      capabilities: capabilityNames,
-      skills: capabilityNames,
+      ...(mode === "create" ? { capabilities: capabilityNames, skills: capabilityNames } : {}),
     }
     const mergedConfig: Record<string, unknown> = {
       ...(cloneSourceID ? withoutCredentialBindings(configBaseForSubmit(agent, connector)) : configBaseForSubmit(agent, connector)),
@@ -900,16 +775,16 @@ export function CreateAgentDialog({
     // config so the runtime resolver and visibility-bindings validator
     // both see them.
     //
-    // Edit mode always emits both keys — including {} / null when the user
-    // cleared all shared picks back to personal — so the backend cherry-pick
-    // can persist the clear. In create mode there's no stored state to
-    // override, so we omit empty payloads to keep the JSON tight.
+    // Only creation carries capability credentials. Editing preserves them
+    // server-side; model credential changes remain part of this form.
     //
     // These belong to the agent config the update body carries, so we build
     // them on a separate object — the agentProfile request below
     // intentionally doesn't see them.
     const agentBodyConfig: Record<string, unknown> = { ...mergedConfig }
-    if (mode === "edit" || Object.keys(credentialBindings).length > 0) {
+    if (mode === "edit") {
+      delete agentBodyConfig.credential_bindings
+    } else if (Object.keys(credentialBindings).length > 0) {
       agentBodyConfig.credential_bindings = credentialBindings
     }
     if (modelBindingChoice.source === "shared" && "existing_secret_id" in modelBindingChoice && modelBindingChoice.existing_secret_id) {
@@ -939,9 +814,7 @@ export function CreateAgentDialog({
       system_prompt: systemPrompt.trim(),
       connector_type: connector,
       ...(requiresModel ? { default_model_id: selectedModelID } : {}),
-      // The legacy name list can lag canonical bindings added from Config.
-      ...(mode === "create" || capabilitySelectionEdited.current ? { capabilities: capabilityNames } : {}),
-      ...(mode === "create" ? { initial_capabilities: initialCapabilities, visibility } : {}),
+      ...(mode === "create" ? { capabilities: capabilityNames, initial_capabilities: initialCapabilities, visibility } : {}),
       config: agentBodyConfig,
       ...(inlineSecretsToCreate.length > 0 ? { inline_new_secrets: inlineSecretsToCreate } : {}),
     } satisfies CreateAgentRequest | UpdateAgentRequest
@@ -952,74 +825,7 @@ export function CreateAgentDialog({
           config: agentProfileConfig,
         } satisfies UpdateAgentProfileRequest
       : undefined
-    // In edit mode, sync per-binding pinning_mode / version against the
-    // server BEFORE firing the main update. updateAgent + the server-
-    // side syncAgentCapabilities don't touch capability_version_id or
-    // pinning_mode on rows that already exist (the "don't auto-upgrade"
-    // contract), so we have to call enable explicitly for each binding
-    // the user changed. enable's upsert path takes care of the UPDATE
-    // when the (agent, capability) row already exists.
-    //
-    // We MUST await every per-binding mutate before calling onSubmit:
-    // syncAgentCapabilities racing with the per-binding enables would
-    // see a "new" row for any binding the user just checked-and-pinned
-    // and re-enable it with its own default mode, clobbering the
-    // pinning_mode the user just picked. Sequencing here makes the
-    // outcome deterministic regardless of network latency.
-    if (mode === "edit" && agent?.id && workspaceID) {
-      const installed = existingBindingsQ.data?.installed ?? []
-      const existingByCapID = new Map<string, { versionID: string; mode: "latest" | "pinned" }>()
-      for (const binding of installed) {
-        if (!binding.capability_id) continue
-        existingByCapID.set(binding.capability_id, {
-          versionID: binding.capability_version_id,
-          mode: binding.pinning_mode === "latest" ? "latest" : "pinned",
-        })
-      }
-      const pendingSyncs: Array<Promise<unknown>> = []
-      for (const [capabilityID, choice] of Object.entries(capabilityVersionChoices)) {
-        // Only sync bindings the user kept selected. Unchecked bindings
-        // get removed by the server-side syncAgentCapabilities through
-        // the capabilities name list.
-        if (!capabilities.includes(capabilityNameForID(capabilityID))) continue
-        const existing = existingByCapID.get(capabilityID)
-        const sameMode = existing?.mode === choice.pinningMode
-        const sameVersion = choice.pinningMode === "latest"
-          ? true // version_id is just a "last seen" pointer in latest mode; don't churn on it.
-          : existing?.versionID === choice.versionID
-        if (existing && sameMode && sameVersion) continue
-        pendingSyncs.push(
-          enableBindingMut.mutateAsync({
-            capabilityVersionID: choice.versionID,
-            pinningMode: choice.pinningMode,
-          }).catch((err) => {
-            // Don't abort the rest of the edit on one binding failing —
-            // the mutation hook logs + surfaces via the toast layer.
-            // We still need to swallow here so Promise.all below doesn't
-            // reject and block the agent update.
-            console.warn("enable binding mutate failed", { capabilityID, err })
-            return null
-          })
-        )
-      }
-      if (pendingSyncs.length > 0) {
-        try {
-          await Promise.all(pendingSyncs)
-        } catch {
-          // Individual failures already swallowed above; this catch is
-          // defence-in-depth in case Promise.all itself rejects.
-        }
-      }
-    }
     onSubmit({ agentID: agent?.id, body, agentProfile })
-  }
-
-  // capabilityNameForID resolves capability_id → name from the
-  // local pool, used by the edit-mode sync to skip choices whose
-  // capability was unchecked (the name disappears from `capabilities`).
-  function capabilityNameForID(capabilityID: string): string {
-    const cap = allCapabilitiesPool.find((c) => c.id === capabilityID)
-    return cap?.name ?? ""
   }
 
   const workDirTrimmed = workDir.trim()
@@ -1045,7 +851,7 @@ export function CreateAgentDialog({
     cloudReady &&
     (connector !== "agent_daemon" || executionMode !== "local_device" || deviceID !== "") &&
     workDirValid && cloneModelCredentialValid
-  const totalSteps = 2
+  const totalSteps = mode === "create" ? 2 : 1
   const progressPercent = Math.round((step / totalSteps) * 100)
 
   function tryAdvance(target: WizardStep) {
@@ -1090,17 +896,20 @@ export function CreateAgentDialog({
       >
         <DialogHeader className="shrink-0">
           <DialogTitle>{mode === "edit" ? t("agents.form.title.edit") : t("agents.form.title.create")}</DialogTitle>
+          {mode === "edit" && <DialogDescription>{t("agents.form.editCapabilitiesHint")}</DialogDescription>}
         </DialogHeader>
 
-        <WizardProgress
-          step={step}
-          totalSteps={totalSteps}
-          progressPercent={progressPercent}
-          title={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.title` as never)}
-          summary={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.summary` as never)}
-          stepOfLabel={t("agents.form.wizard.stepOf", { current: step, total: totalSteps })}
-          completeLabel={t("agents.form.wizard.complete", { percent: progressPercent })}
-        />
+        {mode === "create" && (
+          <WizardProgress
+            step={step}
+            totalSteps={totalSteps}
+            progressPercent={progressPercent}
+            title={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.title` as never)}
+            summary={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.summary` as never)}
+            stepOfLabel={t("agents.form.wizard.stepOf", { current: step, total: totalSteps })}
+            completeLabel={t("agents.form.wizard.complete", { percent: progressPercent })}
+          />
+        )}
 
         {needsCloudPreflight && !cloudReady && workspaceID && (
           <AgentCloudPreflight workspaceID={workspaceID} checking={runtimeStatus.isFetching} failed={runtimeStatus.isError} onRetry={() => void runtimeStatus.refetch()} />
@@ -1582,7 +1391,7 @@ export function CreateAgentDialog({
             </div>
           )}
 
-          {step === 2 && (
+          {mode === "create" && step === 2 && (
             <>
               {cloneSourceID && <AgentCloneNotice
                 ready={clone.ready && cloneCredentials.ready && !allCapabilitiesQ.isLoading}
@@ -1621,7 +1430,7 @@ export function CreateAgentDialog({
                             </div>
                             {rows.map((cap) => {
                               const index = rowCounter++
-                              const checked = mode === "create" ? selectedCapabilityIDs.includes(cap.id) : capabilities.includes(cap.name)
+                              const checked = selectedCapabilityIDs.includes(cap.id)
                               const lockedNoVersion = mode === "create" && !cap.latestVersionID
                               const lockedDeprecatedAndUnchecked = cap.deprecated && !checked
                               const disabled = lockedNoVersion || lockedDeprecatedAndUnchecked || !clone.ready
@@ -1633,7 +1442,7 @@ export function CreateAgentDialog({
                                     className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-accent"
                                     checked={checked}
                                     disabled={disabled}
-                                    onChange={() => mode === "create" ? toggleInitialCapability(cap.id, cap.latestVersionID) : toggleCapability(cap.name, cap.id, cap.latestVersionID)}
+                                    onChange={() => toggleInitialCapability(cap.id, cap.latestVersionID)}
                                   />
                                   <span className="min-w-0 flex-1">
                                     <span className="flex min-w-0 items-center gap-2">
@@ -1685,7 +1494,6 @@ export function CreateAgentDialog({
                     workspaceID={workspaceID}
                     sharedSecrets={sharedSecrets}
                     visibility={visibility}
-                    initialBindings={mode === "edit" ? initialCredentialBindings : undefined}
                     onChange={(bindings, inlineNew, valid) => {
                       setCredentialBindings(bindings)
                       setInlineNewSecrets(inlineNew)

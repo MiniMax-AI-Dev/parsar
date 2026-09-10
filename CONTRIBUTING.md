@@ -267,6 +267,14 @@ description and keep ownership on the side listed here.
   accepted only as an absolute path or `~/...`; daemon-side fallbacks must stay
   under `~/.parsar/`.
 
+### Agent editing
+
+- The Agent edit form updates profile, model, and execution settings only.
+  Manage existing capability bindings, versions, and capability credentials
+  through the Config capability controls. Creation can choose initial bindings.
+  Profile edits must omit capability reconciliation and capability credential
+  snapshots.
+
 ### Agent CLI adapter contract
 
 - Daemon-managed Codex sessions use `approvalPolicy=never` and

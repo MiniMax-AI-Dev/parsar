@@ -10,7 +10,6 @@ for (const instructions of ["Existing instructions", "Updated instructions\nAsk 
     const field = dialog.getByRole("textbox", { name: "Instructions", exact: true });
     await expect(field).toHaveValue("Existing instructions");
     if (instructions !== "Existing instructions") await field.fill(instructions);
-    await dialog.getByRole("button", { name: "Next", exact: true }).click();
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     expect(writes.updates).toHaveLength(1);
@@ -37,7 +36,6 @@ for (const instructions of ["Answer from the approved policy.", ""]) {
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const edit = page.getByRole("dialog", { name: "Edit Agent" });
     await expect(edit.getByRole("textbox", { name: "Instructions", exact: true })).toHaveValue(instructions);
-    await edit.getByRole("button", { name: "Next", exact: true }).click();
     await edit.getByRole("button", { name: "Save", exact: true }).click();
     await expect(edit).not.toBeVisible();
     expect(writes.updates[0].system_prompt).toBe(instructions);
@@ -51,7 +49,6 @@ for (const changePrompt of [false, true]) {
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Edit Agent" });
     if (changePrompt) await dialog.getByRole("textbox", { name: "Instructions", exact: true }).fill("Updated instructions");
-    await dialog.getByRole("button", { name: "Next", exact: true }).click();
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     expect(writes.updates).toHaveLength(1);
@@ -59,18 +56,6 @@ for (const changePrompt of [false, true]) {
     expect(writes.capabilityWrites).toHaveLength(0);
   });
 }
-
-test("explicit capability selection retains the existing replacement request", async ({ page }) => {
-  const writes = await mockAgents(page, true);
-  await page.goto(`/?ws=${workspace}&admin=agents&id=${agentID}&tab=config`);
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Edit Agent" });
-  await dialog.getByRole("button", { name: "Next", exact: true }).click();
-  await dialog.getByRole("checkbox", { name: /Policy/ }).check();
-  await dialog.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(dialog).not.toBeVisible();
-  expect(writes.updates[0].capabilities).toEqual(["Policy"]);
-});
 
 for (const finish of ["create", "cancel"]) {
   test(`model prerequisite preserves the live form until ${finish}`, async ({ page }) => {
