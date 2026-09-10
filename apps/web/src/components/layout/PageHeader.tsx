@@ -25,7 +25,7 @@ interface PageHeaderProps {
 }
 
 /**
- * The 64px topbar every console page starts with: title on the left
+ * The topbar every console page starts with: title on the left
  * (the only 600 weight on the screen), actions on the right. Sticks to
  * the top of the scrolling main column and spans its full width.
  */
@@ -36,7 +36,7 @@ export function PageHeader({ title, subtitle, subtitleFor, action, actionClassNa
   return (
     <header
       className={cn(
-        "sticky top-0 z-10 -mx-6 mb-8 flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-6",
+        "sticky top-0 z-10 -mx-6 mb-8 flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-line bg-surface px-6 py-3",
         className,
       )}
     >
@@ -46,14 +46,14 @@ export function PageHeader({ title, subtitle, subtitleFor, action, actionClassNa
           `overflow: hidden` sliced the tail off every descender — "Settings"
           lost the foot of its g. The scale's own 24px line is the fix. */}
       {title && (
-        <h1 className="font-display flex min-w-0 items-baseline gap-2 text-xl text-fg">
+        <h1 className="font-display flex min-w-0 max-w-full shrink-0 items-baseline gap-2 text-xl text-fg">
           <span className="truncate">{title}</span>
           {resolvedSubtitle && (
             <span className="shrink-0 text-xs font-normal tracking-normal text-fg-muted">{resolvedSubtitle}</span>
           )}
         </h1>
       )}
-      {action && <div className={cn("ml-auto flex shrink-0 items-center gap-2", actionClassName)}>{action}</div>}
+      {action && <div className={cn("ml-auto flex max-w-full shrink-0 flex-wrap items-center gap-2 [&>*]:max-w-full", actionClassName)}>{action}</div>}
     </header>
   )
 }
