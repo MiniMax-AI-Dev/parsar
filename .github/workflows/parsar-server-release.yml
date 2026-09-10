@@ -34,6 +34,7 @@ on:
       # rebuild + republish the server image — else the served binary goes
       # stale against source.
       - "apps/parsar-daemon/**"
+      - "apps/parsar/**"
       - "go.mod"
       - "go.sum"
       - "go.work"
@@ -63,6 +64,7 @@ on:
       - "apps/web/**"
       - "packages/tsconfig/**"
       - "apps/parsar-daemon/**"
+      - "apps/parsar/**"
       - "go.mod"
       - "go.sum"
       - "go.work"

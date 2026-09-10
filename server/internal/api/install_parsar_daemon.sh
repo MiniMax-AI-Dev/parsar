@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # Parsar — parsar-daemon installer.
 #
-# Downloads the platform-appropriate parsar-daemon binary from the project's
-# GitHub Releases. Does NOT chmod, NOT install onto $PATH, NOT touch
-# system directories — the caller (admin operator on their own laptop)
-# decides where the binary lands. We just put it next to the user's
-# Downloads so a managed laptop policy can intercept it before exec.
+# Pairing installs the daemon and companion CLI together under ~/.parsar/bin.
+# Download-only mode keeps the daemon non-executable for operator review.
+# Neither mode modifies shell profiles or system directories.
 #
 # Resolution order (highest priority first):
 #   1. $PARSAR_DAEMON_VERSION       — exact GitHub Release tag (e.g. v0.1.0)
@@ -41,6 +39,24 @@ esac
 REPO="${PARSAR_DAEMON_REPO:-$DEFAULT_REPO}"
 VERSION="${PARSAR_DAEMON_VERSION:-}"
 OUT_DIR="${PARSAR_DAEMON_OUT_DIR:-${HOME}/Downloads}"
+PAIRING="${PARSAR_DAEMON_CONNECT_TOKEN:-}"
+if [ -n "$PAIRING" ]; then
+  if [ -z "${PARSAR_DAEMON_CONNECT_URL:-}" ]; then
+    echo "parsar-daemon: PARSAR_DAEMON_CONNECT_TOKEN is set but PARSAR_DAEMON_CONNECT_URL is empty" >&2
+    exit 1
+  fi
+  OUT_DIR="${PARSAR_DAEMON_OUT_DIR:-${HOME}/.parsar/bin}"
+fi
+case "$OUT_DIR" in
+  /*) ;;
+  *) echo "parsar-daemon: PARSAR_DAEMON_OUT_DIR must be absolute" >&2; exit 1 ;;
+esac
+mkdir -p "$OUT_DIR"
+DOWNLOAD_DIR="$OUT_DIR"
+if [ -n "$PAIRING" ]; then
+  DOWNLOAD_DIR="$(mktemp -d "${OUT_DIR}/.install.XXXXXX")"
+  trap 'rm -rf "$DOWNLOAD_DIR"' EXIT
+fi
 
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
@@ -67,12 +83,19 @@ SERVED_LOCALLY=""
 SERVER_ORIGIN="${PARSAR_DAEMON_CONNECT_URL:-}"
 if [ -n "$SERVER_ORIGIN" ]; then
   SERVER_ORIGIN="${SERVER_ORIGIN%/}"
-  OUT_FILE="${OUT_DIR}/parsar-daemon-${OS}-${ARCH}"
+  OUT_FILE="${DOWNLOAD_DIR}/parsar-daemon-${OS}-${ARCH}"
   echo "Fetching parsar-daemon for ${OS}/${ARCH} from ${SERVER_ORIGIN}..."
   mkdir -p "$OUT_DIR"
   if curl -fL "${SERVER_ORIGIN}/api/v1/parsar-daemon/download?os=${OS}&arch=${ARCH}" -o "$OUT_FILE"; then
     printf 'Downloaded to %s\n' "$OUT_FILE"
     SERVED_LOCALLY=1
+    if [ -n "$PAIRING" ]; then
+      CLI_FILE="${DOWNLOAD_DIR}/parsar"
+      if ! curl -fL "${SERVER_ORIGIN}/api/v1/parsar-daemon/download?os=${OS}&arch=${ARCH}&binary=parsar" -o "$CLI_FILE"; then
+        echo "parsar-daemon: this server is missing the companion CLI. Upgrade the server and retry; pairing has not started." >&2
+        exit 1
+      fi
+    fi
   else
     echo "Parsar server has no prebuilt binary for ${OS}/${ARCH}; falling back to GitHub Releases." >&2
     rm -f "$OUT_FILE"
@@ -101,7 +124,7 @@ if [ -z "$SERVED_LOCALLY" ]; then
   BARE_VERSION="${VERSION#parsar-daemon-}"
   BINARY="parsar-daemon-${BARE_VERSION}-${OS}-${ARCH}"
   DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}"
-  OUT_FILE="${OUT_DIR}/${BINARY}"
+  OUT_FILE="${DOWNLOAD_DIR}/${BINARY}"
 
   echo "Downloading ${BINARY} from ${DOWNLOAD_URL}..."
   mkdir -p "$OUT_DIR"
@@ -117,35 +140,26 @@ ERR
     exit 1
   fi
 
+  if [ -n "$PAIRING" ]; then
+    CLI_FILE="${DOWNLOAD_DIR}/parsar"
+    CLI_URL="https://github.com/${REPO}/releases/download/${VERSION}/parsar-${BARE_VERSION}-${OS}-${ARCH}"
+    if ! curl -fL "$CLI_URL" -o "$CLI_FILE"; then
+      echo "parsar-daemon: this release is missing the companion CLI. Choose a release containing both binaries; pairing has not started." >&2
+      exit 1
+    fi
+  fi
   printf 'Downloaded to %s\n' "$OUT_FILE"
 fi
 
-# --- One-line connect mode (north star) -------------------------------
-# When the Parsar web "Pair new device / copy one command" button mints a
-# command, it pipes this script with the pairing env vars set:
-#
-#   curl -fsSL .../install.sh \
-#     | PARSAR_DAEMON_CONNECT_URL=<server> \
-#       PARSAR_DAEMON_CONNECT_TOKEN=<one-shot-token> \
-#       PARSAR_DAEMON_CONNECT_DEVICE_NAME=<name> bash
-#
-# In that mode we finish the job: chmod the freshly-downloaded binary and
-# hand off to `connect`, so the operator never touches the binary, its
-# path, or the token. `connect` hydrates URL/token/device-name from these
-# same env vars and scrubs them from child argv, so the one-shot token
-# never appears in any process listing. `exec` replaces this shell; the
-# `-b` flag then re-spawns the daemon detached and returns.
-#
-# Without PARSAR_DAEMON_CONNECT_TOKEN we fall through to the download-only
-# enterprise posture below (no chmod, no $PATH changes) — same script,
-# behaviour gated purely on env. Profile-not-fork applied to the installer.
-if [ -n "${PARSAR_DAEMON_CONNECT_TOKEN:-}" ]; then
-  if [ -z "${PARSAR_DAEMON_CONNECT_URL:-}" ]; then
-    echo "parsar-daemon: PARSAR_DAEMON_CONNECT_TOKEN is set but PARSAR_DAEMON_CONNECT_URL is empty" >&2
-    exit 1
-  fi
+# Pair only after both downloads succeed; the token stays in the environment.
+if [ -n "$PAIRING" ]; then
+  chmod +x "$OUT_FILE" "$CLI_FILE"
+  mv "$CLI_FILE" "${OUT_DIR}/parsar"
+  mv "$OUT_FILE" "${OUT_DIR}/parsar-daemon"
+  rm -rf "$DOWNLOAD_DIR"
+  trap - EXIT
+  OUT_FILE="${OUT_DIR}/parsar-daemon"
   printf 'Pairing this device with %s ...\n' "$PARSAR_DAEMON_CONNECT_URL"
-  chmod +x "$OUT_FILE"
   exec "$OUT_FILE" connect -b
 fi
 
