@@ -104,6 +104,7 @@ type ProvisionState = {
 }
 
 interface FeishuConnectorPanelProps {
+  agentName: string
   agentID: string
   workspaceID: string | null
   /** Current persisted config — undefined when never configured. */
@@ -117,6 +118,7 @@ function RequiredMark() {
 }
 
 export function FeishuConnectorPanel({
+  agentName,
   agentID,
   workspaceID,
   current,
@@ -198,8 +200,8 @@ export function FeishuConnectorPanel({
                 ...prev,
                 status: "success",
                 message: res.bot_name
-                  ? t("agents.feishuConnector.provision.successWithName", { name: res.bot_name })
-                  : t("agents.feishuConnector.provision.success"),
+                  ? t("agents.feishuConnector.provision.successWithName", { name: res.bot_name, agent: agentName })
+                  : t("agents.feishuConnector.provision.success", { agent: agentName }),
               } : prev)
               onToast(t("agents.feishuConnector.provision.saved"))
               return
@@ -224,7 +226,7 @@ export function FeishuConnectorPanel({
       )
     }, Math.max(1, provision.intervalSec) * 1000)
     return () => window.clearTimeout(timer)
-  }, [agentID, onToast, pollProvisionPending, provision, t])
+  }, [agentID, agentName, onToast, pollProvisionPending, provision, t])
 
   const onSave = async () => {
     setErrorMsg(null)
@@ -364,7 +366,7 @@ export function FeishuConnectorPanel({
                         <ExternalLink strokeWidth={1.5} aria-hidden="true" />
                       </a>
                     </Button>
-                    {provision.message && <p className="text-sm text-fg">{provision.message}</p>}
+                    {provision.message && <p className="text-sm text-fg [overflow-wrap:anywhere]">{provision.message}</p>}
                   </div>
                 </div>
               )}

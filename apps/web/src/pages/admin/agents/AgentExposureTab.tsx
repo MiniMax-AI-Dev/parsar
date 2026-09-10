@@ -80,6 +80,7 @@ export function AgentExposureTab({ agent, workspaceID, canEdit, onToast }: {
         {feishuOpen && workspaceID && (
           <div className="mt-3">
             <FeishuConnectorPanel
+              agentName={agent.name}
               agentID={agent.id}
               workspaceID={workspaceID}
               current={feishu}
