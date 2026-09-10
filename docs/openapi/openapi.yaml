@@ -4367,8 +4367,8 @@ paths:
       - memories
   /api/v1/parsar-daemon/download:
     get:
-      description: Serves the parsar-daemon binary for the requested os/arch pair
-        from the image's baked-in binary directory. Unauthenticated — the pairing
+      description: Serves the daemon or companion CLI binary for the requested os/arch
+        pair from the image's baked-in binary directory. Unauthenticated — the pairing
         token is what gates the actual connect.
       operationId: downloadParsarDaemon
       parameters:
@@ -4388,11 +4388,18 @@ paths:
         name: arch
         required: true
         type: string
+      - description: binary name (defaults to parsar-daemon)
+        enum:
+        - parsar-daemon
+        - parsar
+        in: query
+        name: binary
+        type: string
       produces:
       - application/octet-stream
       responses:
         "200":
-          description: parsar-daemon binary stream
+          description: device runtime binary stream
           schema:
             type: file
         "400":
@@ -4403,7 +4410,7 @@ paths:
           description: no binary for that os/arch in this image
           schema:
             type: string
-      summary: Download parsar-daemon binary
+      summary: Download device runtime binary
       tags:
       - runtimes
   /api/v1/parsar-daemon/install.sh:

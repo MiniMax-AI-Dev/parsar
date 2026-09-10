@@ -23,7 +23,7 @@ var (
 
 type ParsarDaemonDownloadConfig struct {
 	// BinaryDir holds the per-platform parsar-daemon binaries named
-	// parsar-daemon-<os>-<arch>. Empty falls back to defaultDaemonBinaryDir.
+	// parsar-daemon-<os>-<arch> or parsar-<os>-<arch>. Empty uses the default.
 	BinaryDir string
 }
 
@@ -44,14 +44,15 @@ func RegisterParsarDaemonDownloadRoute(r chi.Router, cfg ParsarDaemonDownloadCon
 // caller's os/arch pair. Extracted so swag can attach annotations to a named
 // function.
 //
-//	@Summary	Download parsar-daemon binary
-//	@Description	Serves the parsar-daemon binary for the requested os/arch pair from the image's baked-in binary directory. Unauthenticated — the pairing token is what gates the actual connect.
+//	@Summary	Download device runtime binary
+//	@Description	Serves the daemon or companion CLI binary for the requested os/arch pair from the image's baked-in binary directory. Unauthenticated — the pairing token is what gates the actual connect.
 //	@Tags		runtimes
 //	@ID			downloadParsarDaemon
 //	@Produce	octet-stream
 //	@Param		os query string true "target GOOS" Enums(darwin, linux)
 //	@Param		arch query string true "target GOARCH" Enums(amd64, arm64)
-//	@Success	200 {file} binary "parsar-daemon binary stream"
+//	@Param		binary query string false "binary name (defaults to parsar-daemon)" Enums(parsar-daemon, parsar)
+//	@Success	200 {file} binary "device runtime binary stream"
 //	@Failure	400 {string} string "os/arch not in the accepted allowlist"
 //	@Failure	404 {string} string "no binary for that os/arch in this image"
 //	@Router		/api/v1/parsar-daemon/download [get]
@@ -64,17 +65,25 @@ func parsarDaemonDownloadHandler(dir string) http.HandlerFunc {
 			return
 		}
 
-		name := "parsar-daemon-" + goos + "-" + goarch
+		binary := req.URL.Query().Get("binary")
+		if binary == "" {
+			binary = "parsar-daemon"
+		}
+		if binary != "parsar-daemon" && binary != "parsar" {
+			http.Error(w, "binary must be one of [parsar-daemon parsar]", http.StatusBadRequest)
+			return
+		}
+		name := binary + "-" + goos + "-" + goarch
 		f, err := os.Open(filepath.Join(dir, name))
 		if err != nil {
-			http.Error(w, "no parsar-daemon binary for "+goos+"/"+goarch+" in this image", http.StatusNotFound)
+			http.Error(w, "no "+binary+" binary for "+goos+"/"+goarch+" in this image", http.StatusNotFound)
 			return
 		}
 		defer func() { _ = f.Close() }()
 
 		stat, err := f.Stat()
 		if err != nil || stat.IsDir() {
-			http.Error(w, "no parsar-daemon binary for "+goos+"/"+goarch+" in this image", http.StatusNotFound)
+			http.Error(w, "no "+binary+" binary for "+goos+"/"+goarch+" in this image", http.StatusNotFound)
 			return
 		}
 

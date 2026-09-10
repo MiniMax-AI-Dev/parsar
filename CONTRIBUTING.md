@@ -193,6 +193,19 @@ description and keep ownership on the side listed here.
   Show the original SKILL.md entry alongside parsed metadata; do not reconstruct
   its source from canonical fields, which omit unsupported frontmatter.
 
+### Paired-device companion CLI
+
+- Device pairing installs `parsar-daemon` and the `parsar` companion CLI from
+  the same server image or release. Stage both downloads before pairing; a
+  missing CLI must not consume the one-shot pairing token.
+- Pairing defaults to `~/.parsar/bin`; download-only mode retains its existing
+  output-directory and non-executable behavior. Do not modify shell profiles
+  or system directories. Upload-enabled tasks can find the executable `parsar`
+  beside the daemon even after a later reconnect from a different shell.
+- The server image and daemon release workflow ship both binaries for the same
+  four platforms. Companion installation does not grant API authorization;
+  task-scoped uploads keep the current run requester and workspace checks.
+
 ### Runtime and execution concepts
 
 - The daemon resolves loopback Postgres capability-download URLs through its

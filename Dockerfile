@@ -99,8 +99,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # parsar-daemon source (root module, no separate go.mod). Copied after the
 # server build so editing the daemon doesn't invalidate the layer above.
 COPY apps/parsar-daemon ./apps/parsar-daemon
+COPY apps/parsar ./apps/parsar
 
-# Cross-compile the daemon for every platform the install script serves —
+# Cross-compile the daemon and companion CLI for device installation —
 # the allowlist in server/internal/api/parsar_daemon_download.go is
 # {darwin,linux}×{amd64,arm64}. Baking all four into the image lets the
 # minting server hand the host-appropriate binary to the one-line connect
@@ -108,13 +109,17 @@ COPY apps/parsar-daemon ./apps/parsar-daemon
 # stays off so each cross-target links statically.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    mkdir -p /out/daemon \
+    set -e; mkdir -p /out/daemon \
  && for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do \
       os="${target%/*}"; arch="${target#*/}"; \
       CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" GOFLAGS=-trimpath \
         go build -ldflags="-s -w" \
           -o "/out/daemon/parsar-daemon-${os}-${arch}" \
           ./apps/parsar-daemon/cmd/parsar-daemon; \
+      CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" GOFLAGS=-trimpath \
+        go build -ldflags="-s -w" \
+          -o "/out/daemon/parsar-${os}-${arch}" \
+          ./apps/parsar/cmd/parsar; \
     done
 
 ###############################################################################
