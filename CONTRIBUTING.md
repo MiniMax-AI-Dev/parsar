@@ -151,7 +151,9 @@ description and keep ownership on the side listed here.
 - Skills.sh previews reuse the install downloader and Skill ZIP parser, require
   the same owner/admin permission, and create no capability, installation, or
   upload record. Temporary preview files stay under `~/.parsar/` and are removed
-  after the request. Preview shows current repository content; installation
+  after the request, including the downloader's own temporary files. Previews
+  require Unix process-group cancellation so child downloads cannot outlive the
+  request. Preview shows current repository content; installation
   fetches again and does not promise an immutable preview revision.
 
 ### Runtime and execution concepts

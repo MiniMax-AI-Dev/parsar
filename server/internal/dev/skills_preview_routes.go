@@ -34,7 +34,7 @@ import (
 //	@Router		/api/v1/workspaces/{workspaceID}/skills/preview [post]
 func previewSkillFromRegistry(runtimeStore RuntimeStore, runner skillInstallCommandRunner) http.HandlerFunc {
 	if runner == nil {
-		runner = defaultSkillInstallRunner{}
+		runner = defaultSkillPreviewRunner{}
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore); !ok {
