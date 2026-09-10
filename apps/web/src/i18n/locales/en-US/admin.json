@@ -68,7 +68,13 @@
       "deleteSelected": "Delete selected",
       "title": "Delete {{count}} models?",
       "description": "This permanently deletes the selected models. Models still referenced by active agents will be skipped.",
-      "resultSummary": "{{deleted}} deleted, {{failed}} failed"
+      "resultSummary": "{{deleted}} deleted, {{failed}} failed",
+      "resultsTitle": "Model deletion results",
+      "deleted": "Deleted",
+      "inUse": "Still used by an Agent. Choose another model in its configuration before deleting this model.",
+      "notFound": "This model no longer exists. Refresh the list.",
+      "failed": "This model could not be deleted. Check the details before trying again.",
+      "openAgent": "Open {{name}} configuration"
     },
     "health": {
       "healthy": "Healthy",

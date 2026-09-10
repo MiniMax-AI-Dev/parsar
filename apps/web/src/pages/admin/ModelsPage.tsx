@@ -4,21 +4,13 @@
  *   - credential_ref: each user supplies their own credential from
  *     MyCredentialsPage
  */
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { AlertTriangle, Database, Download, Loader2, Plus } from "lucide-react"
+import { Database, Download, Loader2, Plus } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "../../components/ui/alert-dialog"
 import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
@@ -39,6 +31,7 @@ import type {
 } from "../../lib/api-models"
 import { CreateModelDialog, EditModelDialog } from "./ModelCrudDialogs"
 import { BulkImportModelsDialog } from "./BulkImportModelsDialog"
+import { ModelDeleteConfirmDialog, ModelDeleteResultsDialog, type ModelDeleteResult } from "./ModelDeleteDialogs"
 import { ModelTestDiagnosticsDialog } from "./ModelTestDiagnosticsDialog"
 import { ModelsTable } from "./ModelsTable"
 import type { Model } from "../../lib/api-types"
@@ -48,54 +41,6 @@ import { useCredentialKindsQuery } from "./capabilities/api"
 import { useAuth } from "../../lib/auth-context"
 import { useToast } from "../../components/ui/toast"
 import { FilterGroup, FilterMenu, FilterOption } from "../../components/ui/filter-menu"
-
-/* --- Confirm dialog ------------------------------------------------------ */
-
-function ConfirmDialog({
-  open,
-  title,
-  description,
-  confirmLabel,
-  destructive,
-  onConfirm,
-  onCancel,
-  loading,
-}: {
-  open: boolean
-  title: string
-  description: string
-  confirmLabel?: string
-  destructive?: boolean
-  onConfirm: () => void
-  onCancel: () => void
-  loading?: boolean
-}) {
-  const { t } = useTranslation("common")
-  return (
-    <AlertDialog open={open} onOpenChange={(next) => { if (!next && !loading) onCancel() }}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle className="flex items-center gap-2">
-            {destructive && (
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-            )}
-            <span>{title}</span>
-          </AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <Button variant="outline" onClick={onCancel} disabled={loading}>
-            {t("actions.cancel")}
-          </Button>
-          <Button variant={destructive ? "destructive" : "default"} onClick={onConfirm} disabled={loading}>
-            {loading && <Loader2 className="animate-spin" />}
-            {confirmLabel ?? t("actions.confirm")}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  )
-}
 
 /* --- Loading skeleton ---------------------------------------------------- */
 
@@ -149,6 +94,8 @@ export function ModelsPage() {
   const [editModel, setEditModel] = useState<Model | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Model | null>(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const bulkDeleteButtonRef = useRef<HTMLButtonElement>(null)
+  const [deleteResult, setDeleteResult] = useState<ModelDeleteResult | null>(null)
   const { show } = useToast()
   const [selectedModelIDs, setSelectedModelIDs] = useState<Set<string>>(() => new Set())
   const [backgroundTestingIDs, setBackgroundTestingIDs] = useState<Set<string>>(() => new Set())
@@ -253,14 +200,15 @@ export function ModelsPage() {
     bulkDeleteMut.mutate(ids, {
       onSuccess: (result) => {
         const failed = result.failed ?? []
-        show(
-          t("models.bulkDelete.resultSummary", { deleted: result.deleted.length, failed: failed.length }),
-          // A partial failure lists models by name; it waits to be dismissed
-          // rather than taking the list with it after seven seconds.
-          failed.length > 0
-            ? { tone: "error", persist: true, detail: failed.map((f) => f.error).join("\n") }
-            : undefined,
-        )
+        if (failed.length > 0) {
+          setDeleteResult({
+            workspaceID: wsId,
+            data: result,
+            names: Object.fromEntries(selectedModels.map((model) => [model.id, model.name])),
+          })
+        } else {
+          show(t("models.bulkDelete.resultSummary", { deleted: result.deleted.length, failed: 0 }))
+        }
         setSelectedModelIDs((current) => {
           const next = new Set(current)
           for (const id of result.deleted) {
@@ -399,6 +347,7 @@ export function ModelsPage() {
               <Button
                 size="sm"
                 variant="destructive"
+                ref={bulkDeleteButtonRef}
                 onClick={() => setConfirmBulkDelete(true)}
                 disabled={bulkDeleteMut.isPending}
               >
@@ -467,7 +416,7 @@ export function ModelsPage() {
         }}
       />
 
-      <ConfirmDialog
+      <ModelDeleteConfirmDialog
         open={!!confirmDelete}
         title={t("models.delete.title", { name: confirmDelete?.name ?? "" })}
         description={t("models.delete.description")}
@@ -481,7 +430,7 @@ export function ModelsPage() {
         onConfirm={performDelete}
       />
 
-      <ConfirmDialog
+      <ModelDeleteConfirmDialog
         open={confirmBulkDelete}
         title={t("models.bulkDelete.title", { count: selectedModels.length })}
         description={t("models.bulkDelete.description")}
@@ -493,6 +442,12 @@ export function ModelsPage() {
           bulkDeleteMut.reset()
         }}
         onConfirm={performBulkDelete}
+      />
+
+      <ModelDeleteResultsDialog
+        result={deleteResult}
+        onClose={() => setDeleteResult(null)}
+        onCloseAutoFocus={() => bulkDeleteButtonRef.current?.focus()}
       />
 
       <ModelTestDiagnosticsDialog

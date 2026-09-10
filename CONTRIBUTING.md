@@ -540,6 +540,9 @@ split relevant pieces out first rather than growing the file further.
 
 ### Frontend shared logic
 
+- Partial bulk model deletion keeps submitted names and per-item results in a
+  dismissible dialog. Link references only after confirming the Agent in the
+  authorized workspace directory; preserve reference text when lookup fails.
 - Audit surfaces share readable action and actor labels. Resolve names only
   from workspace-authorized member/Agent reads and the recorded actor type;
   missing names or failed lookups retain the raw identity. Display names are
