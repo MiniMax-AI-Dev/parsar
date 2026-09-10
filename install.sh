@@ -9,6 +9,7 @@ Install or upgrade Parsar with Docker Compose.
 
 Usage:
   ./install.sh [options]
+  ./install.sh migrate-runtime-history [Docker Compose global options]
   curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
 
 Options:
@@ -23,6 +24,7 @@ Options:
   --help               Show this help.
 
 Advanced Compose settings can be added directly to ~/.parsar/.env.
+The migration-only command preserves existing Compose configuration and services.
 USAGE
 }
 
@@ -120,6 +122,57 @@ prepare_data_directory() {
     || die "server data directory is not writable by its configured user"
 }
 
+migrate_runtime_history() {
+  local container config_dir runtime_image backup source
+  container="$(compose ps -aq parsar-runtime)"
+  [ -n "$container" ] || return 0
+  [[ "$container" != *$'\n'* ]] || die "expected one default runtime container"
+  config_dir="$(docker_run inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container" \
+    | sed -n 's/^CLAUDE_CONFIG_DIR=//p')"
+  [ "$config_dir" != /root/.parsar/claude-code ] || return 0
+  [ -z "$config_dir" ] || die "custom CLAUDE_CONFIG_DIR requires a manual history migration"
+  runtime_image="$(docker_run inspect --format '{{.Image}}' "$container")"
+  backup="$(mktemp -d "$1/runtime-history.XXXXXX")"
+  mkdir "$backup/state"
+  log "Stopping the runtime for history migration; backup: $backup"
+  docker_run stop "$container" >/dev/null
+
+  for source in /root/.claude/. /root/.claude.json; do
+    if ! docker_run cp "$container:$source" "$backup/state/" 2>"$backup/copy-error.log"; then
+      # An unused runtime may not have created either path yet.
+      grep -Fq "Could not find the file $source in container" "$backup/copy-error.log" \
+        || die "history backup failed; old runtime retained. See $backup/copy-error.log"
+    fi
+  done
+
+  # Reuse the old runtime's mounted home; never overwrite a different history.
+  docker_run run --rm --volumes-from "$container" \
+    -v "$backup/state:/parsar-history-backup:ro" --entrypoint /bin/sh "$runtime_image" -ec '
+      target=/root/.parsar/claude-code
+      if [ -e "$target" ]; then
+        diff -qr --no-dereference /parsar-history-backup "$target"
+      else
+        stage=$(mktemp -d /root/.parsar/claude-code-migration.XXXXXX)
+        trap '\''rm -rf "$stage"'\'' EXIT
+        cp -a /parsar-history-backup/. "$stage/"
+        mv "$stage" "$target"
+      fi
+    ' || die "history migration failed; old runtime and backup retained at $backup"
+}
+
+if [ "${1:-}" = migrate-runtime-history ]; then
+  shift
+  compose_args=("$@")
+  compose() { docker_run compose "${compose_args[@]}" "$@"; }
+  umask 077
+  history_backup_root="$(expand_path "${PARSAR_HOME:-$HOME/.parsar}")"
+  mkdir -p "$history_backup_root"
+  detect_docker
+  migrate_runtime_history "$history_backup_root"
+  log "History migration complete; resume with your existing Compose up command"
+  exit 0
+fi
+
 home="${PARSAR_HOME:-$HOME/.parsar}"
 port="${PARSAR_LOCAL_PORT:-18080}"
 bind="${PARSAR_BIND_ADDR:-127.0.0.1}"
@@ -184,6 +237,8 @@ log "Pulling images"
 compose pull parsar-server parsar-runtime
 log "Preparing server data directory"
 prepare_data_directory
+log "Preserving runtime history"
+migrate_runtime_history "$home"
 log "Starting Parsar"
 compose up -d --remove-orphans
 

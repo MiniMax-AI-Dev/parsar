@@ -112,6 +112,20 @@ description and keep ownership on the side listed here.
 - After pulling, the installer prepares its server data mount for the image's
   actual UID/GID and verifies writability before starting services. Only the
   preparation container runs as root; the server retains its configured user.
+- Default Compose keeps Claude Code configuration and native session files in
+  `/root/.parsar/claude-code`, on the runtime's existing persistent home volume.
+  The first installer upgrade stops the old runtime, backs up its legacy
+  `~/.claude/` and `~/.claude.json` under the install directory, and migrates
+  them before container replacement. Conflicting history aborts the upgrade.
+  Do not remove the old container or its volumes before this migration.
+  Direct Compose/Dokploy users must run `./install.sh migrate-runtime-history`
+  followed by their existing Compose global options (such as `-p`, `-f`, and
+  `--env-file`) once before upgrading. This migration-only command does not
+  rewrite `.env`, change data mounts/secrets, pull images, or start services.
+  Then use the original Compose upgrade command. Wait for active runs to finish
+  before upgrading; the runtime is stopped during migration.
+  Backups contain private session/configuration data; retain them securely until
+  resume is verified. Already-deleted native histories cannot be reconstructed.
 - `install.sh` may still write stable random overrides such as
   `PARSAR_MASTER_KEY` and `PARSAR_SHARED_RUNTIME_TOKEN` for safer local
   installs, but raw Compose/Dokploy deployments must not depend on those
@@ -119,6 +133,8 @@ description and keep ownership on the side listed here.
 - Keep `install.sh` a thin Compose wrapper. Its CLI is limited to installation
   location, web bind/port, image overrides, and validation. Uncommon deployment
   settings belong in the Compose environment rather than new installer flags.
+  The one-time history migration subcommand passes existing Compose global
+  options through unchanged so raw deployments retain their configuration.
 - Services exposed through a deployment platform may gain an ingress network,
   but they must remain explicitly attached to the Compose `default` network
   when they depend on internal service DNS names such as `postgres`.

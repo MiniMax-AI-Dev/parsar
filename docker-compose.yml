@@ -1,6 +1,8 @@
 # Run with: docker compose up -d
 # Open http://127.0.0.1:18080 and configure integrations in the web UI.
 # Production deployments should override the three dev-only secrets below.
+# Existing deployments: use install.sh migrate-runtime-history once before
+# recreating containers. See CONTRIBUTING.md#install-and-image-freshness.
 name: parsar
 
 services:
@@ -59,6 +61,7 @@ services:
         condition: service_healthy
     environment:
       PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-parsar-local-runtime-token-change-me}"
+      CLAUDE_CONFIG_DIR: /root/.parsar/claude-code
     command: ["/opt/parsar/bin/runtime-entrypoint.sh"]
     volumes:
       - parsar-runtime-home:/root/.parsar
