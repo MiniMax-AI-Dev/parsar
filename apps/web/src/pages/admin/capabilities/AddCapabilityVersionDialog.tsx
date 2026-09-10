@@ -153,9 +153,9 @@ export function AddCapabilityVersionDialog({
   const skillSpecReady =
     kind !== "skill"
       ? true
-      : !!skillOssKey ||
-        !!inheritedOssLabel ||
-        (!!spec && isImportSpecReady(kind, spec, inlineSecrets))
+      : spec
+        ? isImportSpecReady(kind, spec, inlineSecrets)
+        : rawText === "" && !!inheritedOssLabel
 
   const mcpSpecReady =
     kind !== "mcp" ? true : !!spec && isImportSpecReady(kind, spec, inlineSecrets)

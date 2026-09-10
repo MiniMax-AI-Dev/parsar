@@ -26,7 +26,7 @@ export function startsWithEnvPlaceholder(value: string | undefined): boolean {
 /**
  * Returns true when the spec + provisional inline secrets are commit-ready.
  *
- * skill: non-empty instruction.
+ * skill: non-empty slug and instruction, matching server validation.
  * mcp: every env entry "ready" — literal not a `$…` placeholder,
  *      credential_ref has a kind code, inline_secret has either a
  *      server-allocated secret_id or a queued plaintext.
@@ -36,7 +36,9 @@ export function isImportSpecReady(
   spec: CanonicalSpec,
   inlineSecrets: ImportInlineSecretInput[],
 ): boolean {
-  if (kind === "skill") return (spec.skill?.instruction?.length ?? 0) > 0
+  if (kind === "skill") {
+    return Boolean(spec.skill?.slug?.trim() && spec.skill?.instruction?.trim())
+  }
 
   const servers = spec.mcp?.servers ?? []
   if (servers.length === 0) return false
