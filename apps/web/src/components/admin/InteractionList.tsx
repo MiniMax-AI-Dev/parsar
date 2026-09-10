@@ -57,7 +57,7 @@ export function InteractionList({ rows, selectedID, label, onSelect }: {
                     </div>
                     <PropertyList className="mt-2 hidden @max-2xl/interactions:grid">
                       {fields.map((field) => <Property key={field.label} label={field.label} className="h-auto min-h-7 items-start whitespace-normal py-1">
-                        <span className="break-words">{field.value}</span>
+                        <span className="min-w-0 break-words">{field.value}</span>
                       </Property>)}
                     </PropertyList>
                   </div>

@@ -15,7 +15,9 @@ export function interactionTitle(row: AgentInteraction, t: TFunction<"admin">): 
 }
 
 export function interactionRequester(row: AgentInteraction, t: TFunction<"admin">): string {
-  if (row.requested_by_type === "user" && row.requested_by_name) return row.requested_by_name
+  if (row.requested_by_type === "user" && row.requested_by_name) {
+    return row.requested_by_id ? `${row.requested_by_name} · ${row.requested_by_id}` : row.requested_by_name
+  }
   const type = row.requested_by_type
     ? t(`audit.actor.${row.requested_by_type}`, { defaultValue: row.requested_by_type })
     : t("approvals.detail.requesterUnknown")

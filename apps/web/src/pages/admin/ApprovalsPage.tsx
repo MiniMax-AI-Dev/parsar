@@ -279,7 +279,7 @@ function InteractionRail({
       )}
 
       <PropertyList className="mt-3">
-        <Property label={t("approvals.detail.requester")} className="h-auto min-h-7 items-start whitespace-normal py-1"><span className="break-words" title={`${interaction.requested_by_type || ""} ${interaction.requested_by_id || ""}`}>{interactionRequester(interaction, t)}</span></Property>
+        <Property label={t("approvals.detail.requester")} className="h-auto min-h-7 items-start whitespace-normal py-1"><span className="min-w-0 break-words" title={`${interaction.requested_by_type || ""} ${interaction.requested_by_id || ""}`}>{interactionRequester(interaction, t)}</span></Property>
         <Property label={t("approvals.detail.conversation")} mono>
           <button
             type="button"
