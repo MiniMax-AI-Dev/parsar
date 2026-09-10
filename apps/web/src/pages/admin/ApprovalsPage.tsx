@@ -315,11 +315,11 @@ function InteractionRail({
                 <ul className="m-0 list-none p-0">
                   {question.options.map((option) => (
                     <li key={option.label} className="border-b border-line last:border-b-0">
-                      <label className="flex min-h-8 cursor-pointer items-center gap-2 py-1.5 text-sm text-fg">
+                      <label className="flex min-h-8 cursor-pointer items-start gap-2 py-1.5 text-sm text-fg">
                         <input
                           type={question.multi_select ? "checkbox" : "radio"}
                           name={`${interaction.id}:${key}`}
-                          className="h-3.5 w-3.5 shrink-0 accent-accent"
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-accent"
                           checked={selected.includes(option.label)}
                           onChange={() => {
                             setAnswers((current) => ({
@@ -329,9 +329,9 @@ function InteractionRail({
                             if (!question.multi_select) setCustom((current) => ({ ...current, [key]: "" }))
                           }}
                         />
-                        <span className="min-w-0 flex-1 truncate">
-                          {option.label}
-                          {option.description && <span className="text-fg-muted"> · {option.description}</span>}
+                        <span className="min-w-0 flex-1 break-words">
+                          <span className="block">{option.label}</span>
+                          {option.description && <span className="block text-xs text-fg-muted">{option.description}</span>}
                         </span>
                       </label>
                     </li>
