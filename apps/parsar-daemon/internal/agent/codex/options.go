@@ -105,9 +105,10 @@ type SessionPlan struct {
 func BuildSessionPlan(runID, agentStateKey, workDir string, opts map[string]any) (SessionPlan, error) {
 	cleanup := func() {}
 	plan := SessionPlan{
-		ApprovalPolicy: AskForApproval{String: "never"},
-		Sandbox:        SandboxDangerFullAcces,
-		Cleanup:        cleanup,
+		CollaborationMode: CollaborationModeDefault,
+		ApprovalPolicy:    AskForApproval{String: "never"},
+		Sandbox:           SandboxDangerFullAcces,
+		Cleanup:           cleanup,
 	}
 
 	resolvedCwd, err := resolveWorkDirCodex(workDir)

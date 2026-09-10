@@ -143,6 +143,24 @@ func TestBuildSessionPlan_ParsesCollaborationMode(t *testing.T) {
 	}
 }
 
+func TestBuildSessionPlan_OmittedModeRetainsCurrentInstructions(t *testing.T) {
+	t.Setenv("PARSAR_HOME", t.TempDir())
+	for _, mode := range []string{"", "default"} {
+		opts := map[string]any{"system_prompt": "current reference", "model": "MiniMax-M3"}
+		if mode != "" {
+			opts["mode"] = mode
+		}
+		plan, err := BuildSessionPlan("run", "conv/agent/codex", "", opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer plan.Cleanup()
+		if plan.CollaborationMode != CollaborationModeDefault || plan.SystemPrompt != "current reference" || plan.Model != "MiniMax-M3" {
+			t.Fatalf("mode %q did not retain the default turn instructions: %+v", mode, plan)
+		}
+	}
+}
+
 func TestBuildSessionPlan_RejectsUnknownCollaborationMode(t *testing.T) {
 	_, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "", map[string]any{
 		"mode": "autopilot",
