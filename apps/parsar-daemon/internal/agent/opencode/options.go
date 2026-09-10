@@ -13,10 +13,11 @@ import (
 
 // BuildResult is the opencode CLI launch plan for one prompt.
 type BuildResult struct {
-	Args    []string
-	Env     []string
-	WorkDir string
-	Cleanup func()
+	Args          []string
+	Env           []string
+	WorkDir       string
+	ModelSelector string
+	Cleanup       func()
 }
 
 // BuildArgs translates the daemon prompt_request into an `opencode
@@ -41,6 +42,7 @@ func BuildArgs(runID, prompt, workDir string, opts map[string]any) (BuildResult,
 	}
 	if model := firstString(opts, "model_selector", "model"); model != "" {
 		args = append(args, "--model", model)
+		result.ModelSelector = model
 	}
 	if agent := stringOpt(opts, "agent"); agent != "" {
 		args = append(args, "--agent", agent)

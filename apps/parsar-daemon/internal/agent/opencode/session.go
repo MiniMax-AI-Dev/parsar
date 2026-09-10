@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -40,6 +41,7 @@ func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- pro
 // Session wraps a single `opencode run` subprocess.
 type Session struct {
 	runID string
+	model string
 	cfg   sessionConfig
 
 	cmd *exec.Cmd
@@ -109,9 +111,14 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		buildRes.Cleanup()
 		return nil, fmt.Errorf("opencode: start %q: %w", cfg.opencodeBinary, err)
 	}
+	model := buildRes.ModelSelector
+	if _, key, qualified := strings.Cut(model, "/"); qualified {
+		model = key
+	}
 
 	s := &Session{
 		runID:     req.RunID,
+		model:     model,
 		cfg:       cfg,
 		cmd:       cmd,
 		out:       out,
@@ -158,6 +165,7 @@ func (s *Session) run(stdout io.Reader) {
 	defer s.closeOut()
 
 	tr := newTranslator(s.runID)
+	tr.usage.Model = s.model
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	for sc.Scan() {

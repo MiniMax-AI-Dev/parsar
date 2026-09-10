@@ -289,6 +289,9 @@ description and keep ownership on the side listed here.
   respectively, preserving explicit base paths; absent mappings preserve their
   legacy base URL. Explicit provider SDK options retain precedence over generated
   defaults.
+- OpenCode usage records the model selected by the CLI launch plan, removing
+  only the provider prefix. Without an explicit selection, keep the model unknown;
+  do not infer it from token counts or change cost/provider semantics.
 - Claude Code streaming deltas and their per-block assistant copies must be
   emitted once; preserve separate text blocks even when their content matches.
 - Claude Code failure details may arrive in `error`, `result`, or `errors`.
