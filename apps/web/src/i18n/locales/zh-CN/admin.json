@@ -830,6 +830,8 @@
         "copyFailed": "复制失败，请选中上方详情手动复制。"
       },
       "preview": {
+        "overview": "用途",
+        "files": "文件内容",
         "description": "安装前查看仓库中的当前内容。",
         "loading": "正在读取 Skill 指令和文件…",
         "failed": "无法加载此 Skill 的预览",
