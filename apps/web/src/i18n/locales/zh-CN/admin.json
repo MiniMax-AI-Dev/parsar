@@ -1154,6 +1154,7 @@
       "runtime": "运行环境"
     },
     "runtimeCell": {
+      "external": "外部服务",
       "unbound": "未绑定 Runtime",
       "pending": "待分配"
     },
@@ -1720,7 +1721,7 @@
       },
       "external": {
         "title": "外部 Agent",
-        "description": "接入企业自管 HTTP Agent 服务。"
+        "description": "接入自行托管的 HTTP Agent 服务。"
       }
     },
     "engine": {
@@ -1786,6 +1787,24 @@
       "enabled": "已启用“{{name}}”。",
       "disabled": "已停用“{{name}}”。",
       "failed": "未能更新 Agent 状态"
+    },
+    "http": {
+      "create": "接入外部 Agent",
+      "edit": "编辑外部 Agent",
+      "ownership": "HTTP 服务自行管理模型、工具和对话历史。Parsar 发送消息并记录回复和用量；Skill、MCP 工具和知识库由该服务管理。",
+      "endpoint": "服务地址",
+      "endpointHint": "Parsar 发送 JSON POST，期待返回 {\"content\":\"回复\",\"usage\":{...}}。请使用 Parsar 服务器能访问的地址。",
+      "authentication": "认证方式",
+      "noAuth": "无需认证",
+      "newToken": "添加 Bearer token",
+      "savedCredential": "已保存的 Bearer 凭据",
+      "token": "Bearer token",
+      "authHint": "Token 加密保存在本工作区，仅通过 Authorization 请求头发送；不跟随重定向。",
+      "instructionsHint": "通过 agent_config.system_prompt 发送，由外部服务决定如何应用这些指令。",
+      "saveFailed": "未能保存外部 Agent",
+      "back": "返回",
+      "saving": "保存中…",
+      "invalidEndpoint": "请输入 HTTP(S) 地址，不包含用户名、密码或片段（#）。"
     }
   },
   "connectors": {

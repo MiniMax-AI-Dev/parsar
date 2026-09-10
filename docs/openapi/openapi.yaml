@@ -2660,8 +2660,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Attaches or updates an agent's outbound channel connector configuration.
-        Owner/admin only.
+      description: Updates the HTTP Agent endpoint and optional workspace-owned bearer
+        secret_id. Owner/admin only. Existing profile settings are preserved.
       operationId: configureDevAgentConnector
       parameters:
       - description: Agent UUID
@@ -5398,7 +5398,8 @@ paths:
       - application/json
       description: Enables (installs) a capability version on the agent. Cross-workspace
         enable requires the source capability to be public and non-deprecated. Workspace
-        owner, admin, or member only. Successful requests appear in Agent audit.
+        owner, admin, or member only. Successful requests appear in Agent audit. External
+        HTTP Agents manage capabilities in their own service.
       operationId: enableDevAgentCapability
       parameters:
       - description: Workspace UUID

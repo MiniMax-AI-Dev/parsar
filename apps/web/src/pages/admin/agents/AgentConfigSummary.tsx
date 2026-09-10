@@ -12,6 +12,7 @@ import {
 } from "../../../lib/agent-view-model"
 import type { AgentDetail } from "../../../lib/api-types"
 import { useAgentRuntimeBinding } from "../../../lib/use-agent-runtime-binding"
+import { ExternalAgentSummary } from "./ExternalAgentSummary"
 import { DetailSection } from "./DetailSection"
 
 /* Config reads in the rail now, so it takes the shared property grid: no
@@ -52,6 +53,7 @@ export function AgentConfigSummary({
         </PropertyList>
       </DetailSection>
 
+      {agent.connector_type === "http" ? <ExternalAgentSummary agent={agent} /> : <>
       <DetailSection title={t("agents.detail.config.intelligence.title")}>
         <PropertyList className={CONFIG_PROPERTY_LIST}>
           <Property label={t("agents.detail.config.intelligence.engine")}>
@@ -99,6 +101,7 @@ export function AgentConfigSummary({
           </Property>
         </PropertyList>
       </DetailSection>
+      </>}
     </>
   )
 }

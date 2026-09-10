@@ -1,7 +1,8 @@
 import type { Agent } from "./api-types"
 
-export function agentExecutionPlacement(agent: Agent | undefined | null): "local" | "sandbox" | "unknown" {
+export function agentExecutionPlacement(agent: Agent | undefined | null): "local" | "sandbox" | "external" | "unknown" {
   if (!agent) return "unknown"
+  if (agent.connector_type === "http" || agent.connector_type === "http-agent") return "external"
   if (agent.runtime === "local") return "local"
   if (agent.runtime === "sandbox") return "sandbox"
   const config = agent.config ?? {}

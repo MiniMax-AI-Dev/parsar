@@ -149,7 +149,11 @@ export interface AgentDialogValues {
   agentProfile?: UpdateAgentProfileRequest
 }
 
-interface CreateAgentDialogProps {
+export type AgentFormDraft = { name: string; description: string; systemPrompt: string; visibility: AgentVisibility }
+
+export interface CreateAgentDialogProps {
+  initialDraft?: AgentFormDraft
+  onSelectExternal?: (draft: AgentFormDraft) => void
   open: boolean
   mode: AgentDialogMode
   workspaceID: string | null
@@ -261,6 +265,8 @@ export function CreateAgentDialog({
   error,
   onOpenChange,
   onSubmit,
+  onSelectExternal,
+  initialDraft,
 }: CreateAgentDialogProps) {
   const runtimeStatus = useRuntimeStatus(open ? workspaceID : null)
   const { t } = useTranslation("admin")
@@ -490,8 +496,8 @@ export function CreateAgentDialog({
       // connector-wizard return-to flow relies on them.
       const cloneSource = agent
       const cloneSuffix = cloneSource?.name ? " (Copy)" : ""
-      setName(params.get("agent_name") ?? (cloneSource ? `${cloneSource.name}${cloneSuffix}` : defaultAgentName))
-      setDescription(params.get("agent_description") ?? cloneSource?.description ?? defaultAgentDescription)
+      setName(initialDraft?.name ?? params.get("agent_name") ?? (cloneSource ? `${cloneSource.name}${cloneSuffix}` : defaultAgentName))
+      setDescription(initialDraft?.description ?? params.get("agent_description") ?? cloneSource?.description ?? defaultAgentDescription)
       const initialExecutionMode = cloneSource ? executionModeFromAgent(cloneSource) : "local_device"
       setExecutionMode(initialExecutionMode)
       setAgentEngine(cloneSource ? agentEngineFromAgent(cloneSource) : "claude_code")
@@ -502,11 +508,11 @@ export function CreateAgentDialog({
       setModelSearch("")
       setModelDropdownOpen(false)
       setHighlightedModelID(null)
-      setSystemPrompt(params.get("agent_prompt") ?? (cloneSource ? promptFromAgent(cloneSource, defaultSystemPrompt) : defaultSystemPrompt))
+      setSystemPrompt(initialDraft?.systemPrompt ?? params.get("agent_prompt") ?? (cloneSource ? promptFromAgent(cloneSource, defaultSystemPrompt) : defaultSystemPrompt))
       setSelectedCapabilityIDs([])
       setCapabilityVersionChoices({})
       setCapabilitySearch("")
-      setVisibility("workspace")
+      setVisibility(initialDraft?.visibility ?? "workspace")
       setDeviceID(cloneSource ? deviceIDFromAgent(cloneSource) : "")
       setWorkDir(cloneSource ? workDirFromAgent(cloneSource) || defaultWorkDir(initialExecutionMode) : defaultWorkDir(initialExecutionMode))
       // Capability credentials are resolved separately for each cloned binding.
@@ -553,7 +559,7 @@ export function CreateAgentDialog({
     setPairDialogOpen(false)
     setStep(1)
     setCapabilityTypeFilter("all")
-  }, [open, mode, agent, agent?.id, defaultAgentDescription, defaultAgentName, defaultSystemPrompt, firstModelID])
+  }, [open, mode, agent, agent?.id, defaultAgentDescription, defaultAgentName, defaultSystemPrompt, firstModelID, initialDraft])
 
   const clone = useAgentCloneCapabilities(open, cloneSourceID,
     existingBindingsQ.isFetching || existingBindingsQ.isError ? undefined : existingBindingsQ.data?.installed,
@@ -969,8 +975,8 @@ export function CreateAgentDialog({
                           title={t("agents.execution.external.title")}
                           description={t("agents.execution.external.description")}
                           selected={executionMode === "external"}
-                          onSelect={() => selectExecutionMode("external")}
-                          disabled
+                          onSelect={() => onSelectExternal?.({ name, description, systemPrompt, visibility })}
+                          disabled={!onSelectExternal}
                         />
                       )}
                     </div>

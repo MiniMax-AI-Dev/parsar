@@ -7,7 +7,7 @@ import { useDeleteAgent, useUpdateAgent, useUpdateAgentProfile } from "../../../
 import { agentActionPermissions, useAgentChat } from "../../../lib/agent-actions"
 import type { Agent, Model, UserWorkspace } from "../../../lib/api-types"
 import { useAdminView } from "../../../lib/admin-router"
-import { CreateAgentDialog } from "../CreateAgentDialog"
+import { CreateAgentDialog } from "./AgentDialog"
 import { DeleteAgentDialog } from "./DeleteAgentDialog"
 import type { ShowToast } from "../../../components/ui/toast"
 

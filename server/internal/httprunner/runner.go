@@ -1,13 +1,10 @@
 package httprunner
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -143,46 +140,14 @@ func Invoke(ctx context.Context, runtimeStore Store, client *http.Client, input 
 		return Result{}, ErrInvalidEndpoint
 	}
 
-	body, err := json.Marshal(AgentRequest{
-		RunID:                 invocation.RunID,
-		WorkspaceID:           invocation.WorkspaceID,
-		ConversationID:        invocation.ConversationID,
-		AgentID:               invocation.AgentID,
-		AgentName:             invocation.AgentName,
-		AgentSlug:             invocation.AgentSlug,
-		TriggerMessageContent: invocation.TriggerMessageContent,
-		AgentConfig:           invocation.AgentConfig,
+	agentResponse, err := Send(ctx, client, endpoint, input.Headers, AgentRequest{
+		RunID: invocation.RunID, WorkspaceID: invocation.WorkspaceID,
+		ConversationID: invocation.ConversationID, AgentID: invocation.AgentID,
+		AgentName: invocation.AgentName, AgentSlug: invocation.AgentSlug,
+		TriggerMessageContent: invocation.TriggerMessageContent, AgentConfig: invocation.AgentConfig,
 	})
 	if err != nil {
 		return Result{}, err
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return Result{}, ErrInvalidEndpoint
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	for key, value := range input.Headers {
-		if key = strings.TrimSpace(key); key != "" {
-			httpReq.Header.Set(key, value)
-		}
-	}
-
-	if client == nil {
-		client = http.DefaultClient
-	}
-	response, err := client.Do(httpReq)
-	if err != nil {
-		return Result{}, ErrRequestFailed
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return Result{}, ErrNon2xx
-	}
-
-	var agentResponse AgentResponse
-	if err := json.NewDecoder(response.Body).Decode(&agentResponse); err != nil {
-		return Result{}, ErrInvalidJSON
 	}
 	completed, err := runtimeStore.CompleteAgentRun(ctx, store.CompleteAgentRunInput{
 		RunID:   input.RunID,
@@ -224,9 +189,5 @@ func stringFromConfig(config map[string]any, key string) string {
 }
 
 func isSafeEndpoint(endpoint string) bool {
-	parsed, err := url.Parse(endpoint)
-	if err != nil || parsed.Host == "" {
-		return false
-	}
-	return parsed.Scheme == "http" || parsed.Scheme == "https"
+	return store.ValidHTTPAgentEndpoint(endpoint)
 }

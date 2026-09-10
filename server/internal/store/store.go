@@ -2089,12 +2089,16 @@ func (s *Store) ConfigureDevAgentConnector(ctx context.Context, input ConfigureD
 		return ConfigureDevAgentConnectorResult{}, err
 	}
 
-	agentConfig := map[string]any{}
-	if connectorType == "http" {
-		endpoint := strings.TrimSpace(input.Endpoint)
-		if endpoint != "" {
-			agentConfig["endpoint"] = endpoint
-		}
+	agent, err := s.GetAgent(ctx, input.AgentID)
+	if err != nil {
+		return ConfigureDevAgentConnectorResult{}, err
+	}
+	agentConfig := agent.Config
+	if err := foldHTTPAgentConfig(agentConfig, map[string]any{"endpoint": input.Endpoint, "secret_id": input.SecretID}); err != nil {
+		return ConfigureDevAgentConnectorResult{}, err
+	}
+	if err := s.validateHTTPAgentSecret(ctx, agent.WorkspaceID, agentConfig); err != nil {
+		return ConfigureDevAgentConnectorResult{}, err
 	}
 	agentConfigJSON, err := json.Marshal(agentConfig)
 	if err != nil {
@@ -2919,6 +2923,9 @@ func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (Create
 	if !validConnectorType(connectorType) {
 		return CreateAgentResult{}, ErrInvalidConnectorType
 	}
+	if connectorType == "http" && (len(input.InitialCapabilities) > 0 || len(input.Capabilities) > 0) {
+		return CreateAgentResult{}, fmt.Errorf("%w: external HTTP Agents manage their own capabilities", ErrInvalidInput)
+	}
 	slug := strings.TrimSpace(input.Slug)
 	explicitSlug := slug != ""
 	if !explicitSlug {
@@ -2952,6 +2959,11 @@ func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (Create
 	config, err := agentConfigJSON(input.SystemPrompt, input.DefaultModelID, capabilities, input.Runtime, connectorType, input.AgentConfig)
 	if err != nil {
 		return CreateAgentResult{}, err
+	}
+	if connectorType == "http" {
+		if err := s.validateHTTPAgentSecret(ctx, input.WorkspaceID, decodeJSONMap(config)); err != nil {
+			return CreateAgentResult{}, err
+		}
 	}
 	visibility := strings.TrimSpace(input.Visibility)
 	if visibility == "" {
@@ -3089,6 +3101,16 @@ func (s *Store) UpdateAgent(ctx context.Context, input UpdateAgentInput) (AgentS
 			} else {
 				config[k] = cloneBindingValue(v)
 			}
+		}
+	}
+	if connectorType == "http" {
+		if input.ConfigSet {
+			if err := foldHTTPAgentConfig(config, input.Config); err != nil {
+				return AgentSummary{}, nil, err
+			}
+		}
+		if err := s.validateHTTPAgentSecret(ctx, current.WorkspaceID, config); err != nil {
+			return AgentSummary{}, nil, err
 		}
 	}
 	// Orphan binding cleanup: when capability list is explicitly set,
@@ -7405,7 +7427,7 @@ func validConnectorType(value string) bool {
 // connectorNeedsStreamingDispatch reports whether the given connector_type uses the async
 // streaming path where the server pushes the prompt via Connector.StreamPrompt.
 func connectorNeedsStreamingDispatch(connectorType string) bool {
-	return connectorType == "agent_daemon"
+	return connectorType == "agent_daemon" || connectorType == "http"
 }
 
 func stringFromMap(values map[string]any, key string) string {
@@ -7463,6 +7485,11 @@ func agentConfigJSON(systemPrompt, defaultModelID string, capabilities []string,
 			return nil, err
 		}
 	}
+	if connectorType == "http" {
+		if err := foldHTTPAgentConfig(config, bindings); err != nil {
+			return nil, err
+		}
+	}
 	return json.Marshal(config)
 }
 
@@ -7515,6 +7542,9 @@ func changedAgentFields(current sqlc.GetAgentForUpdateRow, updated AgentSummary,
 	}
 	if input.CapabilitiesSet {
 		changed = append(changed, "capabilities")
+	}
+	if input.ConfigSet && updated.ConnectorType == "http" {
+		changed = append(changed, "http")
 	}
 	return changed
 }

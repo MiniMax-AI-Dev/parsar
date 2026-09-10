@@ -113,7 +113,7 @@ func TestRunOnceMarksClaimedRunFailedWhenInvokeFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.Claimed || !result.Failed || result.Error != ErrNon2xx.Error() {
+	if !result.Claimed || !result.Failed || result.Error != ErrNon2xx.Error()+" (502)" {
 		t.Fatalf("expected failed claimed result, got %+v", result)
 	}
 	if len(runtimeStore.failed) != 1 || runtimeStore.failed[0].RunID != "run-1" || runtimeStore.failed[0].Source != "http_agent" {

@@ -2,7 +2,7 @@ import type { TFunction } from "i18next"
 
 import type { Agent, AgentDetail, CapabilityType, Model } from "./api-types"
 
-export type AgentEngine = "claude_code" | "codex" | "pi" | "opencode"
+export type AgentEngine = "claude_code" | "codex" | "pi" | "opencode" | "external"
 
 export type CodexCollaborationMode = "default" | "plan"
 
@@ -13,6 +13,7 @@ export type AgentEngineLabelKey =
   | "agents.engine.codex.title"
   | "agents.engine.pi.title"
   | "agents.engine.opencode.title"
+  | "agents.execution.external.title"
 
 type AgentSource = Agent | AgentDetail | null | undefined
 type UnknownRecord = Record<string, unknown>
@@ -59,6 +60,7 @@ function normalizeEngine(value: string): AgentEngine | null {
 }
 
 export function agentEngineOf(agent: AgentSource): AgentEngine {
+  if (agent?.connector_type === "http" || agent?.connector_type === "http-agent") return "external"
   const config = configOf(agent)
   const profile = profileOf(agent)
   return (
@@ -77,6 +79,7 @@ export function agentEngineOf(agent: AgentSource): AgentEngine {
 
 export function agentEngineLabel(engine: AgentEngine): AgentEngineLabelKey {
   switch (engine) {
+    case "external": return "agents.execution.external.title"
     case "claude_code":
       return "agents.engine.claudeCode.title"
     case "codex":
@@ -89,6 +92,7 @@ export function agentEngineLabel(engine: AgentEngine): AgentEngineLabelKey {
 }
 
 export function agentEngineSupportsCapability(engine: AgentEngine, capabilityType: CapabilityType): boolean {
+  if (engine === "external") return false
   if (capabilityType === "knowledge") return true
   switch (engine) {
     case "claude_code":
