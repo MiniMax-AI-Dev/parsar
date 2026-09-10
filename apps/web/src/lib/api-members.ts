@@ -15,21 +15,22 @@ const KEY_WORKSPACE_MEMBERS = (wsId: string) =>
 /* --- Network --------------------------------------------------------------- */
 
 async function listWorkspaceMembersRequest(
-  wsId: string | null
+  wsId: string | null,
+  limit?: number,
 ): Promise<ListWorkspaceMembersResponse> {
   if (!wsId) return { workspace_id: "", members: [] }
   return apiRequest<ListWorkspaceMembersResponse>(
     `/api/v1/workspaces/${wsId}/members`,
-    { method: "GET" }
+    { method: "GET", query: { limit } }
   )
 }
 
 /* --- Hooks ----------------------------------------------------------------- */
 
-export function useWorkspaceMembers(wsId: string | null) {
+export function useWorkspaceMembers(wsId: string | null, limit?: number) {
   return useQuery({
-    queryKey: KEY_WORKSPACE_MEMBERS(wsId ?? "_none"),
-    queryFn: () => listWorkspaceMembersRequest(wsId),
+    queryKey: limit === undefined ? KEY_WORKSPACE_MEMBERS(wsId ?? "_none") : [...KEY_WORKSPACE_MEMBERS(wsId ?? "_none"), limit],
+    queryFn: () => listWorkspaceMembersRequest(wsId, limit),
     retry: noUnreachableRetry,
     staleTime: 30_000,
   })

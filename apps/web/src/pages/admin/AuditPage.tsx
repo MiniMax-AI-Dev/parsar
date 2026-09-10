@@ -18,6 +18,7 @@ import { VerbatimBlock } from "../../components/ui/verbatim"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useAuditRecords } from "../../lib/api-governance"
+import { useReadableAuditRecords, type ReadableAuditRecord } from "../../lib/audit-presentation"
 import type { AuditRecord, AuditSource } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
 import { cn } from "../../lib/utils"
@@ -93,7 +94,7 @@ export function AuditPage() {
     source: source === "all" ? undefined : source,
     target_type: targetType || undefined,
   })
-  const rows = useMemo(() => query.data?.audit_records ?? [], [query.data])
+  const rows = useReadableAuditRecords(wsId, query.data?.audit_records)
 
   const err = query.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
@@ -138,6 +139,8 @@ export function AuditPage() {
     const q = keyword.trim().toLowerCase()
     return rows.filter((r) =>
       r.event_type.toLowerCase().includes(q) ||
+      r.eventLabel.toLowerCase().includes(q) ||
+      r.actorLabel.toLowerCase().includes(q) ||
       (r.actor_id ?? "").toLowerCase().includes(q) ||
       (r.target_id ?? "").toLowerCase().includes(q) ||
       (r.target_type ?? "").toLowerCase().includes(q)
@@ -293,7 +296,7 @@ export function AuditPage() {
                   {openRow === r.id && (
                     <li className="border-b border-line px-6 py-2">
                       <VerbatimBlock>
-                        {`#${r.id} ${r.event_type}\n${JSON.stringify(r.payload ?? {}, null, 2)}`}
+                        {`#${r.id} ${r.event_type}\n${r.actorDetail}\n${JSON.stringify(r.payload ?? {}, null, 2)}`}
                       </VerbatimBlock>
                     </li>
                   )}
@@ -332,12 +335,10 @@ function FilterItem({ value, label, count }: { value: string; label: string; cou
 /*  Row                                                                */
 /* ------------------------------------------------------------------ */
 
-function AuditRow({ record, open, onToggle }: { record: AuditRecord; open: boolean; onToggle: () => void }) {
+function AuditRow({ record, open, onToggle }: { record: ReadableAuditRecord; open: boolean; onToggle: () => void }) {
   const { t } = useTranslation("admin")
   const { navigate } = useAdminView()
 
-  const isId = record.actor_type === "user" || record.actor_type === "agent"
-  const actorLabel = isId && record.actor_id ? shortId(record.actor_id, 12) : record.actor_type
   const hasPayload = !!record.payload && Object.keys(record.payload).length > 0
   // Surface commonly-jumped ids as row actions so admins don't have to
   // read the JSON to navigate.
@@ -360,11 +361,11 @@ function AuditRow({ record, open, onToggle }: { record: AuditRecord; open: boole
         {fmtAbsTime(record.occurred_at)}
       </span>
       <span className="truncate text-xs text-fg-muted">{t(`audit.source.${record.source}`)}</span>
-      <span className="flex min-w-0 items-center gap-1.5" title={record.actor_id ?? record.actor_type}>
-        <InitialTile name={actorLabel} />
-        <span className={cn("truncate", isId && "font-mono text-xs")}>{actorLabel}</span>
+      <span className="flex min-w-0 items-center gap-1.5" title={record.actorDetail}>
+        <InitialTile name={record.actorLabel} />
+        <span className="truncate">{record.actorLabel}</span>
       </span>
-      <span className="truncate" title={record.event_type}>{record.event_type}</span>
+      <span className="truncate" title={record.event_type}>{record.eventLabel}</span>
       {record.target_type ? (
         <LedgerId>{record.target_type} · {shortId(record.target_id, 10)}</LedgerId>
       ) : (

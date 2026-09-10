@@ -8,7 +8,8 @@ import { ErrorState } from "../ui/error-state"
 import { Skeleton } from "../ui/skeleton"
 import { VerbatimBlock } from "../ui/verbatim"
 import { useAuditRecords } from "../../lib/api-governance"
-import type { AuditActorType, AuditRecord } from "../../lib/api-types"
+import type { AuditActorType } from "../../lib/api-types"
+import { useReadableAuditRecords, type ReadableAuditRecord } from "../../lib/audit-presentation"
 import { useRelativeTime } from "../../lib/relative-time"
 import { cn } from "../../lib/utils"
 
@@ -19,48 +20,38 @@ const ACTOR_ICON: Record<AuditActorType, LucideIcon> = {
   system: Cog,
 }
 
-function shortId(s: string | undefined | null, n = 10): string {
-  if (!s) return "—"
-  return s.length <= n ? s : s.slice(0, n) + "…"
-}
-
-/** One hairline-separated 32px row, the same idiom as the run steps list. */
-function TimelineRow({ record, fmtAgo }: { record: AuditRecord; fmtAgo: (iso: string | null | undefined) => string }) {
+function TimelineRow({ record, fmtAgo }: { record: ReadableAuditRecord; fmtAgo: (iso: string | null | undefined) => string }) {
   const { t } = useTranslation("admin")
   const [open, setOpen] = useState(false)
   const Icon = ACTOR_ICON[record.actor_type] ?? Cog
-  const actor = record.actor_id ? `${record.actor_type} · ${shortId(record.actor_id, 12)}` : record.actor_type
-  const hasPayload = !!record.payload && Object.keys(record.payload).length > 0
-  const payloadLabel = t("audit.detail.payload")
+  const detailLabel = t("audit.detail.event")
 
   return (
     <li className="border-b border-line last:border-b-0">
-      <div className="flex h-8 items-center gap-2 text-sm">
-        <Icon className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
-        <span className="min-w-0 flex-1 truncate text-fg" title={`${record.event_type} · ${actor}`}>
-          {record.event_type}
-          <span className="text-fg-muted"> · {actor}</span>
-        </span>
+      <div className="flex items-start gap-2 py-2 text-sm">
+        <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+        <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+          <div className="text-fg" title={record.event_type}>{record.eventLabel}</div>
+          <div className="text-xs text-fg-muted" title={record.actorDetail}>{record.actorLabel}</div>
+        </div>
         <span className="shrink-0 text-xs text-fg-muted" title={record.occurred_at}>
           {fmtAgo(record.occurred_at)}
         </span>
-        {hasPayload && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            aria-expanded={open}
-            aria-label={payloadLabel}
-            title={payloadLabel}
-            onClick={() => setOpen((v) => !v)}
-          >
-            <Code className={cn(open && "text-fg")} strokeWidth={1.5} />
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 shrink-0"
+          aria-expanded={open}
+          aria-label={detailLabel}
+          title={detailLabel}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <Code className={cn(open && "text-fg")} strokeWidth={1.5} />
+        </Button>
       </div>
-      {open && hasPayload && (
+      {open && (
         <VerbatimBlock className="mb-2 mt-0">
-          {`#${record.id} ${record.source}\n${JSON.stringify(record.payload ?? {}, null, 2)}`}
+          {`#${record.id} ${record.event_type}\n${record.source} · ${record.actorDetail}\n${record.occurred_at}\n${JSON.stringify(record.payload ?? {}, null, 2)}`}
         </VerbatimBlock>
       )}
     </li>
@@ -92,6 +83,8 @@ export function ResourceAuditTimeline({
     limit,
   })
 
+  const records = useReadableAuditRecords(wsId, query.data?.audit_records)
+
   if (query.isLoading) {
     return (
       <div className="space-y-2 pt-2">
@@ -110,7 +103,6 @@ export function ResourceAuditTimeline({
       />
     )
   }
-  const records = query.data?.audit_records ?? []
   if (records.length === 0) {
     return (
       <EmptyState
