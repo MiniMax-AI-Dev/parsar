@@ -114,7 +114,7 @@ function SharedShell({ agent, children }: {
   children: React.ReactNode
 }) {
   return (
-    <div className="flex h-screen flex-col bg-surface">
+    <div data-shared-conversation className="flex h-dvh min-w-0 flex-col bg-surface">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-6">
         <BrandMark size={18} />
         {agent && (
@@ -123,7 +123,7 @@ function SharedShell({ agent, children }: {
             <InitialTile name={agent.name} />
             <span className="min-w-0 truncate text-sm font-medium text-fg">{agent.name}</span>
             {agent.description && (
-              <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{agent.description}</span>
+              <span className="hidden min-w-0 flex-1 truncate text-xs text-fg-muted sm:block">{agent.description}</span>
             )}
           </>
         )}
@@ -131,7 +131,7 @@ function SharedShell({ agent, children }: {
           <ThemeMenu />
         </div>
       </header>
-      <main className="flex min-h-0 flex-1 flex-col">{children}</main>
+      <main className="flex min-h-0 flex-1 flex-col [&>*]:min-h-0">{children}</main>
     </div>
   )
 }
