@@ -653,7 +653,7 @@ func listMarketplaceEnabledAgents(runtimeStore RuntimeStore) http.HandlerFunc {
 // version) in the given workspace. Owner/admin only.
 //
 //	@Summary		Create a workspace capability
-//	@Description	Creates an MCP or Skill capability in the workspace. Owner/admin only. When body.version is set, an initial capability_version is created in the same call.
+//	@Description	Creates a capability in the workspace. Owner/admin only. When body.version is set, an initial capability_version is created in the same call. Skill versions must use POST /capabilities/import/commit to store their archive; metadata-only Skill creation remains supported.
 //	@Tags			capabilities
 //	@ID				createDevWorkspaceCapability
 //	@Accept			json
@@ -661,7 +661,7 @@ func listMarketplaceEnabledAgents(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Param			workspaceID	path	string			true	"Workspace UUID"
 //	@Param			body		body	capabilityBody	true	"Capability create payload"
 //	@Success		201 {object} map[string]interface{} "Created capability"
-//	@Failure		400 {object} map[string]string "Malformed body, missing name/type, or bad canonical_spec"
+//	@Failure		400 {object} map[string]string "Malformed body, missing name/type, bad canonical_spec, or Skill version requiring import"
 //	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
 //	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
 //	@Router			/api/v1/workspaces/{workspaceID}/capabilities [post]
@@ -695,6 +695,10 @@ func createWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		input := store.CreateCapabilityInput{WorkspaceID: workspaceID, Type: body.Type, Name: body.Name, Description: body.Description, Visibility: capabilityVisibility(body.Visibility, body.Scope), CreatorID: actorID}
 		if strings.TrimSpace(body.Version) != "" {
+			if body.Type == "skill" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Skill versions require an archive; use POST /capabilities/import/commit"})
+				return
+			}
 			ver := store.CreateCapabilityVersionInput{Version: body.Version, GitRepoURL: body.GitRepoURL, GitRef: body.GitRef, Path: body.Path, Content: body.Content, RequiredCredentials: body.RequiredCredentials, SchemaVersion: body.SchemaVersion, CanonicalSpec: body.CanonicalSpec}
 			if err := validateCanonicalSpecForType(body.Type, body.CanonicalSpec); err != nil {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -1030,7 +1034,7 @@ func listWorkspaceCapabilityVersions(runtimeStore RuntimeStore) http.HandlerFunc
 // capability. Owner/admin only. Prefer /versions/import/commit for real edits.
 //
 //	@Summary		Create a capability version
-//	@Description	Adds a new version row to an existing capability. Owner/admin only. Prefer POST .../versions/import/commit for the parsed import path.
+//	@Description	Adds a new version row to an existing capability. Owner/admin only. Skill versions must use POST .../versions/import/commit to store their archive. Prefer that parsed import path for other capability edits as well.
 //	@Tags			capabilities
 //	@ID				createDevWorkspaceCapabilityVersion
 //	@Accept			json
@@ -1039,7 +1043,7 @@ func listWorkspaceCapabilityVersions(runtimeStore RuntimeStore) http.HandlerFunc
 //	@Param			capabilityID	path	string					true	"Capability UUID"
 //	@Param			body			body	capabilityVersionBody	true	"Version payload"
 //	@Success		201 {object} map[string]interface{} "Created capability version"
-//	@Failure		400 {object} map[string]string "Missing version or bad canonical_spec"
+//	@Failure		400 {object} map[string]string "Missing version, bad canonical_spec, or Skill version requiring import"
 //	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
 //	@Failure		404 {object} map[string]string "Capability not found in this workspace"
 //	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
@@ -1066,6 +1070,10 @@ func createWorkspaceCapabilityVersion(runtimeStore RuntimeStore) http.HandlerFun
 		capability, err := runtimeStore.GetCapability(r.Context(), capabilityID)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to load capability")
+			return
+		}
+		if capability.Type == "skill" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Skill versions require an archive; use POST /capabilities/{capabilityID}/versions/import/commit"})
 			return
 		}
 		expectedType := ""

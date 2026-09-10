@@ -6250,9 +6250,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates an MCP or Skill capability in the workspace. Owner/admin
-        only. When body.version is set, an initial capability_version is created in
-        the same call.
+      description: Creates a capability in the workspace. Owner/admin only. When body.version
+        is set, an initial capability_version is created in the same call. Skill versions
+        must use POST /capabilities/import/commit to store their archive; metadata-only
+        Skill creation remains supported.
       operationId: createDevWorkspaceCapability
       parameters:
       - description: Workspace UUID
@@ -6275,7 +6276,8 @@ paths:
             additionalProperties: true
             type: object
         "400":
-          description: Malformed body, missing name/type, or bad canonical_spec
+          description: Malformed body, missing name/type, bad canonical_spec, or Skill
+            version requiring import
           schema:
             additionalProperties:
               type: string
@@ -6813,7 +6815,8 @@ paths:
       consumes:
       - application/json
       description: Adds a new version row to an existing capability. Owner/admin only.
-        Prefer POST .../versions/import/commit for the parsed import path.
+        Skill versions must use POST .../versions/import/commit to store their archive.
+        Prefer that parsed import path for other capability edits as well.
       operationId: createDevWorkspaceCapabilityVersion
       parameters:
       - description: Workspace UUID
@@ -6841,7 +6844,8 @@ paths:
             additionalProperties: true
             type: object
         "400":
-          description: Missing version or bad canonical_spec
+          description: Missing version, bad canonical_spec, or Skill version requiring
+            import
           schema:
             additionalProperties:
               type: string
