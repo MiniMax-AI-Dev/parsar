@@ -1407,7 +1407,9 @@
           "description": "选择一个版本后，此 Agent 的后续运行将固定使用它；进行中的运行不受影响。",
           "latest": "最新",
           "current": "当前",
-          "notice": "切换仅影响本 Agent（{{agent}}）；其它装配此能力的 Agent 不受影响。下次运行生效。"
+          "notice": "切换仅影响本 Agent（{{agent}}）；其它装配此能力的 Agent 不受影响。下次运行生效。",
+          "followLatest": "跟随最新版",
+          "followDescription": "自动跟随后续版本，或为此 Agent 固定一个版本。修改在后续运行中生效。"
         },
         "removeDialog": {
           "title": "从「{{agent}}」移除「{{cap}}」？",
