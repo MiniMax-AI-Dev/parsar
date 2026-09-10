@@ -1519,6 +1519,13 @@
         "placeholder": "/Users/me/code/my-app",
         "hintLocal": "Agent 在所选设备上运行时的目录，填绝对路径或以 ~/ 开头的路径。留空则每个会话各用一个临时目录；路径不存在时自动创建。",
         "hintSandbox": "Agent 在沙盒容器内运行时的目录（如 /workspace/my-app），填绝对路径或以 ~/ 开头的路径。留空则每个会话各用一个临时目录；路径不存在时自动创建。"
+      },
+      "visibility": {
+        "label": "谁可以调用此 Agent",
+        "workspace": "工作区成员",
+        "tenant": "已注册的 Parsar 用户",
+        "access": "此范围控制飞书调用。Web 控制台和 API 仍需满足各自的访问权限。",
+        "sharedModelRequired": "公开 Agent 需要共享模型凭据。请选择已有凭据，或保存一份新的共享凭据后继续。"
       }
     },
     "pendingCapability": {

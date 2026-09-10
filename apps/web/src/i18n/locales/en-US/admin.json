@@ -1519,6 +1519,13 @@
         "placeholder": "/Users/me/code/my-app",
         "hintLocal": "The directory the agent runs in on the selected machine — an absolute path, or one starting with `~/`. Leave blank to use a per-conversation scratch dir; created if it does not exist.",
         "hintSandbox": "The directory the agent runs in inside the sandbox container (e.g. /workspace/my-app) — an absolute path, or one starting with `~/`. Leave blank to use a per-conversation scratch dir; created if it does not exist."
+      },
+      "visibility": {
+        "label": "Who can invoke this Agent",
+        "workspace": "Workspace members",
+        "tenant": "Registered Parsar users",
+        "access": "This scope controls Feishu invocation. Web console and API access still require their existing permissions.",
+        "sharedModelRequired": "Public Agents need a shared model credential. Choose one or save a new shared credential to continue."
       }
     },
     "pendingCapability": {

@@ -18,6 +18,7 @@ import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Select, SelectOption } from "../../components/ui/select"
 import { AgentInstructionsField } from "./agents/AgentInstructionsField"
+import { AgentVisibilityField } from "./agents/AgentVisibilityField"
 import { AgentCloudPreflight } from "./agents/AgentCloudPreflight"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
@@ -33,7 +34,7 @@ import { useCapabilitiesQuery, aggregateRequiredCredentials, aggregateRequiredCr
 import { CredentialCheckPanel } from "../../components/admin/CredentialCheckPanel"
 import { useSecrets } from "../../lib/api-secrets"
 import { useRuntimeStatus } from "../../lib/api-runtime"
-import type { UpdateAgentProfileRequest } from "../../lib/api-agents"
+import type { AgentVisibility, UpdateAgentProfileRequest } from "../../lib/api-agents"
 import type {
   AgentInlineNewSecret,
   AgentRuntime,
@@ -294,7 +295,7 @@ export function CreateAgentDialog({
   // picker's loading-state fallback option renders the right number
   // instead of mis-labelling the pinned row with the latest version.
   const [capabilityVersionChoices, setCapabilityVersionChoices] = useState<Record<string, { pinningMode: "latest" | "pinned"; versionID: string; pinnedVersion?: string }>>({})
-  const [visibility, setVisibility] = useState<"workspace" | "tenant" | "public">("public")
+  const [visibility, setVisibility] = useState<AgentVisibility>("workspace")
   const [capabilitySearch, setCapabilitySearch] = useState("")
   const [capabilityTypeFilter, setCapabilityTypeFilter] = useState<"all" | "mcp" | "skill">("all")
   const [deviceID, setDeviceID] = useState("")
@@ -533,8 +534,7 @@ export function CreateAgentDialog({
       setSelectedCapabilityIDs([])
       setCapabilityVersionChoices({})
       setCapabilitySearch("")
-      // Creation is locked to public; the visibility selector is hidden.
-      setVisibility("public")
+      setVisibility("workspace")
       setDeviceID(cloneSource ? deviceIDFromAgent(cloneSource) : "")
       setWorkDir(cloneSource ? workDirFromAgent(cloneSource) || defaultWorkDir(initialExecutionMode) : defaultWorkDir(initialExecutionMode))
       // Clones explicitly drop the source agent's credential bindings: the
@@ -542,9 +542,7 @@ export function CreateAgentDialog({
       // previous clone's bindings would leak across dialog opens.
       setCredentialBindings({})
       setInitialCredentialBindings(undefined)
-      // Create is locked to public, so personal binding is disabled — start on
-      // shared. Left as a pending pick here (secrets may still be loading); the
-      // resolver effect below upgrades it to the first existing secret if any.
+      // Resolve the pending shared pick when secrets finish loading.
       setModelBindingChoice({ source: "shared" })
       setInlineNewSecrets([])
     } else if (agent) {
@@ -718,6 +716,12 @@ export function CreateAgentDialog({
   const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex" || agentEngine === "pi"
   const selectedModelUnavailable = mode === "edit" && requiresModel && selectedModelID !== "" && selectedModel === null
   const hasRequiredModel = !requiresModel || (selectedModel !== null && !incompatibleModelIDs.has(selectedModel.id))
+  const publicModelBindingValid = mode !== "create" || visibility !== "public"
+    || !requiresModel || selectedModel?.credential_mode !== "credential_ref"
+    || (modelBindingChoice.source === "shared" && (
+      ("existing_secret_id" in modelBindingChoice && Boolean(modelBindingChoice.existing_secret_id))
+      || ("new_secret" in modelBindingChoice && Boolean(modelBindingChoice.new_secret.plaintext.trim()))
+    ))
   // Create opens model binding on a pending "shared" pick because secrets may
   // still be loading; once they land, resolve to the first existing one. Gated
   // on the credential_ref UI so no-credential models stay untouched; with zero
@@ -802,7 +806,7 @@ export function CreateAgentDialog({
   async function submit() {
     setSubmitAttempted(true)
     if (!cloudReady) return
-    if (!hasRequiredModel) {
+    if (!hasRequiredModel || !publicModelBindingValid) {
       modelFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
       return
     }
@@ -889,6 +893,8 @@ export function CreateAgentDialog({
     } else if (mode === "edit") {
       // Explicit null tells the backend to delete the stored binding.
       agentBodyConfig.model_credential_binding = null
+    } else {
+      delete agentBodyConfig.model_credential_binding
     }
     // Compose the inline_new_secrets the server will materialise + bind.
     const inlineSecretsToCreate: AgentInlineNewSecret[] = [...inlineNewSecrets]
@@ -995,6 +1001,7 @@ export function CreateAgentDialog({
     name.trim() !== "" &&
     hasConnector &&
     hasRequiredModel &&
+    publicModelBindingValid &&
     cloudReady &&
     (connector !== "agent_daemon" || executionMode !== "local_device" || deviceID !== "") &&
     workDirValid &&
@@ -1005,6 +1012,7 @@ export function CreateAgentDialog({
     name.trim() !== "" &&
     hasConnector &&
     hasRequiredModel &&
+    publicModelBindingValid &&
     cloudReady &&
     (connector !== "agent_daemon" || executionMode !== "local_device" || deviceID !== "") &&
     workDirValid
@@ -1084,6 +1092,12 @@ export function CreateAgentDialog({
                   <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("agents.form.placeholders.description")} />
                 </Field>
                 <AgentInstructionsField value={systemPrompt} onChange={setSystemPrompt} disabled={pending} />
+                {mode === "create" && (
+                  <AgentVisibilityField value={visibility} disabled={pending} onChange={(next) => {
+                    setVisibility(next)
+                    if (next === "public" && modelBindingChoice.source === "personal") setModelBindingChoice({ source: "shared" })
+                  }} />
+                )}
               </section>
               <section className="flex flex-col gap-3">
               {showExecutionChoices ? (
@@ -1327,6 +1341,7 @@ export function CreateAgentDialog({
               )}
               {requiresModel && selectedModel && selectedModel.credential_mode === "credential_ref" && (
                 <Field label={t("credentialCheck.modelBindingTitle")}>
+                  {!publicModelBindingValid && <p className="text-xs text-fg-muted [overflow-wrap:anywhere]" role="status">{t("agents.form.visibility.sharedModelRequired")}</p>}
                   <div className="flex flex-col gap-1" role="radiogroup">
                     <label className={cn("flex items-start gap-2 py-1", visibility === "public" ? "cursor-not-allowed opacity-50" : "cursor-pointer")}>
                       <input
