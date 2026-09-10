@@ -215,6 +215,9 @@ description and keep ownership on the side listed here.
   defaults.
 - Claude Code streaming deltas and their per-block assistant copies must be
   emitted once; preserve separate text blocks even when their content matches.
+- Codex app-server usage totals are cumulative per thread. Treat restored usage
+  before `turn/started` as the baseline and persist only the current turn's
+  delta; repeated snapshots must not increase recorded usage.
 - OpenCode JSON CLI tool parts arrive after execution. Translate each terminal
   call once into paired tool-call/result records for existing trace consumers.
   These records describe completed work; they are not permission requests or

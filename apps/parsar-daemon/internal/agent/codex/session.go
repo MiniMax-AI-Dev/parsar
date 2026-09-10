@@ -81,6 +81,9 @@ type Session struct {
 
 	usageMu       sync.Mutex
 	latestUsage   *TurnUsage
+	usageTotal    TurnUsage
+	usageBaseline TurnUsage
+	usageTurnID   string
 	resolvedModel string
 
 	finalTextMu sync.Mutex
@@ -373,7 +376,8 @@ func (s *Session) onThreadStarted(raw json.RawMessage) {
 	}
 }
 
-func (s *Session) onTurnStarted(_ json.RawMessage) {
+func (s *Session) onTurnStarted(raw json.RawMessage) {
+	s.beginUsageTurn(raw)
 	// Reset per-turn buffers. The session is per-prompt so this is
 	// belt-and-suspenders today, but it keeps the buffer semantics
 	// honest when codex emits a fresh turn id mid-session.
@@ -445,17 +449,6 @@ func (s *Session) onItemCompleted(raw json.RawMessage) {
 	if text != "" {
 		s.appendFinalText(text)
 	}
-}
-
-func (s *Session) onUsageUpdated(raw json.RawMessage) {
-	var p ThreadTokenUsageUpdatedNotification
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return
-	}
-	s.usageMu.Lock()
-	u := p.Usage
-	s.latestUsage = &u
-	s.usageMu.Unlock()
 }
 
 func (s *Session) onTurnCompleted(raw json.RawMessage) {
