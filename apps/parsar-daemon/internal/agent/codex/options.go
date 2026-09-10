@@ -52,8 +52,7 @@ type SessionPlan struct {
 	// CollaborationMode selects Codex's default or plan tool surface.
 	CollaborationMode CollaborationModeKind
 
-	// ApprovalPolicy + Sandbox steer thread/start. Defaults surface human
-	// approvals and confine writes to the workspace.
+	// ApprovalPolicy + Sandbox apply to both new and resumed threads.
 	ApprovalPolicy AskForApproval
 	Sandbox        SandboxMode
 
@@ -102,13 +101,12 @@ type SessionPlan struct {
 // location, set it via the daemon's process environment (PATH /
 // codexBinary in sessionConfig) rather than per-call.
 //
-// Approval / sandbox keys are not exposed to admin yet. Parsar's Inbox is
-// the default decision surface; per-agent overrides can be added later.
+// Daemon-managed Codex sessions bypass approvals and the engine sandbox.
 func BuildSessionPlan(runID, agentStateKey, workDir string, opts map[string]any) (SessionPlan, error) {
 	cleanup := func() {}
 	plan := SessionPlan{
-		ApprovalPolicy: HumanApprovalPolicy(),
-		Sandbox:        SandboxWorkspaceWrite,
+		ApprovalPolicy: AskForApproval{String: "never"},
+		Sandbox:        SandboxDangerFullAcces,
 		Cleanup:        cleanup,
 	}
 
