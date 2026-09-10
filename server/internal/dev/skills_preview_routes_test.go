@@ -28,7 +28,7 @@ func TestSkillPreviewFromRegistry_ReadOnlyAndCleansUp(t *testing.T) {
 	if res.Code != http.StatusOK {
 		t.Fatalf("preview status = %d: %s", res.Code, res.Body.String())
 	}
-	var result previewCapabilityImportResponse
+	var result skillDirectoryPreviewResponse
 	if err := json.Unmarshal(res.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
@@ -38,6 +38,9 @@ func TestSkillPreviewFromRegistry_ReadOnlyAndCleansUp(t *testing.T) {
 	}
 	if skill.Description != "Triage Gmail with Workspace CLI" {
 		t.Fatalf("description = %q", skill.Description)
+	}
+	if !strings.Contains(result.EntryMarkdown, "name: Gmail Triage\n") || !strings.HasSuffix(result.EntryMarkdown, "triage mail.\n") {
+		t.Fatalf("missing original SKILL.md: %q", result.EntryMarkdown)
 	}
 	var count int
 	if err := db.QueryRow(context.Background(), "select count(*) from capability where workspace_id = $1 and type = 'skill'", ids.WorkspaceID).Scan(&count); err != nil {

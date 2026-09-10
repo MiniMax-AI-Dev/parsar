@@ -134,7 +134,7 @@ export function useSkillsCatalog() {
 export function useSkillPreview(workspaceID: string | null, skill: SkillsCatalogItem, enabled: boolean) {
   return useQuery({
     queryKey: ["admin", "skillPreview", workspaceID, skill.source, skill.slug, skill.id],
-    queryFn: ({ signal }) => apiRequest<ImportPreviewResponse>(
+    queryFn: ({ signal }) => apiRequest<ImportPreviewResponse & { entry_markdown: string }>(
       `/api/v1/workspaces/${encodeURIComponent(workspaceID!)}/skills/preview`,
       {
         method: "POST",

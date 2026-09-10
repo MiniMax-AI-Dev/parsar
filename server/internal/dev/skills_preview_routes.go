@@ -11,6 +11,11 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/paths"
 )
 
+type skillDirectoryPreviewResponse struct {
+	previewCapabilityImportResponse
+	EntryMarkdown string `json:"entry_markdown"`
+}
+
 // previewSkillFromRegistry downloads into disposable storage without creating
 // a capability, installation identity, or persistent upload.
 //
@@ -22,7 +27,7 @@ import (
 //	@Produce	json
 //	@Param		workspaceID	path	string	true	"Workspace UUID"
 //	@Param		body	body	installSkillRequest	true	"Skills.sh source"
-//	@Success	200	{object}	map[string]interface{}	"canonical_spec, warnings, suggested_name"
+//	@Success	200	{object}	map[string]interface{}	"canonical_spec, warnings, suggested_name, entry_markdown"
 //	@Failure	400	{object}	map[string]string
 //	@Failure	401	{object}	map[string]string
 //	@Failure	403	{object}	map[string]string
@@ -82,10 +87,13 @@ func previewSkillFromRegistry(runtimeStore RuntimeStore, runner skillInstallComm
 			writeImportParseError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, previewCapabilityImportResponse{
-			CanonicalSpec: res.Spec,
-			Warnings:      ensureStringSlice(res.Warnings),
-			SuggestedName: res.SuggestedName,
+		writeJSON(w, http.StatusOK, skillDirectoryPreviewResponse{
+			previewCapabilityImportResponse: previewCapabilityImportResponse{
+				CanonicalSpec: res.Spec,
+				Warnings:      ensureStringSlice(res.Warnings),
+				SuggestedName: res.SuggestedName,
+			},
+			EntryMarkdown: res.EntryMarkdown,
 		})
 	}
 }

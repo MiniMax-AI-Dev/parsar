@@ -155,6 +155,8 @@ description and keep ownership on the side listed here.
   require Unix process-group cancellation so child downloads cannot outlive the
   request. Preview shows current repository content; installation
   fetches again and does not promise an immutable preview revision.
+  Show the original SKILL.md entry alongside parsed metadata; do not reconstruct
+  its source from canonical fields, which omit unsupported frontmatter.
 
 ### Runtime and execution concepts
 

@@ -187,6 +187,7 @@ func ParseSkillZip(buf []byte) (SkillParseResult, error) {
 	}
 	skillRes.Spec.Skill.Files = files
 	skillRes.Warnings = warnings
+	skillRes.EntryMarkdown = string(skillMdBytes)
 	return skillRes, nil
 }
 

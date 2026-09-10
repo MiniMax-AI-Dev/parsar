@@ -9051,7 +9051,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: canonical_spec, warnings, suggested_name
+          description: canonical_spec, warnings, suggested_name, entry_markdown
           schema:
             additionalProperties: true
             type: object

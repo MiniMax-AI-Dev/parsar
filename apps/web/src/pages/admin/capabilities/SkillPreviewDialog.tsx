@@ -63,7 +63,7 @@ export function SkillPreviewDialog({ skill, canImport, installedCapabilityID, in
             <div className="min-w-0 space-y-3">
               <p className="text-sm [overflow-wrap:anywhere]">{content.description || t("capabilities.skillsDirectory.preview.noDescription")}</p>
               {!!preview.data?.warnings.length && <ImportPreview status="ready" warnings={preview.data.warnings} />}
-              <SkillFileTree skill={content} />
+              <SkillFileTree skill={content} entryMarkdown={preview.data?.entry_markdown} />
             </div>
           ) : null}
         </div>

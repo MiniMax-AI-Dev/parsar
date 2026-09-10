@@ -14,6 +14,7 @@ type SkillParseResult struct {
 	Spec          canonical.Spec
 	Warnings      []string
 	SuggestedName string
+	EntryMarkdown string
 }
 
 type skillFrontmatter struct {
