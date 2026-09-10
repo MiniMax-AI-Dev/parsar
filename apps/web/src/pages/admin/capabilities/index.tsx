@@ -219,11 +219,7 @@ export function CapabilitiesPage() {
   const latestVersions = versionSummary.latest
   const selectedLatestVersion = addVersionCapability ? latestVersions.get(addVersionCapability.id) : undefined
   const uninstallAgents = uninstallAgentsQ.data ?? uninstallTarget?.enabled_agents ?? []
-  const enabledCounts = useMemo(
-    () => countCapabilityInstalls(agentCapabilityQueries.map((q) => q.data?.installed ?? [])),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [agentCapabilityQueries.map((q) => q.dataUpdatedAt).join(":")],
-  )
+  const enabledCounts = countCapabilityInstalls(agentCapabilityQueries.map((q) => q.data?.installed ?? []))
 
   const countsUnavailable = agentsQ.isLoading || !!agentsQ.error || agentCapabilityQueries.some((q) => q.isLoading || q.error)
 
@@ -1321,18 +1317,15 @@ function useCapabilityVersionSummary(workspaceID: string | null, capabilities: C
       staleTime: 30_000,
     })),
   })
-  return useMemo(() => {
-    const latest = new Map<string, CapabilityVersion>()
-    const byCapability = new Map<string, CapabilityVersion[]>()
-    queries.forEach((q, idx) => {
-      const capabilityID = capabilities[idx].id
-      const versions = q.data?.versions ?? []
-      byCapability.set(capabilityID, versions)
-      if (versions[0]) latest.set(capabilityID, versions[0])
-    })
-    return { latest, byCapability }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capabilities, queries.map((q) => q.dataUpdatedAt).join(":")])
+  const latest = new Map<string, CapabilityVersion>()
+  const byCapability = new Map<string, CapabilityVersion[]>()
+  queries.forEach((q, idx) => {
+    const capabilityID = capabilities[idx].id
+    const versions = q.data?.versions ?? []
+    byCapability.set(capabilityID, versions)
+    if (versions[0]) latest.set(capabilityID, versions[0])
+  })
+  return { latest, byCapability }
 }
 
 
