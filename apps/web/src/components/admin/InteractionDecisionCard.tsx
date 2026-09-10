@@ -10,7 +10,7 @@ import type {
   AgentInteractionQuestion,
   ResolveAgentInteractionRequest,
 } from "../../lib/api-types"
-import { interactionQuestions } from "../../lib/interaction-questions"
+import { interactionQuestions, savedQuestionAnswer } from "../../lib/interaction-questions"
 import { useRelativeTime, useTimeUntil } from "../../lib/relative-time"
 import { cn } from "../../lib/utils"
 import { Badge } from "../ui/badge"
@@ -116,7 +116,8 @@ export function InteractionDecisionCard({
         <div className="space-y-4">
           {questions.map((question, index) => {
             const key = questionKey(question, index)
-            const selected = answers[key] ?? []
+            const saved = savedQuestionAnswer(interaction, question, index)
+            const selected = saved?.selected ?? answers[key] ?? []
             return (
               <fieldset key={key} disabled={!canResolve || !pending || resolve.isPending} className="m-0 min-w-0 border-0 p-0">
                 <legend className="mb-1 text-sm font-medium text-fg">
@@ -157,7 +158,7 @@ export function InteractionDecisionCard({
                     className="mt-2"
                     type={question.is_secret ? "password" : "text"}
                     autoComplete={question.is_secret ? "new-password" : undefined}
-                    value={custom[key] ?? ""}
+                    value={saved?.custom ?? custom[key] ?? ""}
                     onChange={(event) => {
                       const value = event.target.value
                       setCustom((current) => ({ ...current, [key]: value }))

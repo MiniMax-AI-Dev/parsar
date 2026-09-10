@@ -28,7 +28,7 @@ import type {
   AgentInteractionQuestion,
   ResolveAgentInteractionRequest,
 } from "../../lib/api-types"
-import { interactionQuestions } from "../../lib/interaction-questions"
+import { interactionQuestions, savedQuestionAnswer } from "../../lib/interaction-questions"
 import { useRelativeTime, useTimeUntil } from "../../lib/relative-time"
 import { useWorkspaceId } from "../../lib/workspace"
 
@@ -304,7 +304,8 @@ function InteractionRail({
       ) : (
         questions.map((question, index) => {
           const key = questionKey(question, index)
-          const selected = answers[key] ?? []
+          const saved = savedQuestionAnswer(interaction, question, index)
+          const selected = saved?.selected ?? answers[key] ?? []
           return (
             <RailSection
               key={key}
@@ -341,7 +342,7 @@ function InteractionRail({
                   <Input
                     type={question.is_secret ? "password" : "text"}
                     autoComplete={question.is_secret ? "new-password" : undefined}
-                    value={custom[key] ?? ""}
+                    value={saved?.custom ?? custom[key] ?? ""}
                     onChange={(event) => {
                       const value = event.target.value
                       setCustom((current) => ({ ...current, [key]: value }))
