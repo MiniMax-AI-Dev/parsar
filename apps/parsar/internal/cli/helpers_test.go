@@ -35,7 +35,8 @@ func TestTruncate(t *testing.T) {
 		{"hello", 5, "hello"},
 		{"hello world", 5, "hell…"},
 		// truncate is rune-aware, not byte-aware.
-		{"engineer", 2, "en…"},
+		{"engineer", 2, "e…"},
+		{"工程师", 2, "工…"},
 		{"abc", 1, "a"},
 		{"abc", 0, "abc"},
 	}
