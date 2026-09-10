@@ -96,7 +96,7 @@ func TestCancelAbortsOnlyMatchingRun(t *testing.T) {
 		t.Fatal("HTTP request was not cancelled")
 	}
 	first, last := <-events, <-events
-	if first.Type != connector.EventError || last.Type != connector.EventDone || last.Final != nil {
+	if first.Type != connector.EventError || last.Type != connector.EventDone || last.Final == nil || last.Final.Content != "" || last.Final.Metadata["error"] != first.Error {
 		t.Fatal("cancellation did not finish as an error")
 	}
 }

@@ -23,7 +23,7 @@ PARSAR_IMAGE_TAG ?= dev
 help:
 	@printf '%s\n' \
 	  'Local development:' \
-	  '  make dev-all          Start Postgres, API, web, and HTTP runner' \
+	  '  make dev-all          Start Postgres, API, and web' \
 	  '  make dev-db           Start the development Postgres only' \
 	  '  make server           Run the API in the foreground' \
 	  '  make web              Run the web app in the foreground' \

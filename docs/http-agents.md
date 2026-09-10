@@ -6,6 +6,10 @@ and save. No Parsar model or paired runtime is required. The service must be
 reachable from the Parsar server, which may have a different network address
 from your browser.
 
+The API server dispatches HTTP Agents automatically, including in `make dev-all`.
+Do not run the legacy `http-runner-once` or `http-runner-loop` against the same
+database; they bypass the server's credential, queue, and Stop handling.
+
 The service manages its models, tools, approvals, and conversation history.
 Parsar provides the existing Web, IM, and Agent MCP entry points, persists
 results, and records usage supplied by the service. Parsar Skill, MCP, and

@@ -93,7 +93,7 @@ func (c *Connector) StreamPrompt(ctx context.Context, in connector.PromptInput) 
 		result, err := c.invoke(ctx, in)
 		if err != nil {
 			events <- connector.PromptEvent{Type: connector.EventError, Error: err.Error()}
-			events <- connector.PromptEvent{Type: connector.EventDone, Sequence: 1}
+			events <- connector.PromptEvent{Type: connector.EventDone, Sequence: 1, Final: &connector.PromptOutput{Metadata: map[string]any{"error": err.Error()}}}
 			return
 		}
 		events <- connector.PromptEvent{Type: connector.EventDone, Sequence: 1, Final: &result}

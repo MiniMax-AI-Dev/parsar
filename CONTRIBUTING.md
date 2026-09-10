@@ -285,6 +285,9 @@ description and keep ownership on the side listed here.
 - `connector_type=http` runs use the standard conversation dispatcher and its
   30-minute execution deadline. The HTTP connector performs one JSON POST and
   emits one final reply; the dispatcher alone persists completion and usage.
+  Default development startup uses this same dispatcher. The legacy standalone
+  HTTP worker is not supported alongside the server; it bypasses credential
+  resolution, serial dispatch, and request cancellation ownership.
 - Store `config.http.endpoint` and optional `config.http.secret_id`. Accept the
   historical flat keys on input, but never forward endpoint or credential
   configuration in the request body. Only `agent_config.system_prompt` is sent.

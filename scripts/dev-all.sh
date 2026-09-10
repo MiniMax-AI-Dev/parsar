@@ -57,8 +57,6 @@ fi
 
 server_log="$PARSAR_LOG_DIR/server.log"
 web_log="$PARSAR_LOG_DIR/web.log"
-runner_log="$PARSAR_LOG_DIR/http-runner.log"
-runner_status="$PARSAR_STATE_DIR/http-runner-status.json"
 pid_file="$PARSAR_STATE_DIR/dev-all.pids"
 
 cleanup_existing() {
@@ -95,25 +93,16 @@ PARSAR_DEV_API_URL="http://$API_ADDR" pnpm --filter @parsar/web exec vite --host
 WEB_PID=$!
 printf '%s\n' "$WEB_PID" >> "$pid_file"
 
-(
-  cd server
-  PARSAR_HTTP_RUNNER_LOG="$runner_log" PARSAR_HTTP_RUNNER_STATUS="$runner_status" DATABASE_URL="$DATABASE_URL" go run ./cmd/httprunner --interval "${PARSAR_HTTP_RUNNER_INTERVAL:-2s}" --max-runs "${PARSAR_HTTP_RUNNER_MAX_RUNS:-100}"
-) >"$runner_log" 2>&1 &
-RUNNER_PID=$!
-printf '%s\n' "$RUNNER_PID" >> "$pid_file"
-
 cat <<INFO
 Parsar local dev workflow started.
 
 API:        http://$API_ADDR/api/v1/health
 Web:        http://127.0.0.1:$WEB_PORT/
-Runner:     pid $RUNNER_PID, bounded by PARSAR_HTTP_RUNNER_MAX_RUNS=${PARSAR_HTTP_RUNNER_MAX_RUNS:-100}
+HTTP Agents: dispatched by the API server
 PID file:   $pid_file
-Status:     $runner_status
 Logs:
   API:      $server_log
   Web:      $web_log
-  Runner:   $runner_log
 
 Stop with:
   while read -r process_id; do kill "\$process_id" 2>/dev/null || true; done < "$pid_file"
