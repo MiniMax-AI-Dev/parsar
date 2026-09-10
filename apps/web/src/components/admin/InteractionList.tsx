@@ -49,7 +49,7 @@ export function InteractionList({ rows, selectedID, label, onSelect }: {
                   <span className="@max-2xl/interactions:hidden"><StatusIcon status={INTERACTION_STATUS_ICONS[row.status]} title={t(`approvals.status.${row.status}`)} /></span>
                   <div className="min-w-0 @max-2xl/interactions:col-span-full">
                     <div className="flex min-w-0 items-start gap-1.5">
-                      <span className="hidden @max-2xl/interactions:block"><StatusIcon status={INTERACTION_STATUS_ICONS[row.status]} title={t(`approvals.status.${row.status}`)} /></span>
+                      <span className="hidden h-lh shrink-0 items-center @max-2xl/interactions:flex"><StatusIcon status={INTERACTION_STATUS_ICONS[row.status]} title={t(`approvals.status.${row.status}`)} /></span>
                       <span className="min-w-0 break-words font-medium" title={title}>{title}</span>
                     </div>
                     <div className="mt-1 truncate text-xs text-fg-muted" title={row.conversation_title || row.conversation_id}>

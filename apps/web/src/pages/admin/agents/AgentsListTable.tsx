@@ -114,7 +114,7 @@ export function AgentsListTable({
               <span className="@max-3xl/agent-list:hidden"><AgentStatusIcon status={agent.status} /></span>
               <div className="min-w-0 @max-3xl/agent-list:col-span-full">
                 <div className={cn("flex min-w-0 items-center gap-1.5 @max-3xl/agent-list:min-h-7 @max-3xl/agent-list:items-start", canChat && (canManage ? "@max-3xl/agent-list:pr-20" : "@max-3xl/agent-list:pr-12"))}>
-                  <span className="mt-0.5 hidden @max-3xl/agent-list:block"><AgentStatusIcon status={agent.status} /></span>
+                  <span className="hidden h-lh shrink-0 items-center @max-3xl/agent-list:flex"><AgentStatusIcon status={agent.status} /></span>
                   <InitialTile name={agent.name} />
                   <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden @max-3xl/agent-list:flex-col @max-3xl/agent-list:items-start @max-3xl/agent-list:gap-1">
                     <span className="min-w-0 max-w-full shrink-0 truncate font-medium @max-3xl/agent-list:whitespace-normal @max-3xl/agent-list:break-words" title={agent.name}>{agent.name}</span>
