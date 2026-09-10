@@ -600,6 +600,10 @@ split relevant pieces out first rather than growing the file further.
   using its published version metadata; its source workspace version history is
   not a cross-workspace read API. Do not duplicate credential rules.
 
+- Shared run queries refresh queued/running records until the server returns a
+  terminal state. Terminal events may arrive later: allow up to 30 seconds of
+  bounded catch-up reads until the matching event appears. Terminal details and
+  lists without active runs stop periodic polling.
 - Agent management opts into disabled records with a separate query-cache key.
   Ordinary Agent selectors keep active-only reads; status mutations invalidate
   both list variants and the detail before their pending state ends. Agent status

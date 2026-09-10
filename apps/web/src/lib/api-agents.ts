@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ApiError, apiRequest, noUnreachableRetry } from "./api-client"
 import { KEY_AGENT_CAPABILITIES, KEY_CAPABILITIES_WORKSPACE } from "./api-capabilities"
@@ -267,6 +268,10 @@ export interface UseAgentRunsOptions {
   search?: string
 }
 
+function isLiveRunStatus(status?: AgentRunStatus): boolean {
+  return status === "queued" || status === "running"
+}
+
 export function useAgentRuns(
   workspaceID: string | null,
   options: UseAgentRunsOptions = {},
@@ -278,6 +283,8 @@ export function useAgentRuns(
     queryFn: () => listAgentRuns(workspaceID, statuses, offset, limit, search),
     retry: noUnreachableRetry,
     staleTime: 15_000,
+    refetchInterval: (query) =>
+      query.state.data?.agent_runs.some((run) => isLiveRunStatus(run.status)) ? 5_000 : false,
     // Keep prior pages only when the workspace and filters still match.
     placeholderData: (prev, previousQuery) =>
       previousQuery?.queryKey.slice(0, 5).every((value, index) => value === queryKey[index]) ? prev : undefined,
@@ -335,6 +342,7 @@ export function useAgentRun(runID: string | null, _workspaceIDForMock?: string |
     enabled: !!runID,
     retry: noUnreachableRetry,
     staleTime: 15_000,
+    refetchInterval: (query) => isLiveRunStatus(query.state.data?.status) ? 5_000 : false,
   })
 }
 
@@ -343,9 +351,10 @@ export function useAgentRunEvents(
   workspaceID: string | null,
   options?: { status?: AgentRunStatus; initialEvents?: AgentRunEvent[] }
 ) {
+  const qc = useQueryClient()
   // Running and queued runs can still emit new events, so keep polling.
-  const live = options?.status === "running" || options?.status === "queued"
-  return useQuery({
+  const live = isLiveRunStatus(options?.status)
+  const query = useQuery({
     queryKey: KEY_RUN_EVENTS(workspaceID ?? "_none", runID ?? "_none"),
     queryFn: () => listAgentRunEvents(workspaceID, runID),
     enabled: !!runID && !!workspaceID,
@@ -354,6 +363,22 @@ export function useAgentRunEvents(
     refetchInterval: live ? 5_000 : false,
     initialData: options?.initialEvents ? { events: options.initialEvents } : undefined,
   })
+  const { refetch } = query
+  const status = options?.status
+  // Terminal status can precede its event; allow bounded catch-up reads.
+  useEffect(() => {
+    if (!runID || !workspaceID || !status || live) return
+    const readFinal = () => {
+      const snapshot = qc.getQueryData<ListAgentRunEventsResponse>(KEY_RUN_EVENTS(workspaceID, runID))
+      if (!snapshot?.events.some((event) => event.event_kind === `run.${status}`)) {
+        void refetch({ cancelRefetch: false })
+      }
+    }
+    readFinal()
+    const timers = [5_000, 15_000, 30_000].map((delay) => setTimeout(readFinal, delay))
+    return () => timers.forEach(clearTimeout)
+  }, [runID, workspaceID, status, live, qc, refetch])
+  return query
 }
 
 export function useRetryRun(workspaceID: string | null) {
