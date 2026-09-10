@@ -19,7 +19,6 @@ import (
 	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/interaction"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/larksuite/oapi-sdk-go/v3/ws"
@@ -473,13 +472,7 @@ func (m *Manager) startClientWithSecret(ctx context.Context, route store.FeishuA
 	if appSecret == "" {
 		return errors.New("app_secret is required")
 	}
-	eventDispatcher := dispatcher.NewEventDispatcher("", "")
-	eventDispatcher.OnP2MessageReceiveV1(func(eventCtx context.Context, event *larkim.P2MessageReceiveV1) error {
-		return m.handleMessage(eventCtx, strings.TrimSpace(cfg.AppID), event)
-	})
-	eventDispatcher.OnP2CardActionTrigger(func(eventCtx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
-		return m.handleCardAction(eventCtx, strings.TrimSpace(cfg.AppID), event), nil
-	})
+	eventDispatcher := m.newEventDispatcher(strings.TrimSpace(cfg.AppID))
 
 	clientOpts := []ws.ClientOption{
 		ws.WithEventHandler(eventDispatcher),

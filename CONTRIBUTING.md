@@ -801,6 +801,9 @@ Go toolchain; do not use `@latest` for that build-time tool.
   the build on any drift. See `server/internal/api/health.go:livenessHandler`
   and `server/internal/dev/routes.go:listWorkspaceEnabledAgents` for
   the reference style.
+- Feishu WebSocket reaction-created and reaction-deleted notifications are
+  acknowledged without starting runs or changing send/undo reaction state.
+  Keep unsupported-event and malformed-payload errors observable.
 - Feishu WebSocket SDK and lifecycle logs must redact connection URL query
   strings before writing them, without changing the URLs used to connect.
   Omit each field's tail after its first `?`, without requiring a valid URL
