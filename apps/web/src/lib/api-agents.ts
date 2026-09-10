@@ -351,6 +351,7 @@ export function useAgentRunEvents(
   workspaceID: string | null,
   options?: { status?: AgentRunStatus; initialEvents?: AgentRunEvent[] }
 ) {
+  const qc = useQueryClient()
   // Running and queued runs can still emit new events, so keep polling.
   const live = isLiveRunStatus(options?.status)
   const query = useQuery({
@@ -363,10 +364,20 @@ export function useAgentRunEvents(
     initialData: options?.initialEvents ? { events: options.initialEvents } : undefined,
   })
   const { refetch } = query
-  // Read the final event snapshot even when detail polling wins the last tick.
+  const status = options?.status
+  // Terminal status can precede its event; allow bounded catch-up reads.
   useEffect(() => {
-    if (runID && workspaceID && !live) void refetch()
-  }, [runID, workspaceID, live, refetch])
+    if (!runID || !workspaceID || !status || live) return
+    const readFinal = () => {
+      const snapshot = qc.getQueryData<ListAgentRunEventsResponse>(KEY_RUN_EVENTS(workspaceID, runID))
+      if (!snapshot?.events.some((event) => event.event_kind === `run.${status}`)) {
+        void refetch({ cancelRefetch: false })
+      }
+    }
+    readFinal()
+    const timers = [5_000, 15_000, 30_000].map((delay) => setTimeout(readFinal, delay))
+    return () => timers.forEach(clearTimeout)
+  }, [runID, workspaceID, status, live, qc, refetch])
   return query
 }
 
