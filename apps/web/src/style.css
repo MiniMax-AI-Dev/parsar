@@ -294,6 +294,22 @@ html[data-theme="dark"] {
   text-rendering: optimizeLegibility;
 }
 
+@media (width < 40rem) {
+  [data-shared-conversation] header [role="group"] {
+    gap: 0.5rem;
+  }
+
+  [data-shared-conversation] header button,
+  [data-shared-conversation] [data-conversation-composer-actions] > button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  [data-shared-conversation] [data-conversation-composer-actions] {
+    height: 2.75rem;
+  }
+}
+
 /* Page titles: same face, 600, tight tracking. The only 600 on a screen. */
 .font-display {
   font-family: var(--font-display);
