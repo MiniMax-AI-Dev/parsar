@@ -1696,7 +1696,25 @@
         "hide": "Collapse"
       },
       "mcp": {
-        "title": "MCP"
+        "title": "MCP",
+        "description": "Connect your local Agent to this Agent through MCP.",
+        "personal": "This connection acts as you and can call only this Agent. Your workspace permissions still apply.",
+        "readOnly": "Workspace write permission is required to connect through MCP.",
+        "configure": "Connect through MCP",
+        "notConfigured": "No personal connection",
+        "expiry": "Credential · {{time}}",
+        "loadError": "Could not load the connection",
+        "createHint": "Create a personal credential valid for 30 days. You can revoke it here at any time.",
+        "replaceHint": "Replacing the credential disconnects clients using your previous configuration. Other members’ connections are unaffected.",
+        "create": "Generate configuration",
+        "replace": "Replace configuration",
+        "revoke": "Revoke credential",
+        "revoked": "Personal MCP credential revoked.",
+        "copyHint": "Copy this JSON into a client that supports HTTP MCP and Authorization headers. The copied configuration includes your credential; save it before closing this dialog.",
+        "copy": "Copy configuration",
+        "copied": "Configuration copied, including your personal credential.",
+        "copyFailed": "Could not copy the configuration.",
+        "actionFailed": "Could not update the connection"
       },
       "state": {
         "alwaysOn": "Always on · console and shared link",

@@ -193,6 +193,18 @@ description and keep ownership on the side listed here.
 
 ### Server versus daemon ownership
 
+- Agent exposure through MCP lives in `server/internal/api/agentmcp` and uses
+  the standard conversation dispatcher. Personal MCP credentials are stored
+  only as hashes, scoped to one user and Agent, expire after 30 days, and are
+  checked against current membership and resource state on every request.
+  They never authenticate Web sessions or runtime/device APIs. Replacing or
+  revoking a credential affects only that user's connection to that Agent.
+- MCP calls persist their `mcp` source and real requesting user. The MCP
+  endpoint can start a task for its bound Agent and read only that user's runs
+  for that Agent; it does not bypass existing approvals or expose runtime
+  configuration, raw events, or other users' results. Long runs are retrieved
+  with bounded polling; their durable state stays in Parsar, not the MCP session.
+
 - Agent capability reads retain the stored binding version and expose its
   pinning mode. Displayed current versions match the daemon's resolver:
   Skill, Plugin, and Bundle can follow latest metadata (including deprecation
