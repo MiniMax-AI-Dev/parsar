@@ -373,6 +373,9 @@
     },
     "trace": {
       "label": "Work trace",
+      "waitingForOutput": "Waiting for output",
+      "waitingHint": "No text or tool output yet. You can keep waiting or stop this run.",
+      "waitingReadOnlyHint": "No text or tool output yet. It will appear here when available.",
       "running": "Running",
       "completed": "Execution finished",
       "failed": "Failed",

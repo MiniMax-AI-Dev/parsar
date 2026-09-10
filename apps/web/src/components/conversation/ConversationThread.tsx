@@ -507,7 +507,12 @@ function ChatStream({
     <RunTrace
       key={run ? run.id : "live"}
       run={run}
-      live={hasActiveStream ? { steps: stream.steps, startedAt: liveStartedAt ?? undefined } : null}
+      canStop={canWrite}
+      live={hasActiveStream ? {
+        steps: stream.steps,
+        startedAt: liveStartedAt ?? undefined,
+        waitingForOutput: !stream.deltaText && !stream.pendingInteraction,
+      } : null}
       attention={
         (!!run && runsAwaitingUser.has(run.id)) ||
         (!!activeRunId && runsAwaitingUser.has(activeRunId)) ||
@@ -811,10 +816,12 @@ function RunTrace({
   run,
   live,
   attention,
+  canStop = false,
 }: {
   run: ConversationTimelineRun | null
-  live: { steps: StreamingStep[]; startedAt?: number } | null
+  live: { steps: StreamingStep[]; startedAt?: number; waitingForOutput: boolean } | null
   attention: boolean
+  canStop?: boolean
 }) {
   const status: StatusKind = live ? "running" : run ? runStatusKind(run) : "running"
   const steps = useMemo(() => {
@@ -830,6 +837,8 @@ function RunTrace({
       startedAt={isoMs(run?.started_at) ?? live?.startedAt}
       finishedAt={isoMs(run?.finished_at)}
       attentionRequired={attention}
+      waitingForOutput={live?.waitingForOutput && !run?.output_message_id}
+      canStop={canStop}
     />
   )
 }
