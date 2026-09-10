@@ -34,7 +34,7 @@ interface MCPDirectoryProps {
 }
 
 /** connector (+badges, +description) · publisher · version · categories · authentication · actions */
-const DIRECTORY_COLUMNS = [col.title(), col.meta(132), col.id(72, 0.4), col.meta(132), col.meta(110), col.actions(1)]
+const DIRECTORY_COLUMNS = [col.title(280), col.meta(132), col.id(72, 0.4), col.meta(132), col.meta(110), col.actions(1)]
 
 export function MCPDirectory({
   itemID,
@@ -238,14 +238,14 @@ function DirectoryRow({ item, canImport, selected, onOpen, onImport, onConnect, 
     <LedgerRow selected={selected} onClick={onOpen} onKeyDown={onKeyDown} data-testid="mcp-directory-row" data-catalog-id={item.id}>
       <span className="flex min-w-0 items-center gap-2">
         <ConnectorIcon item={item} />
-        <span className="shrink-0 truncate font-medium">{item.name}</span>
+        <span className="min-w-0 truncate font-medium" title={item.name}>{item.name}</span>
         {item.verified ? <VerifiedBadge /> : null}
         {item.installed ? (
           <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.actions.installed")}</Badge>
         ) : item.connected ? (
           <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.oauth.connected")}</Badge>
         ) : null}
-        {item.description && <span className="min-w-0 truncate text-xs text-fg-muted">· {item.description}</span>}
+        {item.description && <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">· {item.description}</span>}
       </span>
       <span className="truncate text-xs text-fg-muted">{item.publisher.name}</span>
       <span className="truncate font-mono text-xs text-fg">{item.version || "—"}</span>

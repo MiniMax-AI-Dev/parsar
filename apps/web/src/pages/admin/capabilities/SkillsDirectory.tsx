@@ -177,9 +177,9 @@ function SkillRow({
     <LedgerRow onKeyDown={onKeyDown} data-testid="skills-directory-row" data-catalog-id={skill.id}>
       <LedgerNum muted>{skill.rank ?? "—"}</LedgerNum>
       <span className="flex min-w-0 items-center gap-2">
-        <span className="shrink-0 truncate font-medium">{skill.name || skill.slug}</span>
+        <span className="min-w-0 truncate font-medium" title={skill.name || skill.slug}>{skill.name || skill.slug}</span>
         {sourceType && <span className="shrink-0 text-xs text-fg-muted">{sourceType}</span>}
-        <span className="min-w-0 truncate text-xs text-fg-muted">· {skill.id}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">· {skill.id}</span>
       </span>
       <LedgerId>{skill.source}</LedgerId>
       <LedgerNum muted={typeof skill.installs !== "number"}>

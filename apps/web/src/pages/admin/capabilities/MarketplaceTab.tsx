@@ -70,7 +70,7 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
 }
 
 /** name (+type, +state, +description) · source · version · workspaces added · credentials · actions */
-const MARKET_COLUMNS = [col.title(), col.meta(120), col.id(96, 0.5), col.num(112), col.meta(150), col.actions(2)]
+const MARKET_COLUMNS = [col.title(280), col.meta(120), col.id(96, 0.5), col.num(112), col.meta(150), col.actions(2)]
 
 function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, canManage, onSelectItem, onInstall, onDelete, onViewCapability }: MarketplaceTabProps) {
   const { t, i18n } = useTranslation("admin")
@@ -208,14 +208,14 @@ function MarketplaceRow({ capability, language, canManage, selected, onOpen, onI
   return (
     <LedgerRow selected={selected} onClick={onOpen} onKeyDown={rowKeyHandler(onOpen)}>
       <span className="flex min-w-0 items-center gap-2">
-        <span className="shrink-0 truncate font-medium">{capability.name}</span>
+        <span className="min-w-0 truncate font-medium" title={capability.name}>{capability.name}</span>
         <CapabilityTypeBadge type={capability.type} />
         {capability.self_published ? (
           <Badge variant="neutral" dot>{t("capabilities.marketplace.card.selfPublished")}</Badge>
         ) : capability.installed ? (
           <Badge variant="neutral" dot>{t("capabilities.marketplace.card.installedBadge")}</Badge>
         ) : null}
-        {capability.description && <span className="min-w-0 truncate text-xs text-fg-muted">· {capability.description}</span>}
+        {capability.description && <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">· {capability.description}</span>}
       </span>
       <span className="truncate text-xs text-fg-muted">{source || "—"}</span>
       <span className={cn("truncate font-mono text-xs", capability.latest_version ? "text-fg" : "text-fg-muted")}>{capability.latest_version ?? "—"}</span>
