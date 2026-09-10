@@ -1407,7 +1407,9 @@
           "description": "Selecting a version pins this Agent to it for future runs. In-flight runs are unchanged.",
           "latest": "latest",
           "current": "current",
-          "notice": "Only this Agent ({{agent}}) is affected. Other Agents using this capability are unchanged. Takes effect on the next run."
+          "notice": "Only this Agent ({{agent}}) is affected. Other Agents using this capability are unchanged. Takes effect on the next run.",
+          "followLatest": "Follow the latest version",
+          "followDescription": "Follow new versions automatically, or pin this Agent to a specific version. Changes apply to future runs."
         },
         "removeDialog": {
           "title": "Remove \"{{cap}}\" from \"{{agent}}\"?",

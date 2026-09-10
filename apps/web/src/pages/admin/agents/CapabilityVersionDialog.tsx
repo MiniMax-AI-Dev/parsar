@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { CredentialBindingSelect } from "../../../components/admin/CredentialBindingSelect"
 import type { ShowToast } from "../../../components/ui/toast"
 import { useEnableAgentCapabilityMutation } from "../../../lib/api-capabilities"
-import { agentCapabilityVersion } from "../../../lib/agent-capability-version"
+import { agentCapabilityVersion, capabilitySupportsLatest } from "../../../lib/agent-capability-version"
 import { catalogIDFromVersion, requiredCredentialKinds, useCapabilityVersions } from "../../../lib/capability-config"
 import { hasCredentialKind, sharedSecretsForKind } from "../../../lib/credential-bindings"
 import type { Agent, AgentCapability, Capability, CapabilityVersion, Secret, UserCredential } from "../../../lib/api-types"
@@ -131,10 +131,14 @@ export function CapabilityVersionDialog({
   const { latest, versions, versionsQ } = useCapabilityVersions(workspaceID, capability, open)
   const currentVersion = agentCapabilityVersion(binding, capability, versions)
   const knowledge = capability.type === "knowledge"
-  const selected = selection || (knowledge && (mode === "enable" || binding?.pinning_mode === "latest") ? "latest" : currentVersion?.id || "")
-  const followsLatest = knowledge && selected === "latest"
+  const allowLatest = knowledge || (mode === "switch" && capabilitySupportsLatest(capability.type) && !capability.deprecated_at
+    && (!capability.from_marketplace || capability.visibility === "public"))
+  const selected = selection || (allowLatest && ((knowledge && mode === "enable") || binding?.pinning_mode === "latest") ? "latest" : currentVersion?.id || "")
+  const followsLatest = allowLatest && selected === "latest"
+  const switchVersions = capability.from_marketplace && currentVersion && !versions.some((version) => version.id === currentVersion.id)
+    ? [...versions, currentVersion] : versions
   const selectedVersion = followsLatest ? latest : selected
-    ? versions.find((version) => version.id === selected) ?? (mode === "enable" ? latest : versions[0])
+    ? switchVersions.find((version) => version.id === selected) ?? (mode === "enable" ? latest : versions[0])
     : mode === "enable" ? latest : versions[0]
   const requiredKinds = useMemo(
     () => mode === "enable" ? requiredCredentialKinds(capability) : [],
@@ -198,7 +202,7 @@ export function CapabilityVersionDialog({
   }
   const isSwitch = mode === "switch"
   const confirmLabel = isSwitch
-    ? followsLatest ? t("capabilities.knowledge.followLatest") : selectedVersion
+    ? followsLatest ? t("agents.detail.capabilities.switchDialog.followLatest") : selectedVersion
       ? t("agents.detail.capabilities.actions.switchConfirm", { version: selectedVersion.version })
       : t("agents.detail.capabilities.actions.switchVersion")
     : t("agents.detail.capabilities.actions.enableConfirm")
@@ -222,17 +226,17 @@ export function CapabilityVersionDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t(isSwitch ? "agents.detail.capabilities.switchDialog.title" : "agents.detail.capabilities.enableDialog.title", { agent: agent.name, cap: capability.name })}</DialogTitle>
-          <DialogDescription>{t(knowledge ? "capabilities.knowledge.versionHint" : isSwitch ? "agents.detail.capabilities.switchDialog.description" : "agents.detail.capabilities.enableDialog.description")}</DialogDescription>
+          <DialogDescription>{t(knowledge ? "capabilities.knowledge.versionHint" : isSwitch && allowLatest ? "agents.detail.capabilities.switchDialog.followDescription" : isSwitch ? "agents.detail.capabilities.switchDialog.description" : "agents.detail.capabilities.enableDialog.description")}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           {isSwitch ? (
             versionsQ.isLoading ? <Skeleton className="h-28 w-full" /> : (
               <ul className="m-0 list-none p-0">
-                {knowledge && <li><label className="flex h-7 cursor-pointer items-center gap-2 text-sm text-fg">
+                {allowLatest && <li><label className="flex h-7 cursor-pointer items-center gap-2 text-sm text-fg">
                   <input type="radio" name="capability-version" className="h-3.5 w-3.5 accent-accent" checked={selected === "latest"} onChange={() => setSelected("latest")} />
-                  {t("capabilities.knowledge.followLatest")}
+                  {t("agents.detail.capabilities.switchDialog.followLatest")}
                 </label></li>}
-                {versions.map((version, index) => (
+                {switchVersions.map((version, index) => (
                   <li key={version.id}>
                     <label className="flex h-7 cursor-pointer items-center gap-2 text-sm text-fg">
                       <input type="radio" name="capability-version" className="h-3.5 w-3.5 accent-accent" checked={selected === version.id} onChange={() => setSelected(version.id)} />

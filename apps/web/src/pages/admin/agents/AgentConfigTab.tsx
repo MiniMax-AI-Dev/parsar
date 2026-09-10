@@ -36,7 +36,7 @@ import {
 } from "../../../lib/api-capabilities"
 import { useMyCredentials } from "../../../lib/api-credentials"
 import { useSecrets } from "../../../lib/api-secrets"
-import { agentCapabilityFollowsLatest, agentCapabilityVersion } from "../../../lib/agent-capability-version"
+import { agentCapabilityFollowsLatest, agentCapabilityVersion, capabilitySupportsLatest } from "../../../lib/agent-capability-version"
 import { agentExecutionPlacement } from "../../../lib/agent-runtime"
 import { agentEngineLabel, agentEngineOf, agentEngineSupportsCapability, agentEnginesSupportingCapability } from "../../../lib/agent-view-model"
 import { credentialBinding, hasCredentialKind, sharedSecretsForKind } from "../../../lib/credential-bindings"
@@ -292,6 +292,10 @@ function CapabilityCard({
   const versionDeleted = !!binding && !versionsQ.isLoading && !boundVersion && !capability?.latest_version_id
   const fromMarketplace = !!capability?.from_marketplace || (!!capability?.source_workspace_id && capability.source_workspace_id !== workspaceID)
   const deprecated = !!capability?.deprecated_at
+  const canChooseLatest = capabilitySupportsLatest(capability?.type) && !deprecated
+    && (!fromMarketplace || capability?.visibility === "public")
+  const canSwitchVersions = !versionDeleted && (canChooseLatest ? versions.length > 0
+    : !fromMarketplace && (versions.length > 1 || (versions.length === 1 && binding?.pinning_mode === "latest")))
 
   if (!capability && binding) {
     return (
@@ -452,13 +456,14 @@ function CapabilityCard({
             {canEditCredentials && binding.enabled && capability.required_credentials?.some((credential) => credential.required) && (
               <CapabilityCredentialsDialog agent={agent} binding={binding} capability={capability} workspaceID={workspaceID} onToast={onToast} />
             )}
-            {(versions.length > 1 || (versions.length === 1 && binding.pinning_mode === "latest")) && !versionDeleted && !fromMarketplace && (
+            {canSwitchVersions && (
               <CapabilityVersionDialog
                 mode="switch"
                 agent={agent}
                 capability={capability}
                 binding={binding}
                 workspaceID={workspaceID}
+                disabled={!canEditCredentials}
                 onToast={onToast}
               />
             )}

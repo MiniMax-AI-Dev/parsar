@@ -1,4 +1,8 @@
-import type { AgentCapability, Capability, CapabilityVersion } from "./api-types"
+import type { AgentCapability, Capability, CapabilityVersion, CapabilityType } from "./api-types"
+
+export function capabilitySupportsLatest(kind: CapabilityType | undefined): boolean {
+  return kind === "skill" || kind === "plugin" || kind === "bundle" || kind === "knowledge"
+}
 
 export function agentCapabilityFollowsLatest(
   binding: AgentCapability | undefined,
@@ -7,7 +11,7 @@ export function agentCapabilityFollowsLatest(
   const kind = capability?.type ?? binding?.type
   // Match the daemon resolvers: MCP and System Prompt still use stored fields.
   return binding?.pinning_mode === "latest"
-    && (kind === "skill" || kind === "plugin" || kind === "bundle" || kind === "knowledge")
+    && capabilitySupportsLatest(kind)
 }
 
 export function agentCapabilityVersion(
