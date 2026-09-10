@@ -164,7 +164,7 @@ export function ImportPluginForm({
   const errMsg = localErr ?? null
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className={`grid gap-4 ${validation || busy ? "md:grid-cols-2" : ""}`}>
       <div className="min-w-0">
         <Label htmlFor="plugin-zip-input">{t("capabilities.import.plugin.uploadLabel", "Upload Plugin zip")}</Label>
         {!file ? (

@@ -42,7 +42,7 @@ export function ImportPreview({
     <div className="space-y-2">
       {status === "idle" && (
         <p className="text-sm text-fg-muted">
-          {t("capabilities.import.preview.idle", "Paste content on the left to see the parsed result here")}
+          {t("capabilities.import.preview.idle", "Paste or upload content to see the preview.")}
         </p>
       )}
 

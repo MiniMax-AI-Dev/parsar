@@ -1034,7 +1034,7 @@
       },
       "preview": {
         "errorFallback": "Failed to parse",
-        "idle": "Paste content on the left to see the parsed result here",
+        "idle": "Paste or upload content to see the preview.",
         "loading": "Parsing…",
         "warnings": "Parse warnings"
       },
