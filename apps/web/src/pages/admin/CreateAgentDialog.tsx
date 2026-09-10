@@ -498,6 +498,7 @@ export function CreateAgentDialog({
 
   const modelFieldRef = useRef<HTMLDivElement | null>(null)
   const modelComboboxRef = useRef<HTMLDivElement | null>(null)
+  const fieldID = useId()
   const modelListboxID = useId()
   const modelSecretID = useId()
   const wasOpenRef = useRef(false)
@@ -1085,12 +1086,13 @@ export function CreateAgentDialog({
               <section className="flex flex-col gap-3">
                 <Field
                   label={t("agents.form.fields.name")}
+                  htmlFor={`${fieldID}-name`}
                   required
                 >
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("agents.form.placeholders.name")} autoFocus />
+                  <Input id={`${fieldID}-name`} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("agents.form.placeholders.name")} autoFocus />
                 </Field>
-                <Field label={t("agents.form.fields.description")}>
-                  <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("agents.form.placeholders.description")} />
+                <Field label={t("agents.form.fields.description")} htmlFor={`${fieldID}-description`}>
+                  <Input id={`${fieldID}-description`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("agents.form.placeholders.description")} />
                 </Field>
                 <AgentInstructionsField value={systemPrompt} onChange={setSystemPrompt} disabled={pending} />
                 {mode === "create" && (
@@ -1236,10 +1238,12 @@ export function CreateAgentDialog({
               {connector === "agent_daemon" && (executionMode === "local_device" || executionMode === "sandbox") && (
                 <Field
                   label={t("agents.form.fields.workDir")}
+                  htmlFor={`${fieldID}-work-dir`}
                   hint={t(executionMode === "sandbox" ? "agents.form.workDir.hintSandbox" : "agents.form.workDir.hintLocal")}
                   error={!workDirValid ? t("agents.form.errors.workDirAbsolute") : undefined}
                 >
                   <Input
+                    id={`${fieldID}-work-dir`}
                     value={workDir}
                     onChange={(e) => setWorkDir(e.target.value)}
                     placeholder={t("agents.form.workDir.placeholder")}
@@ -1257,6 +1261,7 @@ export function CreateAgentDialog({
                   <Field
                     ref={modelFieldRef}
                     label={t("agents.form.fields.model")}
+                    htmlFor={hasModel ? `${fieldID}-model` : undefined}
                     required
                     error={selectedModelUnavailable
                       ? t("agents.form.errors.modelUnavailable")
@@ -1268,6 +1273,7 @@ export function CreateAgentDialog({
                   <div ref={modelComboboxRef} className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
                     <Input
+                      id={`${fieldID}-model`}
                       role="combobox"
                       aria-expanded={modelDropdownOpen}
                       aria-controls={modelListboxID}
@@ -1719,18 +1725,19 @@ function WizardProgress({
 
 interface FieldProps {
   label: ReactNode
+  htmlFor?: string
   children: ReactNode
   required?: boolean
   hint?: string
   error?: string
 }
 const Field = forwardRef<HTMLDivElement, FieldProps>(function Field(
-  { label, children, required, hint, error },
+  { label, htmlFor, children, required, hint, error },
   ref
 ) {
   return (
     <div ref={ref} className="flex flex-col">
-      <Label>
+      <Label htmlFor={htmlFor}>
         {label}{required && <span aria-hidden="true"> *</span>}
       </Label>
       {children}
