@@ -140,7 +140,7 @@ export function ImportMCPForm({
         : "idle"
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,1fr)]">
+    <div className={`grid gap-4 ${status !== "idle" ? "lg:grid-cols-[minmax(0,1fr)_minmax(360px,1fr)]" : ""}`}>
       {/* ---- LEFT: raw input ---- */}
       <div className="min-w-0">
         <div className="mb-2 flex items-center gap-2">
@@ -183,7 +183,7 @@ export function ImportMCPForm({
       </div>
 
       {/* ---- RIGHT: parsed preview ---- */}
-      <div className="min-w-0 space-y-4 lg:pt-9">
+      <div className={`min-w-0 space-y-4 ${status !== "idle" ? "lg:pt-9" : ""}`}>
         <ImportPreview
           status={status as "idle" | "loading" | "error" | "ready"}
           errorMessage={errorMessage}

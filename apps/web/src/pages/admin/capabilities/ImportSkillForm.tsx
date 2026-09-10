@@ -257,15 +257,8 @@ export function ImportSkillForm({
         </TabsList>
       </Tabs>
 
-      {/* Layout:
-       *   paste mode → two columns (editor on the left, live preview on
-       *     the right, side-by-side comparison is the point).
-       *   zip mode  → single column. The dropzone is a small target that
-       *     looks lonely in a half-width column, and the preview wants
-       *     every pixel it can get (SKILL.md and supporting files all stack
-       *     vertically). Stack input above preview instead. */}
-      <div className={source === "paste" ? "grid gap-4 md:grid-cols-2" : "grid gap-4"}>
-        <div className={`min-w-0 ${source === "paste" ? "max-w-3xl" : ""}`}>
+      <div className={source === "paste" && status !== "idle" ? "grid gap-4 md:grid-cols-2" : "grid gap-4"}>
+        <div className="min-w-0">
           {source === "paste" ? (
             <>
               <Label htmlFor="import-skill-markdown">{t("capabilities.import.skill.markdown", "Markdown content")}</Label>
@@ -317,8 +310,6 @@ export function ImportSkillForm({
           )}
         </div>
 
-        {/* ---- PREVIEW: half-width beside the editor in paste mode, full
-         *  width under the dropzone in zip mode. ---- */}
         <div className={`min-w-0 space-y-3 ${source === "paste" ? "max-w-3xl" : ""}`}>
           <ImportPreview
             status={status}
