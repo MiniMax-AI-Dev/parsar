@@ -739,7 +739,8 @@
         "title": "{{name}} — add version",
         "description": "Saving assigns the next version automatically. Check each Agent’s Config tab for the version it will use.",
         "prefillFromLatest": "Prefilled from the previous version ({{version}}). Edits become the new version on submit.",
-        "inlineSecretLostWarning": "Inline secret(s) from the previous version ({{keys}}) are hidden. Re-enter the plaintext to keep them, or switch to a managed credential."
+        "inlineSecretLostWarning": "Inline secret(s) from the previous version ({{keys}}) are hidden. Re-enter the plaintext to keep them, or switch to a managed credential.",
+        "reuseExistingZip": "Current version package: {{filename}}. If you do not re-upload, the new version will reuse this package."
       },
       "viewContent": {
         "title": "View {{version}} content",
@@ -983,7 +984,12 @@
       "dialog": {
         "description": "Paste a third-party MCP config (JSON / TOML) to parse and preview it. Ordinary env values are imported as-is; only env values that start with $ need a credential source.",
         "descriptionSkill": "Paste a SKILL.md or upload a zip bundle. The Skill's name and description come from its frontmatter; the body is injected into the model as instruction.",
-        "descriptionPlaceholder": "One sentence about what this capability does — Claude uses it to decide when to invoke."
+        "descriptionPlaceholder": "One sentence about what this capability does — Claude uses it to decide when to invoke.",
+        "title": "Import capability",
+        "name": "Name",
+        "namePlaceholder": "e.g. github-mcp",
+        "descriptionLabel": "Description",
+        "submit": "Import"
       },
       "skill": {
         "missingName": "Skill name missing",
@@ -1008,7 +1014,76 @@
           "references": "references/",
           "scripts": "scripts/",
           "other": "Other files"
-        }
+        },
+        "markdown": "Markdown content",
+        "placeholder": "---\nname: code-reviewer\ndescription: Review a diff and call out risky changes\n---\n\nYou are a careful code reviewer. When the user pastes a diff, walk through:\n\n1. Correctness — does the change do what it claims?\n2. Risk — what could break in production?\n3. Style — does it match the surrounding conventions?\n\nKeep responses concise.",
+        "pasteHelp": "Supports Markdown with YAML frontmatter. name + description come from the frontmatter; the body is injected into the model as the instruction.",
+        "trigger": "Trigger",
+        "instruction": "Instruction (injected into the model)"
+      },
+      "kindPicker": {
+        "placeholder": "Select a credential kind",
+        "search": "Search…",
+        "loading": "Loading…",
+        "empty": "No matching credential kinds",
+        "createNew": "Create credential kind…"
+      },
+      "tab": {
+        "mcp": "MCP",
+        "skill": "Skill"
+      },
+      "preview": {
+        "errorFallback": "Failed to parse",
+        "idle": "Paste content on the left to see the parsed result here",
+        "loading": "Parsing…",
+        "warnings": "Parse warnings"
+      },
+      "mcp": {
+        "format": "Format",
+        "tomlPlaceholder": "[mcp_servers.github]\ncommand = \"docker\"\nargs = [\"run\", \"-i\", \"ghcr.io/github/github-mcp-server\"]\n\n[mcp_servers.github.env]\nGITHUB_PERSONAL_ACCESS_TOKEN = \"ghp_xxx\"",
+        "jsonPlaceholder": "{\n  \"mcpServers\": {\n    \"github\": {\n      \"command\": \"docker\",\n      \"args\": [\"run\", \"-i\", \"ghcr.io/github/github-mcp-server\"],\n      \"env\": {\n        \"GITHUB_PERSONAL_ACCESS_TOKEN\": \"ghp_xxx\"\n      }\n    }\n  }\n}",
+        "pasteHelp": "Supports Claude Code (env) / OpenCode (environment) JSON and Codex TOML. You can also paste just the inner mcpServers object."
+      },
+      "plugin": {
+        "errors": {
+          "notZip": "Please choose a .zip file",
+          "tooLarge": "File exceeds 32 MiB — the server will reject it"
+        },
+        "uploadLabel": "Upload Plugin zip",
+        "dropHint": "Drag or click to upload a .zip file",
+        "sizeHint": "Up to 32 MiB",
+        "uploading": "Uploading…",
+        "validating": "Validating…",
+        "previewLabel": "Validation result",
+        "previewEmpty": "Upload a zip file to see the validation result here",
+        "passed": "Validation passed",
+        "failed": "Validation failed — fix the issues and upload again",
+        "errorsHeader": "Errors",
+        "warningsHeader": "Warnings"
+      },
+      "systemPrompt": {
+        "versionLabel": "Version",
+        "modeLabel": "Injection mode",
+        "modeAppend": "Append (prepended to the user system prompt)",
+        "modeOverride": "Override (replaces the default system prompt)",
+        "promptLabel": "Prompt content",
+        "promptPlaceholder": "Write the system prompt text you want injected into the agent. Override replaces the default system prompt; append prepends it to the user-supplied system_prompt."
+      },
+      "newKind": {
+        "title": "New credential kind",
+        "code": {
+          "label": "Code",
+          "help": "Lowercase letters, digits, and underscores — e.g. linear_api_key",
+          "invalid": "code must start with a lowercase letter and contain only lowercase letters, digits, and underscores"
+        },
+        "displayName": {
+          "label": "Display name"
+        },
+        "description": {
+          "label": "Description",
+          "placeholder": "Optional — tell users where to get this token"
+        },
+        "submit": "Create"
       }
     }
   },
