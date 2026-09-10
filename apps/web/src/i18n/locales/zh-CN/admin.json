@@ -68,7 +68,13 @@
       "deleteSelected": "删除所选",
       "title": "删除 {{count}} 个模型?",
       "description": "这会永久删除所选模型。仍被活跃 Agent 引用的模型会被跳过。",
-      "resultSummary": "已删除 {{deleted}} 个，失败 {{failed}} 个"
+      "resultSummary": "已删除 {{deleted}} 个，失败 {{failed}} 个",
+      "resultsTitle": "模型删除结果",
+      "deleted": "已删除",
+      "inUse": "仍有 Agent 使用此模型。请先在 Agent 配置中更换模型，再删除。",
+      "notFound": "此模型已不存在，请刷新列表。",
+      "failed": "此模型未能删除，请查看详情后重试。",
+      "openAgent": "打开 {{name}} 的配置"
     },
     "health": {
       "healthy": "健康",
