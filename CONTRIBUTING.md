@@ -703,6 +703,8 @@ split relevant pieces out first rather than growing the file further.
 Standalone shared conversations size to the viewport, including loading and
 unavailable states. Keep their mobile sizing scoped to that shell; the desktop
 console's minimum width and shared message behavior remain independent.
+Below the small-screen breakpoint, theme and composer action buttons in this
+shell have at least 44px touch targets without changing desktop control sizes.
 
 The console and shared conversation view use the same thread scroll hook.
 Opening a conversation and successful sends follow the latest content. Scrolling

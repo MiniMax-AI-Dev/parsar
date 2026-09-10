@@ -1213,7 +1213,7 @@ function ComposerForm({
           disabled={disabled || (!conversationId && !onSendDirect)}
           className="block max-h-[200px] min-h-[40px] w-full resize-none bg-transparent text-base leading-relaxed text-fg placeholder:text-fg-muted focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
         />
-        <div className="mt-2 flex h-8 items-center justify-end gap-3">
+        <div data-conversation-composer-actions className="mt-2 flex h-8 items-center justify-end gap-3">
           {agentName && (
             <span className="flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
               <InitialTile name={agentName} />
