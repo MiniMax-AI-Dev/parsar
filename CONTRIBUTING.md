@@ -145,6 +145,9 @@ description and keep ownership on the side listed here.
 - Skills.sh downloads accept an exact `owner/repo` reference and a Skill slug,
   never a local path or a value the CLI could interpret as an option. Validate
   these inputs before invoking the installer.
+- Skill directory packaging honors the request context while reading files and
+  writing the archive. Enforce the ZIP parser's existing byte and entry limits
+  during packaging, before upload or parsing can allocate oversized results.
 
 ### Runtime and execution concepts
 

@@ -1,7 +1,6 @@
 package dev
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -125,7 +124,7 @@ func installSkillFromRegistry(runtimeStore RuntimeStore, blobStore blob.Store, r
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 			return
 		}
-		zipBytes, err := zipSkillDirectory(skillDir)
+		zipBytes, err := zipSkillDirectory(r.Context(), skillDir)
 		if err != nil {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			return
@@ -329,51 +328,6 @@ func preferClaudeSkillDir(candidates []string) string {
 		}
 	}
 	return candidates[0]
-}
-
-func zipSkillDirectory(skillDir string) ([]byte, error) {
-	if !containsSkillMD(skillDir) {
-		return nil, fmt.Errorf("skill directory %q is missing SKILL.md", skillDir)
-	}
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	err := filepath.WalkDir(skillDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if d.Type()&os.ModeSymlink != 0 {
-			return nil
-		}
-		rel, err := filepath.Rel(skillDir, path)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-		if rel == "." || rel == "" {
-			return nil
-		}
-		file, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		entry, err := zw.Create(rel)
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(entry, file)
-		return err
-	})
-	if closeErr := zw.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return nil, fmt.Errorf("could not package skill directory: %w", err)
-	}
-	return buf.Bytes(), nil
 }
 
 func storeSkillZipBytes(ctx context.Context, blobStore blob.Store, httpClient skillInstallHTTPDoer, workspaceID, filename string, data []byte) (string, *importHTTPError) {
