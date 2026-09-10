@@ -74,6 +74,15 @@ func (s *Store) RecordAgentRunEvent(ctx context.Context, input RecordAgentRunEve
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			if input.EventKind == "run.completed" || input.EventKind == "run.failed" {
+				run, readErr := queries.GetAgentRunForRead(ctx, runID)
+				if readErr == nil && run.Status == "cancelled" {
+					return nil
+				}
+				if readErr != nil && !errors.Is(readErr, pgx.ErrNoRows) {
+					return readErr
+				}
+			}
 			return fmt.Errorf("%w: %s", ErrUnknownAgentRun, input.RunID)
 		}
 		return err

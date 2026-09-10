@@ -261,6 +261,9 @@ description and keep ownership on the side listed here.
   dispatch deadline or cancellation may stop connector work, but it must not
   prevent the server from recording the resulting completed, failed, or
   cancelled state.
+- Once cancellation is persisted, late connector completion/failure events must
+  not create conflicting run lifecycle records. Preserve nonterminal diagnostic
+  events and existing history; cancellation owns the terminal outcome.
 - Manual run retries create a new Run ID through `/agent-runs/{runID}/retry`.
   Preserve the source run's terminal status, events and output; reuse its trigger
   message, and execute as the current requester. One source run maps to one retry

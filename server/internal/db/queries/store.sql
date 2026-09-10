@@ -2910,6 +2910,8 @@ select
   @created_at
 from agent_runs r
 where r.id = @agent_run_id::uuid
+  and not (r.status = 'cancelled' and @event_kind::text in ('run.completed', 'run.failed'))
+for share of r
 on conflict (agent_run_id, sequence) do nothing
 returning
   id::text,
