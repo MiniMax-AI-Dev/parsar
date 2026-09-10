@@ -20,8 +20,7 @@ interface SkillsDirectoryProps {
   onViewCapability: (capabilityID: string) => void
 }
 
-/** rank · skill (+source type, +id) · source · installs · actions */
-const SKILL_COLUMNS = [col.fixed(40), col.title(), col.id(200, 1), col.num(72), col.actions(1)]
+const SKILL_COLUMNS = [col.title(), col.id(200, 1), col.num(40), col.num(72), col.actions(1)]
 
 export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDirectoryProps) {
   const { t, i18n } = useTranslation("admin")
@@ -121,9 +120,9 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
           <div className="mb-3 h-7 border-b border-line" />
           {Array.from({ length: 6 }).map((_, index) => (
             <div key={index} className="flex h-9 items-center gap-3 border-b border-line">
-              <Skeleton className="h-3 w-6" />
               <Skeleton className="h-3 w-40" />
               <Skeleton className="h-3 flex-1" />
+              <Skeleton className="h-3 w-6" />
               <Skeleton className="h-3 w-16" />
             </div>
           ))}
@@ -137,10 +136,10 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
       ) : filtered.length > 0 && !loadError ? (
         <Ledger columns={SKILL_COLUMNS} role="listbox" aria-label={t("capabilities.tabs.skills")} data-testid="skills-marketplace-grid">
           <LedgerHeader>
-            <span className="text-right">#</span>
             <span>{t("capabilities.table.name")}</span>
             <span>{t("capabilities.marketplaceDetail.source.title")}</span>
-            <span className="text-right">{t("capabilities.table.installs")}</span>
+            <span>{t("capabilities.skillsDirectory.rank")}</span>
+            <span>{t("capabilities.table.installs")}</span>
             <span />
           </LedgerHeader>
           <ul className="m-0 list-none p-0">
@@ -194,13 +193,13 @@ function SkillRow({
   }
   return (
     <LedgerRow onClick={onPreview} onKeyDown={onKeyDown} data-testid="skills-directory-row" data-catalog-id={skill.id}>
-      <LedgerNum muted>{skill.rank ?? "—"}</LedgerNum>
       <span className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 truncate font-medium" title={skill.name || skill.slug}>{skill.name || skill.slug}</span>
         {sourceType && <span className="shrink-0 text-xs text-fg-muted">{sourceType}</span>}
         <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">· {skill.id}</span>
       </span>
       <LedgerId>{skill.source}</LedgerId>
+      <LedgerNum muted>{skill.rank ?? "—"}</LedgerNum>
       <LedgerNum muted={typeof skill.installs !== "number"}>
         {typeof skill.installs === "number" ? numberFormatter.format(skill.installs) : "—"}
       </LedgerNum>

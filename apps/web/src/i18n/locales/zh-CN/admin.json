@@ -809,6 +809,7 @@
       }
     },
     "skillsDirectory": {
+      "rank": "排名",
       "loadError": {
         "title": "无法加载 Skills 目录",
         "description": "可以直接重试，不会离开能力市场。"
