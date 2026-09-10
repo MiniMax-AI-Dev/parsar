@@ -233,7 +233,7 @@ func validateInstallSkillRequest(body installSkillRequest) string {
 		return "source must be an owner/repo GitHub reference"
 	}
 	if !validSkillSlug(body.Slug) {
-		return "slug is required and may only contain letters, numbers, dot, underscore, and hyphen"
+		return "slug is required, must not start with a hyphen, and may only contain letters, numbers, dot, underscore, and hyphen"
 	}
 	if strings.TrimSpace(body.RegistryID) == "" {
 		return "registry_id is required"
@@ -242,12 +242,12 @@ func validateInstallSkillRequest(body installSkillRequest) string {
 }
 
 func validSkillSourceRef(source string) bool {
-	parts := strings.Split(strings.TrimSpace(strings.Trim(source, "/")), "/")
-	return len(parts) == 2 && validSkillRefPart(parts[0]) && validSkillRefPart(parts[1])
+	parts := strings.Split(strings.TrimSpace(source), "/")
+	return len(parts) == 2 && !strings.HasPrefix(parts[0], "-") && validSkillRefPart(parts[0]) && validSkillRefPart(parts[1])
 }
 
 func validSkillSlug(slug string) bool {
-	return validSkillRefPart(slug)
+	return !strings.HasPrefix(slug, "-") && validSkillRefPart(slug)
 }
 
 func validSkillRefPart(part string) bool {
