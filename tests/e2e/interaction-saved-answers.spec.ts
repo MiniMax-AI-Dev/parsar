@@ -43,13 +43,13 @@ for (const surface of ["inbox", "conversation"] as const) {
       { id: "checks", question: "Select checks", multi_select: true, options: [{ label: "Smoke" }, { label: "Audit" }] },
       { question: "Additional note", options: [] },
       { id: "secret", question: "Access token", is_secret: true, options: [] },
-    ] }, response: { answers: { language: ["English"], checks: ["Smoke", "Audit", "Check logs"], q2: ["Bring a laptop"], secret: ["synthetic-only"] } } });
+    ] }, response: { answers: { language: ["English"], checks: ["Smoke", "Audit", "Check logs", "Email team"], q2: ["Bring a laptop"], secret: ["synthetic-only"] } } });
     for (let attempt = 0; attempt < 2; attempt++) {
       const card = page.getByTestId("interaction-card");
       await expect(card.getByRole("radio", { name: "English", exact: true })).toBeChecked();
       await expect(card.getByRole("radio", { name: "Chinese", exact: true })).not.toBeChecked();
       for (const name of ["Smoke", "Audit"]) await expect(card.getByRole("checkbox", { name, exact: true })).toBeChecked();
-      await expect(card.locator('input[type="text"]').nth(0)).toHaveValue("Check logs");
+      await expect(card.locator('input[type="text"]').nth(0)).toHaveValue("Check logs, Email team");
       await expect(card.locator('input[type="text"]').nth(1)).toHaveValue("Bring a laptop");
       const secret = card.locator('input[type="password"]');
       await expect(secret).toHaveValue("synthetic-only");

@@ -22,6 +22,6 @@ export function savedQuestionAnswer(row: AgentInteraction, question: AgentIntera
   const labels = new Set(question.options.map((option) => option.label))
   return {
     selected: values.filter((answer) => labels.has(answer)),
-    custom: values.filter((answer) => !labels.has(answer)).join("\n"),
+    custom: values.filter((answer) => !labels.has(answer)).join(", "),
   }
 }
