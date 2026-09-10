@@ -12,6 +12,7 @@
       "title": "Models"
     },
     "actions": {
+      "selectAll": "Select all",
       "addModel": "Add model",
       "importModels": "Import models",
       "test": "Test",

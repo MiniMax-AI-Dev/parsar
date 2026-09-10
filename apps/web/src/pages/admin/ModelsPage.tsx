@@ -287,6 +287,15 @@ export function ModelsPage() {
                   </FilterGroup>
                 </FilterMenu>
               )}
+              {hasModels && (
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedModelIDs((current) => new Set([...current, ...filteredModels.map((model) => model.id)]))}
+                  disabled={bulkDeleteMut.isPending || filteredModels.every((model) => selectedModelIDs.has(model.id))}
+                >
+                  {t("models.actions.selectAll")}
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setBulkImportOpen(true)} disabled={!wsId}>
                 <Download strokeWidth={1.5} aria-hidden="true" />
                 {t("models.actions.importModels")}
