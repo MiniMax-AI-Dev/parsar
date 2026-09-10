@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/installroot"
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/google/uuid"
 )
@@ -55,8 +56,13 @@ func InstallManagedSkills(ctx context.Context, logger *slog.Logger, root string,
 	if strings.TrimSpace(root) == "" {
 		return SkillInstallResult{}, errors.New("managed skills: root is required")
 	}
+	unlock, err := installroot.Lock(ctx, root)
+	if err != nil {
+		return SkillInstallResult{}, err
+	}
+	defer unlock()
 	skills, decodeWarnings := decodeSkillDescriptors(raw)
-	result, err := installSkillsAtRoot(ctx, logger, root, skills, "managed skills")
+	result, err := installSkillsAtRootLocked(ctx, logger, root, skills, "managed skills")
 	result.Warnings = append(decodeWarnings, result.Warnings...)
 	if err != nil {
 		return result, err
@@ -74,14 +80,26 @@ func installSkillsAtRoot(
 	skills []skillDescriptor,
 	logLabel string,
 ) (SkillInstallResult, error) {
+	unlock, err := installroot.Lock(ctx, root)
+	if err != nil {
+		return SkillInstallResult{}, err
+	}
+	defer unlock()
+	return installSkillsAtRootLocked(ctx, logger, root, skills, logLabel)
+}
+
+func installSkillsAtRootLocked(
+	ctx context.Context,
+	logger *slog.Logger,
+	root string,
+	skills []skillDescriptor,
+	logLabel string,
+) (SkillInstallResult, error) {
 	if logger == nil {
 		logger = obslog.Bg()
 	}
 	if len(skills) == 0 {
 		return SkillInstallResult{}, nil
-	}
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		return SkillInstallResult{}, fmt.Errorf("%s: mkdir %s: %w", logLabel, root, err)
 	}
 
 	result := SkillInstallResult{}
