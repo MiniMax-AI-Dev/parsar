@@ -507,8 +507,8 @@ func TestCapabilityVersionImportCommit_AssignsNextVersionWhenOmitted(t *testing.
 	if err := json.Unmarshal(res.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.CapabilityVersion.Version != "1.0.1" {
-		t.Fatalf("automatic version = %q, want 1.0.1", response.CapabilityVersion.Version)
+	if response.CapabilityVersion.Version != "v2" {
+		t.Fatalf("automatic version = %q, want v2", response.CapabilityVersion.Version)
 	}
 }
 
