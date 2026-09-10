@@ -537,6 +537,11 @@ split relevant pieces out first rather than growing the file further.
 
 ### Frontend shared logic
 
+- Audit surfaces share readable action and actor labels. Resolve names only
+  from workspace-authorized member/Agent reads and the recorded actor type;
+  missing names or failed lookups retain the raw identity. Display names are
+  current directory values, not reconstructed historical identities.
+
 - Marketplace-to-Agent installation uses the same capability version and
   credential confirmation dialog as Agent configuration. Keep pending install
   intent in the existing route until completion or cancellation; clear it before
