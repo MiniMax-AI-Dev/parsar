@@ -7,11 +7,12 @@
  * Hand-written; regenerate via openapi-typescript when the OpenAPI
  * surface stabilizes.
  */
+import type { KnowledgeSpec } from "../../../lib/knowledge"
 import type { Capability, CapabilityVersion } from "../../../lib/api-types"
 
 /* ---------- canonical.Spec ----------------------------------------------- */
 
-export type CanonicalKind = "mcp" | "skill" | "plugin" | "system_prompt"
+export type CanonicalKind = "mcp" | "skill" | "plugin" | "system_prompt" | "knowledge"
 
 export type EnvMode = "literal" | "inline_secret" | "credential_ref"
 
@@ -99,6 +100,7 @@ export interface CanonicalSpec {
   skill?: CanonicalSkillSpec
   plugin?: CanonicalPluginSpec
   system_prompt?: CanonicalSystemPromptSpec
+  knowledge?: KnowledgeSpec
 }
 
 /**

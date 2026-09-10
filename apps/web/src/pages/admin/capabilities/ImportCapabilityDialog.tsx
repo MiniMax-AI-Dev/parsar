@@ -26,6 +26,7 @@ import { preventDialogDismissForCredentialMenu } from "../../../lib/dialog-inter
 
 import { useImportCommitMutation } from "./api"
 import { ImportMCPForm } from "./ImportMCPForm"
+import { KnowledgeForm } from "./KnowledgeForm"
 import { ImportSkillForm } from "./ImportSkillForm"
 import { isImportSpecReady } from "./importValidation"
 import { InlineNotice } from "./notices"
@@ -46,14 +47,13 @@ interface Props {
   onCreated?: (capability: ImportCommitResponse["capability"]) => void
 }
 
-type AddCapabilityKind = "mcp" | "skill"
+type AddCapabilityKind = "mcp" | "skill" | "knowledge"
 
 export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCreated }: Props) {
   const { t } = useTranslation("admin")
   const commitMut = useImportCommitMutation(workspaceID)
 
-  // Draft is preserved across tab flips, but the spec itself is dropped
-  // on kind change (an MCP spec is meaningless as a Skill spec).
+  // Keep the knowledge draft separate from other capability formats.
   const [kind, setKind] = useState<AddCapabilityKind>("mcp")
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -71,6 +71,7 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
    *  Skill imports ignore this flag entirely — for Skill, the frontmatter
    *  is the single source of truth and there is no Name input on screen. */
   const nameTouched = useRef(false)
+  const knowledgeDraft = useRef<{ spec: CanonicalSpec | null; name: string; description: string } | null>(null)
 
   // Reset everything when the dialog opens (or closes-then-reopens) so a
   // previous run doesn't bleed in.
@@ -85,6 +86,7 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
       setRawText("")
       setSourceFormat("json")
       setSkillOssKey(null)
+      knowledgeDraft.current = null
       nameTouched.current = false
       commitMut.reset()
     }, 0)
@@ -96,16 +98,21 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
   const onTabChange = (next: string) => {
     const nextKind = next as AddCapabilityKind
     if (nextKind === kind) return
+    if (kind === "knowledge") knowledgeDraft.current = { spec, name, description }
     setKind(nextKind)
     // Cross-kind drafts don't make sense — drop the parsed spec and
     // secrets so the new tab starts clean.
-    setSpec(null)
+    setSpec(nextKind === "knowledge" ? knowledgeDraft.current?.spec ?? null : null)
     setInlineSecrets([])
     setRawText("")
     setSkillOssKey(null)
     setSourceFormat(nextKind === "skill" ? "markdown" : "json")
     // For Skill, frontmatter is the source of truth — reset name/desc
     // on a fresh tab. MCP keeps user input across tab flips.
+    if (nextKind === "knowledge") {
+      setName(knowledgeDraft.current?.name ?? "")
+      setDescription(knowledgeDraft.current?.description ?? "")
+    }
     if (nextKind === "skill") {
       nameTouched.current = false
       setName("")
@@ -170,13 +177,13 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={`max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] ${kind === "skill" ? "max-w-4xl" : "max-w-6xl"} overflow-x-hidden overflow-y-auto`}
+        className={`max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] ${kind === "knowledge" ? "max-w-2xl" : kind === "skill" ? "max-w-4xl" : "max-w-6xl"} overflow-x-hidden overflow-y-auto`}
         onInteractOutside={preventDialogDismissForCredentialMenu}
       >
         <DialogHeader>
           <DialogTitle>{t("capabilities.import.dialog.title", "Import capability")}</DialogTitle>
           <DialogDescription>
-            {kind === "skill"
+            {kind === "knowledge" ? t("capabilities.knowledge.description") : kind === "skill"
               ? t(
                   "capabilities.import.dialog.descriptionSkill",
                   "Paste a SKILL.md or upload a zip. The Skill name and description come from the frontmatter; the body is injected into the model as the instruction.",
@@ -192,9 +199,10 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
           <TabsList>
             <TabsTrigger value="mcp">{t("capabilities.import.tab.mcp", "MCP")}</TabsTrigger>
             <TabsTrigger value="skill">{t("capabilities.import.tab.skill", "Skill")}</TabsTrigger>
+            <TabsTrigger value="knowledge">{t("capabilities.knowledge.title")}</TabsTrigger>
           </TabsList>
 
-          {/* ---- shared meta fields (MCP only) -----------------------
+          {/* ---- shared metadata fields (MCP and knowledge) -----------------------
               Skill imports derive name + description from frontmatter;
               showing manual inputs would let the form value drift from
               the source-of-truth markdown and silently overwrite it. */}
@@ -208,7 +216,7 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
                     nameTouched.current = true
                     setName(e.target.value)
                   }}
-                  placeholder={t("capabilities.import.dialog.namePlaceholder", "e.g. github-mcp")}
+                  placeholder={t(kind === "knowledge" ? "capabilities.knowledge.namePlaceholder" : "capabilities.import.dialog.namePlaceholder", "e.g. github-mcp")}
                 />
               </Field>
               <Field label={t("capabilities.import.dialog.descriptionLabel", "Description")} htmlFor="import-capability-description">
@@ -217,7 +225,7 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder={t(
-                    "capabilities.import.dialog.descriptionPlaceholder",
+                    kind === "knowledge" ? "capabilities.knowledge.descriptionPlaceholder" : "capabilities.import.dialog.descriptionPlaceholder",
                     "One sentence describing what this capability does — Claude uses it to decide when to invoke.",
                   )}
                 />
@@ -257,6 +265,9 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
                 onOssKeyChange={setSkillOssKey}
               />
             )}
+          </TabsContent>
+          <TabsContent value="knowledge" className="mt-3">
+            {kind === "knowledge" && <KnowledgeForm value={spec?.knowledge} onChange={(knowledge) => setSpec({ schema_version: 1, kind: "knowledge", knowledge })} />}
           </TabsContent>
         </Tabs>
 

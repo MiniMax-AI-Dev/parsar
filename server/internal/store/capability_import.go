@@ -663,7 +663,7 @@ func validateImportSpecPreCommit(s canonical.Spec) error {
 		return fmt.Errorf("schema_version must be > 0")
 	}
 	switch s.Kind {
-	case canonical.KindSkill:
+	case canonical.KindSkill, canonical.KindKnowledge:
 		return s.Validate()
 	case canonical.KindMCP:
 		if s.MCP == nil {

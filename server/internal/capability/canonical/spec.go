@@ -28,10 +28,11 @@ const (
 	KindPlugin       Kind = "plugin"
 	KindSystemPrompt Kind = "system_prompt"
 	KindBundle       Kind = "bundle"
+	KindKnowledge    Kind = "knowledge"
 )
 
 // Spec is the top-level canonical capability description. Exactly one of
-// MCP / Skill / Plugin / SystemPrompt / Bundle is non-nil; the populated
+// MCP / Skill / Plugin / SystemPrompt / Bundle / Knowledge is non-nil; the populated
 // branch must match Kind.
 type Spec struct {
 	SchemaVersion int16             `json:"schema_version"`
@@ -41,6 +42,7 @@ type Spec struct {
 	Plugin        *PluginSpec       `json:"plugin,omitempty"`
 	SystemPrompt  *SystemPromptSpec `json:"system_prompt,omitempty"`
 	Bundle        *BundleSpec       `json:"bundle,omitempty"`
+	Knowledge     *KnowledgeSpec    `json:"knowledge,omitempty"`
 }
 
 // Validate performs structural sanity checks. It does NOT consult external
@@ -55,7 +57,7 @@ func (s Spec) Validate() error {
 		if s.MCP == nil {
 			return fmt.Errorf("%w: kind=mcp but mcp body is nil", ErrInvalidSpec)
 		}
-		if s.Skill != nil || s.Plugin != nil || s.SystemPrompt != nil || s.Bundle != nil {
+		if s.Skill != nil || s.Plugin != nil || s.SystemPrompt != nil || s.Bundle != nil || s.Knowledge != nil {
 			return fmt.Errorf("%w: kind=mcp but another body is set", ErrInvalidSpec)
 		}
 		return s.MCP.Validate()
@@ -63,7 +65,7 @@ func (s Spec) Validate() error {
 		if s.Skill == nil {
 			return fmt.Errorf("%w: kind=skill but skill body is nil", ErrInvalidSpec)
 		}
-		if s.MCP != nil || s.Plugin != nil || s.SystemPrompt != nil || s.Bundle != nil {
+		if s.MCP != nil || s.Plugin != nil || s.SystemPrompt != nil || s.Bundle != nil || s.Knowledge != nil {
 			return fmt.Errorf("%w: kind=skill but another body is set", ErrInvalidSpec)
 		}
 		return s.Skill.Validate()
@@ -71,7 +73,7 @@ func (s Spec) Validate() error {
 		if s.Plugin == nil {
 			return fmt.Errorf("%w: kind=plugin but plugin body is nil", ErrInvalidSpec)
 		}
-		if s.MCP != nil || s.Skill != nil || s.SystemPrompt != nil || s.Bundle != nil {
+		if s.MCP != nil || s.Skill != nil || s.SystemPrompt != nil || s.Bundle != nil || s.Knowledge != nil {
 			return fmt.Errorf("%w: kind=plugin but another body is set", ErrInvalidSpec)
 		}
 		return s.Plugin.Validate()
@@ -79,7 +81,7 @@ func (s Spec) Validate() error {
 		if s.SystemPrompt == nil {
 			return fmt.Errorf("%w: kind=system_prompt but system_prompt body is nil", ErrInvalidSpec)
 		}
-		if s.MCP != nil || s.Skill != nil || s.Plugin != nil || s.Bundle != nil {
+		if s.MCP != nil || s.Skill != nil || s.Plugin != nil || s.Bundle != nil || s.Knowledge != nil {
 			return fmt.Errorf("%w: kind=system_prompt but another body is set", ErrInvalidSpec)
 		}
 		return s.SystemPrompt.Validate()
@@ -87,10 +89,18 @@ func (s Spec) Validate() error {
 		if s.Bundle == nil {
 			return fmt.Errorf("%w: kind=bundle but bundle body is nil", ErrInvalidSpec)
 		}
-		if s.MCP != nil || s.Skill != nil || s.Plugin != nil || s.SystemPrompt != nil {
+		if s.MCP != nil || s.Skill != nil || s.Plugin != nil || s.SystemPrompt != nil || s.Knowledge != nil {
 			return fmt.Errorf("%w: kind=bundle but another body is set", ErrInvalidSpec)
 		}
 		return s.Bundle.Validate()
+	case KindKnowledge:
+		if s.Knowledge == nil {
+			return fmt.Errorf("%w: knowledge body is required", ErrInvalidSpec)
+		}
+		if s.MCP != nil || s.Skill != nil || s.Plugin != nil || s.SystemPrompt != nil || s.Bundle != nil {
+			return fmt.Errorf("%w: kind=knowledge but another body is set", ErrInvalidSpec)
+		}
+		return s.Knowledge.Validate()
 	default:
 		return fmt.Errorf("%w: unknown kind %q", ErrInvalidSpec, s.Kind)
 	}
@@ -107,6 +117,7 @@ type specWire struct {
 	Plugin        json.RawMessage `json:"plugin,omitempty"`
 	SystemPrompt  json.RawMessage `json:"system_prompt,omitempty"`
 	Bundle        json.RawMessage `json:"bundle,omitempty"`
+	Knowledge     json.RawMessage `json:"knowledge,omitempty"`
 }
 
 // UnmarshalJSON only decodes the body matching Kind so a malformed inactive
@@ -164,6 +175,15 @@ func (s *Spec) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("decode bundle body: %w", err)
 		}
 		s.Bundle = &body
+	case KindKnowledge:
+		if len(w.Knowledge) == 0 {
+			return fmt.Errorf("%w: knowledge body is required", ErrInvalidSpec)
+		}
+		var body KnowledgeSpec
+		if err := json.Unmarshal(w.Knowledge, &body); err != nil {
+			return fmt.Errorf("decode knowledge body: %w", err)
+		}
+		s.Knowledge = &body
 	case "":
 		return fmt.Errorf("%w: missing kind", ErrInvalidSpec)
 	default:

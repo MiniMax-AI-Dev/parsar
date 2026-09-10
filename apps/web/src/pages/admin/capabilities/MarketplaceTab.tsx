@@ -1,3 +1,4 @@
+import { KnowledgePreview } from "./KnowledgePreview"
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { ArrowUpRight, ChevronDown, ChevronRight, Download, File, FileText, Folder, FolderOpen, PackageCheck, Trash2 } from "lucide-react"
@@ -34,7 +35,7 @@ interface MarketplaceTabProps {
   view: "marketplace" | "connectors" | "skills"
   itemID: string | null
   query: string
-  typeFilter: "" | "mcp" | "skill"
+  typeFilter: "" | "mcp" | "skill" | "knowledge"
   hideInstalled: boolean
   directoryFilters: DirectoryFilterState
   canImport: boolean
@@ -370,7 +371,8 @@ function MarketplaceContentPreview({ detail }: { detail: MarketplaceCapabilityDe
       )}
       {detail.skill ? <SkillPreview skill={detail.skill} /> : null}
       {detail.mcp ? <MCPPreview detail={detail} /> : null}
-      {!detail.skill && !detail.mcp ? (
+      {detail.knowledge ? <KnowledgePreview value={detail.knowledge} /> : null}
+      {!detail.skill && !detail.mcp && !detail.knowledge ? (
         <p className="text-sm text-fg-muted">{t("capabilities.marketplace.detail.contentUnavailable")}</p>
       ) : null}
     </div>

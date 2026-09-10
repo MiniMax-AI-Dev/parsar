@@ -20,7 +20,7 @@ type piRenderer struct{}
 func (piRenderer) Target() Target { return TargetPi }
 
 func (piRenderer) Supports(kind canonical.Kind) bool {
-	return kind == canonical.KindSkill || kind == canonical.KindSystemPrompt || kind == canonical.KindBundle
+	return kind == canonical.KindSkill || kind == canonical.KindSystemPrompt || kind == canonical.KindBundle || kind == canonical.KindKnowledge
 }
 
 func (piRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error) {
@@ -30,6 +30,8 @@ func (piRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error)
 	switch spec.Kind {
 	case canonical.KindSkill:
 		return renderClaudeCodeSkill(spec.Skill)
+	case canonical.KindKnowledge:
+		return renderKnowledge(spec.Knowledge)
 	case canonical.KindSystemPrompt:
 		return renderSystemPrompt(spec.SystemPrompt)
 	case canonical.KindBundle:

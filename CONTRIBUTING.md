@@ -98,6 +98,25 @@ The repo has several concepts that sound similar but must stay separate.
 When adding or changing code, name the boundary explicitly in the PR
 description and keep ownership on the side listed here.
 
+### Agent knowledge references
+
+- Unpublished knowledge retains only the bound version in other workspaces;
+  automatic updates must not expose subsequent private revisions.
+- `knowledge` capabilities store named UTF-8 reference documents in canonical
+  versions. Reuse capability permissions, publication, versioning, and Agent
+  bindings; do not add workspace-wide automatic injection or a parallel store.
+- Accept pasted text and Markdown/TXT uploads (16 documents, 32 KiB per base).
+  Names are labels, never paths to read. No fetching, conversion, RAG, or embeddings.
+- Resolve enabled bindings for each run, honoring pinned/latest versions. Append
+  a JSON reference-data block to the effective system prompt, including an
+  explicit override. Keep Agent instructions and other capability semantics.
+  Reject a combined reference block over 64 KiB rather than silently truncating.
+- Codex resume must refresh developer instructions, including an empty string
+  when removed. Unbinding prevents future injection but cannot erase documents
+  already present in conversation history; use a new conversation for isolation.
+- Knowledge inherits capability visibility. Publishing intentionally makes the
+  documents readable to other workspaces; private documents remain private.
+
 ### Install and image freshness
 
 - The root `docker-compose.yml` must be directly runnable with

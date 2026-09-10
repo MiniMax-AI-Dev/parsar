@@ -2,6 +2,8 @@
  * Submit-button readiness check shared by the create-capability and
  * add-version dialogs.
  */
+import { knowledgeError } from "../../../lib/knowledge"
+
 import type {
   CanonicalKind,
   CanonicalSpec,
@@ -36,6 +38,7 @@ export function isImportSpecReady(
   spec: CanonicalSpec,
   inlineSecrets: ImportInlineSecretInput[],
 ): boolean {
+  if (kind === "knowledge") return !!spec.knowledge && !knowledgeError(spec.knowledge)
   if (kind === "skill") {
     return Boolean(spec.skill?.slug?.trim() && spec.skill?.instruction?.trim())
   }

@@ -89,6 +89,8 @@ import { MarketplaceTab } from "./MarketplaceTab"
 import { DeprecateCapabilityDialog } from "./DeprecateCapabilityDialog"
 import { DeleteCapabilityDialog } from "./DeleteCapabilityDialog"
 import { ImportCapabilityDialog } from "./ImportCapabilityDialog"
+import { KnowledgePreview } from "./KnowledgePreview"
+import type { KnowledgeSpec } from "../../../lib/knowledge"
 import { AddCapabilityVersionDialog } from "./AddCapabilityVersionDialog"
 import { UninstallMarketplaceDialog } from "./UninstallMarketplaceDialog"
 import type { DirectoryFilterState, DirectorySort } from "./mcp-directory/filters"
@@ -99,7 +101,7 @@ type MarketAction = "publish" | "unpublish" | "deprecate" | "undeprecate" | null
 type MarketCapabilityAction = Exclude<MarketAction, null>
 
 /** "" = every type; "bundle" is the server's name for plugin bundles. */
-type CapabilityTypeFilter = "" | "mcp" | "skill" | "bundle"
+type CapabilityTypeFilter = "" | "mcp" | "skill" | "bundle" | "knowledge"
 type PageTab = "workspace" | "marketplace" | "connectors" | "skills"
 
 const PAGE_SIZE = 20
@@ -108,6 +110,7 @@ const TYPE_FILTERS: { value: CapabilityTypeFilter; label: string }[] = [
   { value: "mcp", label: "MCP" },
   { value: "skill", label: "Skill" },
   { value: "bundle", label: "Plugin" },
+  { value: "knowledge", label: "Knowledge base" },
 ]
 
 /** name (+type, +description) · version · source · enabled agents · credentials · updated · actions */
@@ -174,7 +177,7 @@ export function CapabilitiesPage() {
       : itemParam
         ? "marketplace"
         : "workspace"
-  const marketplaceTypeFilter: "" | "mcp" | "skill" = typeFilter === "bundle" ? "" : typeFilter
+  const marketplaceTypeFilter: "" | "mcp" | "skill" | "knowledge" = typeFilter === "bundle" ? "" : typeFilter
   const setPageTab = (next: PageTab) => {
     if (next !== "workspace" && typeFilter === "bundle") setTypeFilter("")
     navigate("capabilities", { tab: next === "workspace" ? null : next, item: null })
@@ -616,7 +619,7 @@ function CapabilitiesFilterMenu({
   const { t } = useTranslation("admin")
   const typeOptions = tab === "workspace" ? TYPE_FILTERS : TYPE_FILTERS.filter((opt) => opt.value !== "bundle")
   const activeType = TYPE_FILTERS.find((opt) => opt.value === typeFilter && typeFilter !== "")
-  const summary = tab === "connectors" ? directory.category || null : activeType?.label ?? null
+  const summary = tab === "connectors" ? directory.category || null : (activeType?.value === "knowledge" ? t("capabilities.knowledge.title") : activeType?.label) ?? null
   return (
     <FilterMenu label={t("capabilities.filters.label")} summary={summary}>
           {tab === "connectors" ? (
@@ -648,7 +651,7 @@ function CapabilitiesFilterMenu({
               <FilterGroup value={typeFilter} onValueChange={(v) => onTypeFilterChange(v as CapabilityTypeFilter)}>
                 <FilterOption value="" label={t("capabilities.filters.all")} />
                 {typeOptions.map((opt) => (
-                  <FilterOption key={opt.value} value={opt.value} label={opt.label} />
+                  <FilterOption key={opt.value} value={opt.value} label={opt.value === "knowledge" ? t("capabilities.knowledge.title") : opt.label} />
                 ))}
               </FilterGroup>
               {tab === "marketplace" && (
@@ -1217,8 +1220,11 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
         skill?: CanonicalSkillSpecView
         plugin?: CanonicalPluginSpecView
         system_prompt?: { prompt?: string; mode?: string }
+        knowledge?: KnowledgeSpec
       }
     | undefined
+
+  if (capability.type === "knowledge") return <KnowledgePreview value={canonicalSpec?.knowledge} />
 
   if (capability.type === "system_prompt") {
     const sp = canonicalSpec?.system_prompt

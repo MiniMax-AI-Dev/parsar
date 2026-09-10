@@ -44,7 +44,7 @@ func TestCapabilityCreationRejectsHiddenTypes(t *testing.T) {
 		t.Run("create "+capabilityType, func(t *testing.T) {
 			body := `{"type":"` + capabilityType + `","name":"Hidden capability"}`
 			res := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+wid+"/capabilities", body, uid)
-			if res.Code != http.StatusBadRequest || !strings.Contains(res.Body.String(), "type must be mcp or skill") {
+			if res.Code != http.StatusBadRequest || !strings.Contains(res.Body.String(), "type must be mcp, skill, bundle, or knowledge") {
 				t.Fatalf("hidden create expected 400, got %d: %s", res.Code, res.Body.String())
 			}
 		})
@@ -125,7 +125,7 @@ func TestCapabilityListFiltersByTypeAndName(t *testing.T) {
 	for _, hiddenType := range []string{"plugin", "system_prompt"} {
 		t.Run("reject type="+hiddenType, func(t *testing.T) {
 			res := serveCapabilityRoute(t, r, http.MethodGet, base+"?type="+hiddenType, "", uid)
-			if res.Code != http.StatusBadRequest || !strings.Contains(res.Body.String(), "type must be mcp or skill") {
+			if res.Code != http.StatusBadRequest || !strings.Contains(res.Body.String(), "type must be mcp, skill, bundle, or knowledge") {
 				t.Fatalf("hidden type expected 400, got %d: %s", res.Code, res.Body.String())
 			}
 		})

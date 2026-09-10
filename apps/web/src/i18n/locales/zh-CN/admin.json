@@ -1095,6 +1095,33 @@
         },
         "submit": "创建"
       }
+    },
+    "knowledge": {
+      "title": "知识库",
+      "description": "为 Agent 添加参考资料。可以粘贴文本，也可以上传 Markdown / TXT 文档。",
+      "upload": "上传文档",
+      "addDocument": "添加文档",
+      "documentName": "文档名称",
+      "content": "内容",
+      "placeholder": "粘贴 Agent 需要参考的政策、说明或其他资料。",
+      "remove": "移除 {{name}}",
+      "limits": "最多 16 份文档 · 合计 32 KiB",
+      "bindingHint": "保存后，在 Agent 配置中启用此知识库。每次运行都会传入文档；跟随最新版本的 Agent 会在下次运行使用更新后的资料，已有对话历史仍会保留。",
+      "errors": {
+        "format": "请选择 Markdown（.md、.markdown）或 TXT 文件。",
+        "size": "最多添加 16 份文档，合计不超过 32 KiB。",
+        "required": "请填写每份文档的内容，或移除空文档。",
+        "name": "请填写单行文档名称，长度不超过 255 字节。",
+        "duplicate": "每份文档的名称不能重复。",
+        "encoding": "请使用不含空字符的 UTF-8 文本文件。",
+        "read": "无法读取文件，请重试。"
+      },
+      "namePlaceholder": "例如：员工手册",
+      "descriptionPlaceholder": "说明资料的适用范围",
+      "previewHint": "使用此知识库的 Agent 会收到以下参考资料。",
+      "loading": "正在加载原有文档…",
+      "followLatest": "跟随最新版本",
+      "versionHint": "跟随最新版本会在下次运行使用更新后的资料，也可以选择固定版本。"
     }
   },
   "agents": {
@@ -1344,7 +1371,8 @@
             "skill": "Skill",
             "plugin": "Plugin",
             "bundle": "插件包",
-            "system_prompt": "System Prompt"
+            "system_prompt": "System Prompt",
+            "knowledge": "知识库"
           }
         },
         "builtin": {
@@ -1367,7 +1395,7 @@
         },
         "enableDialog": {
           "title": "在「{{agent}}」启用「{{cap}}」",
-          "description": "启用后，本 Agent 在运行时可以调用此能力。",
+          "description": "启用后，此 Agent 可以在运行时使用这项能力。",
           "version": "使用版本",
           "noCredential": "此能力不需要外部账号，启用后即可使用。"
         },
@@ -1406,7 +1434,8 @@
           "attention": "有更新",
           "blocked": "不可用",
           "deprecated": "已废弃"
-        }
+        },
+        "pickerHint": "为此 Agent 选择 Skill、工具或参考资料。启用后在下次运行生效，执行时会检查运行环境是否可用。"
       },
       "sandbox": {
         "title": "长期 Sandbox",

@@ -42,7 +42,7 @@ type codexMCPServer struct {
 }
 
 func (codexRenderer) Supports(kind canonical.Kind) bool {
-	return kind == canonical.KindMCP || kind == canonical.KindSkill || kind == canonical.KindSystemPrompt || kind == canonical.KindBundle
+	return kind == canonical.KindMCP || kind == canonical.KindSkill || kind == canonical.KindSystemPrompt || kind == canonical.KindBundle || kind == canonical.KindKnowledge
 }
 
 func (codexRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error) {
@@ -57,6 +57,8 @@ func (codexRenderer) Render(_ context.Context, spec canonical.Spec) (Output, err
 	case canonical.KindPlugin:
 		// No plugin concept in Codex.
 		return Output{}, ErrUnsupported
+	case canonical.KindKnowledge:
+		return renderKnowledge(spec.Knowledge)
 	case canonical.KindSystemPrompt:
 		return renderSystemPrompt(spec.SystemPrompt)
 	case canonical.KindBundle:

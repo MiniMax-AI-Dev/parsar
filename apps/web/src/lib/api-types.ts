@@ -245,7 +245,7 @@ export interface DeleteAgentResponse {
 
 /* --- Capabilities -------------------------------------------------------- */
 
-export type CapabilityType = "skill" | "mcp" | "plugin" | "system_prompt" | "bundle"
+export type CapabilityType = "skill" | "mcp" | "plugin" | "system_prompt" | "bundle" | "knowledge"
 
 export interface RequiredCredential {
   kind: string

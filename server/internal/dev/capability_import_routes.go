@@ -68,7 +68,7 @@ type commitInlineSecretBody struct {
 // may have empty SecretID (server fills them); credential_ref entries must
 // already have a valid credential_kind_code.
 type commitCapabilityImportBody struct {
-	Kind          string                   `json:"kind"`        // "mcp" | "skill"
+	Kind          string                   `json:"kind"`        // "mcp" | "skill" | "knowledge"
 	Name          string                   `json:"name"`        // capability display name
 	Description   string                   `json:"description"` // optional
 	Visibility    string                   `json:"visibility"`  // "private" | "public" | …
@@ -324,7 +324,7 @@ func previewPluginImport(ctx context.Context, w http.ResponseWriter, workspaceID
 // is rebuilt from OSS bytes (the on-disk zip is authoritative).
 //
 //	@Summary		Commit a capability import
-//	@Description	Encrypts inline_secrets then runs the whole MCP or Skill import (capability + capability_version + secrets) in a single transaction. Skill Markdown is packaged into a stored ZIP before commit; uploaded Skill ZIPs rebuild canonical_spec from stored bytes. Owner/admin only.
+//	@Description	Encrypts inline_secrets then runs the whole MCP, Skill, or knowledge import (capability + capability_version + secrets) in a single transaction. Skill Markdown is packaged into a stored ZIP before commit; uploaded Skill ZIPs rebuild canonical_spec from stored bytes. Owner/admin only.
 //	@Tags			capabilities
 //	@ID				commitDevCapabilityImport
 //	@Accept			json
@@ -362,11 +362,15 @@ func commitCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) htt
 		if kind == "" {
 			kind = string(body.CanonicalSpec.Kind)
 		}
-		if kind != string(canonical.KindMCP) && kind != string(canonical.KindSkill) {
+		if kind != string(canonical.KindMCP) && kind != string(canonical.KindSkill) && kind != string(canonical.KindKnowledge) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown kind %q (want mcp|skill)", kind)})
 			return
 		}
 
+		if kind == string(canonical.KindKnowledge) && (body.CanonicalSpec.Kind != canonical.KindKnowledge || (body.Type != "" && body.Type != kind)) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "knowledge import type and canonical_spec.kind must match"})
+			return
+		}
 		// Skill-zip imports rebuild canonical_spec server-side from the OSS
 		// zip; the client-supplied spec is discarded so forged file metadata
 		// cannot reach the DB.

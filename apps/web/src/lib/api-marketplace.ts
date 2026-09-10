@@ -26,6 +26,7 @@ export interface MarketplaceCapability extends Capability {
 }
 
 export interface MarketplaceCapabilityDetail {
+  knowledge?: import("./knowledge").KnowledgeSpec
   capability_id: string
   type: Capability["type"]
   version_id: string

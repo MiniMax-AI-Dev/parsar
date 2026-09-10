@@ -36,6 +36,7 @@ import type { Capability, CapabilityVersion } from "../../../lib/api-types"
 
 import { useImportCapabilityVersionMutation } from "./api"
 import { ImportMCPForm } from "./ImportMCPForm"
+import { KnowledgeForm } from "./KnowledgeForm"
 import { ImportSkillForm } from "./ImportSkillForm"
 import { ImportPluginForm, type PluginUploadState } from "./ImportPluginForm"
 import { isImportSpecReady } from "./importValidation"
@@ -75,7 +76,13 @@ export function AddCapabilityVersionDialog({
 
   const [name, setName] = useState(capability.name)
   const [description, setDescription] = useState(capability.description ?? "")
-  const [spec, setSpec] = useState<CanonicalSpec | null>(null)
+  const [draftSpec, setSpec] = useState<CanonicalSpec | null>(null)
+  // Resolve the initial knowledge draft when the version arrives. Once edited,
+  // background version refreshes must not replace the user's document changes.
+  const spec = kind === "knowledge" && !draftSpec && latestVersion
+    ? { schema_version: 1, kind: "knowledge" as const, knowledge: latestVersion.canonical_spec?.knowledge as CanonicalSpec["knowledge"] }
+    : draftSpec
+  const waitingForKnowledge = kind === "knowledge" && !!capability.latest_version_id && !latestVersion
   const [inlineSecrets, setInlineSecrets] = useState<ImportInlineSecretInput[]>([])
   const [rawText, setRawText] = useState("")
   const [sourceFormat, setSourceFormat] = useState<SourceFormat>(
@@ -160,13 +167,15 @@ export function AddCapabilityVersionDialog({
     kind !== "mcp" ? true : !!spec && isImportSpecReady(kind, spec, inlineSecrets)
 
   const canSubmit =
+    !waitingForKnowledge &&
     !commitMut.isPending &&
     !updateMut.isPending &&
     !!workspaceID &&
     !nameError &&
     pluginHasUsableArtifact &&
     skillSpecReady &&
-    mcpSpecReady
+    mcpSpecReady &&
+    (kind !== "knowledge" || !!spec && isImportSpecReady(kind, spec, inlineSecrets))
 
   const submit = async () => {
     if (!canSubmit) return
@@ -240,7 +249,7 @@ export function AddCapabilityVersionDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={`max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] ${kind === "skill" ? "max-w-4xl" : "max-w-6xl"} overflow-x-hidden overflow-y-auto`}
+        className={`max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] ${kind === "knowledge" ? "max-w-2xl" : kind === "skill" ? "max-w-4xl" : "max-w-6xl"} overflow-x-hidden overflow-y-auto`}
         onInteractOutside={preventDialogDismissForCredentialMenu}
       >
         <DialogHeader>
@@ -283,7 +292,7 @@ export function AddCapabilityVersionDialog({
               id="add-version-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={t("capabilities.fields.name.placeholder")}
+              placeholder={t(kind === "knowledge" ? "capabilities.knowledge.namePlaceholder" : "capabilities.fields.name.placeholder")}
             />
           </Field>
           <Field label={t("capabilities.fields.description.label")} htmlFor="add-version-description">
@@ -291,7 +300,7 @@ export function AddCapabilityVersionDialog({
               id="add-version-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder={t("capabilities.fields.description.placeholder")}
+              placeholder={t(kind === "knowledge" ? "capabilities.knowledge.descriptionPlaceholder" : "capabilities.fields.description.placeholder")}
             />
           </Field>
         </div>
@@ -299,7 +308,9 @@ export function AddCapabilityVersionDialog({
         {nameError && <InlineNotice tone="error">{nameError}</InlineNotice>}
 
         <div>
-          {kind === "mcp" ? (
+          {kind === "knowledge" ? (
+            waitingForKnowledge ? <p role="status" className="text-sm text-fg-muted">{t("capabilities.knowledge.loading")}</p> : <KnowledgeForm value={spec?.knowledge} onChange={(knowledge) => setSpec({ schema_version: 1, kind: "knowledge", knowledge })} />
+          ) : kind === "mcp" ? (
             <ImportMCPForm
               workspaceID={workspaceID}
               value={spec}

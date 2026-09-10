@@ -185,9 +185,10 @@ type ThreadStartResult struct {
 }
 
 type ThreadResumeParams struct {
-	ThreadID       string         `json:"threadId"`
-	ApprovalPolicy AskForApproval `json:"approvalPolicy"`
-	Sandbox        SandboxMode    `json:"sandbox"`
+	DeveloperInstructions string         `json:"developerInstructions"`
+	ThreadID              string         `json:"threadId"`
+	ApprovalPolicy        AskForApproval `json:"approvalPolicy"`
+	Sandbox               SandboxMode    `json:"sandbox"`
 }
 
 // ---------------------------------------------------------------------------
