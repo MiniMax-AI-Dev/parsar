@@ -76,6 +76,7 @@ var credentialPlaceholderRe = regexp.MustCompile(`\$\{PARSAR_CREDENTIAL:([a-zA-Z
 
 // capabilityAdditions holds the results of resolveCapabilityAdditions.
 type capabilityAdditions struct {
+	Knowledge     []resolvedKnowledge
 	Skills        []ResolvedSkill        // skill descriptors for opts["skills"]
 	MCPServers    map[string]any         // server_name → config object for opts["mcp_servers"]
 	Plugins       []ResolvedPlugin       // plugin descriptors for opts["plugins"]
@@ -372,6 +373,12 @@ func (c *Connector) resolveCapabilityAdditions(ctx context.Context, in connector
 			}
 			seenPluginNames[plugin.Name] = cap.CapabilityID
 			result.Plugins = append(result.Plugins, *plugin)
+		case "knowledge":
+			knowledge, err := resolveKnowledgeCapability(ctx, cap, renderer)
+			if err != nil {
+				return result, err
+			}
+			result.Knowledge = append(result.Knowledge, knowledge)
 		case "system_prompt":
 			sp, err := c.resolveSystemPromptCapability(ctx, cap, renderer)
 			if err != nil {

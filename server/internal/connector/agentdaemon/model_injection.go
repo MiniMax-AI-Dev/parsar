@@ -87,6 +87,9 @@ func (c *Connector) buildAgentOptions(ctx context.Context, in connector.PromptIn
 	mergeSystemPromptsIntoOptions(opts, additions.SystemPrompts)
 	c.applySpecMemoryInjection(ctx, opts, in)
 	c.applyIMHistoryPromptInjection(ctx, opts, in)
+	if err := appendKnowledgeContext(opts, additions.Knowledge); err != nil {
+		return nil, err
+	}
 	if err := c.injectManagedModel(ctx, in, opts, agentKind); err != nil {
 		c.log.Error("agent_daemon: injectManagedModel failed", "run_id", in.RunID, "err", err)
 		return nil, err

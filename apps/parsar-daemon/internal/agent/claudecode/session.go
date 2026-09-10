@@ -216,14 +216,14 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		return nil, fmt.Errorf("claudecode: build args: %w", err)
 	}
 	cfg.logger.Info("claudecode: BuildArgs ok",
-		"run_id", req.RunID, "args", buildRes.Args, "env_count", len(buildRes.Env))
+		"run_id", req.RunID, "arg_count", len(buildRes.Args), "env_count", len(buildRes.Env))
 
 	args := append([]string{}, buildRes.Args...)
 	args = append(args, cfg.extraArgs...)
 
 	cfg.logger.Info("claudecode: starting subprocess",
 		"run_id", req.RunID, "binary", cfg.claudeBinary,
-		"args", args, "dir", sessionWorkDir)
+		"arg_count", len(args), "dir", sessionWorkDir)
 	proc, err := clirunner.Start(clirunner.StartOptions{
 		Parent:      parent,
 		Binary:      cfg.claudeBinary,

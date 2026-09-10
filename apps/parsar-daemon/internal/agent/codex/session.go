@@ -320,6 +320,7 @@ func (s *Session) startThread(plan SessionPlan) error {
 func (s *Session) resumeThread(threadID string, plan SessionPlan) error {
 	raw, err := s.rpc.Request(s.cancelCtx, "thread/resume", ThreadResumeParams{
 		ThreadID: threadID, ApprovalPolicy: plan.ApprovalPolicy, Sandbox: plan.Sandbox,
+		DeveloperInstructions: plan.SystemPrompt,
 	})
 	if err != nil {
 		return err

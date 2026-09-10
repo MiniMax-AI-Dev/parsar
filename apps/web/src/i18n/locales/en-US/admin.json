@@ -1095,6 +1095,33 @@
         },
         "submit": "Create"
       }
+    },
+    "knowledge": {
+      "title": "Knowledge base",
+      "description": "Add reference documents for an Agent. Paste text or upload Markdown / TXT files.",
+      "upload": "Upload documents",
+      "addDocument": "Add document",
+      "documentName": "Document name",
+      "content": "Content",
+      "placeholder": "Paste the policy, reference notes, or other facts the Agent should use.",
+      "remove": "Remove {{name}}",
+      "limits": "Up to 16 documents · 32 KiB total",
+      "bindingHint": "Save, then enable this knowledge base in an Agent’s configuration. Documents are sent with each run. Changes apply to the next run for Agents following the latest version; earlier conversation history is retained.",
+      "errors": {
+        "format": "Choose Markdown (.md, .markdown) or TXT files.",
+        "size": "Use up to 16 documents with a total size of 32 KiB.",
+        "required": "Enter content for every document, or remove empty documents.",
+        "name": "Give each document a name of up to 255 bytes on one line.",
+        "duplicate": "Each document needs a different name.",
+        "encoding": "Use UTF-8 text files without null characters.",
+        "read": "Could not read the file. Please try again."
+      },
+      "namePlaceholder": "e.g. Employee handbook",
+      "descriptionPlaceholder": "Reference topics and scope",
+      "previewHint": "Reference documents supplied to Agents using this knowledge base.",
+      "loading": "Loading existing documents…",
+      "followLatest": "Follow the latest version",
+      "versionHint": "Follow latest to use updated documents on the next run, or choose a fixed version."
     }
   },
   "agents": {
@@ -1344,7 +1371,8 @@
             "skill": "Skill",
             "plugin": "Plugin",
             "bundle": "Plugin Bundle",
-            "system_prompt": "System Prompt"
+            "system_prompt": "System Prompt",
+            "knowledge": "Knowledge base"
           }
         },
         "builtin": {
@@ -1367,7 +1395,7 @@
         },
         "enableDialog": {
           "title": "Enable \"{{cap}}\" on \"{{agent}}\"",
-          "description": "Once enabled, this Agent can call this capability during runs.",
+          "description": "Once enabled, this Agent can use this capability during runs.",
           "version": "Version",
           "noCredential": "This capability does not need an external account."
         },
@@ -1406,7 +1434,8 @@
           "attention": "Update available",
           "blocked": "Not usable",
           "deprecated": "Deprecated"
-        }
+        },
+        "pickerHint": "Choose a Skill, tool, or reference documents for this Agent. Enabling it takes effect on the next run; runtime availability is checked during execution."
       },
       "sandbox": {
         "title": "Persistent Sandbox",

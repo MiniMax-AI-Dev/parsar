@@ -6202,7 +6202,7 @@ paths:
         in: query
         name: scope
         type: string
-      - description: Filter by capability type (mcp/skill)
+      - description: Filter by capability type (mcp/skill/bundle/knowledge)
         in: query
         name: type
         type: string
@@ -6953,10 +6953,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Encrypts inline_secrets then runs the whole MCP or Skill import
-        (capability + capability_version + secrets) in a single transaction. Skill
-        Markdown is packaged into a stored ZIP before commit; uploaded Skill ZIPs
-        rebuild canonical_spec from stored bytes. Owner/admin only.
+      description: Encrypts inline_secrets then runs the whole MCP, Skill, or knowledge
+        import (capability + capability_version + secrets) in a single transaction.
+        Skill Markdown is packaged into a stored ZIP before commit; uploaded Skill
+        ZIPs rebuild canonical_spec from stored bytes. Owner/admin only.
       operationId: commitDevCapabilityImport
       parameters:
       - description: Workspace UUID

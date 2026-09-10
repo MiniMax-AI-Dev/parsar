@@ -89,6 +89,7 @@ export function agentEngineLabel(engine: AgentEngine): AgentEngineLabelKey {
 }
 
 export function agentEngineSupportsCapability(engine: AgentEngine, capabilityType: CapabilityType): boolean {
+  if (capabilityType === "knowledge") return true
   switch (engine) {
     case "claude_code":
       return true

@@ -5303,6 +5303,7 @@ select
   -- lets the runtime fail closed if a legacy row slips through.
   coalesce(c.creator_id::text, '')::text as capability_creator_id
 from agent_capabilities ac
+join agents a on a.id = ac.agent_id
 join capability c on c.id = ac.capability_id
 join capability_version cv on cv.id = ac.capability_version_id
 join workspaces src_ws on src_ws.id = c.workspace_id
@@ -5319,6 +5320,10 @@ join lateral (
     -- this predicate is always true and behaves like the previous
     -- "unconditionally take the latest".
     and (c.deprecated_at is null or capability_version.created_at <= c.deprecated_at)
+    -- Unpublished knowledge can keep its bound version in another workspace,
+    -- but private revisions must not reach that workspace through latest.
+    and (c.type <> 'knowledge' or c.visibility = 'public'
+      or c.workspace_id = a.workspace_id or capability_version.id = cv.id)
   order by created_at desc, version desc
   limit 1
 ) latest on true

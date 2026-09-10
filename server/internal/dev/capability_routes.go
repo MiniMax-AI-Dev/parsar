@@ -113,15 +113,16 @@ type uninstallMarketplaceBody struct {
 }
 
 type marketplaceCapabilityDetail struct {
-	CapabilityID string                 `json:"capability_id"`
-	Type         string                 `json:"type"`
-	VersionID    string                 `json:"version_id"`
-	Version      string                 `json:"version"`
-	GitRepoURL   string                 `json:"git_repo_url,omitempty"`
-	GitRef       string                 `json:"git_ref,omitempty"`
-	Path         string                 `json:"path,omitempty"`
-	Skill        *canonical.SkillSpec   `json:"skill,omitempty"`
-	MCP          *marketplaceMCPPreview `json:"mcp,omitempty"`
+	Knowledge    *canonical.KnowledgeSpec `json:"knowledge,omitempty"`
+	CapabilityID string                   `json:"capability_id"`
+	Type         string                   `json:"type"`
+	VersionID    string                   `json:"version_id"`
+	Version      string                   `json:"version"`
+	GitRepoURL   string                   `json:"git_repo_url,omitempty"`
+	GitRef       string                   `json:"git_ref,omitempty"`
+	Path         string                   `json:"path,omitempty"`
+	Skill        *canonical.SkillSpec     `json:"skill,omitempty"`
+	MCP          *marketplaceMCPPreview   `json:"mcp,omitempty"`
 }
 
 type marketplaceMCPPreview struct {
@@ -184,7 +185,7 @@ var plaintextSecretPatterns = []struct {
 //	@Param			workspaceID	path	string	true	"Workspace UUID"
 //	@Param			visibility	query	string	false	"Filter by capability visibility (private/public)"
 //	@Param			scope		query	string	false	"Alias of visibility (legacy)"
-//	@Param			type		query	string	false	"Filter by capability type (mcp/skill)"
+//	@Param			type		query	string	false	"Filter by capability type (mcp/skill/bundle/knowledge)"
 //	@Param			name		query	string	false	"Case-insensitive substring match on name/description"
 //	@Param			page		query	int		false	"1-based page number (opts into paged shape)"
 //	@Param			page_size	query	int		false	"Page size, 1..100 (defaults to 20)"
@@ -205,7 +206,7 @@ func listWorkspaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		typeFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
 		if typeFilter != "" && !isListedCapabilityType(typeFilter) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "type must be mcp or skill"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "type must be mcp, skill, bundle, or knowledge"})
 			return
 		}
 		nameFilter := strings.TrimSpace(r.URL.Query().Get("name"))
@@ -398,7 +399,7 @@ func listMarketplaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 
 func isListedCapabilityType(capabilityType string) bool {
 	switch strings.ToLower(strings.TrimSpace(capabilityType)) {
-	case "mcp", "skill", "bundle":
+	case "mcp", "skill", "bundle", "knowledge":
 		return true
 	default:
 		return false
@@ -477,7 +478,7 @@ func getMarketplaceCapabilityDetail(runtimeStore RuntimeStore) http.HandlerFunc 
 
 func isPreviewableMarketplaceType(capabilityType string) bool {
 	switch strings.ToLower(strings.TrimSpace(capabilityType)) {
-	case string(canonical.KindMCP), string(canonical.KindSkill):
+	case string(canonical.KindMCP), string(canonical.KindSkill), string(canonical.KindKnowledge):
 		return true
 	default:
 		return false
@@ -509,6 +510,8 @@ func buildMarketplaceCapabilityDetail(capability store.MarketplaceCapabilityRead
 	}
 
 	switch spec.Kind {
+	case canonical.KindKnowledge:
+		detail.Knowledge = spec.Knowledge
 	case canonical.KindSkill:
 		detail.Skill = spec.Skill
 	case canonical.KindMCP:
@@ -683,7 +686,11 @@ func createWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		body.Type = strings.ToLower(strings.TrimSpace(body.Type))
 		if !isListedCapabilityType(body.Type) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "type must be mcp, skill, or bundle"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "type must be mcp, skill, bundle, or knowledge"})
+			return
+		}
+		if body.Type == "knowledge" && strings.TrimSpace(body.Version) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "knowledge requires an initial version with documents"})
 			return
 		}
 		input := store.CreateCapabilityInput{WorkspaceID: workspaceID, Type: body.Type, Name: body.Name, Description: body.Description, Visibility: capabilityVisibility(body.Visibility, body.Scope), CreatorID: actorID}
@@ -1056,7 +1063,16 @@ func createWorkspaceCapabilityVersion(runtimeStore RuntimeStore) http.HandlerFun
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "version is required"})
 			return
 		}
-		if err := validateCanonicalSpecForType("", body.CanonicalSpec); err != nil {
+		capability, err := runtimeStore.GetCapability(r.Context(), capabilityID)
+		if err != nil {
+			writeCapabilityError(w, err, "failed to load capability")
+			return
+		}
+		expectedType := ""
+		if capability.Type == "knowledge" {
+			expectedType = "knowledge"
+		}
+		if err := validateCanonicalSpecForType(expectedType, body.CanonicalSpec); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
@@ -1881,6 +1897,9 @@ func writeCapabilityError(w http.ResponseWriter, err error, fallback string) {
 // caller can't smuggle a skill spec into a system_prompt capability row.
 func validateCanonicalSpecForType(capabilityType string, raw json.RawMessage) error {
 	if len(raw) == 0 {
+		if capabilityType == "knowledge" {
+			return fmt.Errorf("knowledge requires canonical_spec documents")
+		}
 		return nil
 	}
 	var spec canonical.Spec
