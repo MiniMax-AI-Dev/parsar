@@ -764,8 +764,9 @@ width changes; after manual scrolling it anchors the current reading position.
 Keep this behavior independent of routing, selection data, and detail focus.
 
 Property groups use the shared `PropertyList` label track: 8rem capped at 40%
-of the available width. Labels wrap and values retain their existing overflow
-behavior. Do not size individual groups from their longest label or add
+of the available width. Labels and plain text values wrap, including long
+unbroken identifiers, with matching first-line spacing. Custom value controls
+retain their own overflow behavior. Do not size groups from their longest label or add
 page-specific label widths; groups in the same context must align.
 
 Single-choice form controls use the shared Radix-backed `Select` and

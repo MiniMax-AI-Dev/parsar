@@ -24,6 +24,7 @@ export function Property({
   /** Overrides the tooltip; by default a string value becomes its own. */
   title?: string
 }) {
+  const plainText = typeof children === "string" || typeof children === "number"
   return (
     <>
       <dt
@@ -35,7 +36,10 @@ export function Property({
       <dd
         title={title ?? (typeof children === "string" ? children : undefined)}
         className={cn(
-          "m-0 flex h-7 min-w-0 items-center gap-1.5 truncate text-sm text-fg",
+          "m-0 min-w-0 text-sm text-fg",
+          plainText
+            ? "min-h-7 py-1 leading-5 [overflow-wrap:anywhere]"
+            : "flex h-7 items-center gap-1.5 truncate",
           mono && "font-mono text-xs",
           className,
         )}
