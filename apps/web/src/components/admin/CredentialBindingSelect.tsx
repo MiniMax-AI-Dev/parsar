@@ -10,6 +10,7 @@ interface CredentialBindingSelectProps {
   personalLabel: string
   sharedLabel: string
   personalPlaceholder?: string
+  unavailableLabel?: string
   createNewLabel?: string
   onChange: (value: string) => void
   className?: string
@@ -25,6 +26,7 @@ export function CredentialBindingSelect({
   personalLabel,
   sharedLabel,
   personalPlaceholder,
+  unavailableLabel,
   createNewLabel,
   onChange,
   className,
@@ -39,6 +41,7 @@ export function CredentialBindingSelect({
     >
       {allowPersonal && <SelectOption value="">{personalLabel}</SelectOption>}
       {!allowPersonal && !value && <SelectOption value="">{personalPlaceholder ?? personalLabel}</SelectOption>}
+      {unavailableLabel && value && !secrets.some((secret) => secret.id === value) && <SelectOption value={value} disabled>{unavailableLabel}</SelectOption>}
       {secrets.map((secret) => (
         <SelectOption key={secret.id} value={secret.id}>
           {sharedLabel}: {secret.name}

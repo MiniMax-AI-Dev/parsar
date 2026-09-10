@@ -651,6 +651,10 @@ split relevant pieces out first rather than growing the file further.
 
 ### Frontend shared logic
 
+- Editing a capability's credentials from Agent Config updates only that binding's
+  credential choices. Preserve its stored version, pinning mode, and other
+  configuration; resolve per-binding choices before Agent-wide defaults.
+
 - Capability usage views distinguish loading, failed, and successful empty reads.
   Failed reads offer retry; incomplete Agent binding counts remain unknown. Query
   status must update even when a failed request leaves cached data unchanged.
