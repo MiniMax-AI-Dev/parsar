@@ -204,7 +204,7 @@ function MarketplaceRow({ capability, language, canManage, selected, onOpen, onI
 }) {
   const { t } = useTranslation("admin")
   const source = marketplaceSourceName(capability)
-  const count = capability.install_count ?? capability.installed_workspace_count ?? 0
+  const count = capability.install_count ?? capability.installed_workspace_count
   return (
     <LedgerRow selected={selected} onClick={onOpen} onKeyDown={rowKeyHandler(onOpen)}>
       <span className="flex min-w-0 items-center gap-2">
@@ -219,7 +219,7 @@ function MarketplaceRow({ capability, language, canManage, selected, onOpen, onI
       </span>
       <span className="truncate text-xs text-fg-muted">{source || "—"}</span>
       <span className={cn("truncate font-mono text-xs", capability.latest_version ? "text-fg" : "text-fg-muted")}>{capability.latest_version ?? "—"}</span>
-      <LedgerNum muted={count === 0}>{count}</LedgerNum>
+      <LedgerNum muted={count == null || count === 0}>{count ?? "—"}</LedgerNum>
       <span className="truncate text-xs text-fg-muted">
         {requiredCredentialsLabel(capability.required_credentials, language, t("capabilities.credentials.none"))}
       </span>
@@ -319,7 +319,7 @@ function MarketplaceItemDetail({ capability, language, canManage, open, onClosed
             <PropertyList>
               <Property label={t("capabilities.marketplaceDetail.source.workspace")}>{source || t("capabilities.none")}</Property>
               <Property label={t("capabilities.table.latestVersion")} mono>{capability.latest_version ? `v${capability.latest_version}` : t("capabilities.none")}</Property>
-              <Property label={t("capabilities.marketplace.detail.addedCount")} mono>{capability.install_count ?? capability.installed_workspace_count ?? 0}</Property>
+              <Property label={t("capabilities.marketplace.detail.addedCount")} mono>{capability.install_count ?? capability.installed_workspace_count ?? "—"}</Property>
               <Property label={t("capabilities.table.credentials")}>
                 {requiredCredentialsLabel(capability.required_credentials, language, t("capabilities.credentials.none"))}
               </Property>
