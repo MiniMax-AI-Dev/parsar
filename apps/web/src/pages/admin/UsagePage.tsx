@@ -16,6 +16,7 @@ import { useUsage } from "../../lib/api-governance"
 import type { UsageLog } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
 import { SectionHead } from "../../components/ui/section"
+import { knownUsageCost } from "../../lib/usage-cost"
 
 /* ------------------------------------------------------------------ */
 /*  Aggregation                                                        */
@@ -26,6 +27,7 @@ interface UsageSummary {
   inputTokens: number
   outputTokens: number
   costUsd: number
+  unknownCosts: number
 }
 
 function summarize(logs: UsageLog[]): UsageSummary {
@@ -34,12 +36,15 @@ function summarize(logs: UsageLog[]): UsageSummary {
     inputTokens: 0,
     outputTokens: 0,
     costUsd: 0,
+    unknownCosts: 0,
   }
   for (const u of logs) {
     if (u.agent_run_id) summary.runs.add(u.agent_run_id)
     summary.inputTokens += u.input_tokens ?? 0
     summary.outputTokens += u.output_tokens ?? 0
-    summary.costUsd += u.cost_usd ?? 0
+    const cost = knownUsageCost(u.cost_usd)
+    summary.costUsd += cost ?? 0
+    if (cost === null) summary.unknownCosts += 1
   }
   return summary
 }
@@ -51,6 +56,7 @@ interface ByModelRow {
   inputTokens: number
   outputTokens: number
   costUsd: number
+  unknownCosts: number
   callCount: number
 }
 
@@ -67,13 +73,16 @@ function groupByModel(logs: UsageLog[]): ByModelRow[] {
         inputTokens: 0,
         outputTokens: 0,
         costUsd: 0,
+        unknownCosts: 0,
         callCount: 0,
       }
       map.set(key, row)
     }
     row.inputTokens += u.input_tokens ?? 0
     row.outputTokens += u.output_tokens ?? 0
-    row.costUsd += u.cost_usd ?? 0
+    const cost = knownUsageCost(u.cost_usd)
+    row.costUsd += cost ?? 0
+    if (cost === null) row.unknownCosts += 1
     row.callCount += 1
   }
   return [...map.values()].sort((a, b) => b.costUsd - a.costUsd)
@@ -88,6 +97,14 @@ function fmtUsd(cost: number): string {
   if (cost < 0.001) return `$${cost.toFixed(5)}`
   if (cost < 1) return `$${cost.toFixed(4)}`
   return `$${cost.toFixed(2)}`
+}
+
+function UsageCost({ value, partial = false }: { value: number; partial?: boolean }) {
+  const { t } = useTranslation("admin")
+  const cost = knownUsageCost(value)
+  if (cost === null) return <span className="font-sans text-fg-muted">{t("usage.cost.unknown")}</span>
+  const amount = fmtUsd(cost)
+  return <span title={partial ? t("usage.cost.partial") : undefined} aria-label={partial ? `${amount} · ${t("usage.cost.partial")}` : undefined}>{amount}{partial ? "*" : ""}</span>
 }
 
 function fmtInt(n: number): string {
@@ -158,8 +175,11 @@ export function UsagePage() {
               <Property label={t("usage.stats.runs")} mono className="tabular-nums">{fmtInt(summary.runs.size)}</Property>
               <Property label={t("usage.stats.inputTokens")} mono className="tabular-nums">{fmtInt(summary.inputTokens)}</Property>
               <Property label={t("usage.stats.outputTokens")} mono className="tabular-nums">{fmtInt(summary.outputTokens)}</Property>
-              <Property label={t("usage.stats.cost")} mono className="tabular-nums">{fmtUsd(summary.costUsd)}</Property>
+              <Property label={t("usage.stats.cost")} mono className="tabular-nums"><UsageCost value={summary.costUsd} partial={summary.unknownCosts > 0} /></Property>
             </PropertyList>
+            {summary.unknownCosts > 0 && (
+              <p className="mt-3 px-6 text-xs text-fg-muted">{t("usage.cost.incomplete")}</p>
+            )}
 
             <SectionHead title={t("usage.byModel.title")} className="mt-6 px-6" />
             <Ledger columns={MODEL_COLUMNS} className="flex-none overflow-visible" role="list" aria-label={t("usage.byModel.title")}>
@@ -179,7 +199,7 @@ export function UsagePage() {
                     <LedgerNum>{fmtInt(m.callCount)}</LedgerNum>
                     <LedgerNum>{fmtInt(m.inputTokens)}</LedgerNum>
                     <LedgerNum>{fmtInt(m.outputTokens)}</LedgerNum>
-                    <LedgerNum>{fmtUsd(m.costUsd)}</LedgerNum>
+                    <LedgerNum><UsageCost value={m.costUsd} partial={m.unknownCosts > 0} /></LedgerNum>
                   </LedgerRow>
                 ))}
               </ul>
@@ -216,7 +236,7 @@ export function UsagePage() {
                     <span className="truncate font-mono text-xs text-fg" title={u.model}>{u.model}</span>
                     <LedgerNum>{fmtInt(u.input_tokens)}</LedgerNum>
                     <LedgerNum>{fmtInt(u.output_tokens)}</LedgerNum>
-                    <LedgerNum>{fmtUsd(u.cost_usd)}</LedgerNum>
+                    <LedgerNum><UsageCost value={u.cost_usd} /></LedgerNum>
                   </LedgerRow>
                 ))}
               </ul>

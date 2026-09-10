@@ -2116,6 +2116,11 @@
     "page": {
       "title": "Usage"
     },
+    "cost": {
+      "unknown": "Unknown",
+      "partial": "Known costs only; some costs are unknown.",
+      "incomplete": "Zero or missing cost values are treated as unknown. Totals marked * include known costs only."
+    },
     "stats": {
       "runs": "Runs",
       "inputTokens": "Input tokens",
