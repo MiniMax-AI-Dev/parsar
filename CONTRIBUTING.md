@@ -215,6 +215,10 @@ description and keep ownership on the side listed here.
   defaults.
 - Claude Code streaming deltas and their per-block assistant copies must be
   emitted once; preserve separate text blocks even when their content matches.
+- OpenCode JSON CLI tool parts arrive after execution. Translate each terminal
+  call once into paired tool-call/result records for existing trace consumers.
+  These records describe completed work; they are not permission requests or
+  measurements of the original tool duration.
 - Every daemon-side agent adapter must use a shared process runner for CLI
   subprocesses. New adapters must not hand-roll separate `Start`, stdin,
   cancellation, timeout, and `Wait` loops.
