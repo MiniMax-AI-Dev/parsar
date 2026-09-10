@@ -359,8 +359,12 @@ type AgentMessageDeltaNotification struct {
 type ReasoningDeltaNotification = AgentMessageDeltaNotification
 
 type ThreadTokenUsageUpdatedNotification struct {
-	ThreadID string    `json:"threadId"`
-	Usage    TurnUsage `json:"usage"`
+	ThreadID   string     `json:"threadId"`
+	TurnID     string     `json:"turnId"`
+	Usage      *TurnUsage `json:"usage,omitempty"` // Legacy turn-level payload.
+	TokenUsage *struct {
+		Total *TurnUsage `json:"total"`
+	} `json:"tokenUsage,omitempty"`
 }
 
 type ErrorNotification struct {
