@@ -390,14 +390,14 @@ function SkillPreview({ skill }: { skill: MarketplaceSkillDetail }) {
   const selected = files.find((file) => file.path === selectedPath) ?? files[0]
 
   return (
-    <div>
+    <div className="@container/skill-preview">
       <div className="flex h-7 items-center gap-2 text-sm">
         <FileText className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
         <span className="font-medium text-fg">{skill.title || skill.slug}</span>
         <span className="text-xs text-fg-muted">{t("capabilities.marketplace.detail.skillBadge")}</span>
       </div>
-      <div className="mt-1 grid min-h-[300px] grid-cols-[200px_minmax(0,1fr)] border-t border-line">
-        <div className="border-r border-line py-1 pr-2">
+      <div className="mt-1 grid grid-cols-1 border-t border-line @lg/skill-preview:min-h-[300px] @lg/skill-preview:grid-cols-[200px_minmax(0,1fr)]">
+        <div className="max-h-40 overflow-auto border-b border-line py-1 @lg/skill-preview:max-h-none @lg/skill-preview:border-r @lg/skill-preview:border-b-0 @lg/skill-preview:pr-2">
           <SkillFileTree
             paths={files.map((file) => file.path)}
             selectedPath={selected.path}
@@ -405,7 +405,7 @@ function SkillPreview({ skill }: { skill: MarketplaceSkillDetail }) {
           />
         </div>
         <div className="min-w-0">
-          <div className="flex h-7 items-center border-b border-line px-3 font-mono text-xs text-fg-muted">{selected.path}</div>
+          <div className="min-h-7 border-b border-line px-3 py-1 font-mono text-xs break-all text-fg-muted">{selected.path}</div>
           <pre className="m-0 max-h-[480px] overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-relaxed text-fg">
             {selected.content}
           </pre>
