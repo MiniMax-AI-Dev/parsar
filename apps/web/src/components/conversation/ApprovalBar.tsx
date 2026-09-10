@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { Check, Loader2, Square, Terminal, Wrench, X } from "lucide-react"
 
-import { useAdminView } from "../../lib/admin-router"
 import { interactionRequester, readableInteractionOperation } from "../../lib/interaction-presentation"
 import { useResolveAgentInteraction } from "../../lib/api-interactions"
 import type { AgentInteraction } from "../../lib/api-types"
@@ -71,7 +70,6 @@ export function ApprovalBar({
   stop?: { onStop: () => void; pending?: boolean; label: string }
 }) {
   const { t } = useTranslation("admin")
-  const { navigate } = useAdminView()
   const resolve = useResolveAgentInteraction(workspaceID)
   const [submitting, setSubmitting] = useState<Decision | null>(null)
   const [error, setError] = useState<{ id: string; message: string } | null>(null)
@@ -174,8 +172,10 @@ export function ApprovalBar({
       )}
 
       <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-        <Button variant="link" size="sm" className="mr-auto" onClick={() => navigate("approvals", { id: current.id })}>
-          {t("approvals.detail.viewRequest")}
+        <Button asChild variant="link" size="sm" className="mr-auto">
+          <a href={`/?ws=${encodeURIComponent(workspaceID)}&admin=approvals&id=${encodeURIComponent(current.id)}`}>
+            {t("approvals.detail.viewRequest")}
+          </a>
         </Button>
         {errorText && <InlineError className="mr-auto min-w-0 flex-1">{errorText}</InlineError>}
         <Button

@@ -8,7 +8,7 @@ export function InteractionRequestDetails({ interaction }: { interaction: AgentI
   const payload = interaction.request.payload
   const entries = payload && typeof payload === "object" && !Array.isArray(payload) ? Object.entries(payload) : null
   const empty = payload == null || (typeof payload === "object" && Object.keys(payload).length === 0)
-  const valueText = (value: unknown) => typeof value === "string" ? value : JSON.stringify(value, null, 2)
+  const valueText = (value: unknown) => JSON.stringify(value, null, 2)
 
   return (
     <section className="space-y-3">
@@ -31,7 +31,6 @@ export function InteractionRequestDetails({ interaction }: { interaction: AgentI
           ))}
         </PropertyList>
       ) : <VerbatimBlock className="w-full min-w-0 max-h-52 break-all">{valueText(payload)}</VerbatimBlock>}
-      {interaction.kind === "permission" && interaction.status === "pending" && <p className="text-xs text-fg-muted">{t("approvals.detail.onceScope")}</p>}
     </section>
   )
 }

@@ -238,7 +238,6 @@
       "requesterUnknown": "Unknown requester",
       "operation": "Operation",
       "noParameters": "The runtime did not report any arguments.",
-      "onceScope": "Allow once applies only to this request.",
       "viewRequest": "View request details"
     },
     "empty": {

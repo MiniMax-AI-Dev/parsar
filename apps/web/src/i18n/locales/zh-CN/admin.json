@@ -238,7 +238,6 @@
       "requesterUnknown": "申请人未知",
       "operation": "操作",
       "noParameters": "执行层未上报操作参数。",
-      "onceScope": "「仅允许本次」只对当前请求生效。",
       "viewRequest": "查看请求详情"
     },
     "empty": {
