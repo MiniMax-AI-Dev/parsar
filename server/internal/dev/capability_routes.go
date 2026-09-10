@@ -1395,7 +1395,7 @@ func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 // Cross-workspace requires the source capability to be public + non-deprecated.
 //
 //	@Summary		Enable a capability on an agent
-//	@Description	Enables (installs) a capability version on the agent. Cross-workspace enable requires the source capability to be public and non-deprecated. Workspace owner, admin, or member only. Successful requests appear in Agent audit.
+//	@Description	Enables (installs) a capability version on the agent. Cross-workspace enable requires the source capability to be public and non-deprecated. Workspace owner, admin, or member only. Successful requests appear in Agent audit. External HTTP Agents manage capabilities in their own service.
 //	@Tags			capabilities
 //	@ID				enableDevAgentCapability
 //	@Accept			json
@@ -1447,6 +1447,10 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 		agentRecord, err := runtimeStore.GetAgent(r.Context(), agentID)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to get agent")
+			return
+		}
+		if agentRecord.ConnectorType == "http" {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "external HTTP Agents manage their own capabilities"})
 			return
 		}
 		agentKind, _ := agentRecord.Config["agent_kind"].(string)

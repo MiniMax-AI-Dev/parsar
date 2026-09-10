@@ -51,6 +51,10 @@ export function AgentRuntimeCell({ agent, className }: { agent: Agent; className
   const placement = agentExecutionPlacement(agent)
   const binding = useAgentRuntimeBinding(agent)
 
+  if (placement === "external") {
+    return <RuntimeLine className={className} tone={null} name={t("agents.runtimeCell.external")} />
+  }
+
   if (placement === "sandbox") {
     const fullId = (agent.sandbox_external_id ?? "").trim()
     if (fullId) {

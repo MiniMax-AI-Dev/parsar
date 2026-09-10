@@ -280,6 +280,32 @@ description and keep ownership on the side listed here.
   accepted only as an absolute path or `~/...`; daemon-side fallbacks must stay
   under `~/.parsar/`.
 
+### External HTTP Agents
+
+- `connector_type=http` runs use the standard conversation dispatcher and its
+  30-minute execution deadline. The HTTP connector performs one JSON POST and
+  emits one final reply; the dispatcher alone persists completion and usage.
+  Default development startup uses this same dispatcher. The legacy standalone
+  HTTP worker is not supported alongside the server; it bypasses credential
+  resolution, serial dispatch, and request cancellation ownership.
+- Store `config.http.endpoint` and optional `config.http.secret_id`. Accept the
+  historical flat keys on input, but never forward endpoint or credential
+  configuration in the request body. Only `agent_config.system_prompt` is sent.
+- Bearer secrets use `kind=provider=http_agent`, `auth_type=bearer`, and a
+  `{"token": "..."}` encrypted payload. Check active status and management
+  workspace on both configuration and every invocation. Global model secrets
+  are not HTTP Agent credentials. Reject URL userinfo and all redirects.
+- The service owns models, tools, permissions, and conversation history, keyed
+  by `conversation_id`. Parsar capability/runtime bindings are not injected.
+  Text requests carry the existing `httprunner.AgentRequest` identity fields;
+  responses contain nonempty `content` and optional `store.UsageInput` `usage`.
+  Responses are limited to 4 MiB. Do not infer unreported usage or prices.
+- Stop cancels the outbound request on the executing server instance; this
+  initial connector targets single-instance deployments. Cross-instance HTTP
+  request cancellation is not supported. Stop does not guarantee termination of work
+  inside a remote service; services should honor HTTP request cancellation and
+  deduplicate work by `run_id`. Retrying creates a new run.
+
 ### Agent editing
 
 - The Agent edit form updates profile, model, and execution settings only.

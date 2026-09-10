@@ -54,6 +54,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	connagentdaemon "github.com/MiniMax-AI-Dev/parsar/server/internal/connector/agentdaemon"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector/httpagent"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/dev"
@@ -494,6 +495,7 @@ func main() {
 		if blobStore != nil {
 			agentDaemonCfg.OSS = blobDownloadAdapter{store: blobStore}
 		}
+		connectorReg.MustRegister(httpagent.New(dbStore, cfg.Secret.MasterKey, nil))
 		agentDaemonConn := connagentdaemon.New(agentDaemonCfg)
 		connagentdaemon.RegisterInternalRoutes(r, agentDaemonConn, agentDaemonInternalToken)
 		if regErr := connectorReg.Register(agentDaemonConn); regErr != nil {

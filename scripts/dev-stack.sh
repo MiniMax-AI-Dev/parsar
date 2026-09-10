@@ -40,6 +40,6 @@ Postgres: ${PARSAR_POSTGRES_HOST}:${PARSAR_POSTGRES_PORT} (db=${PARSAR_PG_DB} us
 Migrate:  make migrate-dev
 Server:   make server             # http://127.0.0.1:${PARSAR_DEV_SERVER_PORT}/api/v1/health
 Web:      make web                # http://127.0.0.1:${PARSAR_WEB_PORT}
-Runner:   make http-runner-loop   # bounded local HTTP Agent runner
+HTTP Agents: dispatched by the API server
 Logs:     $PARSAR_LOG_DIR
 INFO

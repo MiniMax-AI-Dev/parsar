@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -39,7 +38,7 @@ type configureAgentProfileBody struct {
 // configureAgentConnector wires an agent to a channel connector.
 //
 //	@Summary		Configure an agent's connector
-//	@Description	Attaches or updates an agent's outbound channel connector configuration. Owner/admin only.
+//	@Description	Updates the HTTP Agent endpoint and optional workspace-owned bearer secret_id. Owner/admin only. Existing profile settings are preserved.
 //	@Tags			agents
 //	@ID				configureDevAgentConnector
 //	@Accept			json
@@ -97,7 +96,7 @@ func configureAgentConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 		})
 		if err != nil {
 			switch {
-			case errors.Is(err, store.ErrInvalidConnectorType):
+			case errors.Is(err, store.ErrInvalidConnectorType), errors.Is(err, store.ErrInvalidInput):
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			case errors.Is(err, store.ErrUnknownAgent):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
@@ -809,11 +808,7 @@ func deleteAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 }
 
 func isSafeHTTPAgentEndpoint(endpoint string) bool {
-	parsed, err := url.Parse(endpoint)
-	if err != nil || parsed.Host == "" {
-		return false
-	}
-	return parsed.Scheme == "http" || parsed.Scheme == "https"
+	return store.ValidHTTPAgentEndpoint(endpoint)
 }
 
 // listWorkspaceEnabledAgents lists the agents visible to the caller in

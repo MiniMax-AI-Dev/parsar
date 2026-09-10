@@ -583,13 +583,13 @@ export function AgentConfigTab({
     <>
       <AgentConfigSummary agent={agent} modelLabel={modelLabel} />
 
-      {runtimeOf(agent) === "sandbox" && (
+      {agent.connector_type === "agent_daemon" && runtimeOf(agent) === "sandbox" && (
         <div className="mt-6">
           <SandboxPanel workspaceID={workspaceID} agentID={agent.id} />
         </div>
       )}
 
-      <ConfigCapabilitiesSection
+      {agent.connector_type !== "http" && <ConfigCapabilitiesSection
         agent={agent}
         workspaceID={workspaceID}
         isAdmin={canManageCapabilities}
@@ -600,7 +600,7 @@ export function AgentConfigTab({
         loading={agentCapabilitiesQ.isLoading || workspaceCapabilitiesQ.isLoading}
         error={agentCapabilitiesQ.error ?? workspaceCapabilitiesQ.error}
         onToast={onToast}
-      />
+      />}
     </>
   )
 }

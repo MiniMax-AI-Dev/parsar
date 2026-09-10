@@ -1154,6 +1154,7 @@
       "runtime": "Runtime"
     },
     "runtimeCell": {
+      "external": "External service",
       "unbound": "No runtime bound",
       "pending": "Not allocated"
     },
@@ -1720,7 +1721,7 @@
       },
       "external": {
         "title": "External Agent",
-        "description": "Route to a self-managed HTTP Agent service."
+        "description": "Connect your own HTTP Agent service."
       }
     },
     "engine": {
@@ -1786,6 +1787,24 @@
       "enabled": "“{{name}}” enabled.",
       "disabled": "“{{name}}” disabled.",
       "failed": "Could not update Agent status"
+    },
+    "http": {
+      "create": "Connect an external Agent",
+      "edit": "Edit external Agent",
+      "ownership": "Your HTTP service manages its models, tools, and conversation history. Parsar sends messages and records replies and usage. Skills, MCP tools, and knowledge bindings are managed by the service.",
+      "endpoint": "Service endpoint",
+      "endpointHint": "Parsar sends a JSON POST and expects {\"content\":\"reply\",\"usage\":{...}}. Use an address reachable from the Parsar server.",
+      "authentication": "Authentication",
+      "noAuth": "No authentication",
+      "newToken": "Add a bearer token",
+      "savedCredential": "Saved bearer credential",
+      "token": "Bearer token",
+      "authHint": "Tokens are encrypted in this workspace. They are sent only in the Authorization header; redirects are rejected.",
+      "instructionsHint": "Sent as agent_config.system_prompt; your service decides how to apply these instructions.",
+      "saveFailed": "External Agent could not be saved",
+      "back": "Back",
+      "saving": "Saving…",
+      "invalidEndpoint": "Enter an HTTP(S) URL without username, password, or fragment."
     }
   },
   "connectors": {
