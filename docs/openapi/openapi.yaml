@@ -2791,7 +2791,7 @@ paths:
   /api/v1/agents/{agentID}/disable:
     post:
       description: Marks the agent as disabled so it is no longer scheduled. Owner/admin
-        only.
+        only; audits the requesting user.
       operationId: disableDevAgent
       parameters:
       - description: Agent UUID
@@ -2831,7 +2831,7 @@ paths:
   /api/v1/agents/{agentID}/enable:
     post:
       description: Marks a disabled agent as enabled so it can be scheduled again.
-        Owner/admin only.
+        Owner/admin only; audits the requesting user.
       operationId: enableDevAgent
       parameters:
       - description: Agent UUID
