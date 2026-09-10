@@ -642,6 +642,10 @@ split relevant pieces out first rather than growing the file further.
 
 ### Frontend shared logic
 
+- Capability usage views distinguish loading, failed, and successful empty reads.
+  Failed reads offer retry; incomplete Agent binding counts remain unknown. Query
+  status must update even when a failed request leaves cached data unchanged.
+
 - Answered interaction cards display persisted `response.answers` by question ID
   (or `q{index}` fallback), rather than local drafts. Inbox and conversation cards
   share the answer projection; custom secret answers retain password masking.

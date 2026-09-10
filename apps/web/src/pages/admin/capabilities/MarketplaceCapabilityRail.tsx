@@ -112,9 +112,11 @@ export function MarketplaceCapabilityRail({ id, open, onClose, onClosed }: {
           </PropertyList>
         </RailSection>
 
-        <RailSection title={t("capabilities.marketplaceDetail.enabledAgents.title", { count: agentCount })} className="mt-6">
+        <RailSection title={agentsQ.isLoading || agentsQ.error ? t("capabilities.table.enabledAgents") : t("capabilities.marketplaceDetail.enabledAgents.title", { count: agentCount })} className="mt-6">
           {agentsQ.isLoading ? (
             <Skeleton className="mt-2 h-3 w-full" />
+          ) : agentsQ.error ? (
+            <ErrorState onRetry={() => void agentsQ.refetch()} />
           ) : agents.length === 0 ? (
             <EmptyState size="compact" title={t("capabilities.marketplaceDetail.enabledAgents.empty")} />
           ) : (
