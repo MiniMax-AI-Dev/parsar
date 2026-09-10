@@ -407,7 +407,12 @@ export function CapabilitiesPage() {
       onSelectItem={(item) => navigate("capabilities", { tab: item?.startsWith("mcp:") ? "connectors" : pageTab === "workspace" ? "marketplace" : pageTab, item })}
       onInstall={goToAgentsForCapability}
       onDelete={setDeleteTarget}
-      onViewCapability={(capabilityID) => navigate("capabilities", { id: capabilityID, tab: null, item: null })}
+      onViewCapability={(capabilityID) => {
+        setQuery("")
+        setTypeFilter("")
+        setPage(1)
+        navigate("capabilities", { id: capabilityID, tab: null, item: null })
+      }}
     />
   )
 

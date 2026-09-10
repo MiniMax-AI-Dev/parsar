@@ -662,7 +662,7 @@
     },
     "emptyFiltered": {
       "title": "No matching capabilities",
-      "description": "Adjust the search or switch to All to see every capability.",
+      "description": "Adjust your search or clear the filters to see available capabilities.",
       "reset": "Clear filters"
     },
     "rowActions": {
