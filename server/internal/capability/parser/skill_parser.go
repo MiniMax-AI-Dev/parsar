@@ -53,13 +53,14 @@ func ParseSkill(raw string, format SourceFormat) (SkillParseResult, error) {
 		// name next, then an auto-generated suffix.
 		slug = kebabFromName(front.Name)
 	}
-	if slug == "" {
-		warnings = append(warnings, "frontmatter provided no slug or name — add a name to the YAML frontmatter in SKILL.md, then upload or preview again")
-	}
-
 	title := strings.TrimSpace(front.Title)
 	if title == "" {
 		title = strings.TrimSpace(front.Name)
+	}
+	// Missing or unreadable frontmatter already has a recovery warning.
+	// Keep field warnings when some metadata was recovered.
+	if slug == "" && (front != (skillFrontmatter{}) || len(warnings) == 0) {
+		warnings = append(warnings, "frontmatter provided no slug or name — add a name to the YAML frontmatter in SKILL.md, then upload or preview again")
 	}
 
 	spec := canonical.Spec{
@@ -73,7 +74,7 @@ func ParseSkill(raw string, format SourceFormat) (SkillParseResult, error) {
 			Trigger:     strings.TrimSpace(front.Trigger),
 		},
 	}
-	if title == "" {
+	if title == "" && slug != "" {
 		warnings = append(warnings, "title is empty — add a name or title to the YAML frontmatter in SKILL.md, then upload or preview again")
 	}
 	return SkillParseResult{
