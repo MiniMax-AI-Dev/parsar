@@ -1575,8 +1575,10 @@
       },
       "emptyModel": {
         "title": "还没有可用 Model",
-        "description": "先去 Models 页接入一个模型；当前已填内容会带过去，配完后可以回到新建 Agent。",
-        "cta": "去配置 Model"
+        "description": "在新标签页配置模型，然后回到这里刷新。Agent 表单会保持打开，已填内容都会保留。",
+        "cta": "配置模型（新标签页）",
+        "refresh": "刷新模型",
+        "refreshError": "无法刷新模型，请重试。"
       },
       "noTagsAdmin": "当前还没有可用的 Skill 或 MCP 工具，能力配置是可选的。可以先保存 Agent，之后在「能力」页添加，再到 Agent 的「配置」中启用。",
       "noTagsMember": "当前还没有可用的 Skill 或 MCP 工具，能力配置是可选的。可以先保存 Agent，之后请工作区管理员添加能力，再到 Agent 的「配置」中启用。",

@@ -1,7 +1,7 @@
 import { Fragment, forwardRef, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { useQueryClient } from "@tanstack/react-query"
-import { AlertTriangle, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, Search } from "lucide-react"
+import { AlertTriangle, Check, ChevronDown, Eye, EyeOff, Search } from "lucide-react"
 
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
@@ -20,6 +20,7 @@ import { Select, SelectOption } from "../../components/ui/select"
 import { AgentInstructionsField } from "./agents/AgentInstructionsField"
 import { AgentVisibilityField } from "./agents/AgentVisibilityField"
 import { AgentCloudPreflight } from "./agents/AgentCloudPreflight"
+import { AgentModelPrerequisite } from "./agents/AgentModelPrerequisite"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
 import { cn } from "../../lib/utils"
@@ -747,17 +748,6 @@ export function CreateAgentDialog({
   const showDevicePicker = connector === "agent_daemon" && executionMode === "local_device" && Boolean(workspaceID)
   const errMsg = extractErrorMessage(error)
 
-  function prefillQuery(target: "models" | "runtime") {
-    const url = new URL(window.location.href)
-    url.searchParams.set("admin", target)
-    url.searchParams.delete("id")
-    url.searchParams.set("return_to", "agents.create")
-    if (name.trim()) url.searchParams.set("agent_name", name.trim())
-    if (description.trim()) url.searchParams.set("agent_description", description.trim())
-    if (systemPrompt.trim()) url.searchParams.set("agent_prompt", systemPrompt.trim())
-    return `${url.pathname}${url.search}${url.hash}`
-  }
-
   function toggleCapability(cap: string, capabilityID?: string, latestVersionID?: string) {
     capabilitySelectionEdited.current = true
     let wasChecked = false
@@ -1278,7 +1268,7 @@ export function CreateAgentDialog({
                         ? t("agents.form.errors.modelRequired")
                         : undefined}
                   >
-                {hasModel ? (
+                {hasModel && (
                   <div ref={modelComboboxRef} className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
                     <Input
@@ -1349,8 +1339,9 @@ export function CreateAgentDialog({
                       </div>
                     )}
                   </div>
-                ) : (
-                  <DependencyCard title={t("agents.form.emptyModel.title")} description={t("agents.form.emptyModel.description")} href={prefillQuery("models")} cta={t("agents.form.emptyModel.cta")} />
+                )}
+                {activeModels.every((model) => incompatibleModelIDs.has(model.id)) && (
+                  <AgentModelPrerequisite workspaceID={workspaceID} />
                 )}
                   </Field>
                 </div>
@@ -1777,20 +1768,6 @@ function ChoiceCard({ name, title, description, selected, onSelect, disabled = f
         {description && <span className="block text-xs text-fg-muted">{description}</span>}
       </span>
     </label>
-  )
-}
-
-function DependencyCard({ title, description, href, cta }: { title: string; description: string; href: string; cta: string }) {
-  return (
-    <div className="flex flex-col items-start gap-1 py-1">
-      <p className="text-sm font-medium text-fg">{title}</p>
-      <p className="text-xs text-fg-muted">{description}</p>
-      <Button variant="link" size="sm" className="mt-1 px-0" asChild>
-        <a href={href}>
-          {cta} <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
-        </a>
-      </Button>
-    </div>
   )
 }
 
