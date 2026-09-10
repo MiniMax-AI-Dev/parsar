@@ -5870,14 +5870,6 @@ type AgentStatusRead struct {
 	UpdatedAt     time.Time      `json:"updated_at"`
 }
 
-func (s *Store) DisableAgent(ctx context.Context, agentID string) (AgentStatusRead, error) {
-	return s.setAgentStatus(ctx, agentID, "disabled", auditAgentDisabled)
-}
-
-func (s *Store) EnableAgent(ctx context.Context, agentID string) (AgentStatusRead, error) {
-	return s.setAgentStatus(ctx, agentID, "active", auditAgentEnabled)
-}
-
 func (s *Store) GetAgentDetail(ctx context.Context, agentID string) (AgentStatusRead, error) {
 	aUUID, err := uuid(agentID)
 	if err != nil {
@@ -5903,92 +5895,6 @@ func (s *Store) GetAgentDetail(ctx context.Context, agentID string) (AgentStatus
 		UpdatedAt:     pgTime(row.UpdatedAt),
 	}
 	return read, nil
-}
-
-func (s *Store) setAgentStatus(ctx context.Context, agentID, targetStatus, eventType string) (AgentStatusRead, error) {
-	now := time.Now().UTC()
-	aUUID, err := uuid(agentID)
-	if err != nil {
-		return AgentStatusRead{}, err
-	}
-
-	tx, err := beginTx(ctx, s.db)
-	if err != nil {
-		return AgentStatusRead{}, err
-	}
-	defer tx.Rollback(ctx)
-	queries := sqlc.New(tx)
-
-	detail, err := queries.GetAgentDetailForRead(ctx, aUUID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return AgentStatusRead{}, fmt.Errorf("%w: %s", ErrUnknownAgent, agentID)
-		}
-		return AgentStatusRead{}, err
-	}
-
-	var (
-		updatedID, updatedWS, updatedStatus string
-		updatedConfig                       []byte
-		updatedCreatedAt, updatedUpdatedAt  pgtype.Timestamptz
-	)
-	switch targetStatus {
-	case "disabled":
-		row, err := queries.DisableAgent(ctx, sqlc.DisableAgentParams{ID: aUUID, Now: timestamptz(now)})
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return AgentStatusRead{}, fmt.Errorf("%w: %s", ErrUnknownAgent, agentID)
-			}
-			return AgentStatusRead{}, err
-		}
-		updatedID, updatedWS, updatedStatus = row.ID, row.WorkspaceID, row.Status
-		updatedConfig, updatedCreatedAt, updatedUpdatedAt = row.Config, row.CreatedAt, row.UpdatedAt
-	case "active":
-		row, err := queries.EnableAgent(ctx, sqlc.EnableAgentParams{ID: aUUID, Now: timestamptz(now)})
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return AgentStatusRead{}, fmt.Errorf("%w: %s", ErrUnknownAgent, agentID)
-			}
-			return AgentStatusRead{}, err
-		}
-		updatedID, updatedWS, updatedStatus = row.ID, row.WorkspaceID, row.Status
-		updatedConfig, updatedCreatedAt, updatedUpdatedAt = row.Config, row.CreatedAt, row.UpdatedAt
-	default:
-		return AgentStatusRead{}, fmt.Errorf("invalid agent target status: %s", targetStatus)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return AgentStatusRead{}, err
-	}
-
-	s.emitAuditEvent(audit.Event{
-		OccurredAt:  now,
-		Source:      audit.SourceAdmin,
-		EventType:   eventType,
-		ActorType:   audit.ActorTypeSystem,
-		ActorID:     updatedID,
-		TargetType:  "agent",
-		TargetID:    updatedID,
-		WorkspaceID: updatedWS,
-		Payload: map[string]any{
-			"agent_slug": detail.AgentSlug,
-			"agent_name": detail.AgentName,
-			"prev":       detail.Status,
-			"next":       updatedStatus,
-		},
-	})
-
-	return AgentStatusRead{
-		WorkspaceID:   updatedWS,
-		AgentID:       updatedID,
-		AgentName:     detail.AgentName,
-		AgentSlug:     detail.AgentSlug,
-		ConnectorType: detail.ConnectorType,
-		Status:        updatedStatus,
-		Config:        decodeJSONMap(updatedConfig),
-		CreatedAt:     pgTime(updatedCreatedAt),
-		UpdatedAt:     pgTime(updatedUpdatedAt),
-	}, nil
 }
 
 // ResolveModelRuntime returns the flattened runtime view for a shared model.

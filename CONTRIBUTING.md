@@ -183,6 +183,9 @@ description and keep ownership on the side listed here.
 - Successful explicit Agent capability enable, upgrade, removal, and built-in
   toggle requests emit Agent-targeted audit events with the authenticated actor
   and capability identifiers. Never include configuration or credential values.
+- Explicit Agent enable/disable requests pass the requesting user to the store
+  for audit attribution. Keep the target Agent separate from the actor, and
+  preserve the previous and next status in the event payload.
 - `parsar-daemon` owns CLI discovery, process spawning, CLI-specific env,
   cwd selection inside its host/container, permission prompts, and translating
   CLI streams into Parsar daemon protocol frames.

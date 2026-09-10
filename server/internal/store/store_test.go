@@ -3224,7 +3224,7 @@ func TestDisableEnableAgentRoundtripGuardsMentions(t *testing.T) {
 	store, auditIng := newAuditAwareStore(t, db)
 	ids := mustSeedDevFixture(t, ctx, store)
 
-	disabled, err := store.DisableAgent(ctx, ids.BackendAgentID)
+	disabled, err := store.DisableAgent(ctx, ids.BackendAgentID, ids.UserID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3258,7 +3258,7 @@ func TestDisableEnableAgentRoundtripGuardsMentions(t *testing.T) {
 	}
 
 	// re-enable should restore matchability
-	enabled, err := store.EnableAgent(ctx, ids.BackendAgentID)
+	enabled, err := store.EnableAgent(ctx, ids.BackendAgentID, ids.UserID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3287,7 +3287,7 @@ func TestDisableAgentRejectsUnknown(t *testing.T) {
 	ctx := context.Background()
 	store := New(db)
 
-	if _, err := store.DisableAgent(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, ErrUnknownAgent) {
+	if _, err := store.DisableAgent(ctx, "00000000-0000-0000-0000-000000000000", DefaultDevFixtureIDs().UserID); !errors.Is(err, ErrUnknownAgent) {
 		t.Fatalf("expected ErrUnknownAgent, got %v", err)
 	}
 }

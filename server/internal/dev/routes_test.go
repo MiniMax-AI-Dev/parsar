@@ -3174,7 +3174,7 @@ func (s stubRuntimeStore) ListWorkspaceAgentsForAdmin(ctx context.Context, works
 	return append(enabled, store.AgentRead{AgentID: "agent-99", Name: "Disabled Agent", Slug: "disabled-agent", ConnectorType: "agent_daemon", Status: "disabled"}), nil
 }
 
-func (stubRuntimeStore) DisableAgent(ctx context.Context, agentID string) (store.AgentStatusRead, error) {
+func (stubRuntimeStore) DisableAgent(ctx context.Context, agentID, actorID string) (store.AgentStatusRead, error) {
 	if agentID == "00000000-0000-0000-0000-000000099999" {
 		return store.AgentStatusRead{}, fmt.Errorf("%w: %s", store.ErrUnknownAgent, agentID)
 	}
@@ -3189,7 +3189,7 @@ func (stubRuntimeStore) DisableAgent(ctx context.Context, agentID string) (store
 	}, nil
 }
 
-func (stubRuntimeStore) EnableAgent(ctx context.Context, agentID string) (store.AgentStatusRead, error) {
+func (stubRuntimeStore) EnableAgent(ctx context.Context, agentID, actorID string) (store.AgentStatusRead, error) {
 	if agentID == "00000000-0000-0000-0000-000000099999" {
 		return store.AgentStatusRead{}, fmt.Errorf("%w: %s", store.ErrUnknownAgent, agentID)
 	}
