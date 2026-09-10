@@ -237,6 +237,8 @@ description and keep ownership on the side listed here.
   defaults.
 - Claude Code streaming deltas and their per-block assistant copies must be
   emitted once; preserve separate text blocks even when their content matches.
+- Claude Code failure details may arrive in `error`, `result`, or `errors`.
+  Preserve supplied details before falling back to the result subtype.
 - Codex app-server usage totals are cumulative per thread. Treat restored usage
   before `turn/started` as the baseline and persist only the current turn's
   delta; repeated snapshots must not increase recorded usage.
