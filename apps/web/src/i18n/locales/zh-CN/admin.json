@@ -2116,6 +2116,11 @@
     "page": {
       "title": "用量"
     },
+    "cost": {
+      "unknown": "未知",
+      "partial": "仅汇总已知费用，部分记录费用未知。",
+      "incomplete": "零值或缺失的费用暂按未知展示；带 * 的汇总仅包含已知费用。"
+    },
     "stats": {
       "runs": "Run 数",
       "inputTokens": "Input tokens",

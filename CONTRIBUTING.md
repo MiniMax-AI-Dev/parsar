@@ -632,6 +632,11 @@ split relevant pieces out first rather than growing the file further.
 
 ### Frontend shared logic
 
+- Usage cost displays treat stored zero/missing values as unknown: the current
+  contract cannot distinguish free usage from unavailable pricing. Preserve raw
+  records; sum finite positive costs only and label incomplete totals. Do not
+  estimate prices or infer cost availability from provider names or token counts.
+
 - Ordinary toasts expire even while hovered and provide a localized close
   button. Keyboard focus inside pauses their countdown until focus leaves.
   Persistent action prompts remain owned by their caller. Toast removal must
