@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ApiError, apiRequest, noUnreachableRetry } from "./api-client"
 import { KEY_AGENT_CAPABILITIES, KEY_CAPABILITIES_WORKSPACE } from "./api-capabilities"
@@ -267,6 +268,10 @@ export interface UseAgentRunsOptions {
   search?: string
 }
 
+function isLiveRunStatus(status?: AgentRunStatus): boolean {
+  return status === "queued" || status === "running"
+}
+
 export function useAgentRuns(
   workspaceID: string | null,
   options: UseAgentRunsOptions = {},
@@ -278,6 +283,8 @@ export function useAgentRuns(
     queryFn: () => listAgentRuns(workspaceID, statuses, offset, limit, search),
     retry: noUnreachableRetry,
     staleTime: 15_000,
+    refetchInterval: (query) =>
+      query.state.data?.agent_runs.some((run) => isLiveRunStatus(run.status)) ? 5_000 : false,
     // Keep prior pages only when the workspace and filters still match.
     placeholderData: (prev, previousQuery) =>
       previousQuery?.queryKey.slice(0, 5).every((value, index) => value === queryKey[index]) ? prev : undefined,
@@ -335,6 +342,7 @@ export function useAgentRun(runID: string | null, _workspaceIDForMock?: string |
     enabled: !!runID,
     retry: noUnreachableRetry,
     staleTime: 15_000,
+    refetchInterval: (query) => isLiveRunStatus(query.state.data?.status) ? 5_000 : false,
   })
 }
 
@@ -344,8 +352,8 @@ export function useAgentRunEvents(
   options?: { status?: AgentRunStatus; initialEvents?: AgentRunEvent[] }
 ) {
   // Running and queued runs can still emit new events, so keep polling.
-  const live = options?.status === "running" || options?.status === "queued"
-  return useQuery({
+  const live = isLiveRunStatus(options?.status)
+  const query = useQuery({
     queryKey: KEY_RUN_EVENTS(workspaceID ?? "_none", runID ?? "_none"),
     queryFn: () => listAgentRunEvents(workspaceID, runID),
     enabled: !!runID && !!workspaceID,
@@ -354,6 +362,12 @@ export function useAgentRunEvents(
     refetchInterval: live ? 5_000 : false,
     initialData: options?.initialEvents ? { events: options.initialEvents } : undefined,
   })
+  const { refetch } = query
+  // Read the final event snapshot even when detail polling wins the last tick.
+  useEffect(() => {
+    if (runID && workspaceID && !live) void refetch()
+  }, [runID, workspaceID, live, refetch])
+  return query
 }
 
 export function useRetryRun(workspaceID: string | null) {
