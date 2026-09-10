@@ -5,9 +5,7 @@ import (
 	"fmt"
 )
 
-// SilentGranularPolicy disables every Codex approval surface. It is retained
-// for wire-compatibility tests and explicit callers; daemon sessions default
-// to HumanApprovalPolicy so normal runs never auto-accept requests.
+// SilentGranularPolicy disables every granular Codex approval gate.
 func SilentGranularPolicy() AskForApproval {
 	g := GranularAskForApproval{} // zero value = every gate false
 	return AskForApproval{Granular: &g}
@@ -58,7 +56,7 @@ func (a AskForApproval) MarshalJSON() ([]byte, error) {
 		}{Granular: a.Granular})
 	}
 	// Neither set — preserve the historical zero-value encoding. Production
-	// plans always set HumanApprovalPolicy explicitly; an empty marshal would
+	// plans always set a policy explicitly; an empty marshal would
 	// produce `null`, which codex-rs rejects.
 	return json.Marshal(struct {
 		Granular GranularAskForApproval `json:"granular"`

@@ -205,6 +205,13 @@ description and keep ownership on the side listed here.
 
 ### Agent CLI adapter contract
 
+- Daemon-managed Codex sessions use `approvalPolicy=never` and
+  `sandbox=danger-full-access` on both `thread/start` and `thread/resume`,
+  including conversations created under an older policy. The daemon owns
+  these defaults; no `PARSAR_CODEX_*` approval environment switch is required.
+  Explicit engine approval requests still use the durable interaction lifecycle;
+  user-input requests continue to wait for a human answer.
+
 - Agent creation and editing store behavior instructions in `system_prompt`.
   Preserve saved text when opening the form; clearing it sends an empty string.
 - OpenCode model selectors use `provider/model`. Its Anthropic SDK base URL

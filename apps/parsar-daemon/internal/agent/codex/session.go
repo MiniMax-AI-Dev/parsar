@@ -218,7 +218,7 @@ func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 
 	// Resolve thread: resume if possible, else start fresh.
 	if strings.TrimSpace(req.AgentSessionID) != "" {
-		if err := s.resumeThread(req.AgentSessionID); err != nil {
+		if err := s.resumeThread(req.AgentSessionID, plan); err != nil {
 			s.cfg.logger.Warn("codex: thread/resume failed; starting fresh",
 				"run_id", s.runID, "thread_id", req.AgentSessionID, "err", err)
 			if err := s.startThread(plan); err != nil {
@@ -314,8 +314,10 @@ func (s *Session) startThread(plan SessionPlan) error {
 	return nil
 }
 
-func (s *Session) resumeThread(threadID string) error {
-	raw, err := s.rpc.Request(s.cancelCtx, "thread/resume", ThreadResumeParams{ThreadID: threadID})
+func (s *Session) resumeThread(threadID string, plan SessionPlan) error {
+	raw, err := s.rpc.Request(s.cancelCtx, "thread/resume", ThreadResumeParams{
+		ThreadID: threadID, ApprovalPolicy: plan.ApprovalPolicy, Sandbox: plan.Sandbox,
+	})
 	if err != nil {
 		return err
 	}

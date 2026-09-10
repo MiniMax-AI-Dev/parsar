@@ -185,7 +185,9 @@ type ThreadStartResult struct {
 }
 
 type ThreadResumeParams struct {
-	ThreadID string `json:"threadId"`
+	ThreadID       string         `json:"threadId"`
+	ApprovalPolicy AskForApproval `json:"approvalPolicy"`
+	Sandbox        SandboxMode    `json:"sandbox"`
 }
 
 // ---------------------------------------------------------------------------
@@ -366,9 +368,8 @@ type ErrorNotification struct {
 }
 
 // ---------------------------------------------------------------------------
-// Approval and user-input ServerRequest params. Daemon sessions use a
-// human approval policy, so server_requests.go defers each matching JSON-RPC
-// response until Web or IM submits the decision.
+// Approval and user-input ServerRequest params. Explicit requests defer their
+// responses until Web or IM submits the decision, even with bypass defaults.
 // ---------------------------------------------------------------------------
 
 type CommandExecutionRequestApprovalParams struct {
