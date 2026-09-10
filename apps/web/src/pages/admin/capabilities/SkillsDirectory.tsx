@@ -12,6 +12,7 @@ import { useInstalledSkills, useInstallSkill, useSkillsCatalog, type SkillsCatal
 import { useWorkspaceId } from "../../../lib/workspace"
 import { InlineNotice } from "./notices"
 import { SkillInstallErrorDialog } from "./SkillInstallErrorDialog"
+import { SkillPreviewDialog } from "./SkillPreviewDialog"
 
 interface SkillsDirectoryProps {
   query: string
@@ -33,6 +34,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
   const loading = catalogQ.isPending || installedQ.isPending || installedQ.isFetching || installedQ.isPaused
   const loadError = catalogQ.error ?? installedQ.error
   const [success, setSuccess] = useState<{ name: string; capabilityID: string } | null>(null)
+  const [previewSkill, setPreviewSkill] = useState<SkillsCatalogItem | null>(null)
   const numberFormatter = useMemo(() => new Intl.NumberFormat(i18n.language), [i18n.language])
 
   const filtered = useMemo(() => {
@@ -47,6 +49,11 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
   }, [catalogQ.data?.items, query])
   const pendingID = installMut.isPending ? (installMut.variables?.id ?? null) : null
   const failedSkill = installMut.error ? installMut.variables : null
+  const restoreSkillFocus = (id: string) => {
+    const row = directoryRef.current?.querySelector<HTMLElement>(`[data-catalog-id="${CSS.escape(id)}"]`)
+    const target = row ?? directoryRef.current
+    target?.focus()
+  }
 
   const install = (skill: SkillsCatalogItem) => {
     if (!canImport || loading || loadError || installed[skill.id]) return
@@ -59,6 +66,19 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
 
   return (
     <div ref={directoryRef} tabIndex={-1} className="flex min-h-0 flex-1 flex-col" data-testid="skills-directory">
+      {previewSkill && (
+        <SkillPreviewDialog
+          key={previewSkill.id}
+          skill={previewSkill}
+          canImport={canImport}
+          installedCapabilityID={installed[previewSkill.id]}
+          installing={pendingID === previewSkill.id}
+          onInstall={() => install(previewSkill)}
+          onViewCapability={onViewCapability}
+          onClose={() => setPreviewSkill(null)}
+          onRestoreFocus={() => restoreSkillFocus(previewSkill.id)}
+        />
+      )}
       {success && !loading && !loadError && Object.values(installed).includes(success.capabilityID) ? (
         <InlineNotice
           tone="success"
@@ -90,11 +110,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
           detail={installMut.error instanceof Error ? installMut.error.message : String(installMut.error)}
           onClose={() => installMut.reset()}
           onRetry={() => install(failedSkill)}
-          onRestoreFocus={() => {
-            const row = directoryRef.current?.querySelector<HTMLElement>(`[data-catalog-id="${CSS.escape(failedSkill.id)}"]`)
-            const target = row ?? directoryRef.current
-            target?.focus()
-          }}
+          onRestoreFocus={() => restoreSkillFocus(failedSkill.id)}
         />
       ) : null}
 
@@ -135,6 +151,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
                 installedCapabilityID={installed[skill.id]}
                 numberFormatter={numberFormatter}
                 onInstall={() => install(skill)}
+                onPreview={() => setPreviewSkill(skill)}
                 onViewCapability={onViewCapability}
               />
             ))}
@@ -152,6 +169,7 @@ function SkillRow({
   installedCapabilityID,
   numberFormatter,
   onInstall,
+  onPreview,
   onViewCapability,
 }: {
   skill: SkillsCatalogItem
@@ -160,21 +178,20 @@ function SkillRow({
   installedCapabilityID?: string
   numberFormatter: Intl.NumberFormat
   onInstall: () => void
+  onPreview: () => void
   onViewCapability: (capabilityID: string) => void
 }) {
   const { t } = useTranslation("admin")
   const sourceType = skill.sourceType ?? skill.source_type
-  // Rows have no detail view; Enter triggers the row's one action.
-  const primary = installedCapabilityID ? () => onViewCapability(installedCapabilityID) : onInstall
   const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
     if (e.target !== e.currentTarget) return
     if (e.key === "Enter") {
       e.preventDefault()
-      primary()
+      onPreview()
     }
   }
   return (
-    <LedgerRow onKeyDown={onKeyDown} data-testid="skills-directory-row" data-catalog-id={skill.id}>
+    <LedgerRow onClick={onPreview} onKeyDown={onKeyDown} data-testid="skills-directory-row" data-catalog-id={skill.id}>
       <LedgerNum muted>{skill.rank ?? "—"}</LedgerNum>
       <span className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 truncate font-medium" title={skill.name || skill.slug}>{skill.name || skill.slug}</span>
