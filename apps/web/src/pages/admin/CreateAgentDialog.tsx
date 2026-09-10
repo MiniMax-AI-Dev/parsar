@@ -279,6 +279,11 @@ export function CreateAgentDialog({
   const [modelID, setModelID] = useState("")
   const [modelSearch, setModelSearch] = useState("")
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
+  // Radix's document listener can retain the initial Escape handler.
+  const modelDropdownOpenRef = useRef(false)
+  useEffect(() => {
+    modelDropdownOpenRef.current = modelDropdownOpen
+  }, [modelDropdownOpen])
   const [highlightedModelID, setHighlightedModelID] = useState<string | null>(null)
   const [systemPrompt, setSystemPrompt] = useState(defaultSystemPrompt)
   const [capabilities, setCapabilities] = useState<string[]>([])
@@ -684,12 +689,6 @@ export function CreateAgentDialog({
     }
     if (!modelDropdownOpen) return
 
-    if (event.key === "Escape") {
-      event.preventDefault()
-      setModelDropdownOpen(false)
-      return
-    }
-
     if (event.key === "Enter") {
       event.preventDefault()
       const target = filteredModels.find((m) => m.id === highlightedModelID)
@@ -1048,6 +1047,12 @@ export function CreateAgentDialog({
     >
       <DialogContent
         className="flex max-h-[86vh] flex-col overflow-hidden sm:max-w-2xl"
+        onEscapeKeyDown={(event) => {
+          if (modelDropdownOpenRef.current) {
+            event.preventDefault()
+            setModelDropdownOpen(false)
+          }
+        }}
         onPointerDownOutside={(event) => {
           if (pairDialogOpen) event.preventDefault()
         }}
