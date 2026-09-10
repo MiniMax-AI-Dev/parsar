@@ -259,6 +259,7 @@
     }
   },
   "conversations": {
+    "scrollToLatest": "Back to latest",
     "page": {
       "title": "Conversations"
     },
