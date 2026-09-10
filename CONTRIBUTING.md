@@ -680,9 +680,10 @@ The authenticated root owns post-login return navigation for password and SSO
 sign-in. Preserve allowed in-app paths, query parameters and fragments through
 the existing session return intent; login forms must not race that navigation.
 
-Pages with a detail rail may opt into wrapping header actions through
-`PageHeader.actionClassName` and an auto-height header. Other pages retain
-the default single-row header layout.
+`PageHeader` keeps its title readable and wraps actions when their combined
+width exceeds the available panel width. Its minimum height remains 64px;
+wrapped rows grow naturally. Keep this behavior in the shared header, with
+`actionClassName` reserved for page-specific action arrangements.
 
 The Agent form checks workspace runtime status before creating or switching to
 cloud execution. Unknown or unavailable status blocks advancing and submitting;
