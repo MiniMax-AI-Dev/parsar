@@ -10,6 +10,7 @@ import { useConversations } from "../../../lib/api-conversations"
 import type { FeishuConnectorConfig } from "../../../lib/api-agents"
 import type { AgentDetail } from "../../../lib/api-types"
 import { DetailSection } from "./DetailSection"
+import { AgentMCPPanel } from "./AgentMCPPanel"
 import type { ShowToast } from "../../../components/ui/toast"
 
 /**
@@ -92,7 +93,7 @@ export function AgentExposureTab({ agent, workspaceID, canEdit, onToast }: {
       </DetailSection>
 
       <DetailSection title={t("agents.exposure.mcp.title")}>
-        <Exit status="queued" state={t("agents.exposure.state.notYet")} />
+        {workspaceID && <AgentMCPPanel key={`${workspaceID}:${agent.id}`} agentID={agent.id} workspaceID={workspaceID} onToast={onToast} />}
       </DetailSection>
     </>
   )

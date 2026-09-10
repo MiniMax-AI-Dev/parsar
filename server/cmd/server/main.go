@@ -39,6 +39,7 @@ import (
 	agentdaemonbinding "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/binding"
 	agentdaemongateway "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/api"
+	agentmcpapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/agentmcp"
 	imhistoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/imhistoryapi"
 	mcpdirectoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/mcpdirectory"
 	runtimeapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/runtime"
@@ -735,8 +736,11 @@ func main() {
 		}
 		sessionStore := auth.NewPostgresSessionStore(sqlc.New(pool))
 		authMw := auth.NewMiddleware(sessionStore).WithDevAuth(cfg.Auth.DevAuth)
+		agentMCP := agentmcpapi.New(dbStore, log.Bg())
+		agentMCP.RegisterMCPRoutes(r)
 		r.Group(func(r chi.Router) {
 			r.Use(authMw.Require)
+			agentMCP.RegisterAdminRoutes(r)
 			mcpdirectoryapi.RegisterRoutes(r, mcpdirectoryapi.Deps{
 				Catalog:              mcpCatalog,
 				Store:                dbStore,

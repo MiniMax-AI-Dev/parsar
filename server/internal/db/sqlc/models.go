@@ -143,6 +143,15 @@ type AgentInteraction struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
+// Personal, revocable credentials restricted to one Agent MCP endpoint; plaintext is never stored
+type AgentMcpToken struct {
+	AgentID   pgtype.UUID        `json:"agent_id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	TokenHash string             `json:"token_hash"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
 // Agent execution records
 type AgentRun struct {
 	// Run ID

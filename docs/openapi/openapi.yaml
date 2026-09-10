@@ -21,6 +21,13 @@ definitions:
       generation:
         type: integer
     type: object
+  agentmcp.tokenResponse:
+    properties:
+      credential:
+        $ref: '#/definitions/store.AgentMCPToken'
+      token:
+        type: string
+    type: object
   api.CheckResult:
     properties:
       error:
@@ -1612,6 +1619,13 @@ definitions:
       updated_at:
         type: string
       workspace_id:
+        type: string
+    type: object
+  store.AgentMCPToken:
+    properties:
+      created_at:
+        type: string
+      expires_at:
         type: string
     type: object
   store.AgentSummary:
@@ -5378,6 +5392,232 @@ paths:
       summary: Enable a capability on an agent
       tags:
       - capabilities
+  /api/v1/workspaces/{workspaceID}/agents/{agentID}/mcp:
+    post:
+      consumes:
+      - application/json
+      description: Bearer credential is personal and scoped to the Agent. Supports
+        initialize, tools/list and tools/call; no Web or runtime credentials are accepted.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Agent UUID
+        in: path
+        name: agentID
+        required: true
+        type: string
+      - description: Bearer pmcp_ credential
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: MCP JSON-RPC request
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "202":
+          description: Accepted
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "405":
+          description: Method Not Allowed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Call an Agent through Streamable HTTP MCP
+      tags:
+      - agent-mcp
+  /api/v1/workspaces/{workspaceID}/agents/{agentID}/mcp-token:
+    delete:
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Agent UUID
+        in: path
+        name: agentID
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Revoke a personal Agent MCP credential
+      tags:
+      - agent-mcp
+    get:
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Agent UUID
+        in: path
+        name: agentID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/agentmcp.tokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get personal Agent MCP credential status
+      tags:
+      - agent-mcp
+    post:
+      description: Returns plaintext once, expires in 30 days, and invalidates the
+        previous credential for this user and Agent.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Agent UUID
+        in: path
+        name: agentID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/agentmcp.tokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create or replace a personal Agent MCP credential
+      tags:
+      - agent-mcp
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/metrics:
     get:
       description: Returns runtime/usage metrics for the agent within the workspace.

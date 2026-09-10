@@ -1696,7 +1696,25 @@
         "hide": "收起"
       },
       "mcp": {
-        "title": "MCP"
+        "title": "MCP",
+        "description": "通过 MCP，让你的本地 Agent 调用这个 Agent。",
+        "personal": "连接以你的身份调用，仅限此 Agent，并遵循你在工作区的权限。",
+        "readOnly": "需要工作区写入权限才能通过 MCP 连接。",
+        "configure": "通过 MCP 连接",
+        "notConfigured": "尚未配置个人连接",
+        "expiry": "凭证 · {{time}}",
+        "loadError": "无法加载连接配置",
+        "createHint": "生成有效期为 30 天的个人凭证，可随时在这里撤销。",
+        "replaceHint": "更换后，使用你旧配置的客户端将断开连接。其他成员的连接不受影响。",
+        "create": "生成连接配置",
+        "replace": "更换连接配置",
+        "revoke": "撤销凭证",
+        "revoked": "已撤销个人 MCP 凭证。",
+        "copyHint": "将 JSON 配置粘贴到支持 HTTP MCP 和 Authorization 请求头的客户端。复制内容包含你的凭证，请在关闭弹窗前保存。",
+        "copy": "复制配置",
+        "copied": "已复制配置，其中包含你的个人凭证。",
+        "copyFailed": "无法复制配置。",
+        "actionFailed": "无法更新连接配置"
       },
       "state": {
         "alwaysOn": "常开 · 控制台与分享链接",
