@@ -1039,6 +1039,7 @@
         "skill": "Skill"
       },
       "preview": {
+        "title": "内容预览",
         "errorFallback": "解析失败",
         "idle": "粘贴或上传内容后，在这里查看预览",
         "loading": "解析中…",

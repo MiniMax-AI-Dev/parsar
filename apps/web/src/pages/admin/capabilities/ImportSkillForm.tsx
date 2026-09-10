@@ -266,7 +266,7 @@ export function ImportSkillForm({
                 id="import-skill-markdown"
                 value={raw}
                 onChange={(e) => setRaw(e.target.value)}
-                rows={20}
+                rows={12}
                 placeholder={t(
                   "capabilities.import.skill.placeholder",
                   `---\nname: code-reviewer\ndescription: Review a diff and call out risky changes\n---\n\nYou are a careful code reviewer. When the user pastes a diff, walk through:\n\n1. Correctness — does the change do what it claims?\n2. Risk — what could break in production?\n3. Style — does it match the surrounding conventions?\n\nKeep responses concise.`,
@@ -310,24 +310,27 @@ export function ImportSkillForm({
           )}
         </div>
 
-        <div className={`min-w-0 space-y-3 ${source === "paste" ? "max-w-3xl" : ""}`}>
-          <ImportPreview
-            status={status}
-            errorMessage={errorMessage}
-            warnings={warnings}
-            suggestedName={status === "ready" ? skill?.slug : undefined}
-            description={status === "ready" ? skill?.description : undefined}
-            kind="skill"
-          />
+        <section className="min-w-0">
+          {status !== "idle" && <p className="mb-1 text-xs text-fg-muted">{t("capabilities.import.preview.title")}</p>}
+          <div className={status === "idle" ? "" : "space-y-3 rounded-md border border-line bg-surface-subtle p-4"}>
+            <ImportPreview
+              status={status}
+              errorMessage={errorMessage}
+              warnings={warnings}
+              suggestedName={status === "ready" ? skill?.slug : undefined}
+              description={status === "ready" ? skill?.description : undefined}
+              kind="skill"
+            />
 
-          {status === "ready" && skill && (
-            (skill.files && skill.files.length > 0) ? (
-              <SkillFileTree skill={skill} />
-            ) : (
-              <SinglePreview skill={skill} />
-            )
-          )}
-        </div>
+            {status === "ready" && skill && (
+              (skill.files && skill.files.length > 0) ? (
+                <SkillFileTree skill={skill} />
+              ) : (
+                <SinglePreview skill={skill} />
+              )
+            )}
+          </div>
+        </section>
       </div>
 
       {/* Hidden ossKey passthrough — purely for the dev-tools view; the

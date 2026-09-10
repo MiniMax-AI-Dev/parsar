@@ -1039,6 +1039,7 @@
         "skill": "Skill"
       },
       "preview": {
+        "title": "Preview",
         "errorFallback": "Failed to parse",
         "idle": "Paste or upload content to see the preview.",
         "loading": "Parsing…",

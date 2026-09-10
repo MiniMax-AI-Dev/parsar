@@ -170,7 +170,7 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-6xl overflow-x-hidden overflow-y-auto"
+        className={`max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] ${kind === "skill" ? "max-w-4xl" : "max-w-6xl"} overflow-x-hidden overflow-y-auto`}
         onInteractOutside={preventDialogDismissForCredentialMenu}
       >
         <DialogHeader>
