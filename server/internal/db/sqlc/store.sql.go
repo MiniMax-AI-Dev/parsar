@@ -4301,11 +4301,22 @@ select
   ai.resolved_at,
   ai.updated_at,
   coalesce(a.name, '')::text as agent_name,
-  coalesce(c.title, '')::text as conversation_title
+  coalesce(c.title, '')::text as conversation_title,
+  coalesce(r.requested_by_type, '')::text as requested_by_type,
+  coalesce(r.requested_by_id::text, '')::text as requested_by_id,
+  coalesce(nullif(btrim(requester.name), ''), requester.email, '')::text as requested_by_name
 from agent_interactions ai
 join conversations c on c.id = ai.conversation_id
 left join agent_runs r on r.id = ai.agent_run_id
 left join agents a on a.id = r.agent_id
+left join users requester on requester.id = r.requested_by_id
+  and r.requested_by_type = 'user' and requester.deleted_at is null
+  and exists (
+    select 1 from workspace_members wm
+    join workspaces w on w.id = wm.workspace_id and w.deleted_at is null
+    where wm.workspace_id = ai.workspace_id and wm.user_id = requester.id
+      and wm.status = 'active' and wm.deleted_at is null
+  )
 where ai.id = $1::uuid
 `
 
@@ -4329,6 +4340,9 @@ type GetAgentInteractionRow struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	AgentName         string             `json:"agent_name"`
 	ConversationTitle string             `json:"conversation_title"`
+	RequestedByType   string             `json:"requested_by_type"`
+	RequestedByID     string             `json:"requested_by_id"`
+	RequestedByName   string             `json:"requested_by_name"`
 }
 
 func (q *Queries) GetAgentInteraction(ctx context.Context, interactionID pgtype.UUID) (GetAgentInteractionRow, error) {
@@ -4354,6 +4368,9 @@ func (q *Queries) GetAgentInteraction(ctx context.Context, interactionID pgtype.
 		&i.UpdatedAt,
 		&i.AgentName,
 		&i.ConversationTitle,
+		&i.RequestedByType,
+		&i.RequestedByID,
+		&i.RequestedByName,
 	)
 	return i, err
 }
@@ -4378,11 +4395,22 @@ select
   ai.resolved_at,
   ai.updated_at,
   coalesce(a.name, '')::text as agent_name,
-  coalesce(c.title, '')::text as conversation_title
+  coalesce(c.title, '')::text as conversation_title,
+  coalesce(r.requested_by_type, '')::text as requested_by_type,
+  coalesce(r.requested_by_id::text, '')::text as requested_by_id,
+  coalesce(nullif(btrim(requester.name), ''), requester.email, '')::text as requested_by_name
 from agent_interactions ai
 join conversations c on c.id = ai.conversation_id
 left join agent_runs r on r.id = ai.agent_run_id
 left join agents a on a.id = r.agent_id
+left join users requester on requester.id = r.requested_by_id
+  and r.requested_by_type = 'user' and requester.deleted_at is null
+  and exists (
+    select 1 from workspace_members wm
+    join workspaces w on w.id = wm.workspace_id and w.deleted_at is null
+    where wm.workspace_id = ai.workspace_id and wm.user_id = requester.id
+      and wm.status = 'active' and wm.deleted_at is null
+  )
 where ai.kind = $1
   and ai.request_id = $2
   and ai.agent_run_id = $3::uuid
@@ -4416,6 +4444,9 @@ type GetAgentInteractionByRequestIDRow struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	AgentName         string             `json:"agent_name"`
 	ConversationTitle string             `json:"conversation_title"`
+	RequestedByType   string             `json:"requested_by_type"`
+	RequestedByID     string             `json:"requested_by_id"`
+	RequestedByName   string             `json:"requested_by_name"`
 }
 
 func (q *Queries) GetAgentInteractionByRequestID(ctx context.Context, arg GetAgentInteractionByRequestIDParams) (GetAgentInteractionByRequestIDRow, error) {
@@ -4441,6 +4472,9 @@ func (q *Queries) GetAgentInteractionByRequestID(ctx context.Context, arg GetAge
 		&i.UpdatedAt,
 		&i.AgentName,
 		&i.ConversationTitle,
+		&i.RequestedByType,
+		&i.RequestedByID,
+		&i.RequestedByName,
 	)
 	return i, err
 }
@@ -9518,11 +9552,22 @@ select
   ai.resolved_at,
   ai.updated_at,
   coalesce(a.name, '')::text as agent_name,
-  coalesce(c.title, '')::text as conversation_title
+  coalesce(c.title, '')::text as conversation_title,
+  coalesce(r.requested_by_type, '')::text as requested_by_type,
+  coalesce(r.requested_by_id::text, '')::text as requested_by_id,
+  coalesce(nullif(btrim(requester.name), ''), requester.email, '')::text as requested_by_name
 from agent_interactions ai
 join conversations c on c.id = ai.conversation_id
 left join agent_runs r on r.id = ai.agent_run_id
 left join agents a on a.id = r.agent_id
+left join users requester on requester.id = r.requested_by_id
+  and r.requested_by_type = 'user' and requester.deleted_at is null
+  and exists (
+    select 1 from workspace_members wm
+    join workspaces w on w.id = wm.workspace_id and w.deleted_at is null
+    where wm.workspace_id = ai.workspace_id and wm.user_id = requester.id
+      and wm.status = 'active' and wm.deleted_at is null
+  )
 where ai.workspace_id = $1::uuid
   and (
     $2::text = ''
@@ -9560,6 +9605,9 @@ type ListWorkspaceAgentInteractionsRow struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	AgentName         string             `json:"agent_name"`
 	ConversationTitle string             `json:"conversation_title"`
+	RequestedByType   string             `json:"requested_by_type"`
+	RequestedByID     string             `json:"requested_by_id"`
+	RequestedByName   string             `json:"requested_by_name"`
 }
 
 func (q *Queries) ListWorkspaceAgentInteractions(ctx context.Context, arg ListWorkspaceAgentInteractionsParams) ([]ListWorkspaceAgentInteractionsRow, error) {
@@ -9591,6 +9639,9 @@ func (q *Queries) ListWorkspaceAgentInteractions(ctx context.Context, arg ListWo
 			&i.UpdatedAt,
 			&i.AgentName,
 			&i.ConversationTitle,
+			&i.RequestedByType,
+			&i.RequestedByID,
+			&i.RequestedByName,
 		); err != nil {
 			return nil, err
 		}

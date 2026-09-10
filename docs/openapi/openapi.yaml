@@ -1590,6 +1590,12 @@ definitions:
         type: object
       request_id:
         type: string
+      requested_by_id:
+        type: string
+      requested_by_name:
+        type: string
+      requested_by_type:
+        type: string
       resolution_source:
         type: string
       resolved_actor:
@@ -7327,8 +7333,9 @@ paths:
       - workspaces
   /api/v1/workspaces/{workspaceID}/interactions:
     get:
-      description: Returns durable permission and AskUserQuestion requests. status
-        accepts pending, decided, or expired.
+      description: Returns durable permission and AskUserQuestion requests with recorded
+        requester identity and current workspace member names. status accepts pending,
+        decided, or expired.
       operationId: listAgentInteractions
       parameters:
       - description: Workspace UUID

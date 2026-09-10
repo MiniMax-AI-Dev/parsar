@@ -38,7 +38,7 @@ type resolveAgentInteractionResponse struct {
 // listAgentInteractions returns durable human requests for the workspace.
 //
 //	@Summary		List workspace approval and user-question requests
-//	@Description	Returns durable permission and AskUserQuestion requests. status accepts pending, decided, or expired.
+//	@Description	Returns durable permission and AskUserQuestion requests with recorded requester identity and current workspace member names. status accepts pending, decided, or expired.
 //	@Tags			interactions
 //	@ID				listAgentInteractions
 //	@Produce		json

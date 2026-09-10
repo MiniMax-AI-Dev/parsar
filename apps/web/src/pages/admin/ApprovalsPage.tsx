@@ -1,8 +1,10 @@
-import { useMemo, useState, type KeyboardEvent } from "react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import type { TFunction } from "i18next"
 import { AlertTriangle, ArrowUpRight, Inbox, Loader2 } from "lucide-react"
 
+import { InteractionList } from "../../components/admin/InteractionList"
+import { InteractionRequestDetails } from "../../components/admin/InteractionRequestDetails"
+import { interactionTitle, interactionRequester, INTERACTION_STATUS_ICONS } from "../../lib/interaction-presentation"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
@@ -13,27 +15,20 @@ import { ErrorState } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
 import {
   InitialTile,
-  Ledger,
-  LedgerGroup,
-  LedgerHeader,
   LedgerId,
-  LedgerRow,
-  col,
 } from "../../components/ui/ledger"
 import { Property, PropertyList } from "../../components/ui/property-list"
 import { Skeleton } from "../../components/ui/skeleton"
-import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
-import { VerbatimBlock } from "../../components/ui/verbatim"
+import { StatusIcon } from "../../components/ui/status-icon"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useAgentInteractions, useResolveAgentInteraction } from "../../lib/api-interactions"
 import type {
   AgentInteraction,
   AgentInteractionQuestion,
-  AgentInteractionStatus,
   ResolveAgentInteractionRequest,
 } from "../../lib/api-types"
-import { firstInteractionQuestion, interactionQuestions } from "../../lib/interaction-questions"
+import { interactionQuestions } from "../../lib/interaction-questions"
 import { useRelativeTime, useTimeUntil } from "../../lib/relative-time"
 import { useWorkspaceId } from "../../lib/workspace"
 
@@ -41,35 +36,11 @@ import { useWorkspaceId } from "../../lib/workspace"
 /*  List page: the approvals ledger + decision rail                    */
 /* ------------------------------------------------------------------ */
 
-const GROUP_ORDER: AgentInteractionStatus[] = [
-  "pending",
-  "resolving",
-  "approved",
-  "answered",
-  "denied",
-  "cancelled",
-  "expired",
-]
-
-const STATUS_ICON: Record<AgentInteractionStatus, StatusKind> = {
-  pending: "queued",
-  resolving: "running",
-  approved: "completed",
-  answered: "completed",
-  denied: "failed",
-  cancelled: "cancelled",
-  expired: "interrupted",
-}
-
-/** status icon · request (+ kind) · agent · run id · age */
-const LEDGER_COLUMNS = [col.icon(), col.title(), col.text(160, 1), col.id(132), col.age(80)]
-
 export function ApprovalsPage() {
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   const { entityId, navigate } = useAdminView()
   const workspaceID = useWorkspaceId()
-  const fmtAgo = useRelativeTime()
 
   // The API serves three status buckets; the ledger shows them as one
   // list grouped by the concrete state so a decision never changes tabs.
@@ -84,15 +55,6 @@ export function ApprovalsPage() {
       ...(expiredQ.data?.interactions ?? []),
     ],
     [pendingQ.data, decidedQ.data, expiredQ.data],
-  )
-
-  const groups = useMemo(
-    () =>
-      GROUP_ORDER.map((status) => ({
-        status,
-        rows: rows.filter((r) => r.status === status),
-      })).filter((g) => g.rows.length > 0),
-    [rows],
   )
 
   const error = pendingQ.error ?? decidedQ.error ?? expiredQ.error
@@ -146,31 +108,7 @@ export function ApprovalsPage() {
           ) : rows.length === 0 ? (
             <EmptyState icon={Inbox} title={t("approvals.empty.title")} description={t("approvals.empty.description")} />
           ) : (
-            <Ledger columns={LEDGER_COLUMNS} role="listbox" aria-label={pageTitle}>
-              <LedgerHeader>
-                <span />
-                <span>{t("approvals.table.request")}</span>
-                <span>{t("approvals.detail.agent")}</span>
-                <span>{t("runs.table.run")}</span>
-                <span className="text-right">{t("runs.table.age")}</span>
-              </LedgerHeader>
-              {groups.map((g) => (
-                <LedgerGroup key={g.status} label={t(`approvals.status.${g.status}`)} count={g.rows.length}>
-                  {g.rows.map((row) => (
-                    <InteractionRow
-                      key={row.id}
-                      row={row}
-                      selected={row.id === selected?.id}
-                      statusLabel={t(`approvals.status.${row.status}`)}
-                      kindLabel={t(`approvals.kind.${row.kind === "permission" ? "permission" : "userChoice"}`)}
-                      title={interactionTitle(row, t)}
-                      age={fmtAgo(row.created_at)}
-                      onSelect={() => select(row.id)}
-                    />
-                  ))}
-                </LedgerGroup>
-              ))}
-            </Ledger>
+            <InteractionList rows={rows} selectedID={selected?.id} label={pageTitle} onSelect={select} />
           )}
         </div>
 
@@ -185,54 +123,6 @@ export function ApprovalsPage() {
         )}
       </div>
     </AdminLayout>
-  )
-}
-
-function interactionTitle(row: AgentInteraction, t: TFunction<"admin">): string {
-  if (row.kind === "permission") {
-    return String(row.request.resource || row.request.action || t("approvals.kind.permission"))
-  }
-  return firstInteractionQuestion(row)?.question || t("approvals.kind.userChoice")
-}
-
-function InteractionRow({
-  row,
-  selected,
-  statusLabel,
-  kindLabel,
-  title,
-  age,
-  onSelect,
-}: {
-  row: AgentInteraction
-  selected: boolean
-  statusLabel: string
-  kindLabel: string
-  title: string
-  age: string
-  onSelect: () => void
-}) {
-  const agent = row.agent_name || "—"
-  const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault()
-      onSelect()
-    }
-  }
-  return (
-    <LedgerRow selected={selected} onClick={onSelect} onKeyDown={onKeyDown}>
-      <StatusIcon status={STATUS_ICON[row.status]} title={statusLabel} />
-      <span className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate font-medium" title={title}>{title}</span>
-        <span className="shrink-0 text-xs text-fg-muted">· {kindLabel}</span>
-      </span>
-      <span className="flex min-w-0 items-center gap-1.5">
-        <InitialTile name={agent} />
-        <span className="truncate">{agent}</span>
-      </span>
-      <LedgerId>{shortId(row.agent_run_id, 16)}</LedgerId>
-      <span className="truncate text-right text-xs text-fg-muted">{age}</span>
-    </LedgerRow>
   )
 }
 
@@ -330,7 +220,7 @@ function InteractionRail({
       closeLabel={t("runs.detail.close")}
       header={
         <>
-          <StatusIcon status={STATUS_ICON[interaction.status]} />
+          <StatusIcon status={INTERACTION_STATUS_ICONS[interaction.status]} />
           <span className="shrink-0 text-base font-medium text-fg">{t(`approvals.status.${interaction.status}`)}</span>
           <LedgerId className="min-w-0 flex-1">{interaction.request_id || interaction.id}</LedgerId>
         </>
@@ -389,6 +279,7 @@ function InteractionRail({
       )}
 
       <PropertyList className="mt-3">
+        <Property label={t("approvals.detail.requester")} className="h-auto min-h-7 items-start whitespace-normal py-1"><span className="break-words" title={`${interaction.requested_by_type || ""} ${interaction.requested_by_id || ""}`}>{interactionRequester(interaction, t)}</span></Property>
         <Property label={t("approvals.detail.conversation")} mono>
           <button
             type="button"
@@ -409,11 +300,7 @@ function InteractionRail({
       </PropertyList>
 
       {isPermission ? (
-        <RailSection title={t("approvals.detail.payload")}>
-          <VerbatimBlock className="mt-1.5 max-h-60">
-            {JSON.stringify(interaction.request.payload ?? {}, null, 2)}
-          </VerbatimBlock>
-        </RailSection>
+        <div className="mt-4"><InteractionRequestDetails interaction={interaction} /></div>
       ) : (
         questions.map((question, index) => {
           const key = questionKey(question, index)
@@ -484,9 +371,4 @@ function questionKey(question: AgentInteractionQuestion, index: number) {
 function toggleAnswer(current: string[], value: string, multi: boolean) {
   if (!multi) return [value]
   return current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
-}
-
-function shortId(s?: string, n = 8): string {
-  if (!s) return "—"
-  return s.length <= n ? s : s.slice(0, n) + "…"
 }

@@ -2990,11 +2990,22 @@ select
   ai.resolved_at,
   ai.updated_at,
   coalesce(a.name, '')::text as agent_name,
-  coalesce(c.title, '')::text as conversation_title
+  coalesce(c.title, '')::text as conversation_title,
+  coalesce(r.requested_by_type, '')::text as requested_by_type,
+  coalesce(r.requested_by_id::text, '')::text as requested_by_id,
+  coalesce(nullif(btrim(requester.name), ''), requester.email, '')::text as requested_by_name
 from agent_interactions ai
 join conversations c on c.id = ai.conversation_id
 left join agent_runs r on r.id = ai.agent_run_id
 left join agents a on a.id = r.agent_id
+left join users requester on requester.id = r.requested_by_id
+  and r.requested_by_type = 'user' and requester.deleted_at is null
+  and exists (
+    select 1 from workspace_members wm
+    join workspaces w on w.id = wm.workspace_id and w.deleted_at is null
+    where wm.workspace_id = ai.workspace_id and wm.user_id = requester.id
+      and wm.status = 'active' and wm.deleted_at is null
+  )
 where ai.workspace_id = @workspace_id::uuid
   and (
     @status_group::text = ''
@@ -3025,11 +3036,22 @@ select
   ai.resolved_at,
   ai.updated_at,
   coalesce(a.name, '')::text as agent_name,
-  coalesce(c.title, '')::text as conversation_title
+  coalesce(c.title, '')::text as conversation_title,
+  coalesce(r.requested_by_type, '')::text as requested_by_type,
+  coalesce(r.requested_by_id::text, '')::text as requested_by_id,
+  coalesce(nullif(btrim(requester.name), ''), requester.email, '')::text as requested_by_name
 from agent_interactions ai
 join conversations c on c.id = ai.conversation_id
 left join agent_runs r on r.id = ai.agent_run_id
 left join agents a on a.id = r.agent_id
+left join users requester on requester.id = r.requested_by_id
+  and r.requested_by_type = 'user' and requester.deleted_at is null
+  and exists (
+    select 1 from workspace_members wm
+    join workspaces w on w.id = wm.workspace_id and w.deleted_at is null
+    where wm.workspace_id = ai.workspace_id and wm.user_id = requester.id
+      and wm.status = 'active' and wm.deleted_at is null
+  )
 where ai.id = @interaction_id::uuid;
 
 -- name: GetAgentInteractionByRequestID :one
@@ -3052,11 +3074,22 @@ select
   ai.resolved_at,
   ai.updated_at,
   coalesce(a.name, '')::text as agent_name,
-  coalesce(c.title, '')::text as conversation_title
+  coalesce(c.title, '')::text as conversation_title,
+  coalesce(r.requested_by_type, '')::text as requested_by_type,
+  coalesce(r.requested_by_id::text, '')::text as requested_by_id,
+  coalesce(nullif(btrim(requester.name), ''), requester.email, '')::text as requested_by_name
 from agent_interactions ai
 join conversations c on c.id = ai.conversation_id
 left join agent_runs r on r.id = ai.agent_run_id
 left join agents a on a.id = r.agent_id
+left join users requester on requester.id = r.requested_by_id
+  and r.requested_by_type = 'user' and requester.deleted_at is null
+  and exists (
+    select 1 from workspace_members wm
+    join workspaces w on w.id = wm.workspace_id and w.deleted_at is null
+    where wm.workspace_id = ai.workspace_id and wm.user_id = requester.id
+      and wm.status = 'active' and wm.deleted_at is null
+  )
 where ai.kind = @kind
   and ai.request_id = @request_id
   and ai.agent_run_id = @agent_run_id::uuid

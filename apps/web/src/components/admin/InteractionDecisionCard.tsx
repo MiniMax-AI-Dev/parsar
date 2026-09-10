@@ -10,14 +10,15 @@ import type {
   AgentInteractionQuestion,
   ResolveAgentInteractionRequest,
 } from "../../lib/api-types"
-import { firstInteractionQuestion, interactionQuestions } from "../../lib/interaction-questions"
+import { interactionQuestions } from "../../lib/interaction-questions"
 import { useRelativeTime, useTimeUntil } from "../../lib/relative-time"
 import { cn } from "../../lib/utils"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Property, PropertyList } from "../ui/property-list"
-import { VerbatimBlock } from "../ui/verbatim"
+import { InteractionRequestDetails } from "./InteractionRequestDetails"
+import { interactionTitle, interactionRequester } from "../../lib/interaction-presentation"
 
 /**
  * One approval / user-input request, flat: a status badge and title, the
@@ -73,10 +74,7 @@ export function InteractionDecisionCard({
   }
 
   const kindLabel = t(`approvals.kind.${interaction.kind === "permission" ? "permission" : "userChoice"}`)
-  const title =
-    interaction.kind === "permission"
-      ? String(interaction.request.resource || interaction.request.action || t("approvals.kind.permission"))
-      : firstInteractionQuestion(interaction)?.question
+  const title = interactionTitle(interaction, t)
 
   return (
     <article
@@ -101,6 +99,7 @@ export function InteractionDecisionCard({
       </div>
 
       <PropertyList>
+        <Property label={t("approvals.detail.requester")} className="h-auto min-h-7 items-start whitespace-normal py-1"><span className="break-words" title={`${interaction.requested_by_type || ""} ${interaction.requested_by_id || ""}`}>{interactionRequester(interaction, t)}</span></Property>
         <Property label={t("approvals.detail.agent")}>{interaction.agent_name || "—"}</Property>
         <Property label={t("approvals.detail.conversation")}>
           <span className="truncate" title={interaction.conversation_title || interaction.conversation_id}>
@@ -112,9 +111,7 @@ export function InteractionDecisionCard({
       </PropertyList>
 
       {interaction.kind === "permission" ? (
-        <VerbatimBlock className="max-h-52">
-          {JSON.stringify(interaction.request.payload ?? {}, null, 2)}
-        </VerbatimBlock>
+        <InteractionRequestDetails interaction={interaction} />
       ) : (
         <div className="space-y-4">
           {questions.map((question, index) => {

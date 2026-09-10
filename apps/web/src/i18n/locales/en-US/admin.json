@@ -226,14 +226,20 @@
     "detail": {
       "agent": "Agent",
       "conversation": "Conversation",
-      "payload": "Payload preview",
+      "payload": "Arguments",
       "createdAt": "Created",
       "expiresIn": "Expires in",
       "alreadyDecided": "This approval has been handled — actions are no longer available.",
       "readOnly": "Read-only access. Workspace owners, admins, and members can respond.",
       "openRun": "Open Run Detail",
       "openConversation": "Open Conversation",
-      "decidedBy": "Decided by"
+      "decidedBy": "Decided by",
+      "requester": "Requested by",
+      "requesterUnknown": "Unknown requester",
+      "operation": "Operation",
+      "noParameters": "The runtime did not report any arguments.",
+      "onceScope": "Allow once applies only to this request.",
+      "viewRequest": "View request details"
     },
     "empty": {
       "title": "No approvals",
