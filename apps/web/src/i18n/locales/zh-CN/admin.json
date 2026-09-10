@@ -662,7 +662,7 @@
     },
     "emptyFiltered": {
       "title": "没有匹配的能力",
-      "description": "调整搜索词或切到「全部」tab 看完整列表。",
+      "description": "调整搜索词，或清除筛选以查看可用能力。",
       "reset": "清除筛选"
     },
     "rowActions": {
