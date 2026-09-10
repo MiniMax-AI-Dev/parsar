@@ -379,16 +379,16 @@ function ChatStream({
   // Wall clock of the moment the composer handed us a run id: the trace's
   // clock until the timeline carries the run's own started_at.
   const [liveStartedAt, setLiveStartedAt] = useState<number | null>(null)
-  const startRun = useCallback((runId: string) => {
-    setChatToast(null)
-    setLiveStartedAt(Date.now())
-    setActiveRunId(runId)
-  }, [])
   // Surface fire-and-forget /start failures (e.g. daemon offline,
   // network error). Server now auto-starts agent_daemon runs, so a
   // /start that returns 200 `already running` is fine; only true
   // network/5xx errors land here.
   const [chatToast, setChatToast] = useState<{ text: string; detail?: string; runID?: string } | null>(null)
+  const startRun = useCallback((runId: string) => {
+    setChatToast(null)
+    setLiveStartedAt(Date.now())
+    setActiveRunId(runId)
+  }, [])
   const stream = useAgentRunStream(conversationId, activeRunId, { enabled: !!activeRunId })
   const hasActiveStream = !!activeRunId && stream.status !== "error" && stream.status !== "done"
   // Our sentence and the server's string, kept apart. They used to be one
