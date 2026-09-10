@@ -2,6 +2,7 @@
 import * as React from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "../../lib/utils"
+import { useLedgerScrollAnchor } from "../../lib/use-ledger-scroll-anchor"
 import { StatusIcon, type StatusKind } from "./status-icon"
 
 /**
@@ -122,6 +123,7 @@ export function Ledger({
   children,
   ...props
 }: { columns: string | LedgerColumn[] } & React.HTMLAttributes<HTMLDivElement>) {
+  const viewportRef = useLedgerScrollAnchor()
   const value = React.useMemo(
     () => ({
       template: typeof columns === "string" ? adaptLegacyTemplate(columns) : ledgerTemplate(columns),
@@ -132,7 +134,7 @@ export function Ledger({
   )
   return (
     <LedgerContext.Provider value={value}>
-      <div className={cn("min-h-0 flex-1 overflow-y-auto", className)} {...props}>
+      <div ref={viewportRef} className={cn("min-h-0 flex-1 overflow-y-auto", className)} {...props}>
         {children}
       </div>
     </LedgerContext.Provider>
