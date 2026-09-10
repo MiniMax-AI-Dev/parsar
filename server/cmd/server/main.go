@@ -383,6 +383,7 @@ func main() {
 		interactionService = interaction.NewService(dbStore, interaction.RegistryDelivery{Runs: dbStore, Registry: connectorReg}, log.Bg())
 		opts = append(opts, dev.WithInteractionService(interactionService))
 	}
+	skillUploadSigner := auth.NewSkillUploadSigner(cfg.Secret.MasterKey)
 	// Shared signer for the auto-mounted fetch_chat_history tool. Hoisted to
 	// function scope so both the agent_daemon connector (mints per-conversation
 	// tokens) and the internal history endpoint (verifies them) share one
@@ -456,6 +457,12 @@ func main() {
 			// sandbox calls back into, plus the per-conversation token signer.
 			// Nil signer (empty master key) disables the injection.
 			IMHistoryEndpoint: cfg.BuildPublicURL("/internal/im/history"),
+			SkillUploadTokenSigner: func() func(string) (string, error) {
+				if skillUploadSigner == nil {
+					return nil
+				}
+				return skillUploadSigner.Token
+			}(),
 			IMHistoryTokenSigner: func() func(string) string {
 				if imHistorySigner == nil {
 					return nil
@@ -710,6 +717,9 @@ func main() {
 		log.Bg().Info("invite-link system enabled")
 	}
 	dev.RegisterRoutesWithStore(r, runtimeStore, opts...)
+	if dbStore != nil {
+		dev.RegisterSkillUploadRoute(r, dbStore, skillUploadSigner)
+	}
 
 	// imHistoryResolver is bound to the outbound worker once it is built
 	// (later in boot than routes are registered); until then the internal

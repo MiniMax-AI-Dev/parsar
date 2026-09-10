@@ -82,7 +82,7 @@ func printRootHelp(w io.Writer) {
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Run `parsar <subcommand> --help` for subcommand-specific flags.")
-	fmt.Fprintln(w, "Environment: PARSAR_SERVER_URL and PARSAR_RUNNER_TOKEN are required.")
+	fmt.Fprintln(w, "Environment: PARSAR_SERVER_URL and PARSAR_RUNNER_TOKEN are required; plugin add also accepts PARSAR_CAPABILITY_UPLOAD_TOKEN.")
 }
 
 // newFlagSet returns a FlagSet that suppresses its own stderr output;

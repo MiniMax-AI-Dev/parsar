@@ -101,6 +101,14 @@ func runPluginAdd(ctx *runContext, args []string) error {
 		return fmt.Errorf("plugin add: manifest.version is required")
 	}
 
+	cfg, err := ctx.resolveConfig()
+	if err != nil {
+		return fmt.Errorf("plugin add: %w", err)
+	}
+	if cfg.CapabilityUploadToken != "" && (manifest.Server != nil || manifest.Client != nil || len(manifest.Tools)+len(manifest.Hooks)+len(manifest.Credentials) > 0) {
+		return fmt.Errorf("plugin add: this run can upload inline Skills only; server/client code, tools, hooks and credentials are not supported")
+	}
+
 	// Read skill files and embed content
 	skills, err := readPluginSkills(pluginDir, manifest.Skills)
 	if err != nil {
@@ -150,11 +158,11 @@ func runPluginAdd(ctx *runContext, args []string) error {
 
 	// Build the API request
 	reqBody := map[string]any{
-		"type":        "bundle",
-		"name":        manifest.Name,
-		"description": manifest.Description,
-		"visibility":  "workspace",
-		"version":     manifest.Version,
+		"type":           "bundle",
+		"name":           manifest.Name,
+		"description":    manifest.Description,
+		"visibility":     "workspace",
+		"version":        manifest.Version,
 		"canonical_spec": canonicalSpec,
 	}
 
@@ -176,15 +184,15 @@ func runPluginAdd(ctx *runContext, args []string) error {
 		}
 	}
 
-	cfg, err := ctx.resolveConfig()
-	if err != nil {
-		return fmt.Errorf("plugin add: %w", err)
-	}
-	if strings.TrimSpace(cfg.WorkspaceID) == "" {
-		return fmt.Errorf("plugin add: PARSAR_WORKSPACE_ID is required")
+	endpoint := "/api/v1/agent-authoring/skill-bundles"
+	if cfg.CapabilityUploadToken == "" {
+		if strings.TrimSpace(cfg.WorkspaceID) == "" {
+			return fmt.Errorf("plugin add: PARSAR_WORKSPACE_ID is required")
+		}
+		endpoint = "/api/v1/workspaces/" + cfg.WorkspaceID + "/capabilities/plugins/install"
 	}
 	var result map[string]any
-	if err := newClient(cfg).do(context.Background(), "POST", "/api/v1/workspaces/"+cfg.WorkspaceID+"/capabilities/plugins/install", nil, reqBody, &result); err != nil {
+	if err := newClient(cfg).do(context.Background(), "POST", endpoint, nil, reqBody, &result); err != nil {
 		return fmt.Errorf("plugin add: %w", err)
 	}
 

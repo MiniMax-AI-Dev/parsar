@@ -93,6 +93,13 @@ func (e *apiError) Error() string {
 // do dispatches a JSON request and unmarshals the response. body and
 // out are both optional.
 func (c *client) do(ctx context.Context, method, path string, query url.Values, body, out any) error {
+	token := c.cfg.RunnerToken
+	if method == http.MethodPost && path == "/api/v1/agent-authoring/skill-bundles" {
+		token = c.cfg.CapabilityUploadToken
+	}
+	if token == "" {
+		return fmt.Errorf("this command requires PARSAR_RUNNER_TOKEN; a Skill upload credential only permits plugin add")
+	}
 	endpoint, err := c.endpointURL(path, query)
 	if err != nil {
 		return err
@@ -109,7 +116,7 @@ func (c *client) do(ctx context.Context, method, path string, query url.Values, 
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.cfg.RunnerToken)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")

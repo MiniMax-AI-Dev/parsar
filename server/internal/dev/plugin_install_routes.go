@@ -47,70 +47,86 @@ func installPlugin(runtimeStore RuntimeStore) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		var body installPluginBody
-		if err := decodeBody(r, &body); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
-			return
-		}
-		if strings.TrimSpace(body.Name) == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
-			return
-		}
-		if strings.TrimSpace(body.Version) == "" {
-			body.Version = "1.0.0"
-		}
-
-		// Decode and validate the canonical_spec.
-		if len(body.CanonicalSpec) == 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "canonical_spec is required"})
-			return
-		}
-		var spec canonical.Spec
-		if err := json.Unmarshal(body.CanonicalSpec, &spec); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("canonical_spec decode: %s", err)})
-			return
-		}
-		if spec.Kind != canonical.KindBundle {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("canonical_spec.kind must be \"bundle\", got %q", spec.Kind)})
-			return
-		}
-		if err := spec.Validate(); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("canonical_spec validation: %s", err)})
-			return
-		}
-
-		visibility := strings.TrimSpace(body.Visibility)
-		if visibility == "" {
-			visibility = "workspace"
-		}
-
-		sourcePayload := json.RawMessage(`{}`)
-
-		result, err := runtimeStore.ImportCapability(r.Context(), store.ImportCapabilityInput{
-			WorkspaceID:   workspaceID,
-			Name:          strings.TrimSpace(body.Name),
-			Description:   strings.TrimSpace(body.Description),
-			Visibility:    visibility,
-			Type:          "bundle",
-			CreatorID:     actorID,
-			Version:       strings.TrimSpace(body.Version),
-			SourcePayload: sourcePayload,
-			Spec:          spec,
-		})
-		if err != nil {
-			if errors.Is(err, store.ErrCapabilityNameTaken) {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "a plugin with this name already exists in the workspace"})
-				return
-			}
-			writeCapabilityError(w, err, "failed to install plugin")
-			return
-		}
-		writeJSON(w, http.StatusCreated, map[string]any{
-			"id":                  result.Capability.ID,
-			"name":                result.Capability.Name,
-			"type":                result.Capability.Type,
-			"capability_version":  result.CapabilityVersion.ID,
-			"version":             result.CapabilityVersion.Version,
-		})
+		installPluginForActor(w, r, runtimeStore, workspaceID, actorID, false)
 	}
+}
+
+func installPluginForActor(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore, workspaceID, actorID string, skillsOnly bool) {
+	var body installPluginBody
+	if err := decodeBody(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	if strings.TrimSpace(body.Name) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+		return
+	}
+	if strings.TrimSpace(body.Version) == "" {
+		body.Version = "1.0.0"
+	}
+
+	// Decode and validate the canonical_spec.
+	if len(body.CanonicalSpec) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "canonical_spec is required"})
+		return
+	}
+	var spec canonical.Spec
+	if err := json.Unmarshal(body.CanonicalSpec, &spec); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("canonical_spec decode: %s", err)})
+		return
+	}
+	if spec.Kind != canonical.KindBundle {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("canonical_spec.kind must be \"bundle\", got %q", spec.Kind)})
+		return
+	}
+	if err := spec.Validate(); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("canonical_spec validation: %s", err)})
+		return
+	}
+
+	if skillsOnly {
+		b := spec.Bundle
+		if len(b.Skills) == 0 || b.ServerEntry != "" || b.ClientEntry != "" || len(b.Tools)+len(b.Hooks)+len(b.Credentials) > 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "this upload accepts inline Skills only; server/client code, tools, hooks and credentials are not supported"})
+			return
+		}
+		if body.Visibility != "" && body.Visibility != "workspace" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Skill uploads must remain workspace-only"})
+			return
+		}
+	}
+
+	visibility := strings.TrimSpace(body.Visibility)
+	if visibility == "" {
+		visibility = "workspace"
+	}
+
+	sourcePayload := json.RawMessage(`{}`)
+
+	result, err := runtimeStore.ImportCapability(r.Context(), store.ImportCapabilityInput{
+		WorkspaceID:   workspaceID,
+		Name:          strings.TrimSpace(body.Name),
+		Description:   strings.TrimSpace(body.Description),
+		Visibility:    visibility,
+		Type:          "bundle",
+		CreatorID:     actorID,
+		Version:       strings.TrimSpace(body.Version),
+		SourcePayload: sourcePayload,
+		Spec:          spec,
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrCapabilityNameTaken) {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "a plugin with this name already exists in the workspace"})
+			return
+		}
+		writeCapabilityError(w, err, "failed to install plugin")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"id":                 result.Capability.ID,
+		"name":               result.Capability.Name,
+		"type":               result.Capability.Type,
+		"capability_version": result.CapabilityVersion.ID,
+		"version":            result.CapabilityVersion.Version,
+	})
 }
