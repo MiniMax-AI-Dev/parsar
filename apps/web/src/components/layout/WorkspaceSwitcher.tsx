@@ -108,7 +108,7 @@ export function WorkspaceSwitcher() {
     <>
       <DropdownMenu.Root
         onOpenChange={(open) => {
-          if (open) void workspacesQuery.refetch()
+          if (open) void workspacesQuery.refetch({ cancelRefetch: false })
         }}
       >
         <DropdownMenu.Trigger asChild>
