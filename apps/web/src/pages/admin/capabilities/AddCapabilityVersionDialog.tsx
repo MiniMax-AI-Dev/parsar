@@ -10,7 +10,7 @@
  *     only stores ciphertext).
  *   - Plugin / skill-zip kinds: if the user doesn't upload a new zip, the
  *     server reuses the previous version's OSS bytes (commit handler treats
- *     missing oss_key as "reuse latest"). UI shows the existing filename.
+ *     missing oss_key as "reuse latest"). UI explains package reuse.
  *   - Commits to .../capabilities/{id}/versions/import/commit (after an
  *     optional PATCH for name/description).
  */
@@ -92,9 +92,8 @@ export function AddCapabilityVersionDialog({
   const [skillOssKey, setSkillOssKey] = useState<string | null>(null)
 
   const prefill = usePrefillFromLatest(latestVersion)
-  // For plugin / skill-zip rounds where the user keeps the previous OSS blob,
-  // we display the existing filename (derived from the latest version's oss_key)
-  // so the form feels like "edit", not "blank slate".
+  // Keep the existing reference check for package reuse. Storage keys are not
+  // user-facing filenames.
   const inheritedOssLabel = useMemo(() => {
     const key = latestVersion?.oss_key?.trim()
     if (!key) return null
@@ -263,9 +262,8 @@ export function AddCapabilityVersionDialog({
         {inheritedOssLabel && (kind === "plugin" || kind === "skill") && (
           <InlineNotice>
             {t("capabilities.versions.add.reuseExistingZip", {
-              filename: inheritedOssLabel,
               defaultValue:
-                "Current version package: {{filename}}. If you do not re-upload, the new version will reuse this package.",
+                "You can reuse the current file package or replace its contents below.",
             })}
           </InlineNotice>
         )}

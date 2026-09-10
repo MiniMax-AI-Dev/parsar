@@ -740,7 +740,7 @@
         "description": "保存后会自动生成下一个版本。请在各 Agent 的配置页查看实际使用的版本。",
         "prefillFromLatest": "已用上一版（{{version}}）的内容预填。修改后会作为新版本提交。",
         "inlineSecretLostWarning": "上一版的 inline secret（{{keys}}）已隐藏。如需保留，请重新输入明文；或改成已托管的凭据。",
-        "reuseExistingZip": "当前版本的文件包：{{filename}}。如果不重新上传，新版本将沿用这个文件包。"
+        "reuseExistingZip": "可沿用当前版本的文件包，也可以在下方替换内容。"
       },
       "viewContent": {
         "title": "查看 {{version}} 内容",

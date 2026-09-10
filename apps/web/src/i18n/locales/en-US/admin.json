@@ -740,7 +740,7 @@
         "description": "Saving assigns the next version automatically. Check each Agent’s Config tab for the version it will use.",
         "prefillFromLatest": "Prefilled from the previous version ({{version}}). Edits become the new version on submit.",
         "inlineSecretLostWarning": "Inline secret(s) from the previous version ({{keys}}) are hidden. Re-enter the plaintext to keep them, or switch to a managed credential.",
-        "reuseExistingZip": "Current version package: {{filename}}. If you do not re-upload, the new version will reuse this package."
+        "reuseExistingZip": "You can reuse the current file package or replace its contents below."
       },
       "viewContent": {
         "title": "View {{version}} content",
