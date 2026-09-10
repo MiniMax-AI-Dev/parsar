@@ -55,8 +55,13 @@ func InstallManagedSkills(ctx context.Context, logger *slog.Logger, root string,
 	if strings.TrimSpace(root) == "" {
 		return SkillInstallResult{}, errors.New("managed skills: root is required")
 	}
+	unlock, err := lockInstallRoot(ctx, root)
+	if err != nil {
+		return SkillInstallResult{}, err
+	}
+	defer unlock()
 	skills, decodeWarnings := decodeSkillDescriptors(raw)
-	result, err := installSkillsAtRoot(ctx, logger, root, skills, "managed skills")
+	result, err := installSkillsAtRootLocked(ctx, logger, root, skills, "managed skills")
 	result.Warnings = append(decodeWarnings, result.Warnings...)
 	if err != nil {
 		return result, err
@@ -68,6 +73,21 @@ func InstallManagedSkills(ctx context.Context, logger *slog.Logger, root string,
 }
 
 func installSkillsAtRoot(
+	ctx context.Context,
+	logger *slog.Logger,
+	root string,
+	skills []skillDescriptor,
+	logLabel string,
+) (SkillInstallResult, error) {
+	unlock, err := lockInstallRoot(ctx, root)
+	if err != nil {
+		return SkillInstallResult{}, err
+	}
+	defer unlock()
+	return installSkillsAtRootLocked(ctx, logger, root, skills, logLabel)
+}
+
+func installSkillsAtRootLocked(
 	ctx context.Context,
 	logger *slog.Logger,
 	root string,
