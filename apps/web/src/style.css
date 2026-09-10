@@ -340,6 +340,10 @@ samp,
     caret-color: var(--color-accent);
   }
 
+  body:has([data-shared-conversation]) {
+    min-width: 0;
+  }
+
   button,
   a,
   input,
