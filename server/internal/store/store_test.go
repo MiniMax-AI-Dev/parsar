@@ -2038,6 +2038,7 @@ func resetTestDB(t *testing.T, db *pgxpool.Pool) {
 	t.Helper()
 	if _, err := db.Exec(context.Background(), `
 		truncate table
+			connector_session_bindings,
 			runtimes,
 			sandboxes,
 			agent_run_events,
