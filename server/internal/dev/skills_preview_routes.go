@@ -72,7 +72,7 @@ func previewSkillFromRegistry(runtimeStore RuntimeStore, runner skillInstallComm
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 			return
 		}
-		zipBytes, err := zipSkillDirectory(skillDir)
+		zipBytes, err := zipSkillDirectory(ctx, skillDir)
 		if err != nil {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			return
