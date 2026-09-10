@@ -49,6 +49,7 @@ import { DetailSection, InlineError } from "./DetailSection"
 import type { ShowToast } from "../../../components/ui/toast"
 
 import { CapabilityVersionDialog } from "./CapabilityVersionDialog"
+import { CapabilityCredentialsDialog } from "./CapabilityCredentialsDialog"
 import { catalogIDFromVersion, requiredCredentialKinds, useCapabilityVersions } from "../../../lib/capability-config"
 
 type CapabilityCardItem = { capability?: Capability; binding?: AgentCapability }
@@ -271,6 +272,7 @@ function CapabilityCard({
   sharedSecrets,
   mode,
   onToast,
+  canEditCredentials = false,
 }: {
   item: CapabilityCardItem
   agent: Agent
@@ -279,6 +281,7 @@ function CapabilityCard({
   sharedSecrets: Secret[]
   mode: "enabled" | "available"
   onToast: ShowToast
+  canEditCredentials?: boolean
 }) {
   const { t, i18n } = useTranslation("admin")
   const capability = item.capability
@@ -446,6 +449,9 @@ function CapabilityCard({
           />
         ) : binding ? (
           <>
+            {canEditCredentials && binding.enabled && capability.required_credentials?.some((credential) => credential.required) && (
+              <CapabilityCredentialsDialog agent={agent} binding={binding} capability={capability} workspaceID={workspaceID} onToast={onToast} />
+            )}
             {(versions.length > 1 || (versions.length === 1 && binding.pinning_mode === "latest")) && !versionDeleted && !fromMarketplace && (
               <CapabilityVersionDialog
                 mode="switch"
@@ -676,6 +682,7 @@ function ConfigCapabilitiesSection({
                 credentials={credentials}
                 sharedSecrets={sharedSecrets}
                 mode="enabled"
+                canEditCredentials={isAdmin}
                 onToast={onToast}
               />
             )

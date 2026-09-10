@@ -1438,7 +1438,17 @@
           "blocked": "不可用",
           "deprecated": "已废弃"
         },
-        "pickerHint": "为此 Agent 选择 Skill、工具或参考资料。启用后在下次运行生效，执行时会检查运行环境是否可用。"
+        "pickerHint": "为此 Agent 选择 Skill、工具或参考资料。启用后在下次运行生效，执行时会检查运行环境是否可用。",
+        "credentials": {
+          "edit": "更换凭据",
+          "title": "{{name}} 的凭据",
+          "description": "选择此能力使用的凭据。",
+          "saved": "已更新 {{name}} 的凭据。",
+          "unavailable": "之前选择的凭据已不可用",
+          "required": "请选择可用凭据后再保存。",
+          "loadError": "无法加载凭据选项",
+          "saveError": "凭据修改未保存"
+        }
       },
       "sandbox": {
         "title": "长期 Sandbox",

@@ -1438,7 +1438,17 @@
           "blocked": "Not usable",
           "deprecated": "Deprecated"
         },
-        "pickerHint": "Choose a Skill, tool, or reference documents for this Agent. Enabling it takes effect on the next run; runtime availability is checked during execution."
+        "pickerHint": "Choose a Skill, tool, or reference documents for this Agent. Enabling it takes effect on the next run; runtime availability is checked during execution.",
+        "credentials": {
+          "edit": "Change credentials",
+          "title": "Credentials for {{name}}",
+          "description": "Choose which credentials this capability uses.",
+          "saved": "Credentials updated for {{name}}.",
+          "unavailable": "Previously selected credential is unavailable",
+          "required": "Choose an available credential to continue.",
+          "loadError": "Unable to load credential options",
+          "saveError": "Could not save credential changes"
+        }
       },
       "sandbox": {
         "title": "Persistent Sandbox",
