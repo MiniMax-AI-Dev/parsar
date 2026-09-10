@@ -831,6 +831,8 @@
         "copyFailed": "Copy failed. Select and copy the details above."
       },
       "preview": {
+        "overview": "Overview",
+        "files": "Files",
         "description": "Review the current repository content before installing.",
         "loading": "Loading Skill instructions and files…",
         "failed": "Could not load this Skill preview",

@@ -4,7 +4,6 @@ import { ArrowUpRight, Loader2 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../../components/ui/dialog"
 import { ErrorState } from "../../../components/ui/error-state"
-import { Property, PropertyList } from "../../../components/ui/property-list"
 import { useSkillPreview, type SkillsCatalogItem } from "../../../lib/api-skills"
 import { useWorkspaceId } from "../../../lib/workspace"
 import { ImportPreview } from "./ImportPreview"
@@ -38,13 +37,12 @@ export function SkillPreviewDialog({ skill, canImport, installedCapabilityID, in
           <DialogDescription>{t("capabilities.skillsDirectory.preview.description")}</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 min-w-0 space-y-4 overflow-y-auto overflow-x-hidden">
-          <PropertyList>
-            <Property label={t("capabilities.marketplaceDetail.source.title")} className="h-auto min-h-7 whitespace-normal py-1">
-              <a href={`https://github.com/${skill.source}`} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 text-accent hover:underline [overflow-wrap:anywhere]">
-                {skill.source}<ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              </a>
-            </Property>
-          </PropertyList>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
+            <span className="text-fg-muted">{t("capabilities.marketplaceDetail.source.title")}</span>
+            <a href={`https://github.com/${skill.source}`} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 text-accent hover:underline [overflow-wrap:anywhere]">
+              {skill.source}<ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </a>
+          </div>
           {!canImport ? (
             <p className="text-sm text-fg-muted">{t("capabilities.permission.adminOnly")}</p>
           ) : preview.isPending ? (
@@ -61,9 +59,15 @@ export function SkillPreviewDialog({ skill, canImport, installedCapabilityID, in
             />
           ) : content ? (
             <div className="min-w-0 space-y-3">
-              <p className="text-sm [overflow-wrap:anywhere]">{content.description || t("capabilities.skillsDirectory.preview.noDescription")}</p>
+              <section className="rounded-md border border-line bg-surface-subtle p-3">
+                <h3 className="text-base font-semibold text-fg">{t("capabilities.skillsDirectory.preview.overview")}</h3>
+                <p className="mt-2 text-sm leading-relaxed [overflow-wrap:anywhere]">{content.description || t("capabilities.skillsDirectory.preview.noDescription")}</p>
+              </section>
               {!!preview.data?.warnings.length && <ImportPreview status="ready" warnings={preview.data.warnings} />}
-              <SkillFileTree skill={content} entryMarkdown={preview.data?.entry_markdown} />
+              <section className="min-w-0">
+                <h3 className="mb-2 text-base font-semibold text-fg">{t("capabilities.skillsDirectory.preview.files")}</h3>
+                <SkillFileTree skill={content} entryMarkdown={preview.data?.entry_markdown} />
+              </section>
             </div>
           ) : null}
         </div>
