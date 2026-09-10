@@ -809,6 +809,7 @@
       }
     },
     "skillsDirectory": {
+      "rank": "Rank",
       "loadError": {
         "title": "Couldn't load the Skills catalog",
         "description": "Retry without leaving the Capability Marketplace."
