@@ -50,6 +50,7 @@ export function DetailRail({
   const expandLabel = t("actions.expand")
   const collapseLabel = t("actions.collapse")
   const resolvedCloseLabel = closeLabel ?? t("actions.close", { defaultValue: "Close" })
+  const dialogTitle = props["aria-label"]?.trim() || t("layout.details")
   const setModalOpen = (next: boolean) => setExpanded(next)
 
   const frame = (mode: "rail" | "modal") => (
@@ -147,7 +148,7 @@ export function DetailRail({
             aria-label={typeof props["aria-label"] === "string" ? props["aria-label"] : undefined}
             className="app-modal-center app-shadow-floating fixed left-1/2 top-1/2 z-50 flex h-[70vh] w-[70vw] min-w-[720px] max-w-[1200px] flex-col overflow-hidden rounded-lg border border-line bg-surface-subtle focus:outline-none data-[state=open]:animate-modal-in data-[state=closed]:animate-modal-out"
           >
-            <DialogPrimitive.Title className="sr-only">{resolvedCloseLabel}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="sr-only">{dialogTitle}</DialogPrimitive.Title>
             {frame("modal")}
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>

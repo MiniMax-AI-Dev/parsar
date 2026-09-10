@@ -242,6 +242,7 @@
     "submit": "设置密码并加入"
   },
   "layout": {
+    "details": "详情",
     "adjusted": "已调整宽度",
     "temporary": "临时",
     "restore": "恢复"
