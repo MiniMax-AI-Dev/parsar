@@ -359,13 +359,17 @@ export function FeishuConnectorPanel({
                   )}
                   <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
                     <ProvisionStatus status={provision.status} loading={pollProvisionPending} />
-                    <code className="font-mono text-xs text-fg">{provision.userCode}</code>
-                    <Button variant="link" size="sm" className="px-0" asChild>
-                      <a href={provision.verificationUrl} target="_blank" rel="noreferrer">
-                        <span className="truncate">{t("agents.feishuConnector.provision.openLink")}</span>
-                        <ExternalLink strokeWidth={1.5} aria-hidden="true" />
-                      </a>
-                    </Button>
+                    {provision.status !== "success" && (
+                      <>
+                        <code className="font-mono text-xs text-fg">{provision.userCode}</code>
+                        <Button variant="link" size="sm" className="px-0" asChild>
+                          <a href={provision.verificationUrl} target="_blank" rel="noreferrer">
+                            <span className="truncate">{t("agents.feishuConnector.provision.openLink")}</span>
+                            <ExternalLink strokeWidth={1.5} aria-hidden="true" />
+                          </a>
+                        </Button>
+                      </>
+                    )}
                     {provision.message && <p className="text-sm text-fg [overflow-wrap:anywhere]">{provision.message}</p>}
                   </div>
                 </div>
