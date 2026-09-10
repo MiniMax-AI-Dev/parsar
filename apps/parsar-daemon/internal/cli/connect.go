@@ -335,10 +335,10 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 }
 
 func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery, serverURL string) {
-	registry.RegisterKind(agentCLIs.ClaudeCode, withCapabilityDownloads(claudecode.Factory, serverURL))
-	registry.RegisterKind(agentCLIs.OpenCode, withCapabilityDownloads(opencodeagent.Factory, serverURL))
-	registry.RegisterKind(agentCLIs.Codex, withCapabilityDownloads(codex.Factory, serverURL))
-	registry.RegisterKind(agentCLIs.Pi, withCapabilityDownloads(pi.Factory, serverURL))
+	registry.RegisterKind(agentCLIs.ClaudeCode, withSkillUploadServer(withCapabilityDownloads(claudecode.Factory, serverURL), serverURL))
+	registry.RegisterKind(agentCLIs.OpenCode, withSkillUploadServer(withCapabilityDownloads(opencodeagent.Factory, serverURL), serverURL))
+	registry.RegisterKind(agentCLIs.Codex, withSkillUploadServer(withCapabilityDownloads(codex.Factory, serverURL), serverURL))
+	registry.RegisterKind(agentCLIs.Pi, withSkillUploadServer(withCapabilityDownloads(pi.Factory, serverURL), serverURL))
 }
 
 // spawnBackground forks the daemon into the background. Parent

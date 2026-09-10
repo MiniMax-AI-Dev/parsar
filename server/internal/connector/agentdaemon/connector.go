@@ -109,7 +109,8 @@ type Config struct {
 	// auto-mounted fetch_chat_history tool presents to IMHistoryEndpoint. It
 	// MUST sign with the same secret the endpoint verifies (both derive from
 	// the master key). Nil disables the tool injection.
-	IMHistoryTokenSigner func(conversationID string) string
+	IMHistoryTokenSigner   func(conversationID string) string
+	SkillUploadTokenSigner func(runID string) (string, error)
 
 	// ExecutionRecorder persists the per-run execution snapshot. Nil
 	// keeps tests on the pre-snapshot behavior.
@@ -192,6 +193,7 @@ type Connector struct {
 	pluginsDir        string
 	imHistoryEndpoint string
 	imHistoryToken    func(conversationID string) string
+	skillUploadToken  func(runID string) (string, error)
 	log               *slog.Logger
 }
 
@@ -277,6 +279,7 @@ func New(cfg Config) *Connector {
 		pluginsDir:        cfg.PluginsDir,
 		imHistoryEndpoint: cfg.IMHistoryEndpoint,
 		imHistoryToken:    cfg.IMHistoryTokenSigner,
+		skillUploadToken:  cfg.SkillUploadTokenSigner,
 		log:               cfg.Log,
 	}
 }
@@ -518,6 +521,10 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 	}
 	kindInfo, _, _ := sess.AgentKindStatus(agentKind)
 	c.recordExecutionSnapshot(ctx, in, bind, agentKind, kindInfo)
+
+	if err := c.applySkillUpload(agentOptions, in.RunID); err != nil {
+		return errorChannel(in.RunID, "Skill upload context could not be prepared"), nil
+	}
 
 	upstream, err := sess.Subscribe(in.RunID)
 	if err != nil {

@@ -365,6 +365,22 @@ description and keep ownership on the side listed here.
   Reject filenames outside Unicode stream-safe normalization rather than
   adding a separate unbounded normalizer.
 
+### Runtime Skill uploads
+
+- `parsar plugin add` may upload inline Skill bundles using a per-run
+  `PARSAR_CAPABILITY_UPLOAD_TOKEN`. The daemon supplies its paired server URL
+  per request; never export the device's runner credential to an Agent shell.
+  The default sandbox includes the CLI; custom runtimes must install it separately.
+- The upload endpoint derives workspace and actor from the persisted run's
+  requesting user, checking current owner/admin membership and running status
+  on every request. Tokens expire after one hour and are unusable once the run
+  ends. They do not authenticate workspace management or other runtime APIs.
+- This path creates workspace-only bundles of inline Markdown Skills. It cannot
+  publish publicly, bind Agents, upload supporting files, or install server/client
+  plugin code, hooks, tools or credentials. Existing FDE APIs remain independent.
+- Shared/cloud runtimes remain Agent-owned; uploading does not assign a fixed
+  user to the device or change spec/memory identity rules.
+
 ### Plugin Bundle (KindBundle) architecture
 
 - A Plugin Bundle is a `KindBundle` capability that packages server tools,
