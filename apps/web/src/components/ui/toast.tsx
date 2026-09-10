@@ -1,6 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
 import * as React from "react"
 import { createPortal } from "react-dom"
+import { X } from "lucide-react"
+import { useTranslation } from "react-i18next"
+
+import { Button } from "./button"
 
 import { InlineNotice, type NoticeTone } from "./error-state"
 import { VerbatimBlock } from "./verbatim"
@@ -78,6 +82,7 @@ const DEFAULT_MS = 4000
 const ERROR_MS = 7000
 /** Older messages leave rather than stacking into a wall. */
 const MAX_VISIBLE = 3
+const EXIT_FALLBACK_MS = 250
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<ToastItem[]>([])
@@ -161,17 +166,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-/**
- * One strip. It counts down on its own and *pauses* while the pointer is on it
- * or focus is inside — resuming with the time that was left, not from the top,
- * so resting a cursor nearby cannot hold a message on screen forever.
- */
 function ToastStrip({ toast, onLeave, onDrop }: {
   toast: ToastItem
   onLeave: (id: number) => void
   onDrop: (id: number) => void
 }) {
-  const [held, setHeld] = React.useState(false)
+  const { t } = useTranslation("common")
+  const [focused, setFocused] = React.useState(false)
   const remaining = React.useRef(toast.durationMs)
   const startedAt = React.useRef(0)
 
@@ -183,29 +184,34 @@ function ToastStrip({ toast, onLeave, onDrop }: {
   }, [toast.message, toast.detail, toast.durationMs])
 
   React.useEffect(() => {
-    if (toast.persist || toast.leaving || held) return
+    if (toast.persist || toast.leaving || focused) return
     startedAt.current = Date.now()
     const timer = window.setTimeout(() => onLeave(toast.id), remaining.current)
     return () => {
       window.clearTimeout(timer)
       remaining.current = Math.max(0, remaining.current - (Date.now() - startedAt.current))
     }
-  }, [held, toast.persist, toast.leaving, toast.id, onLeave, toast.message, toast.detail, toast.durationMs])
+  }, [focused, toast.persist, toast.leaving, toast.id, onLeave, toast.message, toast.detail, toast.durationMs])
+
+  React.useEffect(() => {
+    if (!toast.leaving) return
+    // Animation events may be suppressed by browser settings or CSS overrides.
+    const timer = window.setTimeout(() => onDrop(toast.id), EXIT_FALLBACK_MS)
+    return () => window.clearTimeout(timer)
+  }, [toast.leaving, toast.id, onDrop])
 
   return (
     <div
-      onMouseEnter={() => setHeld(true)}
-      onMouseLeave={() => setHeld(false)}
-      onFocusCapture={() => setHeld(true)}
-      onBlurCapture={() => setHeld(false)}
-      // Every entrance has an exit: the strip is dropped when its own exit
-      // ends, never on a descendant's animation and never mid-flight.
+      onFocusCapture={() => setFocused(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false)
+      }}
       onAnimationEnd={(e) => {
         if (toast.leaving && e.target === e.currentTarget) onDrop(toast.id)
       }}
       className={cn(
         "app-shadow-floating pointer-events-auto flex w-max max-w-[32rem] flex-col gap-1.5 rounded-lg border border-line bg-surface py-1.5 text-sm text-fg",
-        toast.action ? "pl-3 pr-1.5" : "px-3",
+        toast.action || !toast.persist ? "pl-3 pr-1.5" : "px-3",
         toast.leaving ? "animate-pop-out" : "animate-pop-in",
       )}
     >
@@ -214,6 +220,18 @@ function ToastStrip({ toast, onLeave, onDrop }: {
           {toast.message}
         </InlineNotice>
         {toast.action}
+        {!toast.persist && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            aria-label={t("actions.close")}
+            onClick={() => onLeave(toast.id)}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
       {toast.detail && <VerbatimBlock className="max-h-24">{toast.detail}</VerbatimBlock>}
     </div>

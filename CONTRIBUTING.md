@@ -559,6 +559,11 @@ split relevant pieces out first rather than growing the file further.
 
 ### Frontend shared logic
 
+- Ordinary toasts expire even while hovered and provide a localized close
+  button. Keyboard focus inside pauses their countdown until focus leaves.
+  Persistent action prompts remain owned by their caller. Toast removal must
+  have a timer fallback when exit animation events do not fire.
+
 - Partial bulk model deletion keeps submitted names and per-item results in a
   dismissible dialog. Link references only after confirming the Agent in the
   authorized workspace directory; preserve reference text when lookup fails.
