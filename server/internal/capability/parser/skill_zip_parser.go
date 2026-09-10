@@ -30,9 +30,9 @@ const maxSkillEntryBytes int64 = 1 << 20
 // canonical_spec jsonb.
 const maxSkillTotalDecompressedBytes int64 = 32 * 1024 * 1024
 
-// maxSkillEntryCount: thousands of entries means a packaged node_modules,
+// MaxSkillZipEntries: thousands of entries means a packaged node_modules,
 // not a Skill.
-const maxSkillEntryCount = 256
+const MaxSkillZipEntries = 256
 
 // ErrInvalidSkillZip wraps hard failures (not a zip, missing SKILL.md,
 // frontmatter broken, oversize). The import handler maps it to 4xx.
@@ -62,8 +62,8 @@ func ParseSkillZip(buf []byte) (SkillParseResult, error) {
 		return SkillParseResult{}, fmt.Errorf("%w: not a valid zip file: %v", ErrInvalidSkillZip, err)
 	}
 
-	if len(zr.File) > maxSkillEntryCount {
-		return SkillParseResult{}, fmt.Errorf("%w: skill zip contains %d entries, max %d", ErrInvalidSkillZip, len(zr.File), maxSkillEntryCount)
+	if len(zr.File) > MaxSkillZipEntries {
+		return SkillParseResult{}, fmt.Errorf("%w: skill zip contains %d entries, max %d", ErrInvalidSkillZip, len(zr.File), MaxSkillZipEntries)
 	}
 
 	// detectSingleRoot handles "user packaged with `zip -r foo/`".

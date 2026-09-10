@@ -336,9 +336,9 @@ func TestParseSkillZip_NoFrontmatter_StillImports(t *testing.T) {
 }
 
 func TestParseSkillZip_TooManyEntries_Rejected(t *testing.T) {
-	entries := make([]struct{ name, content string }, 0, maxSkillEntryCount+2)
+	entries := make([]struct{ name, content string }, 0, MaxSkillZipEntries+2)
 	entries = append(entries, struct{ name, content string }{"SKILL.md", minimalSkillMd})
-	for i := range maxSkillEntryCount + 1 {
+	for i := range MaxSkillZipEntries + 1 {
 		entries = append(entries, struct{ name, content string }{
 			name:    "references/f" + strings.Repeat("x", 1) + intToStr(i) + ".md",
 			content: "x",
@@ -390,8 +390,8 @@ func TestParseSkillZip_PerEntryOversize_Skipped(t *testing.T) {
 func TestParseSkillZip_CumulativeOversize_Rejected(t *testing.T) {
 	const perEntry = maxSkillEntryBytes / 2
 	entryCount := int(maxSkillTotalDecompressedBytes/perEntry) + 2
-	if entryCount >= maxSkillEntryCount {
-		t.Skipf("perEntry=%d makes entryCount=%d collide with maxSkillEntryCount=%d — pick a smaller perEntry", perEntry, entryCount, maxSkillEntryCount)
+	if entryCount >= MaxSkillZipEntries {
+		t.Skipf("perEntry=%d makes entryCount=%d collide with MaxSkillZipEntries=%d — pick a smaller perEntry", perEntry, entryCount, MaxSkillZipEntries)
 	}
 	chunk := strings.Repeat("y", int(perEntry))
 	entries := make([]struct{ name, content string }, 0, entryCount+1)
