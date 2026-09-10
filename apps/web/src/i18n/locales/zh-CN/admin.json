@@ -986,6 +986,7 @@
         "descriptionPlaceholder": "用一句话说明这个能力做什么,Claude 会用它判断是否调用"
       },
       "skill": {
+        "missingName": "名称待完善",
         "source": {
           "label": "导入方式",
           "paste": "粘贴 Markdown",

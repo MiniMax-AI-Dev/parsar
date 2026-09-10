@@ -986,6 +986,7 @@
         "descriptionPlaceholder": "One sentence about what this capability does — Claude uses it to decide when to invoke."
       },
       "skill": {
+        "missingName": "Skill name missing",
         "source": {
           "label": "Source",
           "paste": "Paste Markdown",

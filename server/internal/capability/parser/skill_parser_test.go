@@ -107,6 +107,9 @@ func TestParseSkill_NoFrontmatterStillParses(t *testing.T) {
 	if !hasFrontmatterWarning {
 		t.Fatalf("expected a frontmatter-related warning, got %v", res.Warnings)
 	}
+	if len(res.Warnings) != 1 {
+		t.Fatalf("expected one recovery warning without field-level duplicates, got %v", res.Warnings)
+	}
 }
 
 // TestParseSkill_FrontmatterPresentButEmpty: empty frontmatter ==
@@ -122,6 +125,9 @@ func TestParseSkill_FrontmatterPresentButEmpty(t *testing.T) {
 	}
 	if res.Spec.Skill.Instruction != "body" {
 		t.Fatalf("instruction body should be 'body' (frontmatter stripped), got %q", res.Spec.Skill.Instruction)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "add a name") {
+		t.Fatalf("expected one name recovery warning, got %v", res.Warnings)
 	}
 }
 
@@ -153,8 +159,24 @@ func TestParseSkill_MalformedYAMLDegradesToWarning(t *testing.T) {
 	if !hasYAMLWarning {
 		t.Fatalf("expected a YAML-failure warning, got %v", res.Warnings)
 	}
+	if len(res.Warnings) != 1 {
+		t.Fatalf("expected one YAML recovery warning without field-level duplicates, got %v", res.Warnings)
+	}
 	if res.Spec.Skill.Instruction != "body" {
 		t.Fatalf("body should be cleanly stripped of frontmatter, got %q", res.Spec.Skill.Instruction)
+	}
+}
+
+func TestParseSkill_PartialRecoveryKeepsNameWarning(t *testing.T) {
+	res, err := ParseSkill("---\ndescription: Review: changes\n---\nbody\n", SourceFormatMarkdown)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if res.Spec.Skill.Description != "Review: changes" || res.Spec.Skill.Instruction != "body" {
+		t.Fatalf("expected recovered metadata and body, got %+v", res.Spec.Skill)
+	}
+	if len(res.Warnings) != 2 || !strings.Contains(res.Warnings[1], "add a name") {
+		t.Fatalf("expected YAML recovery and missing-name warnings, got %v", res.Warnings)
 	}
 }
 

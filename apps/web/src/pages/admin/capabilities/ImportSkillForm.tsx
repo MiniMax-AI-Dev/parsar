@@ -355,8 +355,8 @@ function SinglePreview({
   const { t } = useTranslation("admin")
   return (
     <section className="border-t border-line pt-3">
-      <h4 className="text-sm font-medium text-fg">{skill.title || skill.slug}</h4>
-      <code className="font-mono text-xs text-fg-muted">{skill.slug}</code>
+      <h4 className="text-sm font-medium text-fg">{skill.title || skill.slug || t("capabilities.import.skill.missingName")}</h4>
+      {skill.slug && <code className="font-mono text-xs text-fg-muted">{skill.slug}</code>}
 
       {/* description intentionally omitted — ImportPreview above already
        *  surfaces it on the "ready" line, repeating it here was noisy. */}
