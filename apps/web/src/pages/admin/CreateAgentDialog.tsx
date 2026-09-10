@@ -714,7 +714,7 @@ export function CreateAgentDialog({
   const hasConnector = true
   const connector = mode === "edit" && agent ? agent.connector_type : connectorForExecutionMode(executionMode)
   const hasModel = activeModels.length > 0
-  const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex" || agentEngine === "pi"
+  const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex" || agentEngine === "pi" || agentEngine === "opencode"
   const selectedModelUnavailable = mode === "edit" && requiresModel && selectedModelID !== "" && selectedModel === null
   const hasRequiredModel = !requiresModel || (selectedModel !== null && !incompatibleModelIDs.has(selectedModel.id))
   const publicModelBindingValid = mode !== "create" || visibility !== "public"
@@ -1144,7 +1144,7 @@ export function CreateAgentDialog({
                         value={agentEngine}
                         onValueChange={(nextValue) => {
                           const next = nextValue
-                          if (next === "claude_code" || next === "codex" || next === "pi") setAgentEngine(next)
+                          if (next === "claude_code" || next === "codex" || next === "pi" || next === "opencode") setAgentEngine(next)
                         }}
                         disabled={pending}
                         aria-label={t("agents.form.fields.agentEngine")}
@@ -1152,7 +1152,7 @@ export function CreateAgentDialog({
                         <SelectOption value="claude_code">{t("agents.engine.claudeCode.title")}</SelectOption>
                         <SelectOption value="codex">{t("agents.engine.codex.title")}</SelectOption>
                         <SelectOption value="pi">{t("agents.engine.pi.title")}</SelectOption>
-                        <SelectOption value="opencode" disabled>{t("agents.engine.opencode.title")}</SelectOption>
+                        <SelectOption value="opencode">{t("agents.engine.opencode.title")}</SelectOption>
                       </Select>
                     </Field>
                   )}
