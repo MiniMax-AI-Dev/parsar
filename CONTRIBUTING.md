@@ -289,6 +289,8 @@ description and keep ownership on the side listed here.
 - Codex app-server usage totals are cumulative per thread. Treat restored usage
   before `turn/started` as the baseline and persist only the current turn's
   delta; repeated snapshots must not increase recorded usage.
+- Omitted Codex mode means `default`, matching the Agent UI. Send the current
+  instructions through that turn mode; cold resume alone may retain old instructions.
 - OpenCode JSON CLI tool parts arrive after execution. Translate each terminal
   call once into paired tool-call/result records for existing trace consumers.
   These records describe completed work; they are not permission requests or
