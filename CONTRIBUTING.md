@@ -142,6 +142,9 @@ description and keep ownership on the side listed here.
   `git` for server-side Skills.sh installs. Keep the runtime image compatible
   with the pinned `skills` package in `skills_install_routes.go`; the image
   build must fail if these executables are missing.
+- Skills.sh downloads accept an exact `owner/repo` reference and a Skill slug,
+  never a local path or a value the CLI could interpret as an option. Validate
+  these inputs before invoking the installer.
 
 ### Runtime and execution concepts
 
