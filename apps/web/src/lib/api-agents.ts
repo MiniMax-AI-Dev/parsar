@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ApiError, apiRequest, noUnreachableRetry } from "./api-client"
+import { KEY_AGENT_CAPABILITIES, KEY_CAPABILITIES_WORKSPACE } from "./api-capabilities"
 import type {
   Agent,
   AgentDetail,
@@ -435,6 +436,8 @@ export function useUpdateAgent(workspaceID: string | null) {
     onSuccess: (_change, variables) => {
       void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
       void qc.invalidateQueries({ queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", variables.agentID) })
+      void qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(workspaceID ?? "_none", variables.agentID) })
+      void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID ?? "_none") })
     },
   })
 }
