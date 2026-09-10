@@ -44,8 +44,40 @@ for (const instructions of ["Answer from the approved policy.", ""]) {
   });
 }
 
-async function mockAgents(page: Page) {
-  const writes = { updates: [] as Record<string, unknown>[], creates: [] as Record<string, unknown>[] };
+for (const changePrompt of [false, true]) {
+  test(`property-only edit preserves capability intent: ${changePrompt}`, async ({ page }) => {
+    const writes = await mockAgents(page, true);
+    await page.goto(`/?ws=${workspace}&admin=agents&id=${agentID}&tab=config`);
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Edit Agent" });
+    if (changePrompt) await dialog.getByRole("textbox", { name: "Instructions", exact: true }).fill("Updated instructions");
+    await dialog.getByRole("button", { name: "Next", exact: true }).click();
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    expect(writes.updates).toHaveLength(1);
+    expect(writes.updates[0]).not.toHaveProperty("capabilities");
+    expect(writes.capabilityWrites).toHaveLength(0);
+  });
+}
+
+test("explicit capability selection retains the existing replacement request", async ({ page }) => {
+  const writes = await mockAgents(page, true);
+  await page.goto(`/?ws=${workspace}&admin=agents&id=${agentID}&tab=config`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit Agent" });
+  await dialog.getByRole("button", { name: "Next", exact: true }).click();
+  await dialog.getByRole("checkbox", { name: /Policy/ }).check();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(writes.updates[0].capabilities).toEqual(["Policy"]);
+});
+
+async function mockAgents(page: Page, withBindings = false) {
+  const writes = { updates: [] as Record<string, unknown>[], creates: [] as Record<string, unknown>[], capabilityWrites: [] as string[] };
+  const installed = withBindings ? ["Policy", "Helpdesk"].map((name, index) => ({
+    capability_id: `cap-${index}`, capability_version_id: `version-${index}`, name,
+    type: index === 0 ? "skill" : "mcp", version: "1.0.0", pinning_mode: "pinned", configuration: { retained: true },
+  })) : [];
   const base = `/api/v1/workspaces/${workspace}`;
   const agentURL = `${base}/agents/${agentID}`;
   const agent = {
@@ -57,8 +89,10 @@ async function mockAgents(page: Page) {
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
+    if (method !== "GET" && path.includes("/capabilities")) writes.capabilityWrites.push(path);
     if (path === "/api/v1/me") return json(route, { user_id: "user-1", name: "User", email: "user@example.test" });
     if (path === "/api/v1/me/workspaces") return json(route, { workspaces: [{ id: workspace, name: "Instruction test", role: "owner" }] });
+    if (path === `${base}/runtime/status`) return json(route, { available: true, profile: "managed" });
     if (path === `${base}/agents`) {
       if (method === "POST") {
         const input = route.request().postDataJSON();
@@ -74,8 +108,10 @@ async function mockAgents(page: Page) {
       if (method !== "GET") writes.updates.push(route.request().postDataJSON());
       return json(route, agent);
     }
-    if (path === `${agentURL}/capabilities`) return json(route, { available: [], installed: [] });
-    if (path === `${base}/capabilities`) return json(route, { capabilities: [] });
+    if (path === `${agentURL}/capabilities`) return json(route, { available: [], installed });
+    if (path === `${base}/capabilities`) return json(route, { capabilities: installed.map((binding) => ({
+      ...binding, id: binding.capability_id, workspace_id: workspace, latest_version_id: binding.capability_version_id,
+    })) });
     if (path.endsWith("/models")) return json(route, { models: [{
       id: "model-1", name: "QA Model", model_key: "qa-model", status: "active", provider_type: "anthropic", adapter: "anthropic", credential_mode: "inline_secret", config: {},
     }] });

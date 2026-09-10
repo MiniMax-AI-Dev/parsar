@@ -276,6 +276,9 @@ description and keep ownership on the side listed here.
 
 - Agent creation and editing store behavior instructions in `system_prompt`.
   Preserve saved text when opening the form; clearing it sends an empty string.
+- Property-only Agent edits omit the legacy `capabilities` replacement field
+  unless the user operates its selection controls. That name list can lag
+  canonical bindings; it must not reconcile bindings during unrelated edits.
 - OpenCode model selectors use `provider/model`. Its Anthropic SDK base URL
   derives from the same endpoint resolver as model probes. OpenAI-compatible
   and OpenAI SDK adapters use the `openai` and `openai-response` endpoint maps,
