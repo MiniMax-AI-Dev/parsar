@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiRequest, noUnreachableRetry } from "./api-client"
 import { KEY_CAPABILITIES_WORKSPACE, KEY_CAPABILITY_VERSIONS } from "./api-capabilities"
 import type { Capability, CapabilityVersion } from "./api-types"
+import type { ImportPreviewResponse } from "../pages/admin/capabilities/types"
 
 // Browser-safe equivalent of:
 // curl -L https://agent-skill-index.vercel.app/api/skills
@@ -127,6 +128,25 @@ export function useSkillsCatalog() {
     queryFn: listSkillsCatalog,
     retry: noUnreachableRetry,
     staleTime: 60_000,
+  })
+}
+
+export function useSkillPreview(workspaceID: string | null, skill: SkillsCatalogItem, enabled: boolean) {
+  return useQuery({
+    queryKey: ["admin", "skillPreview", workspaceID, skill.source, skill.slug, skill.id],
+    queryFn: ({ signal }) => apiRequest<ImportPreviewResponse & { entry_markdown: string }>(
+      `/api/v1/workspaces/${encodeURIComponent(workspaceID!)}/skills/preview`,
+      {
+        method: "POST",
+        signal,
+        body: { source: skill.source, slug: skill.slug, registry_id: skill.id, registry: SKILLS_REGISTRY },
+      },
+    ),
+    enabled: !!workspaceID && enabled,
+    retry: false,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 }
 

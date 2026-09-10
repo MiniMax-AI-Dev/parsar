@@ -26,12 +26,13 @@ import type { CanonicalSkillSpec, SkillFile } from "./types"
 
 interface Props {
   skill: CanonicalSkillSpec
+  entryMarkdown?: string
 }
 
 /* 28px hairline rows; mono file names; chevron rotates when open. */
 const TREE_ROW_CLASS = "flex h-7 w-full items-center gap-2 border-b border-line text-left text-sm transition-colors duration-150 ease-settle hover:app-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
 
-export function SkillFileTree({ skill }: Props) {
+export function SkillFileTree({ skill, entryMarkdown }: Props) {
   const { t } = useTranslation("admin")
   const files = useMemo(() => skill.files ?? [], [skill.files])
 
@@ -39,7 +40,7 @@ export function SkillFileTree({ skill }: Props) {
 
   return (
     <section className="border-t border-line">
-      <SkillMdRow skill={skill} />
+      <SkillMdRow skill={skill} entryMarkdown={entryMarkdown} />
 
       {grouped.references.length > 0 && (
         <GroupRows
@@ -73,13 +74,11 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-function SkillMdRow({ skill }: { skill: CanonicalSkillSpec }) {
+function SkillMdRow({ skill, entryMarkdown }: Props) {
   const { t } = useTranslation("admin")
   const [open, setOpen] = useState(true)
 
-  // Parser drops the raw bytes; rebuild from canonical fields so what
-  // the user sees matches what's been imported.
-  const source = useMemo(() => buildSkillMdSource(skill), [skill])
+  const source = useMemo(() => entryMarkdown ?? buildSkillMdSource(skill), [entryMarkdown, skill])
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>

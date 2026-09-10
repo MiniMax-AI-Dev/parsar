@@ -650,8 +650,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			// the all-or-nothing materialization.
 			r.Post("/workspaces/{workspaceID}/capabilities/import/preview", previewCapabilityImport(runtimeStore, cfg.blobStore))
 			r.Post("/workspaces/{workspaceID}/capabilities/import/commit", commitCapabilityImport(runtimeStore, cfg.blobStore))
-			r.Get("/workspaces/{workspaceID}/skills/installed", listSkillsDirectoryInstalls(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/skills/install", installSkillFromRegistry(runtimeStore, cfg.blobStore, cfg.skillInstallRunner, cfg.skillInstallHTTPClient))
+			registerSkillsDirectoryRoutes(r, runtimeStore, cfg)
 			r.Post("/workspaces/{workspaceID}/capabilities/plugins/install", installPlugin(runtimeStore))
 			// Plugin client bundle serving — browser fetches the built
 			// client.js for each enabled plugin.

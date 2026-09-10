@@ -828,6 +828,12 @@
         "copy": "复制详情",
         "copied": "详情已复制。",
         "copyFailed": "复制失败，请选中上方详情手动复制。"
+      },
+      "preview": {
+        "description": "安装前查看仓库中的当前内容。",
+        "loading": "正在读取 Skill 指令和文件…",
+        "failed": "无法加载此 Skill 的预览",
+        "noDescription": "此 Skill 未提供用途说明。"
       }
     },
     "mcpDirectory": {

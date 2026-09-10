@@ -1,6 +1,16 @@
 package dev
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+)
+
+func registerSkillsDirectoryRoutes(r chi.Router, runtimeStore RuntimeStore, cfg *routerConfig) {
+	r.Get("/workspaces/{workspaceID}/skills/installed", listSkillsDirectoryInstalls(runtimeStore))
+	r.Post("/workspaces/{workspaceID}/skills/install", installSkillFromRegistry(runtimeStore, cfg.blobStore, cfg.skillInstallRunner, cfg.skillInstallHTTPClient))
+	r.Post("/workspaces/{workspaceID}/skills/preview", previewSkillFromRegistry(runtimeStore, cfg.skillInstallRunner))
+}
 
 // listSkillsDirectoryInstalls returns persisted Skills.sh installation identities.
 //

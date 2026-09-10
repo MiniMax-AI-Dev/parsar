@@ -148,6 +148,15 @@ description and keep ownership on the side listed here.
 - Skill directory packaging honors the request context while reading files and
   writing the archive. Enforce the ZIP parser's existing byte and entry limits
   during packaging, before upload or parsing can allocate oversized results.
+- Skills.sh previews reuse the install downloader and Skill ZIP parser, require
+  the same owner/admin permission, and create no capability, installation, or
+  upload record. Temporary preview files stay under `~/.parsar/` and are removed
+  after the request, including the downloader's own temporary files. Previews
+  require Unix process-group cancellation so child downloads cannot outlive the
+  request. Preview shows current repository content; installation
+  fetches again and does not promise an immutable preview revision.
+  Show the original SKILL.md entry alongside parsed metadata; do not reconstruct
+  its source from canonical fields, which omit unsupported frontmatter.
 
 ### Runtime and execution concepts
 

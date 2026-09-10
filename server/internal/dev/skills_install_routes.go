@@ -39,6 +39,14 @@ type skillInstallCommandRunner interface {
 type defaultSkillInstallRunner struct{}
 
 func (defaultSkillInstallRunner) Run(ctx context.Context, dir string, name string, args ...string) ([]byte, error) {
+	cmd, err := newSkillInstallCommand(ctx, dir, name, args...)
+	if err != nil {
+		return nil, err
+	}
+	return cmd.CombinedOutput()
+}
+
+func newSkillInstallCommand(ctx context.Context, dir string, name string, args ...string) (*exec.Cmd, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	env, err := skillInstallCommandEnv()
@@ -46,7 +54,7 @@ func (defaultSkillInstallRunner) Run(ctx context.Context, dir string, name strin
 		return nil, err
 	}
 	cmd.Env = env
-	return cmd.CombinedOutput()
+	return cmd, nil
 }
 
 func skillInstallCommandEnv() ([]string, error) {
