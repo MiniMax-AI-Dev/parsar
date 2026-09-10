@@ -223,7 +223,7 @@ export function mcpDirectoryOAuthStartURL(workspaceID: string, catalogID: string
 	return `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory/${encodeURIComponent(catalogID)}/oauth/start`
 }
 
-function normalizeMarketplaceCapability(item: MarketplaceCapability): MarketplaceCapability {
+export function normalizeMarketplaceCapability(item: MarketplaceCapability): MarketplaceCapability {
   const id = item.id ?? item.capability_id ?? ""
   return { ...item, id, latest_version: item.latest_version ?? item.latest_published_version, created_at: item.created_at ?? item.latest_version_created_at, updated_at: item.updated_at ?? item.latest_version_created_at }
 }
