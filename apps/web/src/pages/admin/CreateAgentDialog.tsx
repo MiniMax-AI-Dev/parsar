@@ -499,6 +499,7 @@ export function CreateAgentDialog({
   const modelFieldRef = useRef<HTMLDivElement | null>(null)
   const modelComboboxRef = useRef<HTMLDivElement | null>(null)
   const modelListboxID = useId()
+  const modelSecretID = useId()
   const wasOpenRef = useRef(false)
 
   useEffect(() => {
@@ -1451,19 +1452,21 @@ export function CreateAgentDialog({
                             {modelNewSecretExpanded && (
                               <div className="flex flex-col gap-3 border-t border-line pt-3" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex flex-col">
-                                  <Label>{t("credentialCheck.form.displayName")}</Label>
+                                  <Label htmlFor={`${modelSecretID}-name`}>{t("credentialCheck.form.displayName")}</Label>
                                   <Input
+                                    id={`${modelSecretID}-name`}
                                     value={modelNewSecretDisplayName}
                                     onChange={(e) => setModelNewSecretDisplayName(e.target.value)}
                                     placeholder={selectedModel?.name ?? t("credentialCheck.modelBindingTitle")}
                                   />
                                 </div>
                                 <div className="flex flex-col">
-                                  <Label>
+                                  <Label htmlFor={`${modelSecretID}-value`}>
                                     {t("credentialCheck.form.value")}<span aria-hidden="true"> *</span>
                                   </Label>
                                   <div className="relative">
                                     <Input
+                                      id={`${modelSecretID}-value`}
                                       type={modelNewSecretShowPlaintext ? "text" : "password"}
                                       value={modelNewSecretPlaintext}
                                       onChange={(e) => setModelNewSecretPlaintext(e.target.value)}
