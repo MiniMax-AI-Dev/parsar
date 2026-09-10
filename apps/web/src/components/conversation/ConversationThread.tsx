@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
+  ArrowDown,
   ArrowUp,
   ArrowUpRight,
   Loader2,
@@ -49,6 +50,7 @@ import { isRuntimeCapabilityError } from "../../lib/message-kind"
 import { conversationRecoveryLinks } from "../../lib/conversation-recovery-links"
 import { isFailedToolResult } from "../../lib/tool-result"
 import { useRelativeTime } from "../../lib/relative-time"
+import { useThreadScroll } from "../../lib/use-thread-scroll"
 import { credentialKindLabel } from "../../pages/admin/capability-ui"
 import { ToolCardSlot, SingleSlot, ListSlot } from "../plugin/SlotRenderer"
 
@@ -489,6 +491,8 @@ function ChatStream({
 
   // Turn navigation: one marker per user turn, the active one follows scroll.
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null)
+  const [threadContent, setThreadContent] = useState<HTMLDivElement | null>(null)
+  const { scrollToLatest, scrollToTurn, showScrollToLatest } = useThreadScroll(conversationId, viewport, threadContent)
   const turns = useMemo(
     () =>
       messages
@@ -567,9 +571,9 @@ function ChatStream({
       />}
 
       <div className="relative flex min-h-0 flex-1 flex-col">
-        {chrome !== "bare" && <TurnNavRail turns={turns} activeKey={activeTurnKey} />}
+        {chrome !== "bare" && <TurnNavRail turns={turns} activeKey={activeTurnKey} onJump={scrollToTurn} />}
         <div ref={setViewport} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col gap-5 px-4 py-6">
+        <div ref={setThreadContent} className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col gap-5 px-4 py-6">
           {timelineQ.isLoading ? (
             <Skeleton className="h-16 w-3/4" />
           ) : messages.length === 0 ? (
@@ -652,6 +656,18 @@ function ChatStream({
             ))}
         </div>
         </div>
+        {showScrollToLatest && (
+          <Button
+            variant="outline"
+            size="sm"
+            shape="pill"
+            className="absolute bottom-3 z-10 self-center"
+            onClick={scrollToLatest}
+          >
+            <ArrowDown strokeWidth={1.5} aria-hidden="true" />
+            {t("conversations.scrollToLatest")}
+          </Button>
+        )}
       </div>
 
       {cancelRunMut.error && !runs.some((run) => run.id === cancelRunMut.variables?.runID && run.status === "cancelled") && <ErrorDialog
@@ -698,6 +714,7 @@ function ChatStream({
             agentName={agentName}
             placeholder={agentDeleted ? t("agents.deletedLabel") : t("conversations.composer.placeholder", { agent: agentName })}
             disabled={!canWrite || !agent || agentDeleted || sandboxGuard?.blocked}
+            onAfterSend={async () => scrollToLatest()}
             onRunStarted={startRun}
             onStartError={(message: string) => setChatToast({ text: message })}
             activeRunId={activeRunId}

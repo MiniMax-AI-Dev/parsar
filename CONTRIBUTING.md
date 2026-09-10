@@ -619,6 +619,11 @@ Standalone shared conversations size to the viewport, including loading and
 unavailable states. Keep their mobile sizing scoped to that shell; the desktop
 console's minimum width and shared message behavior remain independent.
 
+The console and shared conversation view use the same thread scroll hook.
+Opening a conversation and successful sends follow the latest content. Scrolling
+back or choosing a turn preserves the reading position during streaming and
+polling; returning to the bottom resumes following.
+
 Dialogs / drawers / modals and detail panels **must not show a horizontal
 scrollbar**. End users report "I can't see the bottom" far more often than
 "my screen is too narrow", and horizontal scroll almost always means a

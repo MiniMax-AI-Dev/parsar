@@ -259,6 +259,7 @@
     }
   },
   "conversations": {
+    "scrollToLatest": "回到最新",
     "page": {
       "title": "对话"
     },
