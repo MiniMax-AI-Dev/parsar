@@ -2232,6 +2232,10 @@
       "title": "Delete the {{kind}} credential?",
       "description": "After deletion, capabilities that need {{kind}} can no longer be triggered by you. Agents with those capabilities enabled will fail the next time you start a conversation and ask you to set the credential again. The encrypted value is destroyed and cannot be recovered.",
       "impactTitle": "Capabilities currently using this credential type",
+      "impactError": {
+        "title": "Unable to check capability references",
+        "description": "The full list of capabilities using this credential type is unavailable. Retry the check to confirm the impact."
+      },
       "noImpact": "No capability currently uses this credential type.",
       "hasImpact": "{{count}} capabilities across {{workspaceCount}} workspaces use this credential type.",
       "cancel": "Cancel",

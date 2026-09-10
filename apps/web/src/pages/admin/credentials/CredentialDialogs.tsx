@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react"
-import { useQueries } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 import { AlertTriangle, Eye, EyeOff, Loader2 } from "lucide-react"
 
@@ -26,15 +25,9 @@ import { Input } from "../../../components/ui/input"
 import { Field } from "../../../components/ui/label"
 import { Select, SelectOption } from "../../../components/ui/select"
 import { Skeleton } from "../../../components/ui/skeleton"
-import {
-  ApiError,
-  apiRequest,
-  noUnreachableRetry,
-} from "../../../lib/api-client"
-import { KEY_CAPABILITIES } from "../../../lib/api-capabilities"
+import { ApiError } from "../../../lib/api-client"
 import { useMyWorkspaces } from "../../../lib/api-workspaces"
 import type {
-  Capability,
   UserCredential,
   UserCredentialCreateRequest,
   UserCredentialPatchRequest,
@@ -47,6 +40,7 @@ import {
   type KnownCredentialKind,
 } from "../../../lib/credential-kind-ui"
 import { useWorkspaceId } from "../../../lib/workspace"
+import { useCapabilitiesPerWorkspace } from "./shared"
 
 interface CredentialDialogProps {
   mode: "create" | "edit"
@@ -211,31 +205,24 @@ export function DeleteCredentialDialog({ target, pending, error, onCancel, onCon
   const wsId = useWorkspaceId()
   const kindOptions = useCredentialKindOptions(wsId)
   const workspacesQ = useMyWorkspaces()
-  const workspaces = workspacesQ.data?.workspaces ?? []
-  const capabilityQueries = useQueries({
-    queries: workspaces.map((workspace) => ({
-      queryKey: KEY_CAPABILITIES(workspace.id),
-      queryFn: () => apiRequest<{ capabilities: Capability[] }>(`/api/v1/workspaces/${encodeURIComponent(workspace.id)}/capabilities`),
-      enabled: workspaces.length > 0,
-      retry: noUnreachableRetry,
-      staleTime: 0,
-    })),
-  })
+  const workspaces = useMemo(() => workspacesQ.data?.workspaces ?? [], [workspacesQ.data?.workspaces])
+  const capabilitiesScan = useCapabilitiesPerWorkspace(workspaces, 0)
 
   const impact = useMemo(() => {
     const rows: Array<{ workspaceName: string; capabilityName: string }> = []
-    capabilityQueries.forEach((query, idx) => {
-      for (const capability of query.data?.capabilities ?? []) {
+    workspaces.forEach((workspace) => {
+      for (const capability of capabilitiesScan.byWorkspace[workspace.id] ?? []) {
         if (capability.status === "active" && (capability.required_credentials ?? []).some((rc) => rc.kind === target.kind)) {
-          rows.push({ workspaceName: workspaces[idx]?.name ?? "", capabilityName: capability.name })
+          rows.push({ workspaceName: workspace.name, capabilityName: capability.name })
         }
       }
     })
     return rows
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capabilityQueries.map((query) => query.dataUpdatedAt).join(":"), target.kind, workspaces])
+  }, [capabilitiesScan.byWorkspace, target.kind, workspaces])
 
-  const loadingImpact = workspacesQ.isLoading || capabilityQueries.some((query) => query.isLoading)
+  const loadingImpact = workspacesQ.isLoading || capabilitiesScan.isLoading
+  const impactUnavailable = workspacesQ.isError || capabilitiesScan.isError
+  const retryImpact = () => { void Promise.all([workspacesQ.refetch(), capabilitiesScan.refetch()]) }
   const workspaceCount = new Set(impact.map((item) => item.workspaceName)).size
   const kindLabel = credentialKindLabel(target.kind, i18n.language, t("myCredentials.kind.unknown"), kindOptions.kinds)
 
@@ -254,7 +241,14 @@ export function DeleteCredentialDialog({ target, pending, error, onCancel, onCon
 
         <div className="pl-7">
           <h3 className="mb-1 text-xs font-medium text-fg">{t("myCredentials.delete.impactTitle")}</h3>
-          {loadingImpact ? (
+          {impactUnavailable ? (
+            <ErrorState
+              appearance="panel"
+              title={t("myCredentials.delete.impactError.title")}
+              description={t("myCredentials.delete.impactError.description")}
+              onRetry={retryImpact}
+            />
+          ) : loadingImpact ? (
             <Skeleton className="h-3 w-44" />
           ) : (
             <p className="text-sm text-fg">
