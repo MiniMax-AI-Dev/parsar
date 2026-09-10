@@ -194,8 +194,8 @@ export function UsagePage() {
               <ul className="m-0 list-none p-0">
                 {byModel.map((m) => (
                   <LedgerRow key={m.key} role="listitem" tabIndex={-1}>
-                    <span className="truncate text-xs text-fg-muted" title={m.provider}>{m.provider}</span>
-                    <span className="truncate font-mono text-xs text-fg" title={m.model}>{m.model}</span>
+                    <span className="truncate text-xs text-fg-muted" title={m.provider}>{m.provider || "—"}</span>
+                    <span className="truncate font-mono text-xs text-fg" title={m.model}>{m.model || "—"}</span>
                     <LedgerNum>{fmtInt(m.callCount)}</LedgerNum>
                     <LedgerNum>{fmtInt(m.inputTokens)}</LedgerNum>
                     <LedgerNum>{fmtInt(m.outputTokens)}</LedgerNum>
@@ -232,8 +232,8 @@ export function UsagePage() {
                     ) : (
                       <span className="text-xs text-fg-muted" title={t("usage.recent.noRun")}>—</span>
                     )}
-                    <span className="truncate text-xs text-fg-muted" title={u.provider}>{u.provider}</span>
-                    <span className="truncate font-mono text-xs text-fg" title={u.model}>{u.model}</span>
+                    <span className="truncate text-xs text-fg-muted" title={u.provider}>{u.provider || "—"}</span>
+                    <span className="truncate font-mono text-xs text-fg" title={u.model}>{u.model || "—"}</span>
                     <LedgerNum>{fmtInt(u.input_tokens)}</LedgerNum>
                     <LedgerNum>{fmtInt(u.output_tokens)}</LedgerNum>
                     <LedgerNum><UsageCost value={u.cost_usd} /></LedgerNum>
