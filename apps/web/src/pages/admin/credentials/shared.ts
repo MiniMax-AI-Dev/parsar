@@ -103,10 +103,11 @@ export function computeMissingCredentials(
  * Drive the per-workspace capability fetch. Reuses KEY_CAPABILITIES so
  * the Capabilities page can share the prefetched cache entry.
  */
-export function useCapabilitiesPerWorkspace(workspaces: UserWorkspace[]): {
+export function useCapabilitiesPerWorkspace(workspaces: UserWorkspace[], staleTime = 30_000): {
   byWorkspace: Record<string, Capability[] | undefined>
   isLoading: boolean
   isError: boolean
+  refetch: () => Promise<unknown>
 } {
   const queries = useQueries({
     queries: workspaces.map((workspace) => ({
@@ -117,12 +118,12 @@ export function useCapabilitiesPerWorkspace(workspaces: UserWorkspace[]): {
         ),
       enabled: workspaces.length > 0,
       retry: noUnreachableRetry,
-      staleTime: 30_000,
+      staleTime,
     })),
   })
 
   const queryStateKey = queries.map((q) => `${q.dataUpdatedAt}:${q.isLoading}:${q.isError}`).join("|")
-  return useMemo(() => {
+  const state = useMemo(() => {
     const byWorkspace: Record<string, Capability[] | undefined> = {}
     let isLoading = false
     let isError = false
@@ -137,6 +138,7 @@ export function useCapabilitiesPerWorkspace(workspaces: UserWorkspace[]): {
     // Memo key tracks per-query state; workspaces identity is memoized by parent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryStateKey, workspaces])
+  return { ...state, refetch: () => Promise.all(queries.map((query) => query.refetch())) }
 }
 
 /**

@@ -654,6 +654,9 @@ split relevant pieces out first rather than growing the file further.
 - Capability usage views distinguish loading, failed, and successful empty reads.
   Failed reads offer retry; incomplete Agent binding counts remain unknown. Query
   status must update even when a failed request leaves cached data unchanged.
+- Credential deletion previews report unknown impact when workspace or capability
+  reads fail, and offer retry. Do not present partial counts as a complete scan;
+  keep the credential deletion operation independent of these advisory reads.
 
 - Answered interaction cards display persisted `response.answers` by question ID
   (or `q{index}` fallback), rather than local drafts. Inbox and conversation cards
