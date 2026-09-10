@@ -708,6 +708,9 @@ queries against the list width. Keep the same data and row actions, with
 explicit field labels when column headings are hidden.
 For wrapping row titles, center status icons inside a one-line-height wrapper
 (`h-lh items-center`), aligned to the first line rather than the whole text block.
+The shared Ledger preserves the activated row's viewport position when its
+width changes; after manual scrolling it anchors the current reading position.
+Keep this behavior independent of routing, selection data, and detail focus.
 
 Property groups use the shared `PropertyList` label track: 8rem capped at 40%
 of the available width. Labels wrap and values retain their existing overflow
