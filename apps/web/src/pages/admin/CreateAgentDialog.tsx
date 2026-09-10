@@ -287,6 +287,7 @@ export function CreateAgentDialog({
   const [highlightedModelID, setHighlightedModelID] = useState<string | null>(null)
   const [systemPrompt, setSystemPrompt] = useState(defaultSystemPrompt)
   const [capabilities, setCapabilities] = useState<string[]>([])
+  const capabilitySelectionEdited = useRef(false)
   const [selectedCapabilityIDs, setSelectedCapabilityIDs] = useState<string[]>([])
   // capabilityVersionChoices keys on capability_id and stores the user's
   // per-binding version + mode pick. The dropdown default is "latest"
@@ -515,6 +516,7 @@ export function CreateAgentDialog({
     }
     if (wasOpenRef.current) return
     wasOpenRef.current = true
+    capabilitySelectionEdited.current = false
     const params = new URLSearchParams(window.location.search.replace(/^\?+/, "?"))
     if (mode === "create") {
       // Clone path: an `agent` prop in create mode means prefill from that
@@ -757,6 +759,7 @@ export function CreateAgentDialog({
   }
 
   function toggleCapability(cap: string, capabilityID?: string, latestVersionID?: string) {
+    capabilitySelectionEdited.current = true
     let wasChecked = false
     setCapabilities((prev) => {
       wasChecked = prev.includes(cap)
@@ -913,7 +916,8 @@ export function CreateAgentDialog({
       system_prompt: systemPrompt.trim(),
       connector_type: connector,
       ...(requiresModel ? { default_model_id: selectedModelID } : {}),
-      capabilities: capabilityNames,
+      // The legacy name list can lag canonical bindings added from Config.
+      ...(mode === "create" || capabilitySelectionEdited.current ? { capabilities: capabilityNames } : {}),
       ...(mode === "create" ? { initial_capabilities: initialCapabilities, visibility } : {}),
       config: agentBodyConfig,
       ...(inlineSecretsToCreate.length > 0 ? { inline_new_secrets: inlineSecretsToCreate } : {}),
