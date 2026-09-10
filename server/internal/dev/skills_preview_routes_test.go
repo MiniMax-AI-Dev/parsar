@@ -66,6 +66,9 @@ func TestSkillPreviewFromRegistry_DeniesBeforeDownload(t *testing.T) {
 		{"anonymous", "admin", "", skillPreviewTestBody, http.StatusUnauthorized},
 		{"member", "member", "user", skillPreviewTestBody, http.StatusForbidden},
 		{"invalid source", "admin", "user", strings.Replace(skillPreviewTestBody, "googleworkspace/cli", "../cli", 1), http.StatusBadRequest},
+		{"option slug", "admin", "user", strings.Replace(skillPreviewTestBody, "gws-gmail-triage", "--global", 1), http.StatusBadRequest},
+		{"option owner", "admin", "user", strings.Replace(skillPreviewTestBody, "googleworkspace/cli", "-owner/cli", 1), http.StatusBadRequest},
+		{"local source", "admin", "user", strings.Replace(skillPreviewTestBody, "googleworkspace/cli", "/googleworkspace/cli", 1), http.StatusBadRequest},
 		{"invalid json", "admin", "user", "{", http.StatusBadRequest},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
