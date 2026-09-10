@@ -642,6 +642,10 @@ split relevant pieces out first rather than growing the file further.
 
 ### Frontend shared logic
 
+- Answered interaction cards display persisted `response.answers` by question ID
+  (or `q{index}` fallback), rather than local drafts. Inbox and conversation cards
+  share the answer projection; custom secret answers retain password masking.
+
 - Usage cost displays treat stored zero/missing values as unknown: the current
   contract cannot distinguish free usage from unavailable pricing. Preserve raw
   records; sum finite positive costs only and label incomplete totals. Do not
