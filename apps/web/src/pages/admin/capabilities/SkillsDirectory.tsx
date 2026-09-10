@@ -56,12 +56,13 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
   }
 
   const install = (skill: SkillsCatalogItem) => {
-    if (!canImport || loading || loadError || installed[skill.id]) return
+    if (!canImport || loading || loadError || installed[skill.id]) return false
     installMut.mutate(skill, {
       onSuccess: (result) => {
         setSuccess({ name: result.capability.name, capabilityID: result.capability.id })
       },
     })
+    return true
   }
 
   return (
@@ -73,6 +74,7 @@ export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDi
           canImport={canImport}
           installedCapabilityID={installed[previewSkill.id]}
           installing={pendingID === previewSkill.id}
+          installReady={!loading && !loadError}
           onInstall={() => install(previewSkill)}
           onViewCapability={onViewCapability}
           onClose={() => setPreviewSkill(null)}

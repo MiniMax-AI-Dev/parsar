@@ -11,12 +11,13 @@ import { ImportPreview } from "./ImportPreview"
 import { isImportSpecReady } from "./importValidation"
 import { SkillFileTree } from "./SkillFileTree"
 
-export function SkillPreviewDialog({ skill, canImport, installedCapabilityID, installing, onInstall, onViewCapability, onClose, onRestoreFocus }: {
+export function SkillPreviewDialog({ skill, canImport, installedCapabilityID, installing, installReady, onInstall, onViewCapability, onClose, onRestoreFocus }: {
   skill: SkillsCatalogItem
   canImport: boolean
   installedCapabilityID?: string
   installing: boolean
-  onInstall: () => void
+  installReady: boolean
+  onInstall: () => boolean
   onViewCapability: (capabilityID: string) => void
   onClose: () => void
   onRestoreFocus: () => void
@@ -71,7 +72,7 @@ export function SkillPreviewDialog({ skill, canImport, installedCapabilityID, in
           {installedCapabilityID ? (
             <Button onClick={() => { onClose(); onViewCapability(installedCapabilityID) }}>{t("capabilities.mcpDirectory.actions.viewCapability")}</Button>
           ) : canImport ? (
-            <Button disabled={installing || preview.isFetching || !!preview.error || !spec || !isImportSpecReady("skill", spec, [])} onClick={() => { onInstall(); onClose() }}>
+            <Button disabled={!installReady || installing || preview.isFetching || !!preview.error || !spec || !isImportSpecReady("skill", spec, [])} onClick={() => { if (onInstall()) onClose() }}>
               {t(installing ? "capabilities.skillsDirectory.install.installing" : "capabilities.skillsDirectory.install.action")}
             </Button>
           ) : null}
