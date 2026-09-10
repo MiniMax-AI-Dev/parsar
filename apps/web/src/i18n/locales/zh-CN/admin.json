@@ -373,6 +373,9 @@
     },
     "trace": {
       "label": "执行轨迹",
+      "waitingForOutput": "等待输出",
+      "waitingHint": "尚未收到文字或工具输出。可以继续等待，或停止本次执行。",
+      "waitingReadOnlyHint": "尚未收到文字或工具输出，收到后会显示在这里。",
       "running": "运行中",
       "completed": "执行结束",
       "failed": "失败",

@@ -701,6 +701,11 @@ Opening a conversation and successful sends follow the latest content. Scrolling
 back or choosing a turn preserves the reading position during streaming and
 polling; returning to the bottom resumes following.
 
+Before a running conversation emits text or tool activity, its trace identifies
+the wait and shows elapsed time. After 30 seconds, explain the option to wait or,
+when permitted, stop; hide that guidance on output, human interaction, or termination. Do not
+infer engine setup or model-request stages without corresponding events.
+
 Dialogs / drawers / modals and detail panels **must not show a horizontal
 scrollbar**. End users report "I can't see the bottom" far more often than
 "my screen is too narrow", and horizontal scroll almost always means a

@@ -286,6 +286,8 @@ export function WorkTrace({
   startedAt,
   finishedAt,
   attentionRequired = false,
+  waitingForOutput = false,
+  canStop = false,
   collapseAfterAnswer = true,
   className,
 }: {
@@ -297,6 +299,8 @@ export function WorkTrace({
   finishedAt?: number
   /** A step waits on the user (a pending approval for this run): stay open. */
   attentionRequired?: boolean
+  waitingForOutput?: boolean
+  canStop?: boolean
   /** Fold once the run stops. Default on; the user may reopen it. */
   collapseAfterAnswer?: boolean
   className?: string
@@ -322,11 +326,15 @@ export function WorkTrace({
   const start = startedAt ?? firstStep
   const end = running ? (now > 0 ? now : undefined) : (finishedAt ?? lastStep)
   const elapsed = start !== undefined && end !== undefined ? formatTraceElapsed(end - start) : ""
+  const waiting = status === "running" && waitingForOutput && !hasDetails && !attentionRequired
+  const longWait = waiting && start !== undefined && now - start >= 30_000
 
   const word =
-    status === "running" || status === "queued"
-      ? t("conversations.trace.running")
-      : t(DONE_LABEL[status])
+    waiting
+      ? t("conversations.trace.waitingForOutput")
+      : status === "running" || status === "queued"
+        ? t("conversations.trace.running")
+        : t(DONE_LABEL[status])
   const current = running ? [...steps].reverse().find((s) => s.status === "running") : undefined
 
   const header = (
@@ -334,7 +342,7 @@ export function WorkTrace({
       <StatusIcon status={status} />
       <span className="shrink-0 text-sm text-fg-muted">{word}</span>
       {elapsed && (
-        <span className="shrink-0 text-sm text-fg-muted">
+        <span className="shrink-0 text-sm text-fg-muted" aria-hidden={running || undefined}>
           <span aria-hidden="true">· </span>
           <span className="font-mono text-xs tabular-nums">{elapsed}</span>
         </span>
@@ -372,6 +380,12 @@ export function WorkTrace({
         <div className="flex h-8 w-full items-center gap-2" role="status" aria-live="polite">
           {header}
         </div>
+      )}
+
+      {longWait && (
+        <p className="m-0 pb-2 pl-5.5 text-sm text-fg-muted [overflow-wrap:anywhere]">
+          {t(canStop ? "conversations.trace.waitingHint" : "conversations.trace.waitingReadOnlyHint")}
+        </p>
       )}
 
       {hasDetails && (
