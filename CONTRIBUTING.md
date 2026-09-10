@@ -277,7 +277,8 @@ description and keep ownership on the side listed here.
   through the engine's native CLI, config, or RPC surface.
 - In-process Skill and Plugin installs serialize cache checks, extraction, and
   pruning for the same install root. Waiting honors cancellation; independent
-  roots remain concurrent and idle locks are released.
+  roots remain concurrent and idle locks are released. All adapters use the
+  daemon's shared `internal/agent/installroot` coordinator.
 - Markdown Skill imports and new versions must store an engine-neutral ZIP
   containing `SKILL.md`, with its storage reference and SHA-256 persisted before
   reporting success. Existing versions without archives require a new import.

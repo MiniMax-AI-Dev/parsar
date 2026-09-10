@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/installroot"
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/google/uuid"
 )
@@ -55,7 +56,7 @@ func InstallManagedSkills(ctx context.Context, logger *slog.Logger, root string,
 	if strings.TrimSpace(root) == "" {
 		return SkillInstallResult{}, errors.New("managed skills: root is required")
 	}
-	unlock, err := lockInstallRoot(ctx, root)
+	unlock, err := installroot.Lock(ctx, root)
 	if err != nil {
 		return SkillInstallResult{}, err
 	}
@@ -79,7 +80,7 @@ func installSkillsAtRoot(
 	skills []skillDescriptor,
 	logLabel string,
 ) (SkillInstallResult, error) {
-	unlock, err := lockInstallRoot(ctx, root)
+	unlock, err := installroot.Lock(ctx, root)
 	if err != nil {
 		return SkillInstallResult{}, err
 	}
@@ -99,9 +100,6 @@ func installSkillsAtRootLocked(
 	}
 	if len(skills) == 0 {
 		return SkillInstallResult{}, nil
-	}
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		return SkillInstallResult{}, fmt.Errorf("%s: mkdir %s: %w", logLabel, root, err)
 	}
 
 	result := SkillInstallResult{}

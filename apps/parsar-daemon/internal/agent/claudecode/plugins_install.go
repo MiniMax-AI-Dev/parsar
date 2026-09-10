@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/installroot"
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/google/uuid"
 )
@@ -48,14 +49,11 @@ func installPlugins(
 	}
 
 	root := filepath.Join(workDir, ".claude", "plugins")
-	unlock, err := lockInstallRoot(ctx, root)
+	unlock, err := installroot.Lock(ctx, root)
 	if err != nil {
 		return PluginInstallResult{}, err
 	}
 	defer unlock()
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		return PluginInstallResult{}, fmt.Errorf("claudecode plugins: mkdir %s: %w", root, err)
-	}
 
 	result := PluginInstallResult{}
 	for _, p := range plugins {

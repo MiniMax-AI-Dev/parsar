@@ -60,9 +60,17 @@ func TestInstallsConcurrentSameRoot(t *testing.T) {
 				_, _ = w.Write(body)
 			}))
 			defer srv.Close()
-			root := t.TempDir()
+			parent := t.TempDir()
+			alias := filepath.Join(t.TempDir(), "alias")
+			if err := os.Symlink(parent, alias); err != nil {
+				t.Fatal(err)
+			}
 			results := make(chan error, 8)
-			for range 8 {
+			for i := range 8 {
+				root := filepath.Join(parent, "new", "root")
+				if i%2 == 1 {
+					root = filepath.Join(alias, "new", "root")
+				}
 				go func() { results <- installConcurrentFixture(context.Background(), kind, root, srv.URL, body) }()
 			}
 			for range 8 {
