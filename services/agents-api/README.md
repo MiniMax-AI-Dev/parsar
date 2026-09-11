@@ -5,8 +5,9 @@ storage, an authenticated Session HTTP service and an independent migration comm
 does not run Agents or change Parsar's production dispatch.
 
 A Session is an execution context with a stable engine choice. Product
-conversations can map to multiple Sessions. Native engine IDs, device bindings,
-pending interactions and execution delivery will be added with their execution flows.
+conversations can map to multiple Sessions. Device connections and bindings are
+internal primitives; native engine IDs, pending interactions and execution
+delivery will be added with their execution flows.
 
 ## Database ownership
 
@@ -20,9 +21,11 @@ AGENTS_API_DATABASE_URL='postgres://.../agents_api' \
 make sqlc-generate
 ```
 
-The Store requires a tenant on every operation. The API authentication
+Session and device-management operations require a tenant. The API authentication
 layer derives that tenant from the caller's credential, never a tenant
-claimed in a request body. Store methods alone do not authenticate callers.
+claimed in a request body. The daemon gateway separately authenticates device
+credentials before accessing device liveness. Store methods alone do not
+authenticate callers.
 
 Session creation requires an idempotency key scoped to the tenant. Repeating the
 same engine, metadata and configuration returns the existing Session; different input with the
@@ -91,6 +94,46 @@ reusable Parsar Agent. List supports `after`, `limit` (1–100) and `order` (asc
 Unsupported fields, saved Agent references, vaults, initial input and streaming
 return explicit errors. Session update/delete, event submission and other
 resources remain unsupported. `/healthz` reports process liveness only.
+
+## Internal execution device connection
+
+The standalone service can accept existing daemon connections without a Parsar
+workspace or product database. Enable its internal gateway by setting
+`AGENTS_API_DAEMON_WS_URL=wss://your-service/api/v1/agent-daemon/ws` (use `ws`
+for local development). This is separate from the official Agents API executor
+contract; do not return this URL as a public `self_hosted` environment's remote URL.
+
+After migrations, an operator can provision a device for an execution tenant:
+
+```bash
+umask 077
+mkdir -p ~/.parsar/parsar-daemon/agents-api
+go run ./services/agents-api/cmd/device \
+  --tenant '<execution-tenant-uuid>' --name 'local executor' \
+  --url 'http://127.0.0.1:8091' \
+  > ~/.parsar/parsar-daemon/agents-api/auth.json
+parsar-daemon connect --profile agents-api
+```
+
+The command requires `AGENTS_API_DATABASE_URL` and emits a secret profile once.
+Use a new profile rather than overwriting an existing device's credentials. When
+provisioning remote compute, securely transfer this file to the same profile path
+on the executor. The database stores only the credential digest. API keys and
+device credentials are not interchangeable. To revoke a device:
+
+```bash
+go run ./services/agents-api/cmd/device \
+  --tenant '<execution-tenant-uuid>' --revoke '<device-uuid>'
+```
+
+An existing connection is retired on its next heartbeat; new connections are
+rejected immediately. The internal Store binds each Session to one same-tenant
+device, preserves that assignment across retries/restarts, and refuses a silent
+move to another device. Revoked bindings cannot be used for dispatch. Device
+connections alone do not start a Turn: public execution and provider lifecycle
+remain under construction. See the [ownership rules](../../CONTRIBUTING.md#product-and-execution-service-separation).
+
+## Official client verification
 
 After preparing a dedicated test database, build the server and verify it with
 the official client installed from the commit in `contracts/agents-api/upstream.json`:

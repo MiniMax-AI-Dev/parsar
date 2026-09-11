@@ -8,6 +8,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Device struct {
+	ID             pgtype.UUID        `json:"id"`
+	TenantID       pgtype.UUID        `json:"tenant_id"`
+	Name           string             `json:"name"`
+	CredentialHash string             `json:"credential_hash"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	LastSeenAt     pgtype.Timestamptz `json:"last_seen_at"`
+	RevokedAt      pgtype.Timestamptz `json:"revoked_at"`
+}
+
 type Session struct {
 	ID             pgtype.UUID        `json:"id"`
 	TenantID       pgtype.UUID        `json:"tenant_id"`
@@ -17,6 +27,11 @@ type Session struct {
 	RequestHash    string             `json:"request_hash"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	Configuration  []byte             `json:"configuration"`
+}
+
+type SessionDevice struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	DeviceID  pgtype.UUID `json:"device_id"`
 }
 
 type Turn struct {
