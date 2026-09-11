@@ -1,5 +1,5 @@
 import { Check, Copy, Loader2 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -41,14 +41,16 @@ export function DeleteAgentDialog({
   const { t } = useTranslation("admin")
   const [confirmation, setConfirmation] = useState("")
   const [copied, setCopied] = useState(false)
+  const [previousAgentID, setPreviousAgentID] = useState(agent?.id)
   const expected = agent?.name ?? ""
   const canDelete = Boolean(agent) && confirmation === expected && !pending
   const msg = errorMessage(error)
 
-  useEffect(() => {
+  if (previousAgentID !== agent?.id) {
+    setPreviousAgentID(agent?.id)
     setConfirmation("")
     setCopied(false)
-  }, [agent?.id])
+  }
 
   async function copyAgentName() {
     if (!expected || pending) return
