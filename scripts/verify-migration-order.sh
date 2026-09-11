@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Enforce two invariants on server/migrations/ against a base ref:
+# Enforce two invariants on a service migration directory against a base ref:
 #   1. No file that exists on the base ref may be modified — once a
 #      migration lands on main, prod has run it and any edit only
 #      affects fresh installs, splitting the schema.
@@ -9,7 +9,7 @@
 #      goose orders files by that prefix and would silently skip a
 #      migration inserted below the current head.
 #
-# Usage: verify-migration-order.sh [base-ref]
+# Usage: verify-migration-order.sh [base-ref] [migration-directory]
 # Default base ref: origin/main.
 set -euo pipefail
 
@@ -21,7 +21,7 @@ if [[ "${PARSAR_ALLOW_MIGRATION_EDIT:-}" == "1" ]]; then
 fi
 
 BASE_REF="${1:-origin/main}"
-MIG_DIR="server/migrations"
+MIG_DIR="${2:-server/migrations}"
 
 if ! git rev-parse --verify --quiet "${BASE_REF}" >/dev/null; then
   echo "verify-migration-order: base ref '${BASE_REF}' not found; run 'git fetch origin main' first." >&2

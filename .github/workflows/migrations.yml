@@ -1,5 +1,5 @@
-# Guards two invariants on server/migrations/ that used to be enforced
-# only by convention:
+# Guards two invariants independently in each service migration directory,
+# previously enforced only by convention:
 #
 #   1. Migration files that already exist on main are immutable. Once a
 #      file lands on main, prod has run it; editing the SQL only
@@ -21,11 +21,13 @@ on:
     branches: [main]
     paths:
       - 'server/migrations/**'
+      - 'services/agents-api/migrations/**'
       - 'scripts/verify-migration-order.sh'
       - '.github/workflows/migrations.yml'
   pull_request:
     paths:
       - 'server/migrations/**'
+      - 'services/agents-api/migrations/**'
       - 'scripts/verify-migration-order.sh'
       - '.github/workflows/migrations.yml'
 
@@ -40,6 +42,9 @@ jobs:
   verify-order:
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    strategy:
+      matrix:
+        migrations: [server/migrations, services/agents-api/migrations]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -53,4 +58,4 @@ jobs:
         run: git fetch --no-tags --depth=1 origin main
 
       - name: Verify migration order and immutability
-        run: bash scripts/verify-migration-order.sh origin/main
+        run: bash scripts/verify-migration-order.sh origin/main "${{ matrix.migrations }}"
