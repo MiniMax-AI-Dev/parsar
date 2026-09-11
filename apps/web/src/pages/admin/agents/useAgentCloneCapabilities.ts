@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react"
+import { useState, type Dispatch, type SetStateAction } from "react"
 import { cloneableAgentCapabilities } from "../../../lib/agent-clone"
 import type { AgentCapability } from "../../../lib/api-types"
 
@@ -12,12 +12,9 @@ export function useAgentCloneCapabilities(
   setVersionChoices: Dispatch<SetStateAction<Record<string, VersionChoice>>>,
 ) {
   const [snapshot, setSnapshot] = useState<{ sourceID: string; bindings: AgentCapability[] } | null>(null)
-  useEffect(() => {
-    if (!open || !sourceID) {
-      setSnapshot(null)
-      return
-    }
-    if (snapshot?.sourceID === sourceID || !bindings) return
+  if (!open || !sourceID) {
+    if (snapshot !== null) setSnapshot(null)
+  } else if (snapshot?.sourceID !== sourceID && bindings) {
     const selected = cloneableAgentCapabilities(bindings)
     setSelectedIDs(selected.map((binding) => binding.capability_id))
     setVersionChoices(Object.fromEntries(selected.map((binding) => [binding.capability_id, {
@@ -26,7 +23,7 @@ export function useAgentCloneCapabilities(
       pinnedVersion: binding.version ?? binding.capability?.pinned_version,
     }])))
     setSnapshot({ sourceID, bindings: selected })
-  }, [open, sourceID, bindings, snapshot, setSelectedIDs, setVersionChoices])
+  }
   return {
     ready: !sourceID || snapshot?.sourceID === sourceID,
     bindings: snapshot?.sourceID === sourceID ? snapshot.bindings : [],
