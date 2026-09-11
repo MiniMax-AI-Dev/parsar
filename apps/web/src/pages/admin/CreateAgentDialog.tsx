@@ -580,14 +580,13 @@ export function CreateAgentDialog({
     )
   }
 
-  useEffect(() => {
-    if (!modelDropdownOpen) return
+  if (modelDropdownOpen) {
     const firstSelectable = filteredModels.find((m) => !incompatibleModelIDs.has(m.id))
     const nextHighlighted = filteredModels.some((m) => m.id === highlightedModelID)
       ? highlightedModelID
       : (filteredModels.find((m) => m.id === selectedModelID)?.id ?? firstSelectable?.id ?? null)
     if (nextHighlighted !== highlightedModelID) setHighlightedModelID(nextHighlighted)
-  }, [filteredModels, highlightedModelID, incompatibleModelIDs, modelDropdownOpen, selectedModelID])
+  }
 
   useEffect(() => {
     if (!modelDropdownOpen) return
