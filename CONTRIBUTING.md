@@ -1255,12 +1255,14 @@ make check
 
 `make check` is the full local gate. It is composed of narrower targets that
 CI may run independently based on the changed paths: `make check-go` for sqlc
-drift plus non-store Go tests (including the shared daemon gateway and device packages), `make check-store` for migration/store
+drift plus non-store Go tests (including all daemon adapters and shared daemon
+protocol/gateway packages), `make check-store` for migration/store
 integration tests, `make check-web` for web typecheck plus design lint, and
 `make check-cli` for CLI/plugin typechecks, and `make check-installer` for
 Docker-free installer lifecycle checks, plus `make check-agents-api` for the
 execution service. Keep the subtargets aligned with
-the full gate whenever the required checks change.
+the full gate whenever the required checks change. Daemon-only changes must
+trigger the same Go checks in CI as server changes.
 
 Pin the CI vulnerability scanner to a version compatible with the workflow's
 Go toolchain; do not use `@latest` for that build-time tool.

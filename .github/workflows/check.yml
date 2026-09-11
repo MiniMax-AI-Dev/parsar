@@ -12,6 +12,7 @@ on:
       - "contracts/agents-api/**"
       - "packages/agents-client/**"
       - "internal/**"
+      - "apps/parsar-daemon/**"
       - "apps/web/**"
       - "packages/cli/**"
       - "packages/opencode-plugin/**"
@@ -35,6 +36,7 @@ on:
       - "contracts/agents-api/**"
       - "packages/agents-client/**"
       - "internal/**"
+      - "apps/parsar-daemon/**"
       - "apps/web/**"
       - "packages/cli/**"
       - "packages/opencode-plugin/**"
@@ -106,7 +108,7 @@ jobs:
                 go=true
                 store=true
                 ;;
-              server/*|internal/*|services/agents-api/*|contracts/agents-api/*|packages/agents-client/*)
+              server/*|internal/*|apps/parsar-daemon/*|services/agents-api/*|contracts/agents-api/*|packages/agents-client/*)
                 go=true
                 ;;
               apps/web/*)
