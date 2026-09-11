@@ -104,21 +104,12 @@ func ensureSessionItems(ctx context.Context, q *sqlc.Queries, session pgtype.UUI
 				p.AfterOrder = row.SourceOrder
 			}
 		}
-		// Some early internal Turns retained only the terminal aggregate.
-		var outcome struct {
-			Done json.RawMessage `json:"done"`
+		created := turn.CompletedAt
+		if !created.Valid {
+			created = turn.CreatedAt
 		}
-		if err = json.Unmarshal(turn.Outcome, &outcome); err != nil {
+		if err = projectItemSource(ctx, q, session, turn.ID, "execution_"+turn.Status, 0, turn.Outcome, created); err != nil {
 			return err
-		}
-		if len(outcome.Done) > 0 && string(outcome.Done) != "null" {
-			created := turn.CompletedAt
-			if !created.Valid {
-				created = turn.CreatedAt
-			}
-			if err = projectItemSource(ctx, q, session, turn.ID, "done", 0, outcome.Done, created); err != nil {
-				return err
-			}
 		}
 		if err = q.MarkItemsIndexed(ctx, sqlc.MarkItemsIndexedParams{SessionID: session, ID: turn.ID}); err != nil {
 			return err

@@ -91,6 +91,9 @@ func (s *Store) TransitionTurn(ctx context.Context, tenantID, sessionID, turnID 
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrTurnConflict
 		}
+		if err == nil && terminalStatus(row.Status) {
+			return projectItemSource(ctx, q, row.SessionID, row.ID, "execution_"+row.Status, 0, row.Outcome, row.CompletedAt)
+		}
 		return err
 	})
 	if err != nil {

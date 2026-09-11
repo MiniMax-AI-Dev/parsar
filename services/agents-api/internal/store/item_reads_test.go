@@ -152,6 +152,10 @@ func TestItemProjectionFailureRollsBackJournalAndLegacyAggregateRecovers(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
+	current, err := s.ListItems(ctx, tenant, session.ID, "", 100, true)
+	if err != nil || len(current.Items) != 2 || *current.Items[1].Content[0].Text != "legacy answer" {
+		t.Fatal(current, err)
+	}
 	if _, err = pool.Exec(ctx, "UPDATE turns SET items_indexed=false WHERE id=$1", input.TurnID); err != nil {
 		t.Fatal(err)
 	}
@@ -161,5 +165,46 @@ func TestItemProjectionFailureRollsBackJournalAndLegacyAggregateRecovers(t *test
 	}
 	if *page.Items[1].Content[0].Text != "legacy answer" {
 		t.Fatal(page)
+	}
+}
+
+func TestReceiptOnlyTextRecoversWithoutInventingCompletion(t *testing.T) {
+	ctx := context.Background()
+	s, pool := store.NewTestStore(t)
+	tenant := uuid.NewString()
+	for _, receiptOnly := range []bool{true, false} {
+		session, _ := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: uuid.NewString()})
+		input, err := s.SubmitMessage(ctx, tenant, session.ID, "first", json.RawMessage(`{"text":"test"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = s.TransitionTurn(ctx, tenant, session.ID, input.TurnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if receiptOnly {
+			err = s.AppendTurnEvents(ctx, tenant, session.ID, input.TurnID, 1, []store.ExecutionEvent{{Kind: "cancel_receipt", Payload: json.RawMessage(`{"applied":true,"outcome":{"content":"retained cancellation text"}}`)}})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		_, err = s.CompleteExecution(ctx, tenant, session.ID, input.TurnID, store.TurnCancelled, json.RawMessage(`{"done":{"content":"retained cancellation text"}}`), "", input.Sequence)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, err := store.New(pool).ListItems(ctx, tenant, session.ID, "", 100, true)
+		if err != nil || len(page.Items) != 2 || page.Items[1].Status != "incomplete" || *page.Items[1].Content[0].Text != "retained cancellation text" {
+			t.Fatal(page, err)
+		}
+		if _, err = pool.Exec(ctx, "DELETE FROM session_items WHERE session_id=$1", session.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = pool.Exec(ctx, "UPDATE turns SET items_indexed=false WHERE id=$1", input.TurnID); err != nil {
+			t.Fatal(err)
+		}
+		rebuilt, err := s.ListItems(ctx, tenant, session.ID, "", 100, true)
+		if err != nil || !reflect.DeepEqual(page, rebuilt) {
+			t.Fatal(rebuilt, err)
+		}
 	}
 }

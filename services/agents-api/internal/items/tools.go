@@ -26,6 +26,7 @@ type nativeTool struct {
 	ExitCode     *int64              `json:"exitCode"`
 	DurationMS   *int64              `json:"durationMs"`
 	Server       string              `json:"server"`
+	Namespace    string              `json:"namespace"`
 	Tool         string              `json:"tool"`
 	Arguments    json.RawMessage     `json:"arguments"`
 	Result       json.RawMessage     `json:"result"`
@@ -85,6 +86,9 @@ func projectTool(turn string, raw json.RawMessage) ([]Update, error) {
 		}
 		item.Type = "function_call"
 		item.Name = n.Tool
+		if n.Namespace != "" {
+			item.Name = n.Namespace + "::" + n.Tool
+		}
 		item.CallID = item.ID
 		item.Arguments = nullable(n.Arguments)
 		if n.Success != nil && !*n.Success && p.Stage == "after" {

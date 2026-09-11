@@ -28,7 +28,7 @@ def verify_items(a, b, invalid, session, empty_session, turns, expect_error):
         assert mcp.status == "completed" and mcp.server_label == "reference" and mcp.name == "lookup"
         assert mcp.arguments["n"] == 9007199254740993 and mcp.output["structuredContent"]["n"] == 9007199254740993
         assert mcp.error is None
-        call = next(item for item in group if item.type == "function_call" and item.name == "lookup")
+        call = next(item for item in group if item.type == "function_call" and item.name == "reference::lookup")
         output = next(item for item in group if item.type == "function_call_output")
         assert output.call_id == call.call_id and output.id != call.id and group.index(call) < group.index(output)
         assert output.output[0].type == "input_text" and output.output[0].text == ""

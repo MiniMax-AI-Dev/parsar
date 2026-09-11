@@ -70,12 +70,12 @@ func TestToolProjectionPreservesResultsAndPublicFields(t *testing.T) {
 }
 
 func TestDynamicResultsHaveSeparateLinkedIdentity(t *testing.T) {
-	raw := []byte(`{"id":"x","stage":"after","native_item":{"type":"dynamicToolCall","id":"x","tool":"lookup","status":"completed","success":false,"arguments":[1],"contentItems":[{"type":"inputText","text":""},{"type":"inputImage","imageUrl":"data:image/png;base64,abc"}]}}`)
+	raw := []byte(`{"id":"x","stage":"after","native_item":{"type":"dynamicToolCall","id":"x","tool":"lookup","namespace":"reference","status":"completed","success":false,"arguments":[1],"contentItems":[{"type":"inputText","text":""},{"type":"inputImage","imageUrl":"data:image/png;base64,abc"}]}}`)
 	updates, err := Project(testTurn, "tool_call", 1, raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(updates) != 2 || updates[0].Item.ID == updates[1].Item.ID || updates[0].Item.ID != updates[1].Item.CallID || updates[1].Item.Status != "failed" {
+	if len(updates) != 2 || updates[0].Item.Name != "reference::lookup" || updates[0].Item.ID == updates[1].Item.ID || updates[0].Item.ID != updates[1].Item.CallID || updates[1].Item.Status != "failed" {
 		t.Fatalf("%+v", updates)
 	}
 	result, _ := json.Marshal(updates[1].Item)

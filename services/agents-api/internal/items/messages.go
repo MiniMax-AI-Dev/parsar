@@ -70,6 +70,30 @@ func Project(turn, kind string, sequence int64, raw json.RawMessage) ([]Update, 
 			return nil, nil
 		}
 		return []Update{{Item: message(turn, "legacy-message", "assistant", p.Content, "completed"), LegacyFinal: true}}, nil
+	case "cancel_receipt", "execution_completed", "execution_failed", "execution_cancelled":
+		var p struct {
+			Applied bool               `json:"applied"`
+			Outcome *proto.DonePayload `json:"outcome"`
+			Done    *proto.DonePayload `json:"done"`
+		}
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, err
+		}
+		final := p.Done
+		if kind == "cancel_receipt" {
+			if !p.Applied {
+				return nil, nil
+			}
+			final = p.Outcome
+		}
+		if final == nil || final.Content == "" {
+			return nil, nil
+		}
+		status := "incomplete"
+		if kind == "execution_completed" {
+			status = "completed"
+		}
+		return []Update{{Item: message(turn, "legacy-message", "assistant", final.Content, status), LegacyFinal: true}}, nil
 	case proto.TypeToolCall:
 		return projectTool(turn, raw)
 	default:
@@ -82,7 +106,7 @@ func Merge(update Update, previous v1.Item) v1.Item {
 	if previous.ID == "" {
 		return item
 	}
-	if previous.Status != "in_progress" {
+	if previous.Status != "in_progress" && !(update.LegacyFinal && previous.Status == "incomplete") {
 		return previous
 	}
 	if (item.Type == "function_call") && (item.Arguments == nil || string(encoded(item.Arguments)) == "null") {
