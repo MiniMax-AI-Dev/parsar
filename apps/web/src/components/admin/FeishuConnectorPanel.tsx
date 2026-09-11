@@ -138,11 +138,13 @@ export function FeishuConnectorPanel({
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [provision, setProvision] = useState<ProvisionState | null>(null)
 
-  useEffect(() => {
+  const [draftSource, setDraftSource] = useState(current)
+  if (current !== draftSource) {
+    setDraftSource(current)
     setDraft(current ?? EMPTY_CONFIG)
     setSecretInputs(emptySecretInputs())
     setErrorMsg(null)
-  }, [current])
+  }
 
   const dirty = !configEqual(draft, current ?? EMPTY_CONFIG) || secretInputsDirty(secretInputs)
   const saving = mut.isPending || createSecretMut.isPending
