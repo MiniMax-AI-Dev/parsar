@@ -16,6 +16,8 @@
 //     with that id to graft the prior turn's context back in.
 package codex
 
+import "fmt"
+
 // JsonRpcVersion is the JSON-RPC 2.0 marker carried on every outbound
 // frame. Inbound frames omit the field per Codex's app-server convention,
 // so the parser does not enforce it on responses.
@@ -52,6 +54,8 @@ type JsonRpcError struct {
 	Message string `json:"message"`
 	Data    any    `json:"data,omitempty"`
 }
+
+func (e *JsonRpcError) Error() string { return fmt.Sprintf("%d %s", e.Code, e.Message) }
 
 // ---------------------------------------------------------------------------
 // initialize handshake

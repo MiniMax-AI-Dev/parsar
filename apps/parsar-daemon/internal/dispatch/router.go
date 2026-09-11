@@ -74,6 +74,7 @@ type sessionState struct {
 	idleLease   uint64
 	retain      bool
 	steering    map[string]steeringReceipt
+	steerBusy   bool
 }
 
 // Config is the constructor input. Registry and Sender are required;

@@ -424,9 +424,14 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
 - During an active run, the daemon retains up to 256 steering attempts and
   replays their receipts. Reusing an input ID with different text is rejected;
   capacity exhaustion rejects new inputs instead of evicting receipts.
-  `not_ready` means no input was sent and can be retried. An RPC failure yields
+  `not_ready` / `busy` mean no input was sent and the same input can be
+  retried without changing its identity or text. Native delivery runs outside
+  the shared dispatch loop, with at most one in-flight input per run. An
+  `in_flight` receipt means its result is still pending. A native error response
+  yields `rejected`; a transport failure or invalid receipt yields
   `outcome_unknown`, cached without automatic redelivery even after an ack-send
-  failure. These receipts are process-local and disappear with the run;
+  failure. A steering deadline or cancellation closes a blocked native RPC
+  transport to release stdin writes. These receipts are process-local and disappear with the run;
   durable recovery and interpreting missing receipts remain server-owned.
   This adapter contract does not expose the public Agents API events endpoint
   or change the existing product submission path.

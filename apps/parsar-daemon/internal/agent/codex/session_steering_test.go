@@ -57,10 +57,38 @@ func TestSteeringUsesNativeActiveTurnAndReceipt(t *testing.T) {
 			if err := json.NewEncoder(server.ToClient).Encode(map[string]any{"id": request.ID, "result": test.result, "error": test.err}); err != nil {
 				t.Fatal(err)
 			}
-			if err := <-done; (err == nil) != test.wantOK {
+			err := <-done
+			if (err == nil) != test.wantOK {
 				t.Fatalf("want success=%v: %v", test.wantOK, err)
 			}
+			if test.err != nil && !errors.Is(err, agent.ErrSteeringRejected) {
+				t.Fatalf("explicit rejection lost: %v", err)
+			}
 		})
+	}
+}
+
+func TestSteeringDeadlineReleasesBlockedNativeWrite(t *testing.T) {
+	client, _, cleanup := NewTestClient()
+	defer cleanup()
+	s := &Session{rpc: client.JSONRPCClient, cancelCtx: context.Background()}
+	s.setThreadID("native-thread")
+	s.startSteering(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"native-turn"}}`))
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- s.Steer(ctx, proto.PromptSteerPayload{InputID: "blocked", Text: "extra"}) }()
+	// No reader drains the pipe, so the request never reaches its response wait.
+	select {
+	case err := <-done:
+		if err == nil || errors.Is(err, agent.ErrSteeringRejected) {
+			t.Fatalf("blocked delivery has an uncertain outcome: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("deadline did not release native stdin write")
+	}
+	if client.Alive() {
+		t.Fatal("blocked native connection was not closed")
 	}
 }
 

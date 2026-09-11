@@ -3,6 +3,7 @@ package codex
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -14,6 +15,7 @@ type steeringTurn struct {
 	mu      sync.Mutex
 	id      string
 	stopped bool
+	cancel  context.CancelFunc
 }
 
 // TurnSteerParams mirrors the native Codex app-server turn/steer request.
@@ -27,9 +29,19 @@ var _ agent.Steerer = (*Session)(nil)
 
 // Steer returns success only after Codex accepts input for this native turn.
 func (s *Session) Steer(ctx context.Context, input proto.PromptSteerPayload) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	s.steering.mu.Lock()
 	turnID, stopped := s.steering.id, s.steering.stopped
+	if !stopped {
+		s.steering.cancel = cancel
+	}
 	s.steering.mu.Unlock()
+	defer func() {
+		s.steering.mu.Lock()
+		s.steering.cancel = nil
+		s.steering.mu.Unlock()
+	}()
 	if stopped || s.cancelCtx.Err() != nil {
 		return agent.ErrSteeringInactive
 	}
@@ -38,8 +50,16 @@ func (s *Session) Steer(ctx context.Context, input proto.PromptSteerPayload) err
 		return agent.ErrSteeringNotReady
 	}
 	params := TurnSteerParams{ThreadID: threadID, ExpectedTurnID: turnID, Input: FirstUserInput(input.Text)}
+	// Closing the transport also releases a blocked stdin write. A context
+	// deadline alone cannot interrupt io.Writer.Write in the native RPC client.
+	stop := context.AfterFunc(ctx, func() { _ = s.rpc.Close() })
+	defer stop()
 	raw, err := s.rpc.Request(ctx, "turn/steer", params)
 	if err != nil {
+		var rejected *JsonRpcError
+		if errors.As(err, &rejected) {
+			return fmt.Errorf("%w: %v", agent.ErrSteeringRejected, err)
+		}
 		return err
 	}
 	var result struct {
@@ -70,4 +90,7 @@ func (s *Session) stopSteering() {
 	s.steering.mu.Lock()
 	defer s.steering.mu.Unlock()
 	s.steering.stopped = true
+	if s.steering.cancel != nil {
+		s.steering.cancel()
+	}
 }

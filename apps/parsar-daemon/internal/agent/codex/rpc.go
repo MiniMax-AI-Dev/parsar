@@ -479,7 +479,7 @@ func (c *JSONRPCClient) handleResponse(rawID, rawResult, rawError json.RawMessag
 			p.resp <- rpcResponse{err: fmt.Errorf("codex rpc: malformed error reply on %s: %w", p.method, err)}
 			return
 		}
-		p.resp <- rpcResponse{err: fmt.Errorf("codex rpc: %s: %d %s", p.method, errBody.Code, errBody.Message)}
+		p.resp <- rpcResponse{err: fmt.Errorf("codex rpc: %s: %w", p.method, &errBody)}
 		return
 	}
 	p.resp <- rpcResponse{result: rawResult}
