@@ -140,6 +140,9 @@ func admitInput(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, key s
 			return InputReceipt{}, err
 		}
 	}
+	if err := indexInput(ctx, q, session, sequence); err != nil {
+		return InputReceipt{}, err
+	}
 	return inputReceipt(sequence, turn.ID, false), nil
 }
 

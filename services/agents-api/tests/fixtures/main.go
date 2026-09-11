@@ -58,6 +58,9 @@ func seed() error {
 		if _, err = s.TransitionTurn(ctx, f.Tenant, f.Session, receipt.TurnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress}); err != nil {
 			return err
 		}
+		if err = observeItems(ctx, s, f.Tenant, f.Session, receipt.TurnID, status); err != nil {
+			return err
+		}
 		if status != store.TurnInProgress {
 			outcome := json.RawMessage(`{"error":"SECRET engine log","done":{"metadata":{"agent_session_id":"PRIVATE"}}}`)
 			if _, err = s.TransitionTurn(ctx, f.Tenant, f.Session, receipt.TurnID, store.TurnTransition{ExpectedStatus: store.TurnInProgress, Status: status, Outcome: outcome}); err != nil {

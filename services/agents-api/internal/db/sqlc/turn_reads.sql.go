@@ -12,7 +12,7 @@ import (
 )
 
 const listTurns = `-- name: ListTurns :many
-SELECT t.id, t.session_id, t.status, t.created_at, t.started_at, t.completed_at, t.cancel_requested_at, t.outcome, t.event_count, t.event_bytes FROM turns t JOIN sessions s ON s.id = t.session_id
+SELECT t.id, t.session_id, t.status, t.created_at, t.started_at, t.completed_at, t.cancel_requested_at, t.outcome, t.event_count, t.event_bytes, t.items_indexed FROM turns t JOIN sessions s ON s.id = t.session_id
 WHERE s.tenant_id = $1 AND t.session_id = $2
   AND ($3::timestamptz IS NULL
        OR (NOT $4::boolean AND (t.created_at, t.id) < ($3::timestamptz, $5::uuid))
@@ -61,6 +61,7 @@ func (q *Queries) ListTurns(ctx context.Context, arg ListTurnsParams) ([]Turn, e
 			&i.Outcome,
 			&i.EventCount,
 			&i.EventBytes,
+			&i.ItemsIndexed,
 		); err != nil {
 			return nil, err
 		}

@@ -104,6 +104,94 @@ definitions:
     required:
     - model
     type: object
+  v1.Item:
+    properties:
+      action:
+        $ref: '#/definitions/v1.WebSearchAction'
+      arguments: {}
+      call_id:
+        type: string
+      command:
+        type: string
+      content:
+        items:
+          $ref: '#/definitions/v1.ItemContent'
+        type: array
+      cwd:
+        type: string
+      duration_ms:
+        type: integer
+      error: {}
+      exit_code:
+        type: integer
+      id:
+        type: string
+      name:
+        type: string
+      output: {}
+      phase:
+        enum:
+        - commentary
+        - final_answer
+        type: string
+      role:
+        enum:
+        - user
+        - assistant
+        type: string
+      server_label:
+        type: string
+      status:
+        enum:
+        - in_progress
+        - completed
+        - failed
+        - incomplete
+        type: string
+      turn_id:
+        type: string
+      type:
+        enum:
+        - message
+        - command_execution
+        - mcp_call
+        - function_call
+        - function_call_output
+        - web_search_call
+        type: string
+    required:
+    - id
+    - status
+    - turn_id
+    - type
+    type: object
+  v1.ItemContent:
+    properties:
+      image_url:
+        type: string
+      text:
+        type: string
+      type:
+        enum:
+        - input_text
+        - output_text
+        - input_image
+        type: string
+    required:
+    - type
+    type: object
+  v1.ItemList:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/v1.Item'
+        type: array
+      has_more:
+        type: boolean
+    required:
+    - data
+    - has_more
+    type: object
   v1.MultiAgentConfig:
     properties:
       enabled:
@@ -274,6 +362,28 @@ definitions:
     - data
     - has_more
     type: object
+  v1.WebSearchAction:
+    properties:
+      pattern:
+        type: string
+      queries:
+        items:
+          type: string
+        type: array
+      query:
+        type: string
+      type:
+        enum:
+        - search
+        - open_page
+        - find_in_page
+        - other
+        type: string
+      url:
+        type: string
+    required:
+    - type
+    type: object
 info:
   contact: {}
   description: Supported single-Agent execution resources from the pinned openai-python
@@ -435,6 +545,69 @@ paths:
       summary: Retrieve an execution Session
       tags:
       - Sessions
+  /agents/sessions/{session_id}/items:
+    get:
+      description: Returns supported message and tool Items in first-observation order.
+        Native engine fields are projected explicitly; unfinished Items on terminal
+        Turns are incomplete. Cursors belong to the same tenant and Session.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: Last Item ID from the previous page
+        in: query
+        name: after
+        type: string
+      - default: 20
+        description: Page size
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: desc
+        description: Creation order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.ItemList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List persisted execution Items
+      tags:
+      - Items
   /agents/sessions/{session_id}/turns:
     get:
       description: Returns persisted state in creation order. The cursor belongs to

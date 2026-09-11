@@ -43,9 +43,10 @@ separate future dependency for Team orchestration in Parsar, not the HTTP contra
 | Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; no public event submission or execution worker yet |
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |
 | Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
-| Public Items recovery and SSE | Pending; internal daemon payloads are not upstream wire objects |
+| Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
+| Public SSE | Pending; internal daemon payloads are not upstream wire objects |
 | Pending actions and environment lifecycle | Pending |
-| Official-client compatibility | Strict SDK checks for supported Session and Turn reads, pagination, retries, errors, tenant isolation and restart |
+| Official-client compatibility | Strict SDK checks for supported Session, Turn and Items reads, pagination, retries, errors, tenant isolation and restart |
 | Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |
 | Product cutover | Pending |
 | Team orchestration | Deferred; Parsar-owned |
@@ -57,7 +58,7 @@ supported options. For example, upstream metadata is limited to 16 pairs with
 replacement for that public validation.
 
 Use the pinned official Python client against the actual service, with response
-validation enabled, for supported Session/Turn operations, pagination, streaming,
+validation enabled, for supported Session/Turn/Items operations, pagination, streaming,
 errors, idempotency and tenant isolation. A client import or permissive parsing
 alone is not evidence of compatibility. Unsupported capabilities must be explicit
 errors, not successful placeholder resources. Add any provider or engine-specific
@@ -79,4 +80,30 @@ The cursor is a Turn ID in the same tenant and Session. Failed turns expose a
 generic `internal_error`, never raw engine diagnostics. `usage` is currently
 null because the native record does not guarantee the required cache/reasoning
 breakdown; raw measurements remain in execution storage. Public submission,
-Items/SSE and Session runtime-state projection remain pending.
+SSE and Session runtime-state projection remain pending.
+
+### Item recovery reads
+
+`GET /v1/agents/sessions/{session_id}/items` supports the same list controls,
+with a stable Item ID cursor and first-observation ordering. Messages preserve
+text, phase and completion snapshots. Commands preserve reported output, exit
+code, duration and working directory. MCP calls preserve server/tool identity,
+arguments and structured results/errors. Dynamic functions have linked call and
+result Items. Native file changes appear as `apply_patch` function calls with
+reported changes as arguments; no result is invented when the engine reports none.
+Web search exposes its supported action fields.
+
+Terminal Turns make unfinished Items `incomplete`; a failed tool does not imply
+that the Turn failed. Native start/completion snapshots are available, but interim
+tool-output deltas are not yet captured. Tool output is visible to the Session's
+authenticated tenant and may include the command's or tool's own diagnostic text.
+
+The index rebuilds pre-migration history from saved observations on first access,
+in pages under the Session lock. Large historical Sessions can make that first
+access slower. Subsequent reads use the durable index. Legacy unkeyed text is a
+single aggregate: original native message boundaries cannot be reconstructed.
+Legacy tool results retain their content but have `incomplete` status when the
+source did not record a native outcome. Only recognized historical user text/image
+shapes become messages; arbitrary internal input objects remain in source storage.
+Unsupported native variants, reasoning, subagent Items, Items mutation and live SSE
+are not covered. Public execution submission remains a separate milestone.
