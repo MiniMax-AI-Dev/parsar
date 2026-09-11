@@ -66,6 +66,7 @@ type KindCapabilities struct {
 	Resume             bool `json:"resume,omitempty"`
 	Steering           bool `json:"steering,omitempty"`
 	MessageItems       bool `json:"message_items,omitempty"`
+	ToolItems          bool `json:"tool_items,omitempty"`
 	DurableTurns       bool `json:"durable_turns,omitempty"`
 	WorkspaceAuthoring bool `json:"workspace_authoring,omitempty"`
 }

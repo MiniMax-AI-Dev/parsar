@@ -262,6 +262,7 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 				Steering:     true,
 				DurableTurns: true,
 				MessageItems: true,
+				ToolItems:    true,
 			},
 		},
 		Pi: proto.SupportedAgentKind{

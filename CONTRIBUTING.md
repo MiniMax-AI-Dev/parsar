@@ -220,6 +220,13 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   completion text snapshot. A snapshot is not another delta; uncompleted messages
   remain partial when their Turn ends. Keep these observations in the journal
   before projecting public Items. This does not promise daemon event replay.
+- `tool_items` advertises native tool snapshots, enabled per request with
+  `observe_tools`. Codex attaches the original tool item to existing before/after
+  `tool_call` frames, preserving command output, structured MCP results, errors
+  and other engine fields without expanding the legacy product payload. Keep
+  snapshots opaque in the internal journal; the execution service must validate
+  and project supported variants to the pinned public Item schema. Do not expose
+  native snapshots as public Items or synthesize a result for an unfinished call.
 - Execution observations are written to tenant-scoped `turn_events` in ordered,
   idempotent batches before they can back recovery or publication. Keep daemon
   payloads intact; this internal journal is not the public SSE protocol. Flush at

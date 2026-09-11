@@ -57,6 +57,7 @@ func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- pro
 //     this by killing the child early.
 type Session struct {
 	observeMessages bool
+	observeTools    bool
 	runID           string
 	cfg             sessionConfig
 	out             chan<- proto.Envelope
@@ -146,6 +147,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	s := &Session{
 		runID:           req.RunID,
 		observeMessages: req.ObserveMessages,
+		observeTools:    req.ObserveTools,
 		cfg:             cfg,
 		out:             out,
 		rpc:             rpc,
