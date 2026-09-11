@@ -658,14 +658,13 @@ export function CreateAgentDialog({
   // still be loading; once they land, resolve to the first existing one. Gated
   // on the credential_ref UI so no-credential models stay untouched; with zero
   // secrets it stays pending and the inline new-secret form takes over.
-  useEffect(() => {
-    if (mode !== "create" || cloneSourceID) return
-    if (!requiresModel || selectedModel?.credential_mode !== "credential_ref") return
-    if (modelBindingChoice.source !== "shared") return
-    if ("existing_secret_id" in modelBindingChoice || "new_secret" in modelBindingChoice) return
-    if (modelNewSecretExpanded || sharedSecrets.length === 0) return
+  if (mode === "create" && !cloneSourceID && requiresModel
+    && selectedModel?.credential_mode === "credential_ref"
+    && modelBindingChoice.source === "shared"
+    && !("existing_secret_id" in modelBindingChoice) && !("new_secret" in modelBindingChoice)
+    && !modelNewSecretExpanded && sharedSecrets.length > 0) {
     setModelBindingChoice({ source: "shared", existing_secret_id: sharedSecrets[0].id })
-  }, [mode, cloneSourceID, requiresModel, selectedModel, modelBindingChoice, modelNewSecretExpanded, sharedSecrets])
+  }
   const modelSharedSecrets = cloneSourceID
     ? sharedSecretsForKind(sharedSecrets, selectedModel?.credential_kind_code || "model_api_key")
     : sharedSecrets
