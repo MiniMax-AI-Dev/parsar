@@ -228,6 +228,13 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   additional outcome entry. These are internal admission limits, not promises
   about upstream API limits or durable daemon-to-service replay.
 
+- Public Turn retrieve/list project persisted execution state and the immutable
+  Session Agent identity. Scope both resources and pagination cursors to the
+  authenticated tenant and Session, ordering by creation time then ID. Do not
+  expose adapter outcomes, native IDs or raw errors. Failure uses a customer-safe
+  category; usage remains nullable until its complete upstream breakdown can be
+  mapped without inventing measurements. These reads do not enable submission.
+
 ### Agent knowledge references
 
 - Unpublished knowledge retains only the bound version in other workspaces;

@@ -6,8 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
-	"strings"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
@@ -17,6 +15,8 @@ import (
 )
 
 type SessionStore interface {
+	GetTurn(context.Context, string, string, string) (store.Turn, error)
+	ListTurns(context.Context, string, string, string, int, bool) (store.TurnPage, error)
 	CreateSession(context.Context, string, store.CreateSessionInput) (store.Session, error)
 	GetSession(context.Context, string, string) (store.Session, error)
 	ListSessions(context.Context, string, string, int, bool) (store.SessionPage, error)
@@ -43,6 +43,8 @@ func NewHandler(s SessionStore, auth *Authenticator, engine string) (http.Handle
 		r.Post("/agents/sessions", h.createSession)
 		r.Get("/agents/sessions", h.listSessions)
 		r.Get("/agents/sessions/{session_id}", h.getSession)
+		r.Get("/agents/sessions/{session_id}/turns", h.listTurns)
+		r.Get("/agents/sessions/{session_id}/turns/{turn_id}", h.getTurn)
 		r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 			writeError(w, http.StatusNotFound, "unsupported_operation", "This API operation is not supported.")
 		})
@@ -170,27 +172,11 @@ func (h *Handler) respondSession(w http.ResponseWriter, r *http.Request, session
 // @Failure 400,401,404,500 {object} v1.ErrorResponse
 // @Router /agents/sessions [get]
 func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	for key, values := range q {
-		if (key != "after" && key != "limit" && key != "order") || len(values) != 1 {
-			writeError(w, http.StatusBadRequest, "unsupported_parameter", "Supported list parameters are after, limit and order, each supplied once.")
-			return
-		}
-	}
-	limit, order := 20, q.Get("order")
-	if raw, ok := q["limit"]; ok {
-		var err error
-		limit, err = strconv.Atoi(raw[0])
-		if err != nil || limit < 1 || limit > 100 {
-			writeError(w, http.StatusBadRequest, "invalid_request", "limit must be between 1 and 100.")
-			return
-		}
-	}
-	if order != "" && order != "asc" && order != "desc" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "order must be asc or desc.")
+	options, ok := readPage(w, r)
+	if !ok {
 		return
 	}
-	page, err := h.store.ListSessions(r.Context(), tenantID(r), strings.TrimSpace(q.Get("after")), limit, order == "asc")
+	page, err := h.store.ListSessions(r.Context(), tenantID(r), options.after, options.limit, options.ascending)
 	if err != nil {
 		writeStoreError(w, r, err)
 		return

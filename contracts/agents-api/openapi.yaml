@@ -206,6 +206,74 @@ definitions:
     required:
     - type
     type: object
+  v1.Turn:
+    properties:
+      agent_id:
+        type: string
+      completed_at:
+        type: integer
+        x-nullable: true
+      created_at:
+        type: integer
+      error:
+        allOf:
+        - $ref: '#/definitions/v1.TurnError'
+        x-nullable: true
+      id:
+        type: string
+      object:
+        enum:
+        - agent.session.turn
+        type: string
+      session_id:
+        type: string
+      started_at:
+        type: integer
+        x-nullable: true
+      status:
+        enum:
+        - queued
+        - in_progress
+        - waiting
+        - completed
+        - failed
+        - cancelled
+        type: string
+      usage:
+        type: object
+        x-nullable: true
+    required:
+    - agent_id
+    - created_at
+    - id
+    - object
+    - session_id
+    - status
+    type: object
+  v1.TurnError:
+    properties:
+      code:
+        enum:
+        - internal_error
+        type: string
+      message:
+        type: string
+    required:
+    - code
+    - message
+    type: object
+  v1.TurnList:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/v1.Turn'
+        type: array
+      has_more:
+        type: boolean
+    required:
+    - data
+    - has_more
+    type: object
 info:
   contact: {}
   description: Supported single-Agent execution resources from the pinned openai-python
@@ -367,6 +435,115 @@ paths:
       summary: Retrieve an execution Session
       tags:
       - Sessions
+  /agents/sessions/{session_id}/turns:
+    get:
+      description: Returns persisted state in creation order. The cursor belongs to
+        the same Session and tenant. Usage is null until the complete upstream token
+        breakdown is available.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: Last Turn ID from the previous page
+        in: query
+        name: after
+        type: string
+      - default: 20
+        description: Page size
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: desc
+        description: Creation order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.TurnList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List execution Turns
+      tags:
+      - Turns
+  /agents/sessions/{session_id}/turns/{turn_id}:
+    get:
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: Turn ID
+        in: path
+        name: turn_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.Turn'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve an execution Turn
+      tags:
+      - Turns
 schemes:
 - http
 - https

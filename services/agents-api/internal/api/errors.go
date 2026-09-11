@@ -30,14 +30,14 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 func writeStoreError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		writeError(w, http.StatusNotFound, "not_found", "Session not found.")
+		writeError(w, http.StatusNotFound, "not_found", "Resource not found.")
 	case errors.Is(err, store.ErrIdempotencyConflict):
 		writeError(w, http.StatusConflict, "idempotency_conflict", "This idempotency key was used with different input.")
 	case errors.Is(err, store.ErrInvalidInput):
-		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid Session identifier or request limits.")
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid resource identifier or request limits.")
 	default:
 		// Driver errors can include submitted values; do not log the raw error.
 		log.Ctx(r.Context()).Error("agents-api persistence operation failed")
-		writeError(w, http.StatusInternalServerError, "internal_error", "The Session operation could not be completed.")
+		writeError(w, http.StatusInternalServerError, "internal_error", "The operation could not be completed.")
 	}
 }

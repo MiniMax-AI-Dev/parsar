@@ -42,9 +42,10 @@ separate future dependency for Team orchestration in Parsar, not the HTTP contra
 | Internal Turn/input persistence | Tenant-scoped atomic input batches, steering, request-level retry identity, cancellation targets and terminal outcomes |
 | Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; no public event submission or execution worker yet |
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; tenant-scoped paginated Store reads |
-| Public Turn/Items recovery and SSE | Pending; internal daemon payloads are not upstream wire objects |
+| Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
+| Public Items recovery and SSE | Pending; internal daemon payloads are not upstream wire objects |
 | Pending actions and environment lifecycle | Pending |
-| Official-client compatibility | Strict SDK checks for the supported Session subset, pagination, retries, errors, tenant isolation and restart |
+| Official-client compatibility | Strict SDK checks for supported Session and Turn reads, pagination, retries, errors, tenant isolation and restart |
 | Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |
 | Product cutover | Pending |
 | Team orchestration | Deferred; Parsar-owned |
@@ -56,7 +57,7 @@ supported options. For example, upstream metadata is limited to 16 pairs with
 replacement for that public validation.
 
 Use the pinned official Python client against the actual service, with response
-validation enabled, for supported Session operations, pagination, streaming,
+validation enabled, for supported Session/Turn operations, pagination, streaming,
 errors, idempotency and tenant isolation. A client import or permissive parsing
 alone is not evidence of compatibility. Unsupported capabilities must be explicit
 errors, not successful placeholder resources. Add any provider or engine-specific
@@ -68,3 +69,14 @@ Agent references/filtering, other agent options, vaults, initial input, streamin
 and execution/provider resources are not supported by this slice. Reject them
 explicitly. `AGENTS_API_ENGINE` selects the service's engine independently of the
 requested model; it does not add a competing field to the upstream request.
+
+### Turn recovery reads
+
+`GET /v1/agents/sessions/{session_id}/turns` and retrieval by `turn_id`
+return persisted Turn states using the pinned official client contract. Lists
+support `after`, `limit` (1..100, default 20), and `order` (default `desc`).
+The cursor is a Turn ID in the same tenant and Session. Failed turns expose a
+generic `internal_error`, never raw engine diagnostics. `usage` is currently
+null because the native record does not guarantee the required cache/reasoning
+breakdown; raw measurements remain in execution storage. Public submission,
+Items/SSE and Session runtime-state projection remain pending.
