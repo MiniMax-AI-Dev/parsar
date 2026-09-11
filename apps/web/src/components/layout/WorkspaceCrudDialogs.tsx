@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ApiError } from "../../lib/api-client"
 import type { WorkspaceVisibility } from "../../lib/api-types"
@@ -68,13 +68,20 @@ export function WorkspaceFormDialog({
   const [visibility, setVisibility] =
     useState<WorkspaceVisibility>(initialVisibility)
 
-  // Reset on open so a previous error doesn't leak across opens.
-  useEffect(() => {
+  const [previousInputs, setPreviousInputs] = useState({ open, initialName, initialVisibility })
+
+  // Reseed on open or changed defaults, without clearing drafts on mutation updates.
+  if (
+    open !== previousInputs.open ||
+    initialName !== previousInputs.initialName ||
+    initialVisibility !== previousInputs.initialVisibility
+  ) {
+    setPreviousInputs({ open, initialName, initialVisibility })
     if (open) {
       setName(initialName)
       setVisibility(initialVisibility)
     }
-  }, [open, initialName, initialVisibility])
+  }
 
   const errMsg = extractErrorMessage(error)
   const submitLabel =
@@ -208,11 +215,13 @@ export function JoinRequestDialog({
 }: JoinRequestDialogProps) {
   const { t } = useTranslation("common")
   const [reason, setReason] = useState("")
+  const [previousOpen, setPreviousOpen] = useState(open)
 
   // Reset on open so prior input doesn't leak to a different workspace.
-  useEffect(() => {
+  if (open !== previousOpen) {
+    setPreviousOpen(open)
     if (open) setReason("")
-  }, [open])
+  }
 
   const errMsg = extractErrorMessage(error)
   const trimmed = reason.trim()
