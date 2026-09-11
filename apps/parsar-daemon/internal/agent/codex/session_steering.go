@@ -50,11 +50,9 @@ func (s *Session) Steer(ctx context.Context, input proto.PromptSteerPayload) err
 		return agent.ErrSteeringNotReady
 	}
 	params := TurnSteerParams{ThreadID: threadID, ExpectedTurnID: turnID, Input: FirstUserInput(input.Text)}
-	// Closing the transport also releases a blocked stdin write. A context
-	// deadline alone cannot interrupt io.Writer.Write in the native RPC client.
-	stop := context.AfterFunc(ctx, func() { _ = s.rpc.Close() })
-	defer stop()
-	raw, err := s.rpc.Request(ctx, "turn/steer", params)
+	raw, err := s.rpc.request(ctx, "turn/steer", params, func(frame any) error {
+		return s.rpc.writeFrameContext(ctx, frame)
+	})
 	if err != nil {
 		var rejected *JsonRpcError
 		if errors.As(err, &rejected) {

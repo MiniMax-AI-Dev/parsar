@@ -431,7 +431,9 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   yields `rejected`; a transport failure or invalid receipt yields
   `outcome_unknown`, cached without automatic redelivery even after an ack-send
   failure. A steering deadline or cancellation closes a blocked native RPC
-  transport to release stdin writes. These receipts are process-local and disappear with the run;
+  write; waiting for a receipt after a complete write must preserve the process.
+  Unexpected transport exit ends the run with an error, without duplicating a
+  terminal outcome already received. These receipts disappear with the run;
   durable recovery and interpreting missing receipts remain server-owned.
   This adapter contract does not expose the public Agents API events endpoint
   or change the existing product submission path.

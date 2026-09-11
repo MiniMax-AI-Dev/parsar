@@ -65,6 +65,8 @@ type Session struct {
 	cancelFn  context.CancelFunc
 
 	cancelOnce   sync.Once
+	cancelled    atomic.Bool
+	terminal     atomic.Bool
 	closeOutOnce sync.Once
 	outMu        sync.RWMutex
 	outClosed    bool
@@ -181,6 +183,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 }
 
 func (s *Session) Cancel(_ context.Context) error {
+	s.cancelled.Store(true)
 	s.stopSteering()
 	s.cancelOnce.Do(func() {
 		s.stopCodexInteractionTimers()
@@ -280,6 +283,9 @@ func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 	// Block until terminal handlers close the RPC child or cancellation arrives.
 	select {
 	case <-s.rpc.Done():
+		if !s.cancelled.Load() && s.cancelCtx.Err() == nil {
+			s.emitTerminal("codex: connection closed before the run completed", true)
+		}
 	case <-s.cancelCtx.Done():
 		_ = s.rpc.Close()
 	}
@@ -612,6 +618,9 @@ func (s *Session) peekLastErrText() string {
 // ---------------------------------------------------------------------------
 
 func (s *Session) emitDone(content string, usage *TurnUsage) {
+	if !s.terminal.CompareAndSwap(false, true) {
+		return
+	}
 	s.stopSteering()
 	doneMeta := map[string]any{}
 	if tid := s.currentThreadID(); tid != "" {
@@ -650,6 +659,9 @@ func (s *Session) emitUsage(u TurnUsage) {
 }
 
 func (s *Session) emitTerminal(message string, asError bool) {
+	if !s.terminal.CompareAndSwap(false, true) {
+		return
+	}
 	s.stopSteering()
 	// Always log: this is the only place the daemon decides "the prompt is
 	// over, here's what went wrong (if anything)". Without this, post-
