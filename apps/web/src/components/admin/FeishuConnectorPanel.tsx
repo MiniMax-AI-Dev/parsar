@@ -173,11 +173,12 @@ export function FeishuConnectorPanel({
 
   useEffect(() => {
     if (!provision || provision.status !== "pending" || pollProvisionPending) return
-    if (Date.now() >= provision.expiresAt) {
-      setProvision({ ...provision, status: "expired", message: t("agents.feishuConnector.provision.expired") })
-      return
-    }
+    const delay = Math.min(Math.max(1, provision.intervalSec) * 1000, Math.max(0, provision.expiresAt - Date.now()))
     const timer = window.setTimeout(() => {
+      if (Date.now() >= provision.expiresAt) {
+        setProvision({ ...provision, status: "expired", message: t("agents.feishuConnector.provision.expired") })
+        return
+      }
       pollProvision(
         {
           agentID,
@@ -226,7 +227,7 @@ export function FeishuConnectorPanel({
           },
         },
       )
-    }, Math.max(1, provision.intervalSec) * 1000)
+    }, delay)
     return () => window.clearTimeout(timer)
   }, [agentID, agentName, onToast, pollProvision, pollProvisionPending, provision, t])
 
