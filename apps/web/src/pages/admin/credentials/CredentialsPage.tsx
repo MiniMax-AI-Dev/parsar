@@ -29,9 +29,7 @@ export function CredentialsPage() {
   const [query, setQuery] = useState("")
   const [createRequest, setCreateRequest] = useState(0)
 
-  useEffect(() => {
-    if (tab === "org" && !isAdmin) setTab("personal")
-  }, [tab, isAdmin])
+  if (tab === "org" && !isAdmin) setTab("personal")
 
   // replaceState (not push) — tabs aren't a navigation primitive, the
   // back button shouldn't stair-step through them.
