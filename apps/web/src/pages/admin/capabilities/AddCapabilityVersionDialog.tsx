@@ -79,9 +79,9 @@ export function AddCapabilityVersionDialog({
   const [draftSpec, setSpec] = useState<CanonicalSpec | null>(null)
   // Resolve the initial knowledge draft when the version arrives. Once edited,
   // background version refreshes must not replace the user's document changes.
-  const spec = kind === "knowledge" && !draftSpec && latestVersion
+  const spec = useMemo(() => kind === "knowledge" && !draftSpec && latestVersion
     ? { schema_version: 1, kind: "knowledge" as const, knowledge: latestVersion.canonical_spec?.knowledge as CanonicalSpec["knowledge"] }
-    : draftSpec
+    : draftSpec, [kind, draftSpec, latestVersion])
   const waitingForKnowledge = kind === "knowledge" && !!capability.latest_version_id && !latestVersion
   const [inlineSecrets, setInlineSecrets] = useState<ImportInlineSecretInput[]>([])
   const [rawText, setRawText] = useState("")
