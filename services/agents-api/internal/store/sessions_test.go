@@ -92,7 +92,7 @@ func TestSessionsPersistAndStayTenantScoped(t *testing.T) {
 	if _, err := s.GetSession(ctx, tenantB, first.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cross-tenant read: %v", err)
 	}
-	if _, err := s.ListSessions(ctx, tenantB, first.ID, 10); !errors.Is(err, ErrNotFound) {
+	if _, err := s.ListSessions(ctx, tenantB, first.ID, 10, false); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cross-tenant cursor: %v", err)
 	}
 	for _, key := range []string{"second", "third"} {
@@ -111,7 +111,7 @@ func TestSessionsPersistAndStayTenantScoped(t *testing.T) {
 	seen := map[string]bool{}
 	cursor := ""
 	for {
-		page, err := recovered.ListSessions(ctx, tenantA, cursor, 2)
+		page, err := recovered.ListSessions(ctx, tenantA, cursor, 2, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -132,7 +132,7 @@ func TestSessionsPersistAndStayTenantScoped(t *testing.T) {
 	if len(seen) != 3 || !seen[first.ID] || seen[other.ID] {
 		t.Fatalf("pagination lost or leaked sessions: %+v", seen)
 	}
-	empty, err := recovered.ListSessions(ctx, uuid.NewString(), "", 10)
+	empty, err := recovered.ListSessions(ctx, uuid.NewString(), "", 10, false)
 	if err != nil || empty.Sessions == nil || len(empty.Sessions) != 0 {
 		t.Fatalf("empty tenant = %+v, %v", empty, err)
 	}
@@ -183,7 +183,7 @@ func TestConcurrentSessionCreationIsIdempotent(t *testing.T) {
 			t.Fatalf("changed request = %v", err)
 		}
 	}
-	page, err := s.ListSessions(ctx, tenant, "", 10)
+	page, err := s.ListSessions(ctx, tenant, "", 10, false)
 	if err != nil || len(page.Sessions) != 1 || !reflect.DeepEqual(page.Sessions[0], replay) {
 		t.Fatalf("retry changed stored session: %+v, %v", page, err)
 	}

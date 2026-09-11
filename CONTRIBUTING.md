@@ -145,6 +145,18 @@ the existing server remains the execution owner until a flow is explicitly moved
   in `contracts/agents-api/upstream.json`. Follow its Session/Turn/event semantics
   and verify supported behavior using the official client. Track current coverage
   in `contracts/agents-api/README.md`; SDK workflow objects are not this contract.
+- Shared supported wire types live in `contracts/agents-api/v1`. `make openapi`
+  separately generates the product spec and `contracts/agents-api/openapi.yaml`;
+  never mix their routes or authentication schemes. CI checks both for drift.
+- The standalone service uses `AGENTS_API_DATABASE_URL` and operator-provisioned
+  SHA-256 API key bindings from `AGENTS_API_KEYS_FILE`. Tenant identity comes only
+  from that binding; metadata and product session cookies grant no access. The
+  operator-selected `AGENTS_API_ENGINE` is separate from the requested model.
+  Until execution is connected, support only documented idle Session operations
+  and reject unsupported input/environment/agent options explicitly.
+- `services/agents-api/tests/official_client.py` verifies the actual server with
+  the pinned SDK and strict response validation. It requires a dedicated test DB
+  prepared by the Store tests and `AGENTS_API_SERVER_BIN`; it never starts Docker.
 
 ### Agent knowledge references
 

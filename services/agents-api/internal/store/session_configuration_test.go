@@ -40,7 +40,7 @@ func TestConfigurationSizeLimitSurvivesJSONBRoundTrip(t *testing.T) {
 	if err != nil || string(got.Configuration) != string(first.Configuration) {
 		t.Fatalf("configuration failed round trip: %v", err)
 	}
-	page, err := s.ListSessions(ctx, tenant, "", 10)
+	page, err := s.ListSessions(ctx, tenant, "", 10, false)
 	if err != nil || len(page.Sessions) != 1 || page.Sessions[0].ID != first.ID {
 		t.Fatalf("configuration broke listing: %v", err)
 	}

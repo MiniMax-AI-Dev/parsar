@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'services/agents-api/**'
+      - 'contracts/agents-api/**'
       - 'internal/**'
       - 'go.mod'
       - 'go.sum'
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - 'services/agents-api/**'
+      - 'contracts/agents-api/**'
       - 'internal/**'
       - 'go.mod'
       - 'go.sum'
@@ -54,3 +56,21 @@ jobs:
         env:
           PARSAR_AGENTS_API_TEST_DATABASE_URL: postgres://agents_api:agents_api_test_only@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/parsar_agents_api_ci_tests?sslmode=disable
         run: make check-agents-api
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install pinned official client
+        run: |
+          python - <<'PY'
+          import json, subprocess, sys
+          pin = json.load(open('contracts/agents-api/upstream.json'))
+          subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'services/agents-api/tests/requirements.txt',
+                          'openai @ git+https://github.com/openai/openai-python@' + pin['commit']], check=True)
+          PY
+      - name: Build standalone service
+        run: go build -o "$RUNNER_TEMP/agents-api" ./services/agents-api/cmd/server
+      - name: Verify official-client HTTP compatibility
+        env:
+          PARSAR_AGENTS_API_TEST_DATABASE_URL: postgres://agents_api:agents_api_test_only@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/parsar_agents_api_ci_tests?sslmode=disable
+          AGENTS_API_SERVER_BIN: ${{ runner.temp }}/agents-api
+        run: python services/agents-api/tests/official_client.py
