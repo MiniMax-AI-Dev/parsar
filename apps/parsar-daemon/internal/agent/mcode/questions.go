@@ -13,8 +13,9 @@ import (
 )
 
 type formOption struct {
-	Value string `json:"const"`
-	Title string `json:"title"`
+	Value       string `json:"const"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
 }
 
 type formProperty struct {
@@ -89,7 +90,7 @@ func (s *Session) askQuestion(frame rpcFrame) error {
 				return fmt.Errorf("mcode: input choices have ambiguous labels")
 			}
 			labels[label] = true
-			question.Options = append(question.Options, proto.PromptForUserChoiceOption{Label: label})
+			question.Options = append(question.Options, proto.PromptForUserChoiceOption{Label: label, Description: option.Description})
 		}
 		question.IsOther = len(options) == 0 || otherFields[key] != ""
 		questions = append(questions, question)
