@@ -70,7 +70,11 @@ func (s *agentAuthoringService) handle(ctx context.Context, runID string, reques
 		for _, file := range spec.Skill.Files {
 			files = append(files, file.Path)
 		}
-		return map[string]any{"id": capability.ID, "name": capability.Name, "version": capability.LatestVersion, "description": spec.Skill.Description, "instructions": spec.Skill.Instruction, "files": files}, nil
+		markdown, err := s.readSkillMarkdown(ctx, capability.LatestVersionID)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"id": capability.ID, "name": capability.Name, "version": capability.LatestVersion, "description": spec.Skill.Description, "instructions": spec.Skill.Instruction, "markdown": markdown, "files": files}, nil
 	case proto.AuthoringSkillCreate, proto.AuthoringSkillUpdate:
 		return s.writeSkill(ctx, run, request)
 	case proto.AuthoringPromptRead:

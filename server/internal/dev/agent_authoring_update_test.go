@@ -43,9 +43,20 @@ func TestAgentAuthoringUpdateProtectsPublicAndArchivedContent(t *testing.T) {
 			if err == nil || len(s.versions) != 0 || len(s.imports) != 0 {
 				t.Fatalf("unsafe replacement was accepted: %v", err)
 			}
-			if _, err := handler(t.Context(), uploadTestRun, proto.AuthoringRequestPayload{Operation: proto.AuthoringSkillRead, CapabilityID: id}); err != nil {
-				t.Fatalf("existing Skill read was restricted: %v", err)
+			read, err := handler(t.Context(), uploadTestRun, proto.AuthoringRequestPayload{Operation: proto.AuthoringSkillRead, CapabilityID: id})
+			if err != nil || read.(map[string]any)["markdown"] != markdown {
+				t.Fatalf("existing Skill source was not readable: %v", err)
 			}
 		})
+	}
+}
+
+func TestAgentAuthoringReadsLegacyMarkdownSource(t *testing.T) {
+	s := newAuthoringTestStore()
+	s.version.SourcePayload = json.RawMessage(`{"format":"markdown","body":"Original source","run_id":"private-provenance"}`)
+	service := agentAuthoringService{store: s}
+	markdown, err := service.readSkillMarkdown(t.Context(), "version")
+	if err != nil || markdown != "Original source" {
+		t.Fatalf("legacy source unavailable: %v", err)
 	}
 }

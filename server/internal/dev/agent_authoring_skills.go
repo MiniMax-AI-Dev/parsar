@@ -59,7 +59,7 @@ func (s *agentAuthoringService) writeSkill(ctx context.Context, run store.AgentR
 	if err != nil {
 		return nil, err
 	}
-	ref, digest, httpErr := ensureSkillImportArchive(ctx, run.WorkspaceID, parsed.Spec, "", "", s.blobs)
+	ref, digest, httpErr := storeSkillMarkdownArchive(ctx, run.WorkspaceID, request.Content, s.blobs)
 	if httpErr != nil {
 		return nil, errors.New(httpErr.message)
 	}
@@ -82,6 +82,32 @@ func (s *agentAuthoringService) writeSkill(ctx context.Context, run store.AgentR
 		return nil, err
 	}
 	return map[string]string{"id": result.Capability.ID, "name": result.Capability.Name, "version": result.CapabilityVersion.Version, "version_id": result.CapabilityVersion.ID, "visibility": "workspace"}, nil
+}
+
+func (s *agentAuthoringService) readSkillMarkdown(ctx context.Context, versionID string) (string, error) {
+	version, err := s.store.GetCapabilityVersion(ctx, versionID)
+	if err != nil {
+		return "", err
+	}
+	if version.OssKey != "" {
+		if s.blobs == nil {
+			return "", errors.New("Skill archive is unavailable")
+		}
+		data, err := s.blobs.Download(ctx, version.OssKey)
+		if err != nil {
+			return "", err
+		}
+		parsed, err := parser.ParseSkillZip(data)
+		return parsed.EntryMarkdown, err
+	}
+	var source struct {
+		Format string `json:"format"`
+		Body   string `json:"body"`
+	}
+	if json.Unmarshal(version.SourcePayload, &source) == nil && source.Format == "markdown" {
+		return source.Body, nil
+	}
+	return "", nil
 }
 
 // Canonical files may omit oversized assets which still exist in the archive.

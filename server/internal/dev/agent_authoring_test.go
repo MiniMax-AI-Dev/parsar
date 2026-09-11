@@ -9,6 +9,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/parser"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
@@ -95,7 +96,7 @@ func TestAgentAuthoringSkillArchiveAndVersionScope(t *testing.T) {
 	s := newAuthoringTestStore()
 	blobs := blob.NewMemoryStore("https://api.test")
 	handler := NewAgentAuthoringHandler(s, blobs)
-	const markdown = "---\nname: generated-guide\ndescription: Workspace guide\n---\nReturn AUTHORING-OK.\n"
+	const markdown = "---\nname: generated-guide\ndescription: Workspace guide\nallowed-tools: Read\ndisable-model-invocation: true\nlicense: MIT\n---\nReturn AUTHORING-OK.\n"
 	_, err := handler(t.Context(), uploadTestRun, proto.AuthoringRequestPayload{Operation: proto.AuthoringSkillCreate, Content: markdown})
 	if err != nil {
 		t.Fatal(err)
@@ -126,6 +127,21 @@ func TestAgentAuthoringSkillArchiveAndVersionScope(t *testing.T) {
 	}
 	if len(s.versions) != 1 || s.versions[0].Version != "" || s.versions[0].CreatorID != "requester" || s.versions[0].OssKey == input.OssKey || s.versions[0].ExpectedSkillVersionID != "version" {
 		t.Fatal("version did not reuse automatic version/archive contract")
+	}
+	for _, ref := range []string{input.OssKey, s.versions[0].OssKey} {
+		data, err := blobs.Download(t.Context(), ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed, err := parser.ParseSkillZip(data)
+		if err != nil || parsed.EntryMarkdown != markdown {
+			t.Fatalf("archive lost original Skill source: %v", err)
+		}
+		s.version.OssKey = ref
+		read, err := handler(t.Context(), uploadTestRun, proto.AuthoringRequestPayload{Operation: proto.AuthoringSkillRead, CapabilityID: id})
+		if err != nil || read.(map[string]any)["markdown"] != markdown {
+			t.Fatalf("read lost original Skill source: %v", err)
+		}
 	}
 	input.Spec.Skill.Files = []canonical.SkillFile{{Path: "references/policy.md", Content: "Preserve"}}
 	s.version.CanonicalSpec = json.RawMessage(mustJSON(t, input.Spec))

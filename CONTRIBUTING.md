@@ -459,7 +459,8 @@ description and keep ownership on the side listed here.
 - Skill writes reuse the canonical Markdown parser, stored ZIP and transactional
   capability/version import. The first release writes single-file Skills and
   rejects updates to public Skills or updates that would discard supporting
-  files from the stored archive. Existing audit records
+  files from the stored archive. Preserve original Markdown, including unknown
+  frontmatter, in the stored archive and return it on reads. Existing audit records
   retain the requester; the import source records the originating run ID.
   Version writes recheck workspace visibility and the inspected latest version
   under a capability row lock, rejecting changes made during archive I/O.
