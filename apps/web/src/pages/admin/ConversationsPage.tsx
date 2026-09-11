@@ -212,16 +212,19 @@ export function ConversationsPage() {
       attempt = { workspaceId: wsId, agentId: selectedAgentId }
       firstSend.current = attempt
     }
-    if (!attempt.conversationId) {
+    let cid = attempt.conversationId
+    if (!cid) {
       const conv = await createConversation(wsId, {
         title: content.slice(0, 30),
         surface: "web",
         form: "thread",
         agent_id: selectedAgentId,
       })
-      attempt.conversationId = conv.id
+      cid = conv.id
+      const createdAttempt = { ...attempt, conversationId: cid }
+      if (firstSend.current === attempt) firstSend.current = createdAttempt
+      attempt = createdAttempt
     }
-    const cid = attempt.conversationId
     try {
       await sendUserMessage(cid, { content })
     } finally {
@@ -652,4 +655,3 @@ function ConversationList(p: ListProps) {
 /* ============================================================== */
 /*  Main column — header + body (empty or stream) + composer        */
 /* ============================================================== */
-
