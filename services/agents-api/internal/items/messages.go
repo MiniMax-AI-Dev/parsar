@@ -61,16 +61,11 @@ func Project(turn, kind string, sequence int64, raw json.RawMessage) ([]Update, 
 			item.Phase = p.Phase
 		}
 		return []Update{{Item: item, AppendText: p.Text == nil}}, nil
-	case proto.TypeDone:
-		var p proto.DonePayload
-		if err := json.Unmarshal(raw, &p); err != nil {
-			return nil, err
-		}
-		if p.Content == "" {
-			return nil, nil
-		}
-		return []Update{{Item: message(turn, "legacy-message", "assistant", p.Content, "completed"), LegacyFinal: true}}, nil
-	case "cancel_receipt", "execution_completed", "execution_failed", "execution_cancelled":
+	case proto.TypeDone, "execution_failed":
+		// Legacy Done may contain adapter diagnostics. Only a successful Turn
+		// confirms aggregate answer text; failures retain observed message deltas.
+		return nil, nil
+	case "cancel_receipt", "execution_completed", "execution_cancelled":
 		var p struct {
 			Applied bool               `json:"applied"`
 			Outcome *proto.DonePayload `json:"outcome"`

@@ -107,3 +107,7 @@ source did not record a native outcome. Only recognized historical user text/ima
 shapes become messages; arbitrary internal input objects remain in source storage.
 Unsupported native variants, reasoning, subagent Items, Items mutation and live SSE
 are not covered. Public execution submission remains a separate milestone.
+
+Legacy Done frames alone do not complete assistant Items. Aggregate answer text
+is confirmed by successful Turn termination; failed Turns retain observed deltas
+instead of treating adapter diagnostics as assistant output.

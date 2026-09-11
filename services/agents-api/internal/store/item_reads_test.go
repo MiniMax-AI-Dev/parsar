@@ -208,3 +208,52 @@ func TestReceiptOnlyTextRecoversWithoutInventingCompletion(t *testing.T) {
 		}
 	}
 }
+
+func TestLegacyFailureRetainsPartialAnswerAcrossRecovery(t *testing.T) {
+	ctx := context.Background()
+	s, pool := store.NewTestStore(t)
+	tenant := uuid.NewString()
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "failed-items"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, err := s.SubmitMessage(ctx, tenant, session.ID, "first", json.RawMessage(`{"text":"question"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.TransitionTurn(ctx, tenant, session.ID, input.TurnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress})
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch := []store.ExecutionEvent{
+		{Kind: "delta", Payload: json.RawMessage(`{"delta":"partial answer"}`)},
+		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"open","stage":"after","native_item":{"id":"open","type":"webSearch","action":{"type":"openPage","url":"https://example.com"}}}`)},
+		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"find","stage":"after","native_item":{"id":"find","type":"webSearch","action":{"type":"findInPage","url":"https://example.com","pattern":"needle"}}}`)},
+		{Kind: "error", Payload: json.RawMessage(`{"error":"provider failure"}`)},
+		{Kind: "done", Payload: json.RawMessage(`{"content":"provider failure"}`)},
+	}
+	if err = s.AppendTurnEvents(ctx, tenant, session.ID, input.TurnID, 1, batch); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.CompleteExecution(ctx, tenant, session.ID, input.TurnID, store.TurnFailed, json.RawMessage(`{"done":{"content":"provider failure"},"error_code":"engine_failed"}`), "", input.Sequence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := store.New(pool).ListItems(ctx, tenant, session.ID, "", 100, true)
+	if err != nil || len(page.Items) != 4 {
+		t.Fatal(page, err)
+	}
+	if page.Items[1].Status != "incomplete" || *page.Items[1].Content[0].Text != "partial answer" || page.Items[2].Action.Type != "open_page" || page.Items[3].Action.Type != "find_in_page" {
+		t.Fatal(page)
+	}
+	if _, err = pool.Exec(ctx, "DELETE FROM session_items WHERE session_id=$1", session.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, "UPDATE turns SET items_indexed=false WHERE id=$1", input.TurnID); err != nil {
+		t.Fatal(err)
+	}
+	rebuilt, err := s.ListItems(ctx, tenant, session.ID, "", 100, true)
+	if err != nil || !reflect.DeepEqual(page, rebuilt) {
+		t.Fatal(rebuilt, err)
+	}
+}

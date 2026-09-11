@@ -260,7 +260,9 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   under the same Session lock before reads or writes. Unknown historical input
   shapes stay in the source journal without becoming fabricated messages.
   Legacy aggregate text cannot recover missing native message boundaries, and
-  legacy tool frames without a native status remain `incomplete`. Never replay
+  legacy tool frames without a native status remain `incomplete`. Legacy Done
+  may contain diagnostics: only a successful Turn confirms aggregate answer text;
+  failed Turns retain observed message output. Never replay
   engine execution to rebuild the index. New reads use the index, not journal replay.
 - Project only the declared public Item variants; native adapter metadata is not
   a response schema. Preserve structured tool JSON without float conversion.

@@ -83,3 +83,41 @@ func TestDynamicResultsHaveSeparateLinkedIdentity(t *testing.T) {
 		t.Fatal(string(result))
 	}
 }
+
+func TestNativeWebNavigationUsesPublicDiscriminators(t *testing.T) {
+	for native, public := range map[string]string{"openPage": "open_page", "findInPage": "find_in_page"} {
+		updates, err := Project(testTurn, "tool_call", 1, []byte(`{"id":"web","stage":"after","native_item":{"id":"web","type":"webSearch","action":{"type":"`+native+`","url":"https://example.com","pattern":"needle"}}}`))
+		if err != nil || len(updates) != 1 || updates[0].Item.Action.Type != public || updates[0].Item.Action.URL == nil || *updates[0].Item.Action.URL != "https://example.com" {
+			t.Fatal(updates, err)
+		}
+	}
+}
+
+func TestLegacyDoneDoesNotConfirmSuccessfulAnswer(t *testing.T) {
+	var previous v1.Item
+	for _, event := range []struct{ kind, body string }{
+		{"delta", `{"delta":"partial answer"}`},
+		{"error", `{"error":"provider failure"}`},
+		{"done", `{"content":"provider failure"}`},
+		{"execution_failed", `{"done":{"content":"provider failure"}}`},
+	} {
+		updates, err := Project(testTurn, event.kind, 1, []byte(event.body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, update := range updates {
+			previous = Merge(update, previous)
+		}
+	}
+	if previous.Status != "in_progress" || *previous.Content[0].Text != "partial answer" {
+		t.Fatal(previous)
+	}
+	updates, err := Project(testTurn, "execution_completed", 1, []byte(`{"done":{"content":"complete answer"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous = Merge(updates[0], previous)
+	if previous.Status != "completed" || *previous.Content[0].Text != "complete answer" {
+		t.Fatal(previous)
+	}
+}

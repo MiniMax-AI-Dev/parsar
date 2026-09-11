@@ -118,6 +118,10 @@ func projectTool(turn string, raw json.RawMessage) ([]Update, error) {
 		}
 		if item.Action != nil {
 			switch item.Action.Type {
+			case "openPage":
+				item.Action.Type = "open_page"
+			case "findInPage":
+				item.Action.Type = "find_in_page"
 			case "search", "open_page", "find_in_page", "other":
 			default:
 				return nil, errors.New("unsupported web action")
