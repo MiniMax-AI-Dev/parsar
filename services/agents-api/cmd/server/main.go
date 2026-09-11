@@ -24,6 +24,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/api"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/execution"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/runtime"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -70,16 +71,36 @@ func run() error {
 		engine = "codex"
 	}
 	executionStore := store.New(pool)
-	handler, err := api.NewHandler(executionStore, auth, engine)
-	if err != nil {
-		return err
-	}
+	var workerDone chan error
+	var options []api.Option
+	var daemonHandler http.Handler
 	if wsURL := os.Getenv("AGENTS_API_DAEMON_WS_URL"); wsURL != "" {
-		daemonHandler, registry, err := runtime.NewGateway(executionStore, wsURL)
+		var registryHandler http.Handler
+		registryHandler, registry, err := runtime.NewGateway(executionStore, wsURL)
 		if err != nil {
 			return err
 		}
+		daemonHandler = registryHandler
 		defer runtime.CloseConnections(registry)
+		worker, err := execution.StartWorker(ctx, &execution.Dispatcher{Store: executionStore, Registry: registry})
+		if err != nil {
+			return err
+		}
+		workerDone = make(chan error, 1)
+		go func() { workerDone <- worker.Run(ctx) }()
+		defer func() {
+			stop()
+			if workerDone != nil {
+				<-workerDone
+			}
+		}()
+		options = append(options, api.WithExecution(worker))
+	}
+	handler, err := api.NewHandler(executionStore, auth, engine, options...)
+	if err != nil {
+		return err
+	}
+	if daemonHandler != nil {
 		mux := http.NewServeMux()
 		mux.Handle("/api/v1/agent-daemon/", daemonHandler)
 		mux.Handle("/", handler)
@@ -94,6 +115,13 @@ func run() error {
 	go func() { done <- server.ListenAndServe() }()
 	select {
 	case err := <-done:
+		return err
+	case err := <-workerDone:
+		workerDone = nil
+		stop()
+		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdown)
 		return err
 	case <-ctx.Done():
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)

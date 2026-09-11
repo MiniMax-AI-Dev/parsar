@@ -51,6 +51,15 @@ definitions:
     - text
     - tools
     type: object
+  v1.CreateEventsRequest:
+    properties:
+      events:
+        items:
+          $ref: '#/definitions/v1.SessionInput'
+        type: array
+    required:
+    - events
+    type: object
   v1.CreateSessionRequest:
     properties:
       agent:
@@ -103,6 +112,36 @@ definitions:
         type: string
     required:
     - model
+    type: object
+  v1.InputContent:
+    properties:
+      text:
+        type: string
+      type:
+        enum:
+        - input_text
+        type: string
+    required:
+    - text
+    - type
+    type: object
+  v1.InputMessage:
+    properties:
+      content:
+        items:
+          $ref: '#/definitions/v1.InputContent'
+        type: array
+      role:
+        enum:
+        - user
+        type: string
+      type:
+        enum:
+        - message
+        type: string
+    required:
+    - content
+    - role
     type: object
   v1.Item:
     properties:
@@ -241,6 +280,8 @@ definitions:
       status:
         enum:
         - idle
+        - in_progress
+        - failed
         type: string
       usage:
         type: object
@@ -260,6 +301,20 @@ definitions:
     - required_actions
     - status
     - vault_ids
+    type: object
+  v1.SessionInput:
+    properties:
+      input:
+        items:
+          $ref: '#/definitions/v1.InputMessage'
+        type: array
+      type:
+        enum:
+        - agent.session.input.message
+        - agent.session.input.cancel
+        type: string
+    required:
+    - type
     type: object
   v1.SessionList:
     properties:
@@ -543,6 +598,70 @@ paths:
       security:
       - BearerAuth: []
       summary: Retrieve an execution Session
+      tags:
+      - Sessions
+  /agents/sessions/{session_id}/events:
+    post:
+      consumes:
+      - application/json
+      description: Atomically accepts text messages and cancellation. Messages steer
+        active work or start a queued Turn. Retry keys identify the whole ordered
+        batch. Images and tool results are not supported yet.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Retry key, up to 128 bytes
+        in: header
+        name: Idempotency-Key
+        type: string
+      - description: Session ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: Ordered input events
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v1.CreateEventsRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Submit Session input events
       tags:
       - Sessions
   /agents/sessions/{session_id}/items:

@@ -49,10 +49,29 @@ func sessionResponse(session store.Session) (v1.Session, error) {
 	if err := json.Unmarshal(session.Configuration, &cfg); err != nil || cfg.Agent.ID == "" || cfg.Agent.Model == "" || cfg.Environment.Type != "none" {
 		return v1.Session{}, errors.New("unsupported stored session configuration")
 	}
-	return v1.Session{
+	response := v1.Session{
 		ID: session.ID, Agent: cfg.Agent, Environment: cfg.Environment,
 		CreatedAt: session.CreatedAt.Unix(), LastActiveAt: session.CreatedAt.Unix(),
 		Metadata: session.Metadata, Object: "agent.session", Status: "idle",
 		RequiredActions: []json.RawMessage{}, VaultIDs: []string{},
-	}, nil
+	}
+	if turn := session.LastTurn; turn != nil {
+		active := turn.CreatedAt
+		if turn.StartedAt.After(active) {
+			active = turn.StartedAt
+		}
+		if turn.CompletedAt.After(active) {
+			active = turn.CompletedAt
+		}
+		response.LastActiveAt = active.Unix()
+		switch turn.Status {
+		case store.TurnQueued, store.TurnInProgress, store.TurnWaiting:
+			response.Status = "in_progress"
+		case store.TurnFailed:
+			response.Status = "failed"
+			message := "The execution could not complete."
+			response.Error = &message
+		}
+	}
+	return response, nil
 }

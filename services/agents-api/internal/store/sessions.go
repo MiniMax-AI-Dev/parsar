@@ -36,6 +36,7 @@ type Session struct {
 	Metadata      map[string]string
 	CreatedAt     time.Time
 	Configuration json.RawMessage
+	LastTurn      *Turn
 }
 
 type CreateSessionInput struct {
@@ -113,7 +114,8 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 	if err != nil {
 		return Session{}, fmt.Errorf("create session: %w", err)
 	}
-	return sessionFromRow(row)
+	session, decodeErr := sessionFromRow(row)
+	return s.sessionActivity(ctx, session, decodeErr)
 }
 
 // GetSession always scopes lookup to the authenticated caller's tenant.
@@ -133,7 +135,8 @@ func (s *Store) GetSession(ctx context.Context, tenantID, sessionID string) (Ses
 	if err != nil {
 		return Session{}, fmt.Errorf("get session: %w", err)
 	}
-	return sessionFromRow(row)
+	session, decodeErr := sessionFromRow(row)
+	return s.sessionActivity(ctx, session, decodeErr)
 }
 
 // ListSessions orders by creation time and ID. The cursor is the last returned
@@ -166,6 +169,7 @@ func (s *Store) ListSessions(ctx context.Context, tenantID, cursor string, limit
 	}
 	for _, row := range rows {
 		session, err := sessionFromRow(row)
+		session, err = s.sessionActivity(ctx, session, err)
 		if err != nil {
 			return SessionPage{}, err
 		}

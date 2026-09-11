@@ -27,7 +27,7 @@ func (s *recordingStore) CreateSession(_ context.Context, tenant string, input s
 	return store.Session{ID: uuid.NewString(), TenantID: tenant, Metadata: input.Metadata, Configuration: input.Configuration, CreatedAt: time.Unix(1700000000, 0)}, nil
 }
 
-func testHandler(t *testing.T) (http.Handler, *recordingStore, string) {
+func testHandler(t *testing.T, options ...Option) (http.Handler, *recordingStore, string) {
 	t.Helper()
 	tenant := uuid.NewString()
 	hash := sha256.Sum256([]byte("test-api-key"))
@@ -36,7 +36,7 @@ func testHandler(t *testing.T) (http.Handler, *recordingStore, string) {
 		t.Fatal(err)
 	}
 	s := &recordingStore{}
-	h, err := NewHandler(s, auth, "claude_code")
+	h, err := NewHandler(s, auth, "claude_code", options...)
 	if err != nil {
 		t.Fatal(err)
 	}
