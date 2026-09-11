@@ -70,9 +70,8 @@ function trackFor(c: LedgerColumn): string {
     case "tile":
       return "18px"
     case "actions":
-      // No track: RowActions overlays the row's right end on hover, so
-      // every ledger's last content column ends at the same edge.
-      return "0px"
+      // 28px buttons, 2px gaps, and 2px padding on each side.
+      return `${c.count * 30 + 2}px`
     case "fixed":
       return `${c.width}px`
     default: {
@@ -171,10 +170,8 @@ function alignCells(children: React.ReactNode, columns?: LedgerColumn[]) {
   })
 }
 
-/* Rows and the header share one gutter: 24px each side, the topbar's
-   padding, so the first and last columns of every ledger sit on the same
-   two edges page after page. A trailing (zero-width) actions track still
-   carries the 10px column gap, which the right padding absorbs. */
+/* The trailing action track includes its own padding and column gap;
+   keep its floating controls clear of the last content column. */
 function gutterClass(trailingActions: boolean) {
   return trailingActions ? "pl-6 pr-3.5" : "px-6"
 }
@@ -186,7 +183,7 @@ export function LedgerHeader({ children, className }: { children: React.ReactNod
       aria-hidden="true"
       style={{ gridTemplateColumns: template }}
       className={cn(
-        "sticky top-0 z-[1] grid h-7 items-center gap-x-2.5 border-b border-line bg-surface text-xs text-fg-muted [&>*]:min-w-0 [&>*]:truncate [&>*]:whitespace-nowrap",
+        "sticky top-0 z-[1] grid h-7 min-w-min items-center gap-x-2.5 border-b border-line bg-surface text-xs text-fg-muted [&>*]:min-w-0 [&>*]:truncate [&>*]:whitespace-nowrap",
         gutterClass(trailingActions),
         className,
       )}
@@ -303,7 +300,7 @@ export const LedgerRow = React.forwardRef<
       tabIndex={0}
       style={{ gridTemplateColumns: template }}
       className={cn(
-        "group relative grid h-9 cursor-default items-center gap-x-2.5 border-b border-line text-sm text-fg outline-none transition-colors duration-150 ease-settle hover:app-hover focus-visible:app-hover [&>*]:min-w-0 [&>*]:self-center",
+        "group relative grid h-9 min-w-min cursor-default items-center gap-x-2.5 border-b border-line text-sm text-fg outline-none transition-colors duration-150 ease-settle hover:app-hover focus-visible:app-hover [&>*]:min-w-0 [&>*]:self-center",
         gutterClass(trailingActions),
         selected && "app-selected before:absolute before:bottom-0 before:left-0 before:top-0 before:w-0.5 before:bg-accent before:content-['']",
         className,

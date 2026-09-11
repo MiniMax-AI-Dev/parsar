@@ -86,7 +86,7 @@ import { PendingInvitationsList } from "./PendingInvitationsList"
 const ROLES: MemberRole[] = ["owner", "admin", "member", "viewer"]
 
 /** user · email / detail · role · age · actions */
-const LEDGER_COLUMNS = [col.title(), col.id(200, 1), col.meta(104), col.age(80), col.actions(2)]
+const LEDGER_COLUMNS = [col.title(), col.id(200, 1), col.meta(104), col.age(80), col.actions(3)]
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
