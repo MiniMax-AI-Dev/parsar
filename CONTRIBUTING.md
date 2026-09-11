@@ -115,7 +115,8 @@ the existing server remains the execution owner until a flow is explicitly moved
   session identifiers belong to the execution service.
 - Establish single-Agent execution, approval, cancellation, idempotent submission,
   event cursor replay and persisted recovery queries before Team orchestration.
-  Team definitions stay in Parsar; SDK orchestration and child runs belong to Agents API.
+  Team definitions, management and orchestration belong to Parsar. Agents API
+  provides single-Agent execution primitives; Team loops are deferred.
 - Daemon Skill/SP authoring remains a product operation: forward through a scoped
   product callback with the original requester and workspace checks. A runtime
   credential alone must not grant business write permissions.
