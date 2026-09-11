@@ -165,9 +165,10 @@ type ThreadStartParams struct {
 	// string: "read-only" / "workspace-write" / "danger-full-access".
 	// Sending the old object shape causes codex to silently default to
 	// read-only, which terminates the turn before the model can reply.
-	Sandbox               SandboxMode `json:"sandbox,omitempty"`
-	DeveloperInstructions string      `json:"developerInstructions,omitempty"`
-	RuntimeWorkspaceRoots []string    `json:"runtimeWorkspaceRoots,omitempty"`
+	Sandbox               SandboxMode           `json:"sandbox,omitempty"`
+	DeveloperInstructions string                `json:"developerInstructions,omitempty"`
+	RuntimeWorkspaceRoots []string              `json:"runtimeWorkspaceRoots,omitempty"`
+	DynamicTools          []dynamicFunctionTool `json:"dynamicTools,omitempty"`
 }
 
 type Thread struct {

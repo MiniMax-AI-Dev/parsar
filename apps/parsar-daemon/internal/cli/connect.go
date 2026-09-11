@@ -261,6 +261,7 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 				Resume:          true,
 				Steering:        true,
 				DurableTurns:    true,
+				FunctionTools:   true,
 				MessageItems:    true,
 				ToolItems:       true,
 				EnvironmentNone: true,

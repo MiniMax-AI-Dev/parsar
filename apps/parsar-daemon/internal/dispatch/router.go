@@ -141,6 +141,8 @@ func (r *Router) Handle(ctx context.Context, env proto.Envelope) error {
 		return r.handlePromptRequest(ctx, env)
 	case proto.TypePromptCancel:
 		return r.handlePromptCancel(ctx, env)
+	case proto.TypeFunctionResult:
+		return r.handleFunctionResult(ctx, env)
 	case proto.TypePromptSteer:
 		return r.handlePromptSteer(ctx, env)
 	case proto.TypePermissionDecision:
@@ -249,6 +251,11 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 	if req.AgentKind == "" {
 		r.log.ErrorContext(callerCtx, "handlePromptRequest: missing agent_kind", "run_id", runID)
 		return errors.New("dispatch: prompt_request missing agent_kind")
+	}
+	if len(req.FunctionTools) > 0 && !r.supportsFunctionTools(req.AgentKind) {
+		err := errors.New("engine does not support function tools")
+		r.emitTerminalError(callerCtx, runID, err.Error())
+		return err
 	}
 	if req.DisableExecutionEnvironment && req.AgentKind != "codex" {
 		err := errors.New("execution environment none requires a supported Codex engine")
