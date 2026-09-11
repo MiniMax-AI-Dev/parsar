@@ -49,6 +49,9 @@ func (s *Store) CompleteExecution(ctx context.Context, tenantID, sessionID, turn
 		if err != nil {
 			return err
 		}
+		if err = insertTurnEvent(ctx, q, row, "execution_"+status, outcome); err != nil {
+			return err
+		}
 		if nativeID != "" {
 			n, err := q.RememberNativeSession(ctx, sqlc.RememberNativeSessionParams{SessionID: session, NativeSessionID: nativeID})
 			if err != nil {

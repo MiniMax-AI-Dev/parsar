@@ -210,9 +210,23 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   same counters again when Done also includes them.
 - The dispatcher is an internal entry point, not a public event handler or worker.
   Its private `daemon` configuration is neither `environment:none` nor the official
-  self-hosted executor protocol. Public environment mapping, durable output events,
+  self-hosted executor protocol. Public environment mapping, output Items/SSE,
   pending interactions, crash reconciliation and provider allocation remain separate
   slices. Unexpected interaction requests fail explicitly until supported.
+- Execution observations are written to tenant-scoped `turn_events` in ordered,
+  idempotent batches before they can back recovery or publication. Keep daemon
+  payloads intact; this internal journal is not the public SSE protocol. Flush at
+  least every 100 ms while consuming events and before terminal persistence;
+  uncommitted observations can be lost on a hard process crash. Terminal outcome,
+  journal entry and native continuity commit together. Preserve partial text on
+  cancellation, including frames queued before a separate cancellation receipt.
+  Do not infer successful completion after a persistence error or stream overflow.
+- Agents API uses the gateway's durable subscription; overflow or disconnection
+  closes it with an explicit error. Product subscriptions retain their existing
+  best-effort behavior. Journal limits are 512 KiB per payload, 1 MiB per batch,
+  65,536 observations and 32 MiB per Turn; terminal persistence reserves one
+  additional outcome entry. These are internal admission limits, not promises
+  about upstream API limits or durable daemon-to-service replay.
 
 ### Agent knowledge references
 
