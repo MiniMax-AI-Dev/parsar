@@ -76,9 +76,8 @@ export function ActionIconButton({
 
 /**
  * Row action cluster. Inside a `LedgerRow` (a `group`) it floats over the
- * row's right end, invisible until the row is hovered or focused, so the
- * last content column of every ledger ends on the same edge and rows read
- * as content, not as toolbars; pass `always` to keep it visible.
+ * reserved action column, invisible until the row is hovered or focused.
+ * Pass `always` to keep it visible.
  */
 export function RowActions({
   children,

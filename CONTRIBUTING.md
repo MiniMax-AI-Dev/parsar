@@ -869,13 +869,17 @@ component; page-level empty states retain the default size.
 Structured `Ledger` columns own both header and cell alignment: numbers align
 right; text, identifiers, and dates align left. Keep widths and alignment in
 the shared column model, not separate page-specific header rules. Direct cell
-components must forward `className` to their grid item. Fixed icon/action
+components must forward `className` to their grid item. Fixed icon
 tracks, legacy string templates, and rows spanning multiple columns retain
 their existing layout.
 
 When a list needs a compact presentation beside a detail rail, use container
 queries against the list width. Keep the same data and row actions, with
 explicit field labels when column headings are hidden.
+Declare row actions with `col.actions(count)` so the shared column model reserves
+space for the maximum visible button count. Hover and keyboard focus reveal the
+controls within that space; they must not cover content or shift column widths.
+Headers and rows retain the grid's minimum width when the list viewport is narrower.
 For wrapping row titles, center status icons inside a one-line-height wrapper
 (`h-lh items-center`), aligned to the first line rather than the whole text block.
 The shared Ledger preserves the activated row's viewport position when its
