@@ -402,6 +402,11 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 					Resume:      true,
 				},
 			},
+			{
+				Kind:         "codex",
+				Available:    true,
+				Capabilities: proto.AgentKindCapabilities{Steering: true},
+			},
 		},
 	})
 	raw, _ := jsonMarshal(env)
@@ -411,8 +416,8 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 	if got.RuntimeID != "dev-1" || got.DaemonVersion != "0.2.0-test" || got.ActiveRequests != 2 || got.HeartbeatTimestamp != 1710000000 {
 		t.Fatalf("heartbeat metadata not preserved: %+v", got)
 	}
-	if len(got.SupportedAgentKinds) != 2 {
-		t.Fatalf("SupportedAgentKinds len = %d, want 2: %#v", len(got.SupportedAgentKinds), got.SupportedAgentKinds)
+	if len(got.SupportedAgentKinds) != 3 {
+		t.Fatalf("SupportedAgentKinds len = %d, want 3: %#v", len(got.SupportedAgentKinds), got.SupportedAgentKinds)
 	}
 	byKind := map[string]device.SupportedAgentKind{}
 	for _, info := range got.SupportedAgentKinds {
@@ -425,6 +430,13 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 	opencode := byKind["opencode"]
 	if opencode.Available || opencode.Version != "missing" || !opencode.Capabilities.Streaming {
 		t.Fatalf("opencode descriptor not converted: %#v", opencode)
+	}
+	if !byKind["codex"].Capabilities.Steering || claude.Capabilities.Steering || opencode.Capabilities.Steering {
+		t.Fatalf("steering capability not preserved: %#v", byKind)
+	}
+	codex, found, known := sess.AgentKindStatus("codex")
+	if !found || !known || !codex.Capabilities.Steering {
+		t.Fatalf("steering capability absent from live session: %#v", codex)
 	}
 }
 
@@ -452,6 +464,9 @@ func TestSession_HeartbeatInfersClaudeCodeFromLegacyFlag(t *testing.T) {
 	claude := got.SupportedAgentKinds[0]
 	if claude.Kind != "claude_code" || !claude.Available || !claude.Capabilities.Streaming || !claude.Capabilities.Permissions || !claude.Capabilities.Usage || !claude.Capabilities.Resume {
 		t.Fatalf("legacy claude_available fallback not inferred: %#v", claude)
+	}
+	if claude.Capabilities.Steering {
+		t.Fatal("legacy daemon must not advertise steering")
 	}
 }
 
