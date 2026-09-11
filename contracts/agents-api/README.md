@@ -21,6 +21,10 @@ separate future dependency for Team orchestration in Parsar, not the HTTP contra
 - Input, cancellation and function results are submitted through session events.
   Turns are queried through `/agents/sessions/{id}/turns`; do not invent turn-create
   endpoints. Event submissions support the `Idempotency-Key` header.
+- Per the [official Session guide](https://developers.openai.com/api/docs/guides/agents-api/sessions),
+  input steers an active Turn and starts a new Turn when idle. Streams are live-only;
+  recover missed work through persisted Session/Turn/Items queries, not assumed SSE
+  replay. Internal input ordering is not a public event-stream cursor.
 - List operations use the upstream `after`, `limit`, `order` and resource-specific
   filters. Stream events preserve the upstream discriminators and payload shapes.
 - The upstream self-hosted environment includes an exec-server `remote_url`.
@@ -35,6 +39,7 @@ separate future dependency for Team orchestration in Parsar, not the HTTP contra
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
 | Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, environment `none`, metadata and creation retry keys |
+| Internal Turn/input persistence | Tenant-scoped admission, steering, retry identity, cancellation targets and terminal outcomes; no dispatch or public event submission yet |
 | Turn execution, events, results and cancellation | Pending |
 | Pending actions and environment lifecycle | Pending |
 | Official-client compatibility | Strict SDK checks for the supported Session subset, pagination, retries, errors, tenant isolation and restart |

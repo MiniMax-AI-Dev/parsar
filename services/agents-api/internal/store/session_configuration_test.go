@@ -14,13 +14,13 @@ import (
 func TestConfigurationCanonicalization(t *testing.T) {
 	input := ` {"environment":{"type":"none"},"agent":{"revision":9007199254740993,"model":"example"}} `
 	want := `{"agent":{"model":"example","revision":9007199254740993},"environment":{"type":"none"}}`
-	got, err := canonicalConfiguration([]byte(input))
+	got, err := canonicalJSONObject([]byte(input))
 	if err != nil || string(got) != want {
 		t.Fatalf("canonical = %s, %v; want %s", got, err, want)
 	}
 	for _, raw := range []string{`null`, `[]`, `"text"`, `{} {}`, `{`} {
-		if _, err := canonicalConfiguration([]byte(raw)); !errors.Is(err, ErrInvalidInput) {
-			t.Fatalf("invalid configuration accepted (length %d): %v", len(raw), err)
+		if _, err := canonicalJSONObject([]byte(raw)); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("invalid JSON object accepted (length %d): %v", len(raw), err)
 		}
 	}
 }

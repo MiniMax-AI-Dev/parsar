@@ -50,9 +50,12 @@ type SessionPage struct {
 	NextCursor string
 }
 
-type Store struct{ queries *sqlc.Queries }
+type Store struct {
+	queries *sqlc.Queries
+	pool    *pgxpool.Pool
+}
 
-func New(pool *pgxpool.Pool) *Store { return &Store{queries: sqlc.New(pool)} }
+func New(pool *pgxpool.Pool) *Store { return &Store{queries: sqlc.New(pool), pool: pool} }
 
 func ValidEngine(engine string) bool { return enginePattern.MatchString(engine) }
 
@@ -80,7 +83,7 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 	if len(input.Configuration) > 512*1024 {
 		return Session{}, fmt.Errorf("%w: configuration exceeds 512 KiB", ErrInvalidInput)
 	}
-	configuration, err := canonicalConfiguration(input.Configuration)
+	configuration, err := canonicalJSONObject(input.Configuration)
 	if err != nil {
 		return Session{}, err
 	}
@@ -181,7 +184,7 @@ func parseID(value string) (pgtype.UUID, error) {
 
 func sessionFromRow(row sqlc.Session) (Session, error) {
 	session := Session{ID: uuid.UUID(row.ID.Bytes).String(), TenantID: uuid.UUID(row.TenantID.Bytes).String(), Engine: row.Engine, CreatedAt: row.CreatedAt.Time}
-	configuration, err := canonicalConfiguration(row.Configuration)
+	configuration, err := canonicalJSONObject(row.Configuration)
 	if err != nil {
 		return Session{}, fmt.Errorf("decode session configuration: %w", err)
 	}
