@@ -750,8 +750,11 @@ export function EditModelDialog({
   const [secretID, setSecretID] = useState<string>("")
   const [credentialKindCode, setCredentialKindCode] = useState<string>("")
 
-  useEffect(() => {
-    if (!open || !model) return
+  const [seededModel, setSeededModel] = useState<Model | null>(null)
+  if (!open || !model) {
+    if (seededModel) setSeededModel(null)
+  } else if (model !== seededModel) {
+    setSeededModel(model)
     setName(model.name)
     setModelKey(model.model_key)
     setBaseURL(model.base_url)
@@ -760,7 +763,7 @@ export function EditModelDialog({
     setNewAPIKey("")
     setSecretID(model.secret_id ?? "")
     setCredentialKindCode(model.credential_kind_code ?? "")
-  }, [open, model, providerTypeMeta])
+  }
 
   if (!model) return null
   const activeSecrets = secrets.filter((s) => s.status === "active" && s.kind === "model_provider")
