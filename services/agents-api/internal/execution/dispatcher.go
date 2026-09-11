@@ -93,7 +93,7 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if _, err := d.Store.TransitionTurn(ctx, tenantID, sessionID, turnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress}); err != nil {
 		return store.Turn{}, err
 	}
-	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, AgentOptions: options, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true}
+	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, AgentOptions: options, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: info.Capabilities.MessageItems}
 	result, status := d.deliver(ctx, tenantID, sessionID, peer, req, inputs[0].Sequence)
 	if result.Done.Usage.Model == "" {
 		result.Done.Usage.Model = snapshot.Agent.Model

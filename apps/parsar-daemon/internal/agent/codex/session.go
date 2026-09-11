@@ -56,10 +56,11 @@ func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- pro
 //  5. turn/completed emits TypeDone + closes out. Cancel can short-cut
 //     this by killing the child early.
 type Session struct {
-	runID string
-	cfg   sessionConfig
-	out   chan<- proto.Envelope
-	rpc   *JSONRPCClient
+	observeMessages bool
+	runID           string
+	cfg             sessionConfig
+	out             chan<- proto.Envelope
+	rpc             *JSONRPCClient
 
 	cancelCtx context.Context
 	cancelFn  context.CancelFunc
@@ -143,17 +144,18 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	rpc := NewJSONRPCClient(rpcCfg)
 
 	s := &Session{
-		runID:         req.RunID,
-		cfg:           cfg,
-		out:           out,
-		rpc:           rpc,
-		cancelCtx:     cancelCtx,
-		cancelFn:      cancelFn,
-		waitDone:      make(chan struct{}),
-		cleanup:       plan.Cleanup,
-		bufs:          NewItemBuffers(),
-		resolvedModel: plan.Model,
-		interactions:  newPendingCodexInteractions(),
+		runID:           req.RunID,
+		observeMessages: req.ObserveMessages,
+		cfg:             cfg,
+		out:             out,
+		rpc:             rpc,
+		cancelCtx:       cancelCtx,
+		cancelFn:        cancelFn,
+		waitDone:        make(chan struct{}),
+		cleanup:         plan.Cleanup,
+		bufs:            NewItemBuffers(),
+		resolvedModel:   plan.Model,
+		interactions:    newPendingCodexInteractions(),
 	}
 	s.registerHandlers()
 
@@ -385,23 +387,6 @@ func (s *Session) onTurnStarted(raw json.RawMessage) {
 	s.bufs = NewItemBuffers()
 }
 
-func (s *Session) onAgentDelta(raw json.RawMessage) {
-	var p AgentMessageDeltaNotification
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return
-	}
-	if p.Delta == "" {
-		return
-	}
-	_ = FoldDeltaIntoBuffer(s.bufs, "agent", p.ItemID, p.Delta)
-	seq := s.deltaSeq.Add(1)
-	env, err := proto.NewEnvelope(proto.TypeDelta, s.runID, proto.DeltaPayload{Delta: p.Delta, Sequence: seq})
-	if err != nil {
-		return
-	}
-	s.trySend(env)
-}
-
 func (s *Session) onReasoningDelta(raw json.RawMessage) {
 	var p AgentMessageDeltaNotification
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -417,39 +402,6 @@ func (s *Session) onReasoningDelta(raw json.RawMessage) {
 		return
 	}
 	s.trySend(env)
-}
-
-func (s *Session) onItemStarted(raw json.RawMessage) {
-	var p ItemStartedNotification
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return
-	}
-	envs, err := DispatchStartedItem(s.runID, p.Item)
-	if err != nil {
-		s.cfg.logger.Warn("codex: dispatch started item failed", "run_id", s.runID, "err", err)
-		return
-	}
-	for _, env := range envs {
-		s.trySend(env)
-	}
-}
-
-func (s *Session) onItemCompleted(raw json.RawMessage) {
-	var p ItemCompletedNotification
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return
-	}
-	envs, text, err := DispatchCompletedItem(s.runID, p.Item, s.bufs)
-	if err != nil {
-		s.cfg.logger.Warn("codex: dispatch completed item failed", "run_id", s.runID, "err", err)
-		return
-	}
-	for _, env := range envs {
-		s.trySend(env)
-	}
-	if text != "" {
-		s.appendFinalText(text)
-	}
 }
 
 func (s *Session) onTurnCompleted(raw json.RawMessage) {

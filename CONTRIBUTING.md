@@ -213,6 +213,13 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   self-hosted executor protocol. Public environment mapping, output Items/SSE,
   pending interactions, crash reconciliation and provider allocation remain separate
   slices. Unexpected interaction requests fail explicitly until supported.
+- `message_items` advertises native assistant-message observations. Agents API
+  opts in with `observe_messages` only for advertised peers; ordinary product
+  requests retain their existing frame sequence. Opted-in text deltas carry their
+  native item ID, and `output_message` records start/completion, phase and the
+  completion text snapshot. A snapshot is not another delta; uncompleted messages
+  remain partial when their Turn ends. Keep these observations in the journal
+  before projecting public Items. This does not promise daemon event replay.
 - Execution observations are written to tenant-scoped `turn_events` in ordered,
   idempotent batches before they can back recovery or publication. Keep daemon
   payloads intact; this internal journal is not the public SSE protocol. Flush at

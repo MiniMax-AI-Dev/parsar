@@ -295,6 +295,7 @@ type ThreadItem struct {
 	ID   string `json:"id,omitempty"`
 
 	// agentMessage / reasoning
+	Phase       string   `json:"phase,omitempty"`
 	Text        string   `json:"text,omitempty"`
 	Summary     []string `json:"summary,omitempty"`
 	Content     []string `json:"content,omitempty"`
