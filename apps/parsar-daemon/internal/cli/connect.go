@@ -18,6 +18,7 @@ import (
 	opencodeagent "github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/opencode"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/pi"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/auth"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/authoring"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/daemonize"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/dispatch"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/paths"
@@ -511,6 +512,8 @@ func mainLoop(rc *runContext, profile string, prof auth.Profile, agentCLIs agent
 // graceful router.Shutdown on exit so any in-flight subprocesses get
 // SIGTERM.
 func pumpConn(parentCtx context.Context, conn *transport.Conn, registry *agent.Registry, boot *transport.BootstrapResponse, agentCLIs agentCLIDiscovery) error {
+	bridge := authoring.New(conn)
+	registry = authoringRegistry(registry, bridge)
 	router, err := dispatch.New(dispatch.Config{
 		Registry: registry,
 		Sender:   conn,
@@ -548,6 +551,10 @@ func pumpConn(parentCtx context.Context, conn *transport.Conn, registry *agent.R
 			if !ok {
 				obslog.Bg().Warn("pumpConn: recvCh closed", "err", conn.Err())
 				return conn.Err()
+			}
+			if env.Type == proto.TypeAuthoringResponse {
+				bridge.Deliver(env)
+				continue
 			}
 			obslog.Bg().Info("pumpConn: received envelope, calling router.Handle", "type", env.Type, "id", env.ID)
 			if err := router.Handle(parentCtx, env); err != nil {

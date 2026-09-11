@@ -221,10 +221,11 @@ type HeartbeatStatus struct {
 // importing the wire proto package so runtime config persistence stays
 // decoupled from transport structs.
 type AgentDaemonKindCapabilities struct {
-	Streaming   bool `json:"streaming,omitempty"`
-	Permissions bool `json:"permissions,omitempty"`
-	Usage       bool `json:"usage,omitempty"`
-	Resume      bool `json:"resume,omitempty"`
+	Streaming          bool `json:"streaming,omitempty"`
+	Permissions        bool `json:"permissions,omitempty"`
+	Usage              bool `json:"usage,omitempty"`
+	Resume             bool `json:"resume,omitempty"`
+	WorkspaceAuthoring bool `json:"workspace_authoring,omitempty"`
 }
 
 // AgentDaemonSupportedAgentKind is the sanitized runtime.config view

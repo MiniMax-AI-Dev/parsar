@@ -566,10 +566,11 @@ func storeKindsFromHeartbeat(p proto.HeartbeatPayload) []store.AgentDaemonSuppor
 			Available: info.Available,
 			Version:   info.Version,
 			Capabilities: store.AgentDaemonKindCapabilities{
-				Streaming:   info.Capabilities.Streaming,
-				Permissions: info.Capabilities.Permissions,
-				Usage:       info.Capabilities.Usage,
-				Resume:      info.Capabilities.Resume,
+				Streaming:          info.Capabilities.Streaming,
+				Permissions:        info.Capabilities.Permissions,
+				Usage:              info.Capabilities.Usage,
+				Resume:             info.Capabilities.Resume,
+				WorkspaceAuthoring: info.Capabilities.WorkspaceAuthoring,
 			},
 		})
 	}
