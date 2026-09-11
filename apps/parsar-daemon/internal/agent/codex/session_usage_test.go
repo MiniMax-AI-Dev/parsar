@@ -129,14 +129,15 @@ func TestCompleteTokenBreakdownAndCancellation(t *testing.T) {
 }
 
 func TestAbnormalTerminationTransmitsKnownUsage(t *testing.T) {
-	s := &Session{runID: "run", out: make(chan proto.Envelope, 4), cancelCtx: context.Background(), cfg: sessionConfig{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}}
+	out := make(chan proto.Envelope, 4)
+	s := &Session{runID: "run", out: out, cancelCtx: context.Background(), cfg: sessionConfig{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}}
 	s.setThreadID("thread")
 	s.beginUsageTurn(json.RawMessage(`{"turn":{"id":"turn"}}`))
 	s.onUsageUpdated(json.RawMessage(`{"threadId":"thread","turnId":"turn","tokenUsage":{"total":{"inputTokens":10,"cachedInputTokens":4,"outputTokens":3,"reasoningOutputTokens":2,"totalTokens":13}}}`))
 	s.emitTerminal("native connection closed", true)
 	s.closeOut()
 	var done proto.DonePayload
-	for e := range s.out {
+	for e := range out {
 		if e.Type == proto.TypeDone {
 			if err := e.DecodePayload(&done); err != nil {
 				t.Fatal(err)
