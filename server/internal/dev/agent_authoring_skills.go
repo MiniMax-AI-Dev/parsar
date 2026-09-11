@@ -36,6 +36,7 @@ func (s *agentAuthoringService) readSkill(ctx context.Context, workspaceID, id s
 }
 
 func (s *agentAuthoringService) writeSkill(ctx context.Context, run store.AgentRunInvocation, request proto.AuthoringRequestPayload) (any, error) {
+	expectedVersionID := ""
 	if request.Operation == proto.AuthoringSkillUpdate {
 		capability, current, err := s.readSkill(ctx, run.WorkspaceID, request.CapabilityID)
 		if err != nil {
@@ -50,6 +51,7 @@ func (s *agentAuthoringService) writeSkill(ctx context.Context, run store.AgentR
 		if err := s.checkSingleFileArchive(ctx, capability.LatestVersionID); err != nil {
 			return nil, err
 		}
+		expectedVersionID = capability.LatestVersionID
 	} else if request.CapabilityID != "" {
 		return nil, errors.New("skill.create does not accept a capability ID")
 	}
@@ -66,7 +68,8 @@ func (s *agentAuthoringService) writeSkill(ctx context.Context, run store.AgentR
 	if request.Operation == proto.AuthoringSkillUpdate {
 		result, err = s.store.ImportCapabilityVersion(ctx, store.ImportCapabilityVersionInput{
 			WorkspaceID: run.WorkspaceID, CapabilityID: request.CapabilityID, CreatorID: run.RequestedByID,
-			Spec: parsed.Spec, SourcePayload: source, OssKey: ref, SHA256: digest,
+			ExpectedSkillVersionID: expectedVersionID,
+			Spec:                   parsed.Spec, SourcePayload: source, OssKey: ref, SHA256: digest,
 		})
 	} else {
 		result, err = s.store.ImportCapability(ctx, store.ImportCapabilityInput{

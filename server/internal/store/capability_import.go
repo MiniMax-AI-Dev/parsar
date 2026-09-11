@@ -306,6 +306,8 @@ type ImportCapabilityVersionInput struct {
 	InlineSecrets []ImportInlineSecret
 	OssKey        string
 	SHA256        string
+	// Nonempty only for workspace Skill authoring; checked under a row lock.
+	ExpectedSkillVersionID string
 }
 
 // ImportCapabilityVersion is the version-only analogue of ImportCapability.
@@ -364,6 +366,9 @@ func (s *Store) ImportCapabilityVersion(ctx context.Context, input ImportCapabil
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 	q := sqlc.New(tx)
+	if err := checkAuthoringSkillVersion(ctx, q, input); err != nil {
+		return ImportCapabilityResult{}, err
+	}
 
 	now := time.Now().UTC()
 

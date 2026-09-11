@@ -461,6 +461,8 @@ description and keep ownership on the side listed here.
   rejects updates to public Skills or updates that would discard supporting
   files from the stored archive. Existing audit records
   retain the requester; the import source records the originating run ID.
+  Version writes recheck workspace visibility and the inspected latest version
+  under a capability row lock, rejecting changes made during archive I/O.
   System-prompt writes use the existing partial Agent update and apply next turn.
 
 ### Plugin Bundle (KindBundle) architecture
