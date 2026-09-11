@@ -18,3 +18,24 @@ type Session struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	Configuration  []byte             `json:"configuration"`
 }
+
+type Turn struct {
+	ID                pgtype.UUID        `json:"id"`
+	SessionID         pgtype.UUID        `json:"session_id"`
+	Status            string             `json:"status"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	StartedAt         pgtype.Timestamptz `json:"started_at"`
+	CompletedAt       pgtype.Timestamptz `json:"completed_at"`
+	CancelRequestedAt pgtype.Timestamptz `json:"cancel_requested_at"`
+	Outcome           []byte             `json:"outcome"`
+}
+
+type TurnInput struct {
+	Sequence       int64              `json:"sequence"`
+	SessionID      pgtype.UUID        `json:"session_id"`
+	TurnID         pgtype.UUID        `json:"turn_id"`
+	IdempotencyKey string             `json:"idempotency_key"`
+	Kind           string             `json:"kind"`
+	Payload        []byte             `json:"payload"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}

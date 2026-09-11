@@ -1,12 +1,12 @@
 # Agents API
 
-Execution service under construction. This first slice provides durable Session
-storage, an authenticated HTTP service and an independent migration command. It
+Execution service under construction. Current slices provide durable Session/Turn
+storage, an authenticated Session HTTP service and an independent migration command. It
 does not run Agents or change Parsar's production dispatch.
 
 A Session is an execution context with a stable engine choice. Product
 conversations can map to multiple Sessions. Native engine IDs, device bindings,
-runs and pending interactions will be added with their execution flows.
+pending interactions and execution delivery will be added with their execution flows.
 
 ## Database ownership
 
@@ -38,6 +38,30 @@ original retry identity. JSON key order and whitespace do not affect matching.
 The API layer validates the supported upstream schema before calling the Store;
 the Store does not invent defaults or claim a daemon environment is connected.
 See [the compatibility boundary](../../contracts/agents-api/README.md).
+
+## Internal Turn persistence
+
+The Store accepts individual validated messages and cancellation requests.
+Messages start a Turn when idle and append to the existing Turn while active,
+including queued or waiting work. Session row locks and a PostgreSQL uniqueness
+constraint serialize admission across processes. Input keys are scoped to the
+Session across message/cancel kinds; identical retries return the original
+sequence and Turn, while different input conflicts. JSON object key order and
+whitespace are immaterial. Input payloads are limited to 512 KiB.
+
+Cancellation records its original target even when there was no active Turn.
+Queued work cancels immediately; a dispatcher must claim `in_progress` before
+dispatch. Running/waiting work records the request and remains active until the
+executor reports a terminal outcome. Completion may win a cancellation race;
+once stored, terminal status, timestamps and outcome cannot be overwritten.
+Outcome is a bounded adapter payload, not a second public response schema.
+
+Tenant-scoped Turn and ordered input reads survive process restarts. The Session
+configuration remains immutable and shared by its Turns. These primitives do
+not yet dispatch work, acknowledge input delivery, fence executor ownership,
+resume a native engine session, accept public event batches or emit SSE. Durable
+input acceptance alone is not an exactly-once execution guarantee. Those flows
+must be connected and verified before public execution support is advertised.
 
 ## Standalone HTTP service
 

@@ -104,6 +104,9 @@ The target deployment has a Parsar product service and an independently usable
 Agents API, installed together by Compose. They may share a PostgreSQL instance,
 but own separate databases, credentials and migrations. Migrate incrementally;
 the existing server remains the execution owner until a flow is explicitly moved.
+Agents API is general infrastructure: third-party clients must be able to use
+the declared supported protocol through the official SDK with a different base
+URL, without creating Parsar business objects. Parsar is one client of that API.
 
 - Parsar owns users, workspaces, business authorization, Agent/Team definitions,
   capabilities, product conversations, IM/sharing, approval decisions and billing.
@@ -114,7 +117,9 @@ the existing server remains the execution owner until a flow is explicitly moved
   session is distinct from a live daemon socket, process or sandbox. Native engine
   session identifiers belong to the execution service.
 - Establish single-Agent execution, approval, cancellation, idempotent submission,
-  event cursor replay and persisted recovery queries before Team orchestration.
+  persisted recovery queries before Team orchestration. The upstream SSE stream
+  is live-only; recover through Session/Turn/Items reads. Any additional product
+  cursor replay must be documented as an extension, not upstream semantics.
   Team definitions, management and orchestration belong to Parsar. Agents API
   provides single-Agent execution primitives; Team loops are deferred. Future Team
   orchestration directly depends on `openai/openai-agents-python` in Parsar.
@@ -141,6 +146,13 @@ the existing server remains the execution owner until a flow is explicitly moved
   dedicated `parsar_agents_api_*_tests` database for Session integration tests.
   CI provides a separate PostgreSQL service. Migration immutability and ordering
   apply independently to each service directory.
+- Turn writes serialize on the tenant-scoped Session row. An idle message starts
+  a Turn; messages during queued/running/waiting work belong to that same Turn.
+  Store input retry identities and order durably. Cancellation retains its first
+  target, including an idle no-op, so retries cannot stop later work. Queued work
+  can cancel before dispatch; active work needs an executor outcome. Terminal
+  states and outcomes cannot be overwritten. These Store primitives do not yet
+  implement daemon delivery, public event batches or output streams.
 - The external protocol reference is `openai/openai-python`'s `beta/agents`, pinned
   in `contracts/agents-api/upstream.json`. Follow its Session/Turn/event semantics
   and verify supported behavior using the official client. Track current coverage
