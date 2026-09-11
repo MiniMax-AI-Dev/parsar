@@ -1,0 +1,56 @@
+name: agents-api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/agents-api/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - '.github/workflows/agents-api.yml'
+  pull_request:
+    paths:
+      - 'services/agents-api/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - '.github/workflows/agents-api.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agents-api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sessions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: parsar_agents_api_ci_tests
+          POSTGRES_USER: agents_api
+          POSTGRES_PASSWORD: agents_api_test_only
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U agents_api -d parsar_agents_api_ci_tests"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify dedicated execution persistence
+        env:
+          PARSAR_AGENTS_API_TEST_DATABASE_URL: postgres://agents_api:agents_api_test_only@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/parsar_agents_api_ci_tests?sslmode=disable
+        run: make check-agents-api

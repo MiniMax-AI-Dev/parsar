@@ -12,6 +12,7 @@ on:
     branches: [main]
     paths:
       - "server/**"
+      - "services/agents-api/**"
       - "internal/**"
       - "go.mod"
       - "go.sum"
@@ -21,6 +22,7 @@ on:
   pull_request:
     paths:
       - "server/**"
+      - "services/agents-api/**"
       - "internal/**"
       - "go.mod"
       - "go.sum"

@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-GO_TEST_PACKAGE ?= $(shell cd server && go list ./... ../internal/agentdaemon/gateway ../internal/agentdaemon/device | grep -Ev 'internal/(store|seed)$$')
+GO_TEST_PACKAGE ?= $(shell cd server && go list ./... ../internal/agentdaemon/gateway ../internal/agentdaemon/device ../services/agents-api/... | grep -Ev '/server/internal/(store|seed)$$')
 GO_TEST_RUN ?=
 GO_TEST_ARGS ?=
 SQLC_VERSION ?= v1.29.0
@@ -79,6 +79,7 @@ bootstrap:
 
 sqlc-generate:
 	cd server && $(SQLC) generate
+	cd services/agents-api && $(SQLC) generate
 
 dev-db:
 	./scripts/dev-stack.sh
@@ -86,7 +87,7 @@ dev-db:
 # Backward-compatible alias. Prefer `make dev-db` for the DB-only dev stack.
 dev: dev-db
 
-check: check-go check-store check-web check-cli check-hygiene check-installer
+check: check-go check-store check-web check-cli check-hygiene check-installer check-agents-api
 	@printf 'Parsar harness checks passed.\n'
 
 check-setup:
@@ -94,9 +95,10 @@ check-setup:
 
 check-sqlc:
 	@set -e; \
-	before_sqlc_status="$$(cd server && git status --short -- internal/db/sqlc)"; \
+	before_sqlc_status="$$(git status --short -- server/internal/db/sqlc services/agents-api/internal/db/sqlc)"; \
 	(cd server && $(SQLC) generate); \
-	after_sqlc_status="$$(cd server && git status --short -- internal/db/sqlc)"; \
+	(cd services/agents-api && $(SQLC) generate); \
+	after_sqlc_status="$$(git status --short -- server/internal/db/sqlc services/agents-api/internal/db/sqlc)"; \
 	if [[ "$$before_sqlc_status" != "$$after_sqlc_status" ]]; then \
 	  echo "sqlc generated files are out of date" >&2; \
 	  printf '%s\n' "$$after_sqlc_status" >&2; \
@@ -264,7 +266,7 @@ openapi:
 	    --outputTypes yaml \
 	    --parseInternal \
 	    --parseDepth 100 \
-	    --exclude ./apps,./packages,./node_modules,./tests,./infra
+	    --exclude ./apps,./packages,./services,./node_modules,./tests,./infra
 	@mv docs/openapi/gen/swagger.yaml docs/openapi/openapi.yaml
 	@rmdir docs/openapi/gen 2>/dev/null || true
 	@echo "openapi: wrote docs/openapi/openapi.yaml"
@@ -326,3 +328,8 @@ e2b-template-binaries:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" \
 	    -o $(E2B_BUILD_DIR)/parsar ./apps/parsar/cmd/parsar
 	@echo "e2b-template: staged linux/amd64 binaries in $(E2B_BUILD_DIR)"
+
+# Dedicated execution-store tests require their own PostgreSQL database.
+.PHONY: check-agents-api
+check-agents-api:
+	go test ./services/agents-api/... -count=1

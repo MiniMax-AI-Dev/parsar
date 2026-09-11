@@ -124,6 +124,18 @@ the existing server remains the execution owner until a flow is explicitly moved
   types. Product adapters live in `server/internal/agentdaemon`. Keep protocol
   frames in `internal/agentdaemon/proto` until the contracts directory migration.
   Store aliases preserve existing callers during this transition.
+- `services/agents-api` owns its SQL schema, sqlc queries and embedded goose
+  migrations. `AGENTS_API_DATABASE_URL` is required; never fall back to the product
+  database URL. Its first persistence slice stores tenant-scoped Sessions with a
+  stable engine and idempotent creation. It does not switch production execution.
+- Tenant scope must come from authenticated service identity before calling the
+  execution Store. Product workspace/user references in metadata grant no access.
+  Keep credentials and effective execution options out of Session metadata.
+- `make sqlc-generate` and the drift gate cover both services. Run
+  `make check-agents-api` with `PARSAR_AGENTS_API_TEST_DATABASE_URL` pointing to a
+  dedicated `parsar_agents_api_*_tests` database for Session integration tests.
+  CI provides a separate PostgreSQL service. Migration immutability and ordering
+  apply independently to each service directory.
 - Pin a concrete reference contract before claiming compatibility with an external
   Agents API. SDK workflow objects are not themselves a server API contract.
 
@@ -1061,7 +1073,8 @@ CI may run independently based on the changed paths: `make check-go` for sqlc
 drift plus non-store Go tests (including the shared daemon gateway and device packages), `make check-store` for migration/store
 integration tests, `make check-web` for web typecheck plus design lint, and
 `make check-cli` for CLI/plugin typechecks, and `make check-installer` for
-Docker-free installer lifecycle checks. Keep the subtargets aligned with
+Docker-free installer lifecycle checks, plus `make check-agents-api` for the
+execution service. Keep the subtargets aligned with
 the full gate whenever the required checks change.
 
 Pin the CI vulnerability scanner to a version compatible with the workflow's
