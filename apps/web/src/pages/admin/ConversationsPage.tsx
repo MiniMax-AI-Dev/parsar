@@ -502,7 +502,7 @@ function ConversationList(p: ListProps) {
               const isActive = c.id === p.selectedConversationId
               const isRenaming = renamingConvId === c.id
               const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
-                if (isRenaming) return
+                if (isRenaming || e.target !== e.currentTarget) return
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault()
                   p.onPickConversation(c.id)

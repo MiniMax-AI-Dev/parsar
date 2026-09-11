@@ -349,6 +349,7 @@ function AuditRow({ record, open, onToggle }: { record: ReadableAuditRecord; ope
   const payloadLabel = t("audit.detail.payload")
 
   const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+    if (e.target !== e.currentTarget) return
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault()
       onToggle()
