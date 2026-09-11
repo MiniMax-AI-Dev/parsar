@@ -352,10 +352,8 @@ function ConversationList(p: ListProps) {
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState<string>("")
   const renameInputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (!p.canWrite) setRenamingConvId(null)
-    if (!p.canDelete) setDeleteConvId(null)
-  }, [p.canWrite, p.canDelete])
+  if (!p.canWrite && renamingConvId !== null) setRenamingConvId(null)
+  if (!p.canDelete && deleteConvId !== null) setDeleteConvId(null)
   useEffect(() => {
     if (renamingConvId && renameInputRef.current) {
       renameInputRef.current.focus()
