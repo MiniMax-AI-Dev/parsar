@@ -405,7 +405,7 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 			{
 				Kind:         "codex",
 				Available:    true,
-				Capabilities: proto.AgentKindCapabilities{Steering: true, MessageItems: true, ToolItems: true},
+				Capabilities: proto.AgentKindCapabilities{Steering: true, MessageItems: true, ToolItems: true, EnvironmentNone: true},
 			},
 		},
 	})
@@ -431,7 +431,7 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 	if opencode.Available || opencode.Version != "missing" || !opencode.Capabilities.Streaming {
 		t.Fatalf("opencode descriptor not converted: %#v", opencode)
 	}
-	if !byKind["codex"].Capabilities.ToolItems || claude.Capabilities.ToolItems || opencode.Capabilities.ToolItems || !byKind["codex"].Capabilities.MessageItems || !byKind["codex"].Capabilities.Steering || claude.Capabilities.Steering || opencode.Capabilities.Steering {
+	if !byKind["codex"].Capabilities.EnvironmentNone || claude.Capabilities.EnvironmentNone || opencode.Capabilities.EnvironmentNone || !byKind["codex"].Capabilities.ToolItems || claude.Capabilities.ToolItems || opencode.Capabilities.ToolItems || !byKind["codex"].Capabilities.MessageItems || !byKind["codex"].Capabilities.Steering || claude.Capabilities.Steering || opencode.Capabilities.Steering {
 		t.Fatalf("steering capability not preserved: %#v", byKind)
 	}
 	codex, found, known := sess.AgentKindStatus("codex")

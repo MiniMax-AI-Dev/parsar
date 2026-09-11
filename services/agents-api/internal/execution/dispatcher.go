@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,8 +17,9 @@ import (
 
 // Snapshot is resolved internally; Daemon is not a public environment wire type.
 type Snapshot struct {
-	Agent  v1.Agent      `json:"agent"`
-	Daemon *DaemonConfig `json:"daemon"`
+	Agent       v1.Agent        `json:"agent"`
+	Daemon      *DaemonConfig   `json:"daemon"`
+	Environment *v1.Environment `json:"environment"`
 }
 
 type DaemonConfig struct {
@@ -59,12 +59,15 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 		return store.Turn{}, errors.New("device must advertise streaming, steering and durable turns for this engine")
 	}
 	var snapshot Snapshot
-	if json.Unmarshal(session.Configuration, &snapshot) != nil || snapshot.Daemon == nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
+	if json.Unmarshal(session.Configuration, &snapshot) != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
 		return store.Turn{}, store.ErrInvalidInput
 	}
-	workDir := snapshot.Daemon.WorkDir
-	if workDir != "" && !filepath.IsAbs(workDir) && !strings.HasPrefix(workDir, "~/") {
-		return store.Turn{}, store.ErrInvalidInput
+	workDir, noEnvironment, err := resolveExecutionEnvironment(snapshot)
+	if err != nil {
+		return store.Turn{}, err
+	}
+	if noEnvironment && (session.Engine != "codex" || !info.Capabilities.EnvironmentNone) {
+		return store.Turn{}, errors.New("device must advertise environment_none for Codex")
 	}
 	inputs, err := d.Store.ListTurnInputs(ctx, tenantID, sessionID, turnID, 0, 1)
 	if err != nil {
@@ -93,7 +96,7 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if _, err := d.Store.TransitionTurn(ctx, tenantID, sessionID, turnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress}); err != nil {
 		return store.Turn{}, err
 	}
-	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, AgentOptions: options, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: info.Capabilities.MessageItems, ObserveTools: info.Capabilities.ToolItems}
+	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, AgentOptions: options, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: info.Capabilities.MessageItems, ObserveTools: info.Capabilities.ToolItems, DisableExecutionEnvironment: noEnvironment}
 	result, status := d.deliver(ctx, tenantID, sessionID, peer, req, inputs[0].Sequence)
 	if result.Done.Usage.Model == "" {
 		result.Done.Usage.Model = snapshot.Agent.Model

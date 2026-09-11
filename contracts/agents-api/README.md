@@ -40,7 +40,7 @@ separate future dependency for Team orchestration in Parsar, not the HTTP contra
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
 | Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, environment `none`, metadata and creation retry keys |
 | Internal Turn/input persistence | Tenant-scoped atomic input batches, steering, request-level retry identity, cancellation targets and terminal outcomes |
-| Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; no public event submission or execution worker yet |
+| Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution; no public event submission or execution worker yet |
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |
 | Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
 | Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
@@ -116,3 +116,21 @@ Pagination orders by first-observation timestamp, then position within that sour
 and stable public ID. Distinct observations sharing exactly the same timestamp
 may therefore differ from journal order; preserving source order for that tie is
 a tracked follow-up. Content updates do not move existing Items.
+
+### No-environment execution
+
+The internal dispatcher can execute a public `environment.type=none` snapshot
+on an authenticated, bound engine host advertising `environment_none`. It does
+not allocate a local execution environment: the daemon uses upstream Codex's
+`CODEX_EXEC_SERVER_URL=none` and verifies the native environment state before
+starting/resuming. A missing capability or unsupported native method fails rather
+than falling back to local execution. Private `daemon` snapshots remain distinct.
+This is an engine tool/environment boundary, not operating-system isolation.
+Public event submission/worker scheduling and the self-hosted registry/Noise
+transport are still pending.
+
+The native reference is Codex `rust-v0.153.4`, commit
+`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`, especially
+`codex-rs/exec-server/src/environment_provider.rs`. The self-hosted registry
+requires executor registration, harness authorization and encrypted relay;
+a daemon WebSocket URL is not that protocol.
