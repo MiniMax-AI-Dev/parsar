@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ChevronDown, KeyRound, Pencil, Plus, Search, Trash2 } from "lucide-react"
 
@@ -87,13 +87,13 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
   const requestedKind = standalone ? route.credentialKind : null
   const initialPrefill = standalone ? route.credentialPrefill : null
   const [prefillQueue, setPrefillQueue] = useState<string[]>([])
-  const prefillSeededRef = useRef(false)
+  const [prefillSeeded, setPrefillSeeded] = useState(false)
+  if (standalone && !prefillSeeded && initialPrefill && initialPrefill.length > 0) {
+    setPrefillSeeded(true)
+    setPrefillQueue(initialPrefill)
+  }
   useEffect(() => {
-    if (!standalone) return
-    if (prefillSeededRef.current) return
-    if (initialPrefill && initialPrefill.length > 0) {
-      prefillSeededRef.current = true
-      setPrefillQueue(initialPrefill)
+    if (prefillSeeded) {
       if (typeof window !== "undefined" && window.history?.replaceState) {
         try {
           const url = new URL(window.location.href)
@@ -103,20 +103,23 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
             window.history.replaceState(window.history.state, "", next)
           }
         } catch {
-          // URL parse failure: the ref guard above keeps the queue
+          // URL parse failure: the seed guard above keeps the queue
           // from re-seeding.
         }
       }
     }
-  }, [standalone, initialPrefill])
+  }, [prefillSeeded])
 
   // Priority: prefill queue head (channel-layer multi-kind) → ?kind=
   // single-kind → user-clicked pending kind.
   const pendingPrefillKind = prefillQueue[0] ?? requestedKind ?? pendingKind
 
-  useEffect(() => {
-    if (pendingPrefillKind && !credentialsQ.isLoading) setCreateOpen(true)
-  }, [pendingPrefillKind, credentialsQ.isLoading])
+  const readyPrefillKind = credentialsQ.isLoading ? null : pendingPrefillKind
+  const [previousReadyKind, setPreviousReadyKind] = useState<string | null>(null)
+  if (readyPrefillKind !== previousReadyKind) {
+    setPreviousReadyKind(readyPrefillKind)
+    if (readyPrefillKind) setCreateOpen(true)
+  }
 
   // The page header owns the "add" button and bumps `createRequest`; any
   // bump we have not yet dismissed counts as an open (unprefilled) dialog.
