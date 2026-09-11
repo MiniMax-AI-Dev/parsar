@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 type fakeOwnerStore struct {
@@ -17,17 +17,17 @@ type fakeOwnerStore struct {
 	lastRenewGen int64
 }
 
-func (f *fakeOwnerStore) ClaimAgentDaemonDeviceOwner(context.Context, store.ClaimAgentDaemonDeviceOwnerInput) (store.AgentDaemonDeviceOwnerRead, error) {
-	return store.AgentDaemonDeviceOwnerRead{}, nil
+func (f *fakeOwnerStore) ClaimAgentDaemonDeviceOwner(context.Context, device.ClaimOwner) (device.Owner, error) {
+	return device.Owner{}, nil
 }
 
-func (f *fakeOwnerStore) RenewAgentDaemonDeviceOwner(_ context.Context, in store.RenewAgentDaemonDeviceOwnerInput) (store.AgentDaemonDeviceOwnerRead, bool, error) {
+func (f *fakeOwnerStore) RenewAgentDaemonDeviceOwner(_ context.Context, in device.RenewOwner) (device.Owner, bool, error) {
 	f.renewCalls++
 	f.lastRenewGen = in.Generation
-	return store.AgentDaemonDeviceOwnerRead{}, f.renewOK, nil
+	return device.Owner{}, f.renewOK, nil
 }
 
-func (f *fakeOwnerStore) ReleaseAgentDaemonDeviceOwner(context.Context, store.ReleaseAgentDaemonDeviceOwnerInput) (bool, error) {
+func (f *fakeOwnerStore) ReleaseAgentDaemonDeviceOwner(context.Context, device.ReleaseOwner) (bool, error) {
 	f.releaseCalls++
 	if f.releaseCh != nil {
 		select {
@@ -39,8 +39,8 @@ func (f *fakeOwnerStore) ReleaseAgentDaemonDeviceOwner(context.Context, store.Re
 	return true, nil
 }
 
-func (f *fakeOwnerStore) GetAgentDaemonDeviceOwner(context.Context, string) (store.AgentDaemonDeviceOwnerRead, bool, error) {
-	return store.AgentDaemonDeviceOwnerRead{}, false, nil
+func (f *fakeOwnerStore) GetAgentDaemonDeviceOwner(context.Context, string) (device.Owner, bool, error) {
+	return device.Owner{}, false, nil
 }
 
 func TestSessionOwnerLeaseLostClosesStaleConnection(t *testing.T) {

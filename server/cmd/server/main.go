@@ -35,9 +35,10 @@ import (
 	"syscall"
 	"time"
 
+	agentdaemongateway "github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon"
 	agentdaemonbinding "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/binding"
-	agentdaemongateway "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/api"
 	agentmcpapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/agentmcp"
 	imhistoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/imhistoryapi"
@@ -417,7 +418,7 @@ func main() {
 			log.Bg().Warn("agentdaemon binder", "msg", fmt.Sprintf(format, args...))
 		})
 		agentDaemonRegistry := agentdaemongateway.NewRegistry()
-		agentDaemonAuth := agentdaemongateway.NewAuthenticator(dbStore)
+		agentDaemonAuth := agentdaemongateway.NewAuthenticator(agentdaemon.Credentials{Runtimes: dbStore})
 		publicWSURL := resolveAgentDaemonPublicWSURL(envLookup, cfg)
 		agentDaemonPodID := resolveAgentDaemonOwnerPodID(envLookup)
 		agentDaemonOwnerURL, err := resolveAgentDaemonOwnerURL(envLookup, cfg)

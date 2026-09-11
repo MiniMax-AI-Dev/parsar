@@ -10,16 +10,16 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
-// HeartbeatTouch is the subset of store.Store the gateway uses to
+// HeartbeatTouch is the persistence interface the gateway uses to
 // bump last_heartbeat_at / promote pending_pairing -> online when a
 // daemon connects.
 type HeartbeatTouch interface {
-	TouchRuntimeHeartbeat(ctx context.Context, runtimeID string) (store.HeartbeatStatus, error)
-	TouchAgentDaemonHeartbeat(ctx context.Context, input store.TouchAgentDaemonHeartbeatInput) (store.HeartbeatStatus, error)
+	TouchRuntimeHeartbeat(ctx context.Context, runtimeID string) (device.HeartbeatStatus, error)
+	TouchAgentDaemonHeartbeat(ctx context.Context, input device.Heartbeat) (device.HeartbeatStatus, error)
 	MarkRuntimeOffline(ctx context.Context, runtimeID string) error
 }
 
@@ -154,7 +154,7 @@ func (h *Handler) WS(w http.ResponseWriter, r *http.Request) {
 	var lease *ownerLease
 	if h.cfg.OwnerStore != nil {
 		now := time.Now().UTC()
-		owner, ownerErr := h.cfg.OwnerStore.ClaimAgentDaemonDeviceOwner(r.Context(), store.ClaimAgentDaemonDeviceOwnerInput{
+		owner, ownerErr := h.cfg.OwnerStore.ClaimAgentDaemonDeviceOwner(r.Context(), device.ClaimOwner{
 			DeviceID:       auth.DeviceID,
 			WorkspaceID:    auth.WorkspaceID,
 			OwnerPodID:     h.cfg.OwnerPodID,
@@ -287,7 +287,7 @@ func (h *Handler) DeviceStatus(w http.ResponseWriter, r *http.Request) {
 		if current, ok, ownerErr := h.cfg.OwnerStore.GetAgentDaemonDeviceOwner(r.Context(), auth.DeviceID); ownerErr != nil {
 			h.cfg.Log("agentdaemon gateway: device-status owner lookup failed: %v", ownerErr)
 		} else if ok {
-			leaseOnline := current.Status == store.AgentDaemonOwnerStatusConnected && current.LeaseExpiresAt.After(time.Now().UTC())
+			leaseOnline := current.Status == device.OwnerStatusConnected && current.LeaseExpiresAt.After(time.Now().UTC())
 			online = online || leaseOnline
 			owner = map[string]any{
 				"owner_pod_id":     current.OwnerPodID,

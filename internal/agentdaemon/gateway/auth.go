@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 )
 
 // RuntimeTypeAgentDaemon is the value runtimes.type takes for rows
@@ -29,9 +29,9 @@ var ErrAuthBadCredential = errors.New("agentdaemon auth: bad credential")
 
 var ErrAuthIncompatibleVersion = errors.New("agentdaemon auth: incompatible protocol version")
 
-// RuntimeStore is the slice of *store.Store the gateway needs for auth.
+// RuntimeStore supplies device credentials without exposing product runtime records.
 type RuntimeStore interface {
-	GetRuntime(ctx context.Context, runtimeID string) (store.RuntimeRead, bool, error)
+	GetDeviceCredential(ctx context.Context, runtimeID string) (device.Credential, bool, error)
 }
 
 // AuthenticatedRuntime is the result of a successful credential check.
@@ -63,7 +63,7 @@ func (a *Authenticator) AuthenticateBearer(ctx context.Context, deviceID, bearer
 	if deviceID == "" || bearer == "" {
 		return AuthenticatedRuntime{}, ErrAuthMissingParams
 	}
-	rt, ok, err := a.store.GetRuntime(ctx, deviceID)
+	rt, ok, err := a.store.GetDeviceCredential(ctx, deviceID)
 	if err != nil {
 		return AuthenticatedRuntime{}, fmt.Errorf("agentdaemon auth: store: %w", err)
 	}
@@ -73,13 +73,13 @@ func (a *Authenticator) AuthenticateBearer(ctx context.Context, deviceID, bearer
 	if rt.Type != RuntimeTypeAgentDaemon {
 		return AuthenticatedRuntime{}, ErrAuthWrongRuntimeType
 	}
-	storedHash, _ := rt.Config["runner_credential_hash"].(string)
+	storedHash := rt.CredentialHash
 	if storedHash == "" {
 		// Pairing never completed, or someone wiped the credential
 		// out-of-band. Fail closed.
 		return AuthenticatedRuntime{}, ErrAuthBadCredential
 	}
-	presented := store.HashRuntimeCredential(bearer)
+	presented := device.HashCredential(bearer)
 	if subtle.ConstantTimeCompare([]byte(presented), []byte(storedHash)) != 1 {
 		return AuthenticatedRuntime{}, ErrAuthBadCredential
 	}

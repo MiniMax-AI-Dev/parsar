@@ -11,6 +11,8 @@ Current subpackages:
 | Directory | Shared by | Contents |
 |---|---|---|
 | `agentdaemon/proto/` | `server/` + `apps/parsar-daemon/` | Wire schema between the server and the daemon binary (message format, version negotiation) |
+| `agentdaemon/gateway/` | product server + planned Agents API | Daemon HTTP/WebSocket connections; persistence through interfaces only |
+| `agentdaemon/device/` | gateway + service stores | Device identity, normalized heartbeat data and owner leases |
 | `obs/` | server + daemons / CLIs | Shared observability helpers (structured log fields, trace helpers) |
 | `runtimecrypto/` | server + parsar-daemon | Runtime envelope crypto (sandbox side decrypts short-lived credentials issued by the server) |
 
@@ -18,7 +20,10 @@ Current subpackages:
 
 ## When to put code here
 
-The only test: **does more than one sibling subtree import it?**
+Use shared packages when multiple sibling subtrees import them. During the
+[execution-service migration](../CONTRIBUTING.md#product-and-execution-service-separation),
+the daemon gateway and device data are extracted here before the new service
+starts using them.
 
 - Only used by `server/` → put it under `server/internal/...`
 - Only used by `apps/parsar-daemon/` → put it under `apps/parsar-daemon/internal/...`

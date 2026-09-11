@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/gateway"
 )
 
 func feedAgentKinds(t *testing.T, conn *fakeConn, sess *gateway.Session, kinds []proto.SupportedAgentKind) {

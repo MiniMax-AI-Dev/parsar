@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/gateway"
 )
 
 type AuthoringHandler func(context.Context, string, proto.AuthoringRequestPayload) (any, error)
