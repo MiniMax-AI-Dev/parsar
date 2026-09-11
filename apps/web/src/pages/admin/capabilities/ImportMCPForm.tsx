@@ -78,8 +78,6 @@ export function ImportMCPForm({
     if (debounceRef.current) window.clearTimeout(debounceRef.current)
     if (raw.trim() === "") {
       onChange(null)
-      setWarnings([])
-      setErrorMessage(null)
       previewMut.reset()
       return
     }
@@ -156,7 +154,13 @@ export function ImportMCPForm({
           id="import-mcp-source"
           aria-label={t("capabilities.import.tab.mcp", "MCP")}
           value={raw}
-          onChange={(e) => setRaw(e.target.value)}
+          onChange={(e) => {
+            setRaw(e.target.value)
+            if (!e.target.value.trim()) {
+              setWarnings([])
+              setErrorMessage(null)
+            }
+          }}
           rows={20}
           placeholder={
             format === "toml"
