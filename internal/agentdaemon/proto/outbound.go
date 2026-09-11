@@ -79,6 +79,7 @@ type PromptRequestPayload struct {
 	// ReleaseOnCompletion closes the native writer before acknowledging Done.
 	ReleaseOnCompletion bool `json:"release_on_completion,omitempty"`
 	StrictResume        bool `json:"strict_resume,omitempty"`
+	ObserveMessages     bool `json:"observe_messages,omitempty"`
 }
 
 // PromptAttachment is one piece of non-text user input the daemon-side

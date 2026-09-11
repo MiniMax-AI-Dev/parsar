@@ -16,6 +16,9 @@ const (
 	// full Final.Content.
 	TypeDelta = "delta"
 
+	// TypeOutputMessage carries opt-in native message boundaries and completion snapshots.
+	TypeOutputMessage = "output_message"
+
 	// TypeThinking carries an internal-thinking fragment. Gateway
 	// forwards as a plain EventDelta so existing renderers keep
 	// working.
@@ -65,8 +68,17 @@ const (
 
 // DeltaPayload carries an incremental text fragment from the agent.
 type DeltaPayload struct {
+	ItemID   string `json:"item_id,omitempty"`
 	Delta    string `json:"delta"`
 	Sequence uint64 `json:"sequence"`
+}
+
+// OutputMessagePayload describes a native assistant message; Text is a completion snapshot.
+type OutputMessagePayload struct {
+	ID     string  `json:"id"`
+	Status string  `json:"status"`
+	Phase  string  `json:"phase,omitempty"`
+	Text   *string `json:"text,omitempty"`
 }
 
 // ThinkingPayload carries an internal-thinking fragment.
@@ -229,6 +241,7 @@ type AgentKindCapabilities struct {
 	Resume             bool `json:"resume,omitempty"`
 	WorkspaceAuthoring bool `json:"workspace_authoring,omitempty"`
 	Steering           bool `json:"steering,omitempty"`
+	MessageItems       bool `json:"message_items,omitempty"`
 	// DurableTurns includes strict resume, completion release and cancellation snapshots.
 	DurableTurns bool `json:"durable_turns,omitempty"`
 }

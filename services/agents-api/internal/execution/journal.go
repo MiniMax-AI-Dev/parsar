@@ -54,7 +54,7 @@ func (j *journal) observe(ctx context.Context, env proto.Envelope) error {
 
 func (j *journal) enqueue(env proto.Envelope) error {
 	switch env.Type {
-	case proto.TypeDelta, proto.TypeThinking, proto.TypeToolCall, proto.TypeUsage,
+	case proto.TypeDelta, proto.TypeOutputMessage, proto.TypeThinking, proto.TypeToolCall, proto.TypeUsage,
 		proto.TypeError, proto.TypeDone, proto.TypePromptSteerAck, "cancel_receipt":
 	default:
 		return nil
