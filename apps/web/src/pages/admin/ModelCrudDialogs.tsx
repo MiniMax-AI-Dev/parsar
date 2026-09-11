@@ -322,13 +322,10 @@ export function CreateModelDialog({
   const [baseConfig, setBaseConfig] = useState<Record<string, unknown>>({})
   const detectEndpointsMut = useDetectModelEndpoints(workspaceID)
 
-  const wasOpenRef = useRef(false)
-  useEffect(() => {
-    if (open && !wasOpenRef.current) {
-      // Seed every field. If `initialValues` was provided (duplicate
-      // flow), pull from it; otherwise reset to the same empty defaults
-      // we shipped before. Both branches bump headersSeed in the same
-      // effect tick so HeadersEditor reseeds atomically with the parent.
+  const [previousOpen, setPreviousOpen] = useState(false)
+  if (previousOpen !== open) {
+    setPreviousOpen(open)
+    if (open) {
       const seed = initialValues
       if (seed) {
         const providerCfg = providerTypes.find((p) => p.key === seed.provider_type)
@@ -378,8 +375,7 @@ export function CreateModelDialog({
       }
       setHeadersSeed((n) => n + 1)
     }
-    wasOpenRef.current = open
-  }, [open, initialValues, providerTypes, defaultProviderType])
+  }
 
   function handleProviderTypeChange(next: string) {
     const cfg = providerTypes.find((p) => p.key === next)
