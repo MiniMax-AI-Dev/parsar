@@ -73,6 +73,7 @@ type Session struct {
 
 	threadIDMu sync.Mutex
 	threadID   string
+	steering   steeringTurn
 
 	deltaSeq    atomic.Uint64
 	thinkingSeq atomic.Uint64
@@ -180,6 +181,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 }
 
 func (s *Session) Cancel(_ context.Context) error {
+	s.stopSteering()
 	s.cancelOnce.Do(func() {
 		s.stopCodexInteractionTimers()
 		// Best-effort turn/interrupt — codex will translate this into
@@ -380,6 +382,7 @@ func (s *Session) onThreadStarted(raw json.RawMessage) {
 }
 
 func (s *Session) onTurnStarted(raw json.RawMessage) {
+	s.startSteering(raw)
 	s.beginUsageTurn(raw)
 	// Reset per-turn buffers. The session is per-prompt so this is
 	// belt-and-suspenders today, but it keeps the buffer semantics
@@ -455,6 +458,7 @@ func (s *Session) onItemCompleted(raw json.RawMessage) {
 }
 
 func (s *Session) onTurnCompleted(raw json.RawMessage) {
+	s.stopSteering()
 	var p TurnCompletedNotification
 	if err := json.Unmarshal(raw, &p); err != nil {
 		s.cfg.logger.Warn("codex: turn/completed decode error",
@@ -608,6 +612,7 @@ func (s *Session) peekLastErrText() string {
 // ---------------------------------------------------------------------------
 
 func (s *Session) emitDone(content string, usage *TurnUsage) {
+	s.stopSteering()
 	doneMeta := map[string]any{}
 	if tid := s.currentThreadID(); tid != "" {
 		doneMeta[proto.DoneMetaAgentSessionID] = tid
@@ -645,6 +650,7 @@ func (s *Session) emitUsage(u TurnUsage) {
 }
 
 func (s *Session) emitTerminal(message string, asError bool) {
+	s.stopSteering()
 	// Always log: this is the only place the daemon decides "the prompt is
 	// over, here's what went wrong (if anything)". Without this, post-
 	// mortem requires correlating server-side TypeError frames against
@@ -696,6 +702,7 @@ func (s *Session) trySend(env proto.Envelope) {
 }
 
 func (s *Session) closeOut() {
+	s.stopSteering()
 	s.closeOutOnce.Do(func() {
 		s.outMu.Lock()
 		s.outClosed = true

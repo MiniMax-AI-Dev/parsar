@@ -226,6 +226,7 @@ type AgentKindCapabilities struct {
 	Usage              bool `json:"usage,omitempty"`
 	Resume             bool `json:"resume,omitempty"`
 	WorkspaceAuthoring bool `json:"workspace_authoring,omitempty"`
+	Steering           bool `json:"steering,omitempty"`
 }
 
 // SupportedAgentKind is one daemon-advertised agent engine. Daemons

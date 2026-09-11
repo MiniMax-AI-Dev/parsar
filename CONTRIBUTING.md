@@ -416,6 +416,21 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   Explicit engine approval requests still use the durable interaction lifecycle;
   user-input requests continue to wait for a human answer.
 
+- Active-turn text uses optional daemon `prompt_steer` / `prompt_steer_ack`
+  frames, correlated by run ID and payload `input_id`. Check the engine's
+  advertised `steering` capability first; Codex uses native `turn/steer` with
+  its thread ID and active turn ID precondition. It must never start another
+  turn as a fallback. Only a matching engine receipt confirms acceptance.
+- During an active run, the daemon retains up to 256 steering attempts and
+  replays their receipts. Reusing an input ID with different text is rejected;
+  capacity exhaustion rejects new inputs instead of evicting receipts.
+  `not_ready` means no input was sent and can be retried. An RPC failure yields
+  `outcome_unknown`, cached without automatic redelivery even after an ack-send
+  failure. These receipts are process-local and disappear with the run;
+  durable recovery and interpreting missing receipts remain server-owned.
+  This adapter contract does not expose the public Agents API events endpoint
+  or change the existing product submission path.
+
 - Agent cloning copies enabled capability bindings, version choices, and configuration.
   Pinned clones retain the stored version; latest choices resolve from the current catalog.
   Display, credential checks, and submission use the same version. Shared credentials remain

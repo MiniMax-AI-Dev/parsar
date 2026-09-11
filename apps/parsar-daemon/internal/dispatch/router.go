@@ -73,6 +73,7 @@ type sessionState struct {
 	idleTimer   *time.Timer
 	idleLease   uint64
 	retain      bool
+	steering    map[string]steeringReceipt
 }
 
 // Config is the constructor input. Registry and Sender are required;
@@ -138,6 +139,8 @@ func (r *Router) Handle(ctx context.Context, env proto.Envelope) error {
 		return r.handlePromptRequest(ctx, env)
 	case proto.TypePromptCancel:
 		return r.handlePromptCancel(ctx, env)
+	case proto.TypePromptSteer:
+		return r.handlePromptSteer(ctx, env)
 	case proto.TypePermissionDecision:
 		return r.handlePermissionDecision(ctx, env)
 	case proto.TypePromptForUserChoiceDecision:
