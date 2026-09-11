@@ -46,16 +46,23 @@ export function NewCredentialKindInlineDialog({
   const { t } = useTranslation("admin")
   const mut = useCreateCredentialKindMutation(workspaceID)
 
-  const [code, setCode] = useState("")
+  const [code, setCode] = useState(initialCode?.toLowerCase() ?? "")
   const [displayName, setDisplayName] = useState("")
   const [description, setDescription] = useState("")
+  const [previousOpen, setPreviousOpen] = useState(open)
 
   // Seed only on the open transition — subsequent edits stay user-driven.
+  if (open !== previousOpen) {
+    setPreviousOpen(open)
+    if (open) {
+      setCode(initialCode?.toLowerCase() ?? "")
+      setDisplayName("")
+      setDescription("")
+    }
+  }
+
   useEffect(() => {
     if (!open) return
-    setCode(initialCode?.toLowerCase() ?? "")
-    setDisplayName("")
-    setDescription("")
     mut.reset()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
