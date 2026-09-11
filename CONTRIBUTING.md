@@ -252,8 +252,9 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
 
 - Public Items list reads a persisted execution-owned projection, updated in the
   same Session transaction as admitted messages and journal batches. IDs derive
-  from the Turn and source identity; first-observation order never changes when
-  content or status changes. Cursors are scoped to the authenticated Session.
+  from the Turn and source identity; the first-observation timestamp and stable
+  tie breakers never change when content or status changes. Equal timestamps
+  use per-source position and public ID, not the original event ordinal. Cursors are scoped to the authenticated Session.
   Terminal Turns expose unfinished Items as `incomplete`, preserving completed
   message/tool states independently of the Turn outcome.
 - Pre-Items Turns rebuild their index once from paged persisted inputs/events,
