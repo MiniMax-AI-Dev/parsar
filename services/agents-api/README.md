@@ -72,12 +72,13 @@ After preparing a dedicated test database, build the server and verify it with
 the official client installed from the commit in `contracts/agents-api/upstream.json`:
 
 ```bash
+python -m pip install -r services/agents-api/tests/requirements.txt
 go build -o /tmp/agents-api ./services/agents-api/cmd/server
 AGENTS_API_SERVER_BIN=/tmp/agents-api python services/agents-api/tests/official_client.py
 ```
 
 The test uses `PARSAR_AGENTS_API_TEST_DATABASE_URL`, temporary service keys and
-fresh tenant IDs. It checks strict response schemas, retries, ordering, tenant
+fresh tenant IDs. It checks upstream and generated response schemas, retries, ordering, tenant
 isolation, unsupported options and reads after a process restart.
 
 ## Checks

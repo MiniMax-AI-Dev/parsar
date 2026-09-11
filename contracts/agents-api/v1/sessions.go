@@ -6,17 +6,17 @@ import "encoding/json"
 // CreateSessionRequest currently supports inline agents without initial input.
 type CreateSessionRequest struct {
 	Agent       *InlineAgent      `json:"agent" binding:"required"`
-	AgentID     *string           `json:"agent_id,omitempty"`
+	AgentID     *string           `json:"agent_id,omitempty" extensions:"x-nullable"`
 	Environment *Environment      `json:"environment" binding:"required"`
-	Input       json.RawMessage   `json:"input,omitempty" swaggertype:"object"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	Input       json.RawMessage   `json:"input,omitempty" swaggertype:"object" extensions:"x-nullable"`
+	Metadata    map[string]string `json:"metadata,omitempty" extensions:"x-nullable"`
 	Stream      bool              `json:"stream,omitempty"`
 	VaultIDs    []string          `json:"vault_ids,omitempty"`
 }
 
 type InlineAgent struct {
 	Model        string  `json:"model" binding:"required"`
-	Instructions *string `json:"instructions,omitempty"`
+	Instructions *string `json:"instructions,omitempty" extensions:"x-nullable"`
 }
 
 // Environment currently supports the upstream environment-free configuration.
@@ -26,10 +26,10 @@ type Environment struct {
 
 type Agent struct {
 	ID           string            `json:"id" binding:"required"`
-	Instructions *string           `json:"instructions"`
+	Instructions *string           `json:"instructions" extensions:"x-nullable"`
 	Model        string            `json:"model" binding:"required"`
 	MultiAgent   MultiAgentConfig  `json:"multi_agent" binding:"required"`
-	Name         *string           `json:"name"`
+	Name         *string           `json:"name" extensions:"x-nullable"`
 	Reasoning    Reasoning         `json:"reasoning" binding:"required"`
 	ServiceTier  string            `json:"service_tier" enums:"auto" binding:"required"`
 	Text         TextConfig        `json:"text" binding:"required"`
@@ -38,12 +38,12 @@ type Agent struct {
 
 type MultiAgentConfig struct {
 	Enabled                bool `json:"enabled" binding:"required"`
-	MaxConcurrentSubagents *int `json:"max_concurrent_subagents"`
+	MaxConcurrentSubagents *int `json:"max_concurrent_subagents" extensions:"x-nullable"`
 }
 
 type Reasoning struct {
-	Effort  *string `json:"effort,omitempty"`
-	Summary *string `json:"summary,omitempty"`
+	Effort  *string `json:"effort,omitempty" extensions:"x-nullable"`
+	Summary *string `json:"summary,omitempty" extensions:"x-nullable"`
 }
 
 type TextConfig struct {
@@ -60,13 +60,13 @@ type Session struct {
 	Agent           Agent             `json:"agent" binding:"required"`
 	CreatedAt       int64             `json:"created_at" binding:"required"`
 	Environment     Environment       `json:"environment" binding:"required"`
-	Error           *string           `json:"error"`
+	Error           *string           `json:"error" extensions:"x-nullable"`
 	LastActiveAt    int64             `json:"last_active_at" binding:"required"`
 	Metadata        map[string]string `json:"metadata" binding:"required"`
 	Object          string            `json:"object" enums:"agent.session" binding:"required"`
 	RequiredActions []json.RawMessage `json:"required_actions" swaggertype:"array,object" binding:"required"`
 	Status          string            `json:"status" enums:"idle" binding:"required"`
-	Usage           json.RawMessage   `json:"usage" swaggertype:"object"`
+	Usage           json.RawMessage   `json:"usage" swaggertype:"object" extensions:"x-nullable"`
 	VaultIDs        []string          `json:"vault_ids" binding:"required"`
 }
 
@@ -83,5 +83,5 @@ type APIError struct {
 	Message string  `json:"message" binding:"required"`
 	Type    string  `json:"type" binding:"required"`
 	Code    string  `json:"code" binding:"required"`
-	Param   *string `json:"param"`
+	Param   *string `json:"param" extensions:"x-nullable"`
 }

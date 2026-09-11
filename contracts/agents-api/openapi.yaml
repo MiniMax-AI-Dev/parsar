@@ -8,6 +8,7 @@ definitions:
         type: string
       param:
         type: string
+        x-nullable: true
       type:
         type: string
     required:
@@ -21,12 +22,14 @@ definitions:
         type: string
       instructions:
         type: string
+        x-nullable: true
       model:
         type: string
       multi_agent:
         $ref: '#/definitions/v1.MultiAgentConfig'
       name:
         type: string
+        x-nullable: true
       reasoning:
         $ref: '#/definitions/v1.Reasoning'
       service_tier:
@@ -54,14 +57,17 @@ definitions:
         $ref: '#/definitions/v1.InlineAgent'
       agent_id:
         type: string
+        x-nullable: true
       environment:
         $ref: '#/definitions/v1.Environment'
       input:
         type: object
+        x-nullable: true
       metadata:
         additionalProperties:
           type: string
         type: object
+        x-nullable: true
       stream:
         type: boolean
       vault_ids:
@@ -92,6 +98,7 @@ definitions:
     properties:
       instructions:
         type: string
+        x-nullable: true
       model:
         type: string
     required:
@@ -103,6 +110,7 @@ definitions:
         type: boolean
       max_concurrent_subagents:
         type: integer
+        x-nullable: true
     required:
     - enabled
     type: object
@@ -110,8 +118,10 @@ definitions:
     properties:
       effort:
         type: string
+        x-nullable: true
       summary:
         type: string
+        x-nullable: true
     type: object
   v1.Session:
     properties:
@@ -123,6 +133,7 @@ definitions:
         $ref: '#/definitions/v1.Environment'
       error:
         type: string
+        x-nullable: true
       id:
         type: string
       last_active_at:
@@ -145,6 +156,7 @@ definitions:
         type: string
       usage:
         type: object
+        x-nullable: true
       vault_ids:
         items:
           type: string

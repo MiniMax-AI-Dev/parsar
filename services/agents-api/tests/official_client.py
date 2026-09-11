@@ -14,11 +14,32 @@ from urllib.parse import parse_qs, urlsplit
 import uuid
 
 import httpx2
+from jsonschema import Draft4Validator
 from openai import AuthenticationError, BadRequestError, ConflictError, NotFoundError, OpenAI
+import yaml
+
+
+def nullable_schema(value):
+    """Translate Swagger 2's nullable extension for JSON Schema validation."""
+    if isinstance(value, list):
+        return [nullable_schema(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    converted = {key: nullable_schema(item) for key, item in value.items() if key != "x-nullable"}
+    return {"anyOf": [{"type": "null"}, converted]} if value.get("x-nullable") else converted
 
 
 def main():
     root = Path(__file__).resolve().parents[3]
+    contract = nullable_schema(yaml.safe_load((root / "contracts/agents-api/openapi.yaml").read_text()))
+
+    def validate_response(response):
+        response.read()
+        path = response.request.url.path.removeprefix("/v1")
+        if path.startswith("/agents/sessions/"):
+            path = "/agents/sessions/{session_id}"
+        schema = contract["paths"][path][response.request.method.lower()]["responses"][str(response.status_code)]["schema"]
+        Draft4Validator({"definitions": contract["definitions"], **schema}).validate(response.json())
     pin = json.loads((root / "contracts/agents-api/upstream.json").read_text())
     distribution = importlib.metadata.distribution("openai")
     source = json.loads(distribution.read_text("direct_url.json") or "{}")
@@ -62,7 +83,7 @@ def main():
                     raise
 
             def client(token):
-                return OpenAI(api_key=token, base_url=base + "/v1", max_retries=0, _strict_response_validation=True, http_client=httpx2.Client(trust_env=False, timeout=10))
+                return OpenAI(api_key=token, base_url=base + "/v1", max_retries=0, _strict_response_validation=True, http_client=httpx2.Client(trust_env=False, timeout=10, event_hooks={"response": [validate_response]}))
 
             def expect_error(error, operation):
                 try:
@@ -118,7 +139,7 @@ def main():
                     process = start()
                     assert sessions.retrieve(first.id) == first
                     assert sessions.create(**spec, metadata={"workspace": "untrusted-reference"}, extra_headers=headers) == first
-                print("Official client: strict schemas, persistence/restart, retries, pagination, tenant isolation and explicit unsupported options passed.")
+                print("Official client: upstream and generated response schemas, persistence/restart, retries, pagination, tenant isolation and explicit unsupported options passed.")
             finally:
                 if process and process.poll() is None:
                     process.terminate()
