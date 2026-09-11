@@ -101,7 +101,7 @@ type Session struct {
 	// Subscribers keyed by runID. The read loop only sends on these
 	// channels; Unsubscribe is the only place that closes them.
 	subsMu sync.Mutex
-	subs   map[string]chan proto.Envelope
+	subs   map[string]*Subscription
 
 	ackMu      sync.Mutex
 	ackWaiters map[string]chan proto.InteractionDecisionAckPayload
@@ -145,7 +145,7 @@ func NewSessionWithOwner(conn WSConn, deviceID, workspaceID, daemonVersion strin
 		reg:           reg,
 		owner:         owner,
 		lastSeenAt:    now,
-		subs:          map[string]chan proto.Envelope{},
+		subs:          map[string]*Subscription{},
 		ackWaiters:    map[string]chan proto.InteractionDecisionAckPayload{},
 		sendCh:        make(chan proto.Envelope, 64),
 		closed:        make(chan struct{}),
@@ -242,11 +242,10 @@ func (s *Session) Close(reason string) {
 		// sees a clean EOF and unsubscribes naturally.
 		s.subsMu.Lock()
 		subs := s.subs
-		s.subs = map[string]chan proto.Envelope{}
+		s.subs = map[string]*Subscription{}
 		s.subsMu.Unlock()
-		for runID, ch := range subs {
-			s.deliverSynthetic(runID, ch, reason)
-			close(ch)
+		for runID, sub := range subs {
+			s.closeSubscription(runID, sub, reason)
 			s.reg.DetachRun(runID)
 		}
 		s.reg.Deregister(s)
@@ -353,46 +352,6 @@ func (s *Session) SendAndWaitInteractionAck(ctx context.Context, env proto.Envel
 			return proto.InteractionDecisionAckPayload{}, waitCtx.Err()
 		}
 	}
-}
-
-// Subscribe attaches a receiver channel for one runID. Calling Subscribe
-// twice for the same runID replaces (and closes) the previous subscriber.
-// The subscriber MUST call Unsubscribe when done; the channel is closed
-// by Unsubscribe or by the read loop on a done/error auto-unsubscribe.
-func (s *Session) Subscribe(runID string) (<-chan proto.Envelope, error) {
-	if runID == "" {
-		return nil, fmt.Errorf("agentdaemon gateway: Subscribe requires non-empty runID")
-	}
-	if s.IsClosed() {
-		return nil, ErrSessionClosed
-	}
-	ch := make(chan proto.Envelope, 32)
-	s.subsMu.Lock()
-	if existing, ok := s.subs[runID]; ok {
-		close(existing)
-	}
-	s.subs[runID] = ch
-	s.subsMu.Unlock()
-	s.reg.AttachRun(runID, s)
-	return ch, nil
-}
-
-// Unsubscribe removes a runID's subscriber and closes its channel.
-// Idempotent.
-func (s *Session) Unsubscribe(runID string) {
-	if runID == "" {
-		return
-	}
-	s.subsMu.Lock()
-	ch, ok := s.subs[runID]
-	if ok {
-		delete(s.subs, runID)
-	}
-	s.subsMu.Unlock()
-	if ok {
-		close(ch)
-	}
-	s.reg.DetachRun(runID)
 }
 
 // writeLoop is the single writer goroutine that gorilla/websocket
@@ -637,24 +596,5 @@ func (s *Session) dispatch(env proto.Envelope) {
 	if env.ID == "" {
 		return
 	}
-	s.subsMu.Lock()
-	ch, ok := s.subs[env.ID]
-	s.subsMu.Unlock()
-	if !ok {
-		return
-	}
-	// Bounded send so a wedged subscriber can't pin the read loop.
-	select {
-	case ch <- env:
-	case <-s.closed:
-		return
-	default:
-		s.log("agentdaemon gateway: subscriber buffer full for run %s, dropping %s", env.ID, env.Type)
-	}
-
-	// Auto-unsubscribe after a terminal frame so the subscriber sees
-	// a closed channel without an explicit "done" signal.
-	if env.Type == proto.TypeDone {
-		s.Unsubscribe(env.ID)
-	}
+	s.dispatchToSubscriber(env)
 }

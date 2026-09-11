@@ -44,6 +44,17 @@ type Turn struct {
 	CompletedAt       pgtype.Timestamptz `json:"completed_at"`
 	CancelRequestedAt pgtype.Timestamptz `json:"cancel_requested_at"`
 	Outcome           []byte             `json:"outcome"`
+	EventCount        int32              `json:"event_count"`
+	EventBytes        int64              `json:"event_bytes"`
+}
+
+type TurnEvent struct {
+	SessionID pgtype.UUID        `json:"session_id"`
+	TurnID    pgtype.UUID        `json:"turn_id"`
+	Ordinal   int32              `json:"ordinal"`
+	Kind      string             `json:"kind"`
+	Payload   []byte             `json:"payload"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type TurnInput struct {

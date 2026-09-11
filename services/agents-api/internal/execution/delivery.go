@@ -51,15 +51,30 @@ func abort(peer *gateway.Session, runID string) {
 func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, peer *gateway.Session, request proto.PromptRequestPayload, first int64) (result Result, status string) {
 	status = store.TurnFailed
 	result.AppliedThrough = first
-	upstream, err := peer.Subscribe(request.RunID)
+	subscription, err := peer.SubscribeDurable(request.RunID)
 	if err != nil {
 		result.ErrorCode = "device_disconnected"
 		return
 	}
+	upstream := subscription.Events
 	defer peer.Unsubscribe(request.RunID)
 	defer func() {
 		if status == store.TurnFailed {
 			abort(peer, request.RunID)
+		}
+	}()
+	journal := &journal{store: d.Store, tenant: tenantID, session: sessionID, turn: request.RunID, next: 1}
+	defer func() {
+		finishCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := journal.drain(finishCtx, upstream); err != nil {
+			result.ErrorCode, status = "event_persistence_failed", store.TurnFailed
+		}
+		if err := journal.flush(finishCtx); err != nil {
+			result.ErrorCode, status = "event_persistence_failed", store.TurnFailed
+		}
+		if subscription.Err() != nil {
+			result.ErrorCode, status = "event_stream_incomplete", store.TurnFailed
 		}
 	}()
 	if err := send(ctx, peer, proto.TypePromptRequest, request.RunID, request); err != nil {
@@ -68,6 +83,8 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 	}
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
+	flushTicker := time.NewTicker(100 * time.Millisecond)
+	defer flushTicker.Stop()
 	var pending *pendingInput
 	var cancelSent time.Time
 	var cancelReply <-chan cancellationResult
@@ -75,7 +92,16 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 	defer stopCancellation()
 	for {
 		select {
+		case <-flushTicker.C:
+			if journal.flush(ctx) != nil {
+				result.ErrorCode = "event_persistence_failed"
+				return
+			}
 		case reply := <-cancelReply:
+			if journal.drain(ctx, upstream) != nil || recordCancellation(ctx, journal, reply) != nil {
+				result.ErrorCode = "event_persistence_failed"
+				return
+			}
 			if reply.err == nil && reply.ack.Applied {
 				if reply.ack.Outcome != nil {
 					raw, _ := json.Marshal(reply.ack.Outcome)
@@ -95,6 +121,10 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 		case env, ok := <-upstream:
 			if !ok {
 				result.ErrorCode = "device_disconnected"
+				return
+			}
+			if journal.observe(ctx, env) != nil {
+				result.ErrorCode = "event_persistence_failed"
 				return
 			}
 			switch env.Type {
@@ -118,6 +148,10 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 				if cancelReply != nil {
 					select {
 					case reply := <-cancelReply:
+						if recordCancellation(ctx, journal, reply) != nil {
+							result.ErrorCode = "event_persistence_failed"
+							return
+						}
 						if reply.err == nil && reply.ack.Applied {
 							if reply.ack.Outcome != nil {
 								raw, _ := json.Marshal(reply.ack.Outcome)
@@ -196,6 +230,9 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 					return
 				}
 				if len(inputs) == 0 {
+					continue
+				}
+				if inputs[0].Kind == "cancel" {
 					continue
 				}
 				text, err := messageText(inputs[0].Payload)

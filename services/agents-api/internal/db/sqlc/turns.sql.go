@@ -12,7 +12,7 @@ import (
 )
 
 const createTurn = `-- name: CreateTurn :one
-INSERT INTO turns(id, session_id) VALUES ($1, $2) RETURNING id, session_id, status, created_at, started_at, completed_at, cancel_requested_at, outcome
+INSERT INTO turns(id, session_id) VALUES ($1, $2) RETURNING id, session_id, status, created_at, started_at, completed_at, cancel_requested_at, outcome, event_count, event_bytes
 `
 
 type CreateTurnParams struct {
@@ -32,6 +32,8 @@ func (q *Queries) CreateTurn(ctx context.Context, arg CreateTurnParams) (Turn, e
 		&i.CompletedAt,
 		&i.CancelRequestedAt,
 		&i.Outcome,
+		&i.EventCount,
+		&i.EventBytes,
 	)
 	return i, err
 }
@@ -109,7 +111,7 @@ func (q *Queries) FindInputBatch(ctx context.Context, arg FindInputBatchParams) 
 }
 
 const getActiveTurn = `-- name: GetActiveTurn :one
-SELECT id, session_id, status, created_at, started_at, completed_at, cancel_requested_at, outcome FROM turns WHERE session_id = $1 AND status IN ('queued', 'in_progress', 'waiting')
+SELECT id, session_id, status, created_at, started_at, completed_at, cancel_requested_at, outcome, event_count, event_bytes FROM turns WHERE session_id = $1 AND status IN ('queued', 'in_progress', 'waiting')
 `
 
 func (q *Queries) GetActiveTurn(ctx context.Context, sessionID pgtype.UUID) (Turn, error) {
@@ -124,12 +126,14 @@ func (q *Queries) GetActiveTurn(ctx context.Context, sessionID pgtype.UUID) (Tur
 		&i.CompletedAt,
 		&i.CancelRequestedAt,
 		&i.Outcome,
+		&i.EventCount,
+		&i.EventBytes,
 	)
 	return i, err
 }
 
 const getTurn = `-- name: GetTurn :one
-SELECT t.id, t.session_id, t.status, t.created_at, t.started_at, t.completed_at, t.cancel_requested_at, t.outcome FROM turns t JOIN sessions s ON s.id = t.session_id
+SELECT t.id, t.session_id, t.status, t.created_at, t.started_at, t.completed_at, t.cancel_requested_at, t.outcome, t.event_count, t.event_bytes FROM turns t JOIN sessions s ON s.id = t.session_id
 WHERE s.tenant_id = $1 AND t.session_id = $2 AND t.id = $3
 `
 
@@ -151,6 +155,8 @@ func (q *Queries) GetTurn(ctx context.Context, arg GetTurnParams) (Turn, error) 
 		&i.CompletedAt,
 		&i.CancelRequestedAt,
 		&i.Outcome,
+		&i.EventCount,
+		&i.EventBytes,
 	)
 	return i, err
 }
@@ -265,7 +271,7 @@ WHERE id = $3 AND session_id = $4
     AND status = $5
     AND status IN ('queued', 'in_progress', 'waiting')
     AND ($1::text <> 'in_progress' OR cancel_requested_at IS NULL)
-RETURNING id, session_id, status, created_at, started_at, completed_at, cancel_requested_at, outcome
+RETURNING id, session_id, status, created_at, started_at, completed_at, cancel_requested_at, outcome, event_count, event_bytes
 `
 
 type TransitionTurnParams struct {
@@ -294,6 +300,8 @@ func (q *Queries) TransitionTurn(ctx context.Context, arg TransitionTurnParams) 
 		&i.CompletedAt,
 		&i.CancelRequestedAt,
 		&i.Outcome,
+		&i.EventCount,
+		&i.EventBytes,
 	)
 	return i, err
 }
