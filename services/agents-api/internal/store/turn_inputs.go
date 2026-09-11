@@ -28,73 +28,119 @@ type TurnInput struct {
 	CreatedAt time.Time
 }
 
-// SubmitMessage persists one validated input. An idle Session gets a new Turn;
-// active Sessions receive steering input on the current Turn. API-level event
-// validation and batch submission are separate from this internal primitive.
+// Input is a validated execution command, not an upstream wire type.
+// The API validates event fields before constructing this storage input.
+type Input struct {
+	Kind    string          `json:"kind"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// SubmitMessage and RequestCancel use the same request-level admission as batches.
 func (s *Store) SubmitMessage(ctx context.Context, tenantID, sessionID, key string, payload json.RawMessage) (InputReceipt, error) {
-	if len(payload) == 0 || len(payload) > 512*1024 {
-		return InputReceipt{}, fmt.Errorf("%w: message payload must be nonempty and at most 512 KiB", ErrInvalidInput)
-	}
-	canonical, err := canonicalJSONObject(payload)
+	return s.submitOne(ctx, tenantID, sessionID, key, Input{Kind: "message", Payload: payload})
+}
+
+func (s *Store) RequestCancel(ctx context.Context, tenantID, sessionID, key string) (InputReceipt, error) {
+	return s.submitOne(ctx, tenantID, sessionID, key, Input{Kind: "cancel", Payload: json.RawMessage(`{}`)})
+}
+
+func (s *Store) submitOne(ctx context.Context, tenantID, sessionID, key string, input Input) (InputReceipt, error) {
+	receipts, err := s.SubmitInputs(ctx, tenantID, sessionID, key, []Input{input})
 	if err != nil {
 		return InputReceipt{}, err
 	}
-	return s.submitInput(ctx, tenantID, sessionID, key, "message", canonical)
+	return receipts[0], nil
 }
 
-// RequestCancel fixes the cancellation target at first acceptance. A retry must
-// not cancel a later Turn. Queued work stops immediately; running work remains
-// active until the executor acknowledges cancellation or reports another outcome.
-func (s *Store) RequestCancel(ctx context.Context, tenantID, sessionID, key string) (InputReceipt, error) {
-	return s.submitInput(ctx, tenantID, sessionID, key, "cancel", json.RawMessage(`{}`))
-}
-
-func (s *Store) submitInput(ctx context.Context, tenantID, sessionID, key, kind string, payload json.RawMessage) (InputReceipt, error) {
+// SubmitInputs commits a request in order under one Session lock. The entire
+// batch is the retry identity; replay never re-evaluates a cancellation target.
+// Internal receipts are not the response body of the public events endpoint.
+func (s *Store) SubmitInputs(ctx context.Context, tenantID, sessionID, key string, inputs []Input) ([]InputReceipt, error) {
 	if strings.TrimSpace(key) == "" || len(key) > 128 {
-		return InputReceipt{}, fmt.Errorf("%w: idempotency key is required and limited to 128 bytes", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: idempotency key is required and limited to 128 bytes", ErrInvalidInput)
 	}
-	var receipt InputReceipt
-	err := s.withSession(ctx, tenantID, sessionID, func(q *sqlc.Queries, session pgtype.UUID) error {
-		previous, err := q.FindTurnInput(ctx, sqlc.FindTurnInputParams{SessionID: session, IdempotencyKey: key, Kind: kind, Payload: payload})
-		if err == nil {
-			if !previous.Matches {
+	batch, encoded, err := validateInputs(inputs)
+	if err != nil {
+		return nil, err
+	}
+	receipts := make([]InputReceipt, 0, len(batch))
+	err = s.withSession(ctx, tenantID, sessionID, func(q *sqlc.Queries, session pgtype.UUID) error {
+		previous, err := q.FindInputBatch(ctx, sqlc.FindInputBatchParams{SessionID: session, IdempotencyKey: key, Batch: encoded})
+		if err != nil {
+			return err
+		}
+		if len(previous) > 0 {
+			if !previous[0].Matches {
 				return ErrIdempotencyConflict
 			}
-			receipt = inputReceipt(previous.Sequence, previous.TurnID, true)
+			for _, row := range previous {
+				receipts = append(receipts, inputReceipt(row.Sequence, row.TurnID, true))
+			}
 			return nil
 		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		turn, err := q.GetActiveTurn(ctx, session)
-		if errors.Is(err, pgx.ErrNoRows) {
-			if kind == "message" {
-				turn, err = q.CreateTurn(ctx, sqlc.CreateTurnParams{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, SessionID: session})
-			} else {
-				err = nil // Retain even an idle cancellation's retry identity.
-			}
-		}
-		if err != nil {
-			return err
-		}
-		sequence, err := q.CreateTurnInput(ctx, sqlc.CreateTurnInputParams{
-			SessionID: session, TurnID: turn.ID, IdempotencyKey: key, Kind: kind, Payload: payload,
-		})
-		if err != nil {
-			return err
-		}
-		if kind == "cancel" && turn.ID.Valid {
-			if err := q.RequestTurnCancel(ctx, sqlc.RequestTurnCancelParams{ID: turn.ID, SessionID: session}); err != nil {
+		for position, input := range batch {
+			receipt, err := admitInput(ctx, q, session, key, int32(position), input)
+			if err != nil {
 				return err
 			}
+			receipts = append(receipts, receipt)
 		}
-		receipt = inputReceipt(sequence, turn.ID, false)
 		return nil
 	})
 	if err != nil {
-		return InputReceipt{}, fmt.Errorf("submit turn input: %w", err)
+		return nil, fmt.Errorf("submit turn inputs: %w", err)
 	}
-	return receipt, nil
+	return receipts, nil
+}
+
+func validateInputs(inputs []Input) ([]Input, json.RawMessage, error) {
+	if len(inputs) == 0 || len(inputs) > 64 {
+		return nil, nil, fmt.Errorf("%w: input batch must contain 1..64 events", ErrInvalidInput)
+	}
+	batch := make([]Input, len(inputs))
+	size := 0
+	for i, input := range inputs {
+		size += len(input.Payload)
+		if size > 512*1024 || len(input.Payload) == 0 || (input.Kind != "message" && input.Kind != "cancel") {
+			return nil, nil, fmt.Errorf("%w: message/cancel payloads must be nonempty and total at most 512 KiB", ErrInvalidInput)
+		}
+		payload, err := canonicalJSONObject(input.Payload)
+		if err != nil {
+			return nil, nil, err
+		}
+		if input.Kind == "cancel" && string(payload) != "{}" {
+			return nil, nil, fmt.Errorf("%w: cancel payload must be empty", ErrInvalidInput)
+		}
+		batch[i] = Input{Kind: input.Kind, Payload: payload}
+	}
+	encoded, err := json.Marshal(batch)
+	return batch, encoded, err
+}
+
+func admitInput(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, key string, position int32, input Input) (InputReceipt, error) {
+	turn, err := q.GetActiveTurn(ctx, session)
+	if errors.Is(err, pgx.ErrNoRows) {
+		if input.Kind == "message" {
+			turn, err = q.CreateTurn(ctx, sqlc.CreateTurnParams{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, SessionID: session})
+		} else {
+			err = nil // Retain even an idle cancellation's retry identity.
+		}
+	}
+	if err != nil {
+		return InputReceipt{}, err
+	}
+	sequence, err := q.CreateTurnInput(ctx, sqlc.CreateTurnInputParams{
+		SessionID: session, TurnID: turn.ID, IdempotencyKey: key, Kind: input.Kind, Payload: input.Payload, BatchPosition: position,
+	})
+	if err != nil {
+		return InputReceipt{}, err
+	}
+	if input.Kind == "cancel" && turn.ID.Valid {
+		if err := q.RequestTurnCancel(ctx, sqlc.RequestTurnCancelParams{ID: turn.ID, SessionID: session}); err != nil {
+			return InputReceipt{}, err
+		}
+	}
+	return inputReceipt(sequence, turn.ID, false), nil
 }
 
 // ListTurnInputs is an internal ordered recovery query, not the public SSE stream.

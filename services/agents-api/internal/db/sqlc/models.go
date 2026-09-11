@@ -38,4 +38,5 @@ type TurnInput struct {
 	Kind           string             `json:"kind"`
 	Payload        []byte             `json:"payload"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	BatchPosition  int32              `json:"batch_position"`
 }

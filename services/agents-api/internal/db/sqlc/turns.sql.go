@@ -37,8 +37,8 @@ func (q *Queries) CreateTurn(ctx context.Context, arg CreateTurnParams) (Turn, e
 }
 
 const createTurnInput = `-- name: CreateTurnInput :one
-INSERT INTO turn_inputs(session_id, turn_id, idempotency_key, kind, payload)
-VALUES ($1, $2, $3, $4, $5) RETURNING sequence
+INSERT INTO turn_inputs(session_id, turn_id, idempotency_key, kind, payload, batch_position)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING sequence
 `
 
 type CreateTurnInputParams struct {
@@ -47,6 +47,7 @@ type CreateTurnInputParams struct {
 	IdempotencyKey string      `json:"idempotency_key"`
 	Kind           string      `json:"kind"`
 	Payload        []byte      `json:"payload"`
+	BatchPosition  int32       `json:"batch_position"`
 }
 
 func (q *Queries) CreateTurnInput(ctx context.Context, arg CreateTurnInputParams) (int64, error) {
@@ -56,40 +57,55 @@ func (q *Queries) CreateTurnInput(ctx context.Context, arg CreateTurnInputParams
 		arg.IdempotencyKey,
 		arg.Kind,
 		arg.Payload,
+		arg.BatchPosition,
 	)
 	var sequence int64
 	err := row.Scan(&sequence)
 	return sequence, err
 }
 
-const findTurnInput = `-- name: FindTurnInput :one
-SELECT sequence, turn_id, (kind = $3 AND payload = $4::jsonb)::boolean AS matches
-FROM turn_inputs WHERE session_id = $1 AND idempotency_key = $2
+const findInputBatch = `-- name: FindInputBatch :many
+WITH previous AS (
+    SELECT sequence, turn_id, kind, payload, batch_position FROM turn_inputs
+    WHERE session_id = $1 AND idempotency_key = $2
+)
+SELECT sequence, turn_id, COALESCE((
+    SELECT jsonb_agg(jsonb_build_object('kind', kind, 'payload', payload) ORDER BY batch_position)
+        = $3::jsonb FROM previous
+), false)::boolean AS matches
+FROM previous ORDER BY batch_position
 `
 
-type FindTurnInputParams struct {
+type FindInputBatchParams struct {
 	SessionID      pgtype.UUID `json:"session_id"`
 	IdempotencyKey string      `json:"idempotency_key"`
-	Kind           string      `json:"kind"`
-	Payload        []byte      `json:"payload"`
+	Batch          []byte      `json:"batch"`
 }
 
-type FindTurnInputRow struct {
+type FindInputBatchRow struct {
 	Sequence int64       `json:"sequence"`
 	TurnID   pgtype.UUID `json:"turn_id"`
 	Matches  bool        `json:"matches"`
 }
 
-func (q *Queries) FindTurnInput(ctx context.Context, arg FindTurnInputParams) (FindTurnInputRow, error) {
-	row := q.db.QueryRow(ctx, findTurnInput,
-		arg.SessionID,
-		arg.IdempotencyKey,
-		arg.Kind,
-		arg.Payload,
-	)
-	var i FindTurnInputRow
-	err := row.Scan(&i.Sequence, &i.TurnID, &i.Matches)
-	return i, err
+func (q *Queries) FindInputBatch(ctx context.Context, arg FindInputBatchParams) ([]FindInputBatchRow, error) {
+	rows, err := q.db.Query(ctx, findInputBatch, arg.SessionID, arg.IdempotencyKey, arg.Batch)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindInputBatchRow{}
+	for rows.Next() {
+		var i FindInputBatchRow
+		if err := rows.Scan(&i.Sequence, &i.TurnID, &i.Matches); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getActiveTurn = `-- name: GetActiveTurn :one
@@ -140,7 +156,7 @@ func (q *Queries) GetTurn(ctx context.Context, arg GetTurnParams) (Turn, error) 
 }
 
 const listTurnInputs = `-- name: ListTurnInputs :many
-SELECT i.sequence, i.session_id, i.turn_id, i.idempotency_key, i.kind, i.payload, i.created_at FROM turn_inputs i JOIN sessions s ON s.id = i.session_id
+SELECT i.sequence, i.session_id, i.turn_id, i.idempotency_key, i.kind, i.payload, i.created_at, i.batch_position FROM turn_inputs i JOIN sessions s ON s.id = i.session_id
 WHERE s.tenant_id = $1 AND i.session_id = $2 AND i.turn_id = $3 AND i.sequence > $4
 ORDER BY i.sequence LIMIT $5
 `
@@ -176,6 +192,7 @@ func (q *Queries) ListTurnInputs(ctx context.Context, arg ListTurnInputsParams) 
 			&i.Kind,
 			&i.Payload,
 			&i.CreatedAt,
+			&i.BatchPosition,
 		); err != nil {
 			return nil, err
 		}
