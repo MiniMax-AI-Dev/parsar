@@ -38,9 +38,7 @@ func (s *Session) onItemStarted(raw json.RawMessage) {
 		s.cfg.logger.Warn("codex: dispatch started item failed", "run_id", s.runID, "err", err)
 		return
 	}
-	for _, env := range envs {
-		s.trySend(env)
-	}
+	s.sendItemEvents(envs, raw)
 }
 
 func (s *Session) onItemCompleted(raw json.RawMessage) {
@@ -53,9 +51,7 @@ func (s *Session) onItemCompleted(raw json.RawMessage) {
 		s.cfg.logger.Warn("codex: dispatch completed item failed", "run_id", s.runID, "err", err)
 		return
 	}
-	for _, env := range envs {
-		s.trySend(env)
-	}
+	s.sendItemEvents(envs, raw)
 	messageText := p.Item.Text
 	if messageText == "" {
 		messageText = text

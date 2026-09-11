@@ -1,5 +1,7 @@
 package proto
 
+import "encoding/json"
+
 // This package lives at the repo-root module so both the server-side
 // gateway/connector AND apps/parsar-daemon can import it. That rules out
 // importing server/internal/... (Go's internal-package rule), so wire
@@ -91,11 +93,13 @@ type ThinkingPayload struct {
 // when the agent is about to call the tool, "after" when the result
 // is back.
 type ToolCallPayload struct {
-	ID     string         `json:"id"`
-	Name   string         `json:"name"`
-	Stage  string         `json:"stage"`
-	Args   map[string]any `json:"args,omitempty"`
-	Result map[string]any `json:"result,omitempty"`
+	// NativeItem is an opt-in engine snapshot for execution-service projection, not a public Item.
+	NativeItem json.RawMessage `json:"native_item,omitempty"`
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Stage      string          `json:"stage"`
+	Args       map[string]any  `json:"args,omitempty"`
+	Result     map[string]any  `json:"result,omitempty"`
 }
 
 // PermissionRequestPayload carries an agent's request for human
@@ -242,6 +246,7 @@ type AgentKindCapabilities struct {
 	WorkspaceAuthoring bool `json:"workspace_authoring,omitempty"`
 	Steering           bool `json:"steering,omitempty"`
 	MessageItems       bool `json:"message_items,omitempty"`
+	ToolItems          bool `json:"tool_items,omitempty"`
 	// DurableTurns includes strict resume, completion release and cancellation snapshots.
 	DurableTurns bool `json:"durable_turns,omitempty"`
 }
