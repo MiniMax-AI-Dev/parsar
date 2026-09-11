@@ -12,12 +12,12 @@ import (
 )
 
 const createSession = `-- name: CreateSession :one
-INSERT INTO sessions (id, tenant_id, engine, metadata, idempotency_key, request_hash)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO sessions (id, tenant_id, engine, metadata, idempotency_key, request_hash, configuration)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (tenant_id, idempotency_key) DO UPDATE
 SET idempotency_key = EXCLUDED.idempotency_key
 WHERE sessions.request_hash = EXCLUDED.request_hash
-RETURNING id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at
+RETURNING id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration
 `
 
 type CreateSessionParams struct {
@@ -27,6 +27,7 @@ type CreateSessionParams struct {
 	Metadata       []byte      `json:"metadata"`
 	IdempotencyKey string      `json:"idempotency_key"`
 	RequestHash    string      `json:"request_hash"`
+	Configuration  []byte      `json:"configuration"`
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
@@ -37,6 +38,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		arg.Metadata,
 		arg.IdempotencyKey,
 		arg.RequestHash,
+		arg.Configuration,
 	)
 	var i Session
 	err := row.Scan(
@@ -47,12 +49,13 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.IdempotencyKey,
 		&i.RequestHash,
 		&i.CreatedAt,
+		&i.Configuration,
 	)
 	return i, err
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at FROM sessions WHERE tenant_id = $1 AND id = $2
+SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration FROM sessions WHERE tenant_id = $1 AND id = $2
 `
 
 type GetSessionParams struct {
@@ -71,12 +74,13 @@ func (q *Queries) GetSession(ctx context.Context, arg GetSessionParams) (Session
 		&i.IdempotencyKey,
 		&i.RequestHash,
 		&i.CreatedAt,
+		&i.Configuration,
 	)
 	return i, err
 }
 
 const listSessions = `-- name: ListSessions :many
-SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at FROM sessions
+SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration FROM sessions
 WHERE tenant_id = $1
   AND ($2::timestamptz IS NULL
        OR (created_at, id) < ($2::timestamptz, $3::uuid))
@@ -113,6 +117,7 @@ func (q *Queries) ListSessions(ctx context.Context, arg ListSessionsParams) ([]S
 			&i.IdempotencyKey,
 			&i.RequestHash,
 			&i.CreatedAt,
+			&i.Configuration,
 		); err != nil {
 			return nil, err
 		}

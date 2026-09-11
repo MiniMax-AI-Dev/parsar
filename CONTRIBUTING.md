@@ -116,7 +116,8 @@ the existing server remains the execution owner until a flow is explicitly moved
 - Establish single-Agent execution, approval, cancellation, idempotent submission,
   event cursor replay and persisted recovery queries before Team orchestration.
   Team definitions, management and orchestration belong to Parsar. Agents API
-  provides single-Agent execution primitives; Team loops are deferred.
+  provides single-Agent execution primitives; Team loops are deferred. Future Team
+  orchestration directly depends on `openai/openai-agents-python` in Parsar.
 - Daemon Skill/SP authoring remains a product operation: forward through a scoped
   product callback with the original requester and workspace checks. A runtime
   credential alone must not grant business write permissions.
@@ -132,13 +133,18 @@ the existing server remains the execution owner until a flow is explicitly moved
 - Tenant scope must come from authenticated service identity before calling the
   execution Store. Product workspace/user references in metadata grant no access.
   Keep credentials and effective execution options out of Session metadata.
+  Store resolved, non-secret Agent/environment configuration in the Session's
+  immutable configuration snapshot, and include it in creation idempotency checks.
+  Public schema validation belongs to the API; the Store validates JSON structure.
 - `make sqlc-generate` and the drift gate cover both services. Run
   `make check-agents-api` with `PARSAR_AGENTS_API_TEST_DATABASE_URL` pointing to a
   dedicated `parsar_agents_api_*_tests` database for Session integration tests.
   CI provides a separate PostgreSQL service. Migration immutability and ordering
   apply independently to each service directory.
-- Pin a concrete reference contract before claiming compatibility with an external
-  Agents API. SDK workflow objects are not themselves a server API contract.
+- The external protocol reference is `openai/openai-python`'s `beta/agents`, pinned
+  in `contracts/agents-api/upstream.json`. Follow its Session/Turn/event semantics
+  and verify supported behavior using the official client. Track current coverage
+  in `contracts/agents-api/README.md`; SDK workflow objects are not this contract.
 
 ### Agent knowledge references
 

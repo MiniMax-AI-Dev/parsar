@@ -76,7 +76,8 @@ func TestSessionsPersistAndStayTenantScoped(t *testing.T) {
 	s, pool := testStore(t)
 	ctx := context.Background()
 	tenantA, tenantB := uuid.NewString(), uuid.NewString()
-	input := CreateSessionInput{Engine: "codex", Metadata: map[string]string{"source": "standalone"}, IdempotencyKey: "first"}
+	input := CreateSessionInput{Engine: "codex", Metadata: map[string]string{"source": "standalone"}, IdempotencyKey: "first",
+		Configuration: []byte(`{"agent":{"model":"test-model","instructions":"Keep the snapshot."},"environment":{"type":"none"}}`)}
 	first, err := s.CreateSession(ctx, tenantA, input)
 	if err != nil {
 		t.Fatal(err)

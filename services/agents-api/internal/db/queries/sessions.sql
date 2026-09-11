@@ -1,6 +1,6 @@
 -- name: CreateSession :one
-INSERT INTO sessions (id, tenant_id, engine, metadata, idempotency_key, request_hash)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO sessions (id, tenant_id, engine, metadata, idempotency_key, request_hash, configuration)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (tenant_id, idempotency_key) DO UPDATE
 SET idempotency_key = EXCLUDED.idempotency_key
 WHERE sessions.request_hash = EXCLUDED.request_hash

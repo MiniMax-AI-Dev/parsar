@@ -16,4 +16,5 @@ type Session struct {
 	IdempotencyKey string             `json:"idempotency_key"`
 	RequestHash    string             `json:"request_hash"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Configuration  []byte             `json:"configuration"`
 }
