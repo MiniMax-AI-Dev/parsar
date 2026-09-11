@@ -127,10 +127,11 @@ export function CapabilitiesPage() {
   const [directoryFilters, setDirectoryFilters] = useState<DirectoryFilterState>({ category: "", verifiedOnly: false, sort: "featured" })
   const [page, setPage] = useState(1)
   const debouncedQuery = useDebouncedValue(query, 250)
-  // Reset to page 1 whenever the user changes filters.
-  useEffect(() => {
+  const [pageFilters, setPageFilters] = useState({ query: debouncedQuery, type: typeFilter })
+  if (pageFilters.query !== debouncedQuery || pageFilters.type !== typeFilter) {
+    setPageFilters({ query: debouncedQuery, type: typeFilter })
     setPage(1)
-  }, [debouncedQuery, typeFilter])
+  }
   const capsQ = useCapabilitiesQuery(wid, debouncedQuery, typeFilter, page, PAGE_SIZE)
   const agentsQ = useAgents(wid)
   const workspacesQ = useMyWorkspaces()
