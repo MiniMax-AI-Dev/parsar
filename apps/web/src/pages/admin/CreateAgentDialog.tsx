@@ -478,15 +478,10 @@ export function CreateAgentDialog({
   const fieldID = useId()
   const modelListboxID = useId()
   const modelSecretID = useId()
-  const wasOpenRef = useRef(false)
+  const [previousOpen, setPreviousOpen] = useState(false)
+  if (open !== previousOpen) setPreviousOpen(open)
 
-  useEffect(() => {
-    if (!open) {
-      wasOpenRef.current = false
-      return
-    }
-    if (wasOpenRef.current) return
-    wasOpenRef.current = true
+  if (open && !previousOpen) {
     const params = new URLSearchParams(window.location.search.replace(/^\?+/, "?"))
     if (mode === "create") {
       // Clone path: an `agent` prop in create mode means prefill from that
@@ -557,7 +552,7 @@ export function CreateAgentDialog({
     setPairDialogOpen(false)
     setStep(1)
     setCapabilityTypeFilter("all")
-  }, [open, mode, agent, agent?.id, defaultAgentDescription, defaultAgentName, defaultSystemPrompt, firstModelID, initialDraft])
+  }
 
   const clone = useAgentCloneCapabilities(open, cloneSourceID,
     existingBindingsQ.isFetching || existingBindingsQ.isError ? undefined : existingBindingsQ.data?.installed,
