@@ -1,14 +1,15 @@
 -- name: GetSessionItem :one
 SELECT * FROM session_items WHERE session_id = $1 AND id = $2;
 
--- name: PutSessionItem :exec
+-- name: PutSessionItem :one
 INSERT INTO session_items(id, session_id, turn_id, created_at, payload, position, output_index)
 VALUES (sqlc.arg(id), sqlc.arg(session_id), sqlc.arg(turn_id), sqlc.arg(created_at), sqlc.arg(payload),
     (SELECT COALESCE(max(position), -1) + 1 FROM session_items WHERE session_id = sqlc.arg(session_id)),
     CASE WHEN sqlc.arg(is_output)::boolean THEN
         (SELECT COALESCE(max(output_index), -1) + 1 FROM session_items WHERE turn_id = sqlc.arg(turn_id))
     END)
-ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload;
+ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload
+RETURNING *;
 
 -- name: ListSessionItems :many
 SELECT i.id, i.created_at,

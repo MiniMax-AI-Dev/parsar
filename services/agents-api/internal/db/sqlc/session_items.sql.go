@@ -250,7 +250,7 @@ func (q *Queries) MarkItemsIndexed(ctx context.Context, arg MarkItemsIndexedPara
 	return err
 }
 
-const putSessionItem = `-- name: PutSessionItem :exec
+const putSessionItem = `-- name: PutSessionItem :one
 INSERT INTO session_items(id, session_id, turn_id, created_at, payload, position, output_index)
 VALUES ($1, $2, $3, $4, $5,
     (SELECT COALESCE(max(position), -1) + 1 FROM session_items WHERE session_id = $2),
@@ -258,6 +258,7 @@ VALUES ($1, $2, $3, $4, $5,
         (SELECT COALESCE(max(output_index), -1) + 1 FROM session_items WHERE turn_id = $3)
     END)
 ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload
+RETURNING id, session_id, turn_id, created_at, position, payload, output_index
 `
 
 type PutSessionItemParams struct {
@@ -269,8 +270,8 @@ type PutSessionItemParams struct {
 	IsOutput  bool               `json:"is_output"`
 }
 
-func (q *Queries) PutSessionItem(ctx context.Context, arg PutSessionItemParams) error {
-	_, err := q.db.Exec(ctx, putSessionItem,
+func (q *Queries) PutSessionItem(ctx context.Context, arg PutSessionItemParams) (SessionItem, error) {
+	row := q.db.QueryRow(ctx, putSessionItem,
 		arg.ID,
 		arg.SessionID,
 		arg.TurnID,
@@ -278,7 +279,17 @@ func (q *Queries) PutSessionItem(ctx context.Context, arg PutSessionItemParams) 
 		arg.Payload,
 		arg.IsOutput,
 	)
-	return err
+	var i SessionItem
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.TurnID,
+		&i.CreatedAt,
+		&i.Position,
+		&i.Payload,
+		&i.OutputIndex,
+	)
+	return i, err
 }
 
 const unindexedItemTurn = `-- name: UnindexedItemTurn :one

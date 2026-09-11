@@ -17,7 +17,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (tenant_id, idempotency_key) DO UPDATE
 SET idempotency_key = EXCLUDED.idempotency_key
 WHERE sessions.request_hash = EXCLUDED.request_hash
-RETURNING id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration
+RETURNING id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence
 `
 
 type CreateSessionParams struct {
@@ -50,12 +50,13 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.RequestHash,
 		&i.CreatedAt,
 		&i.Configuration,
+		&i.EventSequence,
 	)
 	return i, err
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration FROM sessions WHERE tenant_id = $1 AND id = $2
+SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence FROM sessions WHERE tenant_id = $1 AND id = $2
 `
 
 type GetSessionParams struct {
@@ -75,12 +76,13 @@ func (q *Queries) GetSession(ctx context.Context, arg GetSessionParams) (Session
 		&i.RequestHash,
 		&i.CreatedAt,
 		&i.Configuration,
+		&i.EventSequence,
 	)
 	return i, err
 }
 
 const listSessions = `-- name: ListSessions :many
-SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration FROM sessions
+SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence FROM sessions
 WHERE tenant_id = $1
   AND ($2::timestamptz IS NULL
        OR (NOT $3::boolean AND (created_at, id) < ($2::timestamptz, $4::uuid))
@@ -125,6 +127,7 @@ func (q *Queries) ListSessions(ctx context.Context, arg ListSessionsParams) ([]S
 			&i.RequestHash,
 			&i.CreatedAt,
 			&i.Configuration,
+			&i.EventSequence,
 		); err != nil {
 			return nil, err
 		}

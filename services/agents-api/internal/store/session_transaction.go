@@ -31,6 +31,9 @@ func (s *Store) withSession(ctx context.Context, tenantID, sessionID string, app
 		if err := ensureSessionItems(ctx, q, id); err != nil {
 			return err
 		}
-		return apply(q, id)
+		if err := apply(q, id); err != nil {
+			return err
+		}
+		return q.PruneSessionEvents(ctx, id)
 	})
 }

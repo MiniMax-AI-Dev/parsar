@@ -27,12 +27,20 @@ type Session struct {
 	RequestHash    string             `json:"request_hash"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	Configuration  []byte             `json:"configuration"`
+	EventSequence  int64              `json:"event_sequence"`
 }
 
 type SessionDevice struct {
 	SessionID       pgtype.UUID `json:"session_id"`
 	DeviceID        pgtype.UUID `json:"device_id"`
 	NativeSessionID string      `json:"native_session_id"`
+}
+
+type SessionEvent struct {
+	SessionID    pgtype.UUID `json:"session_id"`
+	Sequence     int64       `json:"sequence"`
+	Payload      []byte      `json:"payload"`
+	PayloadBytes pgtype.Int4 `json:"payload_bytes"`
 }
 
 type SessionItem struct {

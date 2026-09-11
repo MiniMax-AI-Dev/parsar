@@ -62,7 +62,10 @@ func (s *Store) CompleteExecution(ctx context.Context, tenantID, sessionID, turn
 			}
 		}
 		row, err = q.GetTurn(ctx, p)
-		return err
+		if err != nil {
+			return err
+		}
+		return recordTurnChange(ctx, q, row, false)
 	})
 	if err != nil {
 		return Turn{}, err
