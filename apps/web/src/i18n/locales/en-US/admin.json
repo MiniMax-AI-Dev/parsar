@@ -1270,7 +1270,8 @@
       "errors": {
         "appIdInUse": "This App ID is already bound to another active Agent in this instance. Pick a different App ID, or disable the other Agent's Feishu binding first.",
         "incomplete": "When enabled, App ID / App Secret / Verification Token are all required.",
-        "generic": "Save failed"
+        "generic": "Save failed",
+        "title": "Couldn't configure Feishu"
       },
       "actions": {
         "save": "Save",

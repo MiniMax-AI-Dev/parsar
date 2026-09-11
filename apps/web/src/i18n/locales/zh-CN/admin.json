@@ -1270,7 +1270,8 @@
       "errors": {
         "appIdInUse": "这个 App ID 已经被本实例的另一个启用 Agent 占用了. 请换一个 App ID, 或先把那个 Agent 的飞书绑定关掉.",
         "incomplete": "启用时, App ID / App Secret / Verification Token 都必须填.",
-        "generic": "保存失败"
+        "generic": "保存失败",
+        "title": "飞书配置失败"
       },
       "actions": {
         "save": "保存",
