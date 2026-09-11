@@ -64,7 +64,8 @@ configuration remains immutable and shared by its Turns. The internal dispatcher
 claims a Turn before delivery, confirms additional messages through native steering,
 and commits the outcome and native engine ID together. It requires an internally
 resolved `daemon.work_dir` configuration and a bound device advertising streaming
-and steering. Messages currently use normalized internal `{"text":"..."}` payloads;
+and steering plus `durable_turns` (strict resume, process release and cancellation
+snapshots). Failed resumes report an error instead of starting a fresh thread. Messages currently use normalized internal `{"text":"..."}` payloads;
 public upstream input mapping is not implemented here.
 
 The dispatcher takes immutable model/instructions from the Session snapshot and

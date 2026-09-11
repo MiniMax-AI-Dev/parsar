@@ -198,8 +198,10 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   require native steering receipts. Commit terminal outcome and native Session ID
   together under the admission lock; unapplied messages prevent successful completion.
   Resolve credentials separately from the immutable non-secret snapshot.
-- Internal execution requires a matching daemon with optional cancellation receipts
-  and `release_on_completion` support. Release the native writer before forwarding
+- Internal execution requires the advertised `durable_turns` engine capability,
+  strict resume, and optional cancellation receipts
+  and `release_on_completion` support. Reject unadvertised peers before claiming;
+  failed strict resumes must not fall back to a new native thread. Release the native writer before forwarding
   completion, so the next Turn can resume its durable native ID. Existing product
   requests retain their default idle-process policy. Native history still requires
   the device's persisted engine files; IDs alone cannot restore deleted history.

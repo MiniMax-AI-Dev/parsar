@@ -78,6 +78,7 @@ type PromptRequestPayload struct {
 	WorkspaceAuthoring bool   `json:"workspace_authoring,omitempty"`
 	// ReleaseOnCompletion closes the native writer before acknowledging Done.
 	ReleaseOnCompletion bool `json:"release_on_completion,omitempty"`
+	StrictResume        bool `json:"strict_resume,omitempty"`
 }
 
 // PromptAttachment is one piece of non-text user input the daemon-side

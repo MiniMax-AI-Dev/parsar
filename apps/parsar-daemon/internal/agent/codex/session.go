@@ -94,6 +94,7 @@ type Session struct {
 	lastErrText string
 
 	interactions *pendingCodexInteractions
+	outcome      cancellationOutcomeState
 }
 
 var _ agent.Session = (*Session)(nil)
@@ -224,21 +225,9 @@ func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 	defer s.cleanup()
 	defer s.closeOut()
 
-	// Resolve thread: resume if possible, else start fresh.
-	if strings.TrimSpace(req.AgentSessionID) != "" {
-		if err := s.resumeThread(req.AgentSessionID, plan); err != nil {
-			s.cfg.logger.Warn("codex: thread/resume failed; starting fresh",
-				"run_id", s.runID, "thread_id", req.AgentSessionID, "err", err)
-			if err := s.startThread(plan); err != nil {
-				s.emitTerminal(fmt.Sprintf("codex: thread/start: %v", err), true)
-				return
-			}
-		}
-	} else {
-		if err := s.startThread(plan); err != nil {
-			s.emitTerminal(fmt.Sprintf("codex: thread/start: %v", err), true)
-			return
-		}
+	if err := s.resolveThread(req, plan); err != nil {
+		s.emitTerminal(err.Error(), true)
+		return
 	}
 
 	// turn/start fires the first prompt. The reply ack is fire-and-forget
@@ -464,6 +453,8 @@ func (s *Session) onItemCompleted(raw json.RawMessage) {
 }
 
 func (s *Session) onTurnCompleted(raw json.RawMessage) {
+	s.outcome.notificationMu.Lock()
+	defer s.outcome.notificationMu.Unlock()
 	s.stopSteering()
 	var p TurnCompletedNotification
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -480,6 +471,9 @@ func (s *Session) onTurnCompleted(raw json.RawMessage) {
 		s.usageMu.Unlock()
 	}
 	if usage != nil {
+		s.usageMu.Lock()
+		s.latestUsage = usage
+		s.usageMu.Unlock()
 		s.emitUsage(*usage)
 	}
 
@@ -636,6 +630,7 @@ func (s *Session) emitDone(content string, usage *TurnUsage) {
 			OutputTokens: int32(usage.OutputTokens),
 		}
 	}
+	s.rememberOutcome(payload)
 	env, err := proto.NewEnvelope(proto.TypeDone, s.runID, payload)
 	if err != nil {
 		return
@@ -689,10 +684,12 @@ func (s *Session) emitTerminal(message string, asError bool) {
 		doneMeta[proto.DoneMetaAgentSessionID] = tid
 		doneMeta[proto.DoneMetaAgentSessionType] = "codex_thread"
 	}
-	env, err := proto.NewEnvelope(proto.TypeDone, s.runID, proto.DonePayload{
+	payload := proto.DonePayload{
 		Content:  message,
 		Metadata: doneMeta,
-	})
+	}
+	s.rememberOutcome(payload)
+	env, err := proto.NewEnvelope(proto.TypeDone, s.runID, payload)
 	if err != nil {
 		return
 	}

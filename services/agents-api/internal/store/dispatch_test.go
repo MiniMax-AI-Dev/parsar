@@ -68,7 +68,7 @@ func newDispatchHarness(t *testing.T) *dispatchHarness {
 		t.Fatal("device connection failed")
 	}
 	t.Cleanup(func() { h.conn.Close() })
-	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true}}}})
+	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true}}}})
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		peer, e := h.registry.LookupDevice(h.device.ID)
@@ -332,5 +332,30 @@ func TestExecutionOutcomeAndNativeBindingCommitTogether(t *testing.T) {
 	}
 	if success != 1 {
 		t.Fatal("multiple terminal owners")
+	}
+}
+
+func TestExecutionRejectsLegacyDaemonBeforeClaim(t *testing.T) {
+	h := newDispatchHarness(t)
+	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true}}}})
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		peer, _ := h.registry.LookupDevice(h.device.ID)
+		info, _, _ := peer.AgentKindStatus("codex")
+		if !info.Capabilities.DurableTurns {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("legacy heartbeat not registered")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	first := h.message("legacy", "Run")
+	if _, err := h.d.Run(context.Background(), h.tenant, h.session.ID, first.TurnID); err == nil {
+		t.Fatal("legacy daemon accepted")
+	}
+	turn, err := h.s.GetTurn(context.Background(), h.tenant, h.session.ID, first.TurnID)
+	if err != nil || turn.Status != store.TurnQueued {
+		t.Fatal("unsupported daemon claimed work")
 	}
 }

@@ -229,6 +229,8 @@ type AgentKindCapabilities struct {
 	Resume             bool `json:"resume,omitempty"`
 	WorkspaceAuthoring bool `json:"workspace_authoring,omitempty"`
 	Steering           bool `json:"steering,omitempty"`
+	// DurableTurns includes strict resume, completion release and cancellation snapshots.
+	DurableTurns bool `json:"durable_turns,omitempty"`
 }
 
 // SupportedAgentKind is one daemon-advertised agent engine. Daemons
