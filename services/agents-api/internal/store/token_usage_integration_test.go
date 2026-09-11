@@ -101,3 +101,34 @@ func TestTokenUsageDurableSnapshotsAndSessionTotals(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCancellationReceiptUsageSurvivesRecovery(t *testing.T) {
+	ctx := context.Background()
+	s, _ := store.NewTestStore(t)
+	tenant := uuid.NewString()
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "cancel-recovery"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	admission, err := s.SubmitMessage(ctx, tenant, session.ID, "start", json.RawMessage(`{"text":"measure"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.TransitionTurn(ctx, tenant, session.ID, admission.TurnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress})
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt := json.RawMessage(`{"applied":true,"outcome":{"usage":{"tokens":{"input_tokens":10,"cached_input_tokens":4,"output_tokens":3,"reasoning_output_tokens":2,"total_tokens":13}}}}`)
+	if err = s.AppendTurnEvents(ctx, tenant, session.ID, admission.TurnID, 1, []store.ExecutionEvent{{Kind: "cancel_receipt", Payload: receipt}}); err != nil {
+		t.Fatal(err)
+	}
+	// Startup recovery has no in-memory cancellation outcome.
+	recovered, err := s.TransitionTurn(ctx, tenant, session.ID, admission.TurnID, store.TurnTransition{ExpectedStatus: store.TurnInProgress, Status: store.TurnFailed, Outcome: json.RawMessage(`{"error_code":"execution_interrupted"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got v1.TokenUsage
+	if json.Unmarshal(recovered.Usage, &got) != nil || got.TotalTokens != 13 {
+		t.Fatalf("recovery lost receipt usage: %s", recovered.Usage)
+	}
+}

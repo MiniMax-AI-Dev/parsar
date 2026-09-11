@@ -593,7 +593,7 @@ func (s *Session) emitDone(content string, usage *TurnUsage) {
 	if usage != nil {
 		payload.Usage = s.usagePayload(*usage)
 	}
-	s.rememberOutcome(payload)
+	payload = s.rememberOutcome(payload)
 	env, err := proto.NewEnvelope(proto.TypeDone, s.runID, payload)
 	if err != nil {
 		return
@@ -646,7 +646,7 @@ func (s *Session) emitTerminal(message string, asError bool) {
 		Content:  message,
 		Metadata: doneMeta,
 	}
-	s.rememberOutcome(payload)
+	payload = s.rememberOutcome(payload)
 	env, err := proto.NewEnvelope(proto.TypeDone, s.runID, payload)
 	if err != nil {
 		return

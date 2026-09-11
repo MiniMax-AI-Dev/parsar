@@ -1346,7 +1346,8 @@ documentation must be written in English.
   regressing baselines must not become complete measurements; legacy input/output
   fields retain their existing product behavior.
 - Agents API atomically projects the latest complete per-Turn measurement alongside
-  journal/terminal writes. Snapshots replace, rather than add to, previous values;
+  journal/terminal writes, including applied cancellation receipts. Snapshots replace,
+  rather than add to, previous values;
   duplicate usage and Done frames cannot double count. Failure and cancellation
   retain already measured usage even when the terminal payload omits it.
 - Session usage sums recorded Turn measurements only, as best-effort usage under

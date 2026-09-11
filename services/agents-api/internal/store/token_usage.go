@@ -28,19 +28,36 @@ func measuredUsage(kind string, raw json.RawMessage) *v1.TokenUsage {
 	if json.Unmarshal(raw, &object) != nil {
 		return nil
 	}
+	if kind == "cancel_receipt" {
+		var applied bool
+		if json.Unmarshal(object["applied"], &applied) != nil || !applied {
+			return nil
+		}
+		raw = object["outcome"]
+		object = nil
+		if json.Unmarshal(raw, &object) != nil {
+			return nil
+		}
+		kind = "done"
+	}
 	if strings.HasPrefix(kind, "execution_") {
-		if json.Unmarshal(object["done"], &object) != nil {
+		raw = object["done"]
+		object = nil
+		if json.Unmarshal(raw, &object) != nil {
 			return nil
 		}
 		kind = "done"
 	}
 	if kind == "done" {
-		if json.Unmarshal(object["usage"], &object) != nil {
+		raw = object["usage"]
+		object = nil
+		if json.Unmarshal(raw, &object) != nil {
 			return nil
 		}
 	} else if kind != "usage" {
 		return nil
 	}
+
 	var tokens map[string]*int64
 	if json.Unmarshal(object["tokens"], &tokens) != nil {
 		return nil

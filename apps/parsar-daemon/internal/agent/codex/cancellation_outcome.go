@@ -12,7 +12,7 @@ type cancellationOutcomeState struct {
 	terminal       *proto.DonePayload
 }
 
-func (s *Session) rememberOutcome(outcome proto.DonePayload) {
+func (s *Session) rememberOutcome(outcome proto.DonePayload) proto.DonePayload {
 	s.usageMu.Lock()
 	if outcome.Usage.Provider == "" && s.latestUsage != nil {
 		outcome.Usage = s.usagePayload(*s.latestUsage)
@@ -21,6 +21,7 @@ func (s *Session) rememberOutcome(outcome proto.DonePayload) {
 	s.outcome.mu.Lock()
 	s.outcome.terminal = &outcome
 	s.outcome.mu.Unlock()
+	return outcome
 }
 
 // CancellationOutcome remains readable after Cancel stops the native process.
