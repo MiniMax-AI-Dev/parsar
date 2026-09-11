@@ -62,19 +62,20 @@ type appliedInteractionDecision struct {
 // outbound frame stamps env.Trace with the same value, completing
 // frontend → server → daemon → agent → server attribution.
 type sessionState struct {
-	runID       string
-	stateKey    string
-	session     agent.Session
-	out         chan proto.Envelope
-	ctxCancel   context.CancelFunc
-	pendingIDs  map[string]struct{}
-	pendingAsks map[string]struct{}
-	traceparent string
-	idleTimer   *time.Timer
-	idleLease   uint64
-	retain      bool
-	steering    map[string]steeringReceipt
-	steerBusy   bool
+	runID               string
+	stateKey            string
+	session             agent.Session
+	out                 chan proto.Envelope
+	ctxCancel           context.CancelFunc
+	pendingIDs          map[string]struct{}
+	pendingAsks         map[string]struct{}
+	traceparent         string
+	idleTimer           *time.Timer
+	idleLease           uint64
+	retain              bool
+	releaseOnCompletion bool
+	steering            map[string]steeringReceipt
+	steerBusy           bool
 }
 
 // Config is the constructor input. Registry and Sender are required;
@@ -289,14 +290,15 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 	}
 	out := make(chan proto.Envelope, 64)
 	state := &sessionState{
-		runID:       runID,
-		stateKey:    stateKey,
-		out:         out,
-		ctxCancel:   sessionCancel,
-		pendingIDs:  make(map[string]struct{}),
-		pendingAsks: make(map[string]struct{}),
-		traceparent: env.Trace,
-		retain:      stateKey != "",
+		runID:               runID,
+		stateKey:            stateKey,
+		out:                 out,
+		ctxCancel:           sessionCancel,
+		pendingIDs:          make(map[string]struct{}),
+		pendingAsks:         make(map[string]struct{}),
+		traceparent:         env.Trace,
+		retain:              stateKey != "",
+		releaseOnCompletion: req.ReleaseOnCompletion,
 	}
 	r.sessions[runID] = state
 	r.mu.Unlock()
@@ -321,25 +323,6 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 
 	r.shutdownWG.Add(1)
 	go r.pump(state)
-	return nil
-}
-
-func (r *Router) handlePromptCancel(ctx context.Context, env proto.Envelope) error {
-	r.mu.Lock()
-	state, ok := r.sessions[env.ID]
-	if ok {
-		state.retain = false
-	}
-	r.mu.Unlock()
-	if !ok {
-		// Cancelling an unknown / already-finished run is a no-op.
-		r.log.InfoContext(ctx, "prompt_cancel for unknown run (no-op)", "run_id", env.ID)
-		return nil
-	}
-	if err := state.session.Cancel(ctx); err != nil {
-		r.log.WarnContext(ctx, "session.Cancel failed", "run_id", env.ID, "err", err)
-	}
-	state.ctxCancel()
 	return nil
 }
 
@@ -626,6 +609,12 @@ func (r *Router) pump(s *sessionState) {
 				return
 			}
 			r.indexPermissionFrame(s, env)
+			if env.Type == proto.TypeDone && s.releaseOnCompletion {
+				if err := r.releaseCompletedSession(s); err != nil {
+					r.emitTerminalError(pumpCtx, s.runID, "failed to release completed executor")
+					continue
+				}
+			}
 			r.log.InfoContext(pumpCtx, "pump: forwarding envelope", "run_id", s.runID, "type", env.Type, "env_id", env.ID)
 			// Stamp the run's trace onto outbound frames so the
 			// gateway attributes daemon-emitted lines to the same

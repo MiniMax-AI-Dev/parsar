@@ -30,8 +30,9 @@ type Session struct {
 }
 
 type SessionDevice struct {
-	SessionID pgtype.UUID `json:"session_id"`
-	DeviceID  pgtype.UUID `json:"device_id"`
+	SessionID       pgtype.UUID `json:"session_id"`
+	DeviceID        pgtype.UUID `json:"device_id"`
+	NativeSessionID string      `json:"native_session_id"`
 }
 
 type Turn struct {

@@ -571,6 +571,7 @@ func deviceKindsFromHeartbeat(p proto.HeartbeatPayload) []device.SupportedAgentK
 				Usage:              info.Capabilities.Usage,
 				Resume:             info.Capabilities.Resume,
 				Steering:           info.Capabilities.Steering,
+				DurableTurns:       info.Capabilities.DurableTurns,
 				WorkspaceAuthoring: info.Capabilities.WorkspaceAuthoring,
 			},
 		})

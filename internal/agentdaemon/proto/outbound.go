@@ -76,6 +76,9 @@ type PromptRequestPayload struct {
 	// AgentStateKey is the stable daemon-side state directory key.
 	AgentStateKey      string `json:"agent_state_key,omitempty"`
 	WorkspaceAuthoring bool   `json:"workspace_authoring,omitempty"`
+	// ReleaseOnCompletion closes the native writer before acknowledging Done.
+	ReleaseOnCompletion bool `json:"release_on_completion,omitempty"`
+	StrictResume        bool `json:"strict_resume,omitempty"`
 }
 
 // PromptAttachment is one piece of non-text user input the daemon-side
@@ -93,10 +96,10 @@ type PromptAttachment struct {
 	DataBase64 string `json:"data_base64"`
 }
 
-// PromptCancelPayload is intentionally empty; the run identity is on
-// Envelope.ID. Declared so future fields (e.g. Reason) don't require a
-// wire-format bump.
-type PromptCancelPayload struct{}
+// PromptCancelPayload optionally requests an application receipt; identity is on Envelope.ID.
+type PromptCancelPayload struct {
+	DeliveryID string `json:"delivery_id,omitempty"`
+}
 
 // PermissionDecisionPayload carries the human verdict. UpdatedInput
 // lets the approver edit the tool input before letting the call

@@ -42,7 +42,7 @@ const (
 	TypePromptForUserChoice = "prompt_for_user_choice"
 
 	// TypeInteractionDecisionAck confirms that the daemon-side agent
-	// accepted (or definitively rejected) a permission/user-input decision.
+	// accepted (or definitively rejected) a permission/user-input decision or cancellation.
 	// The server must not mark the durable interaction terminal before this
 	// frame arrives.
 	TypeInteractionDecisionAck = "interaction_decision_ack"
@@ -108,6 +108,8 @@ type InteractionDecisionAckPayload struct {
 	Applied    bool   `json:"applied"`
 	ErrorCode  string `json:"error_code,omitempty"`
 	Error      string `json:"error,omitempty"`
+	// Outcome preserves native continuity when cancellation does not emit Done.
+	Outcome *DonePayload `json:"outcome,omitempty"`
 }
 
 // PromptForUserChoiceOption is one button / checkbox the user can
@@ -227,6 +229,8 @@ type AgentKindCapabilities struct {
 	Resume             bool `json:"resume,omitempty"`
 	WorkspaceAuthoring bool `json:"workspace_authoring,omitempty"`
 	Steering           bool `json:"steering,omitempty"`
+	// DurableTurns includes strict resume, completion release and cancellation snapshots.
+	DurableTurns bool `json:"durable_turns,omitempty"`
 }
 
 // SupportedAgentKind is one daemon-advertised agent engine. Daemons

@@ -48,3 +48,7 @@ RETURNING *;
 SELECT i.* FROM turn_inputs i JOIN sessions s ON s.id = i.session_id
 WHERE s.tenant_id = $1 AND i.session_id = $2 AND i.turn_id = $3 AND i.sequence > $4
 ORDER BY i.sequence LIMIT $5;
+
+-- name: HasUnappliedMessages :one
+SELECT EXISTS(SELECT 1 FROM turn_inputs
+WHERE session_id = $1 AND turn_id = $2 AND sequence > $3 AND kind = 'message');

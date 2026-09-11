@@ -255,11 +255,12 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 		Codex: proto.SupportedAgentKind{
 			Kind: "codex",
 			Capabilities: proto.AgentKindCapabilities{
-				Streaming:   true,
-				Permissions: true,
-				Usage:       true,
-				Resume:      true,
-				Steering:    true,
+				Streaming:    true,
+				Permissions:  true,
+				Usage:        true,
+				Resume:       true,
+				Steering:     true,
+				DurableTurns: true,
 			},
 		},
 		Pi: proto.SupportedAgentKind{
