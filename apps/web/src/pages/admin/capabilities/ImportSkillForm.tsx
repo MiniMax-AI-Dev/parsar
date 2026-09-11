@@ -93,8 +93,6 @@ export function ImportSkillForm({
     if (debounceRef.current) window.clearTimeout(debounceRef.current)
     if (raw.trim() === "") {
       onChange(null)
-      setPasteWarnings([])
-      setPasteError(null)
       previewMut.reset()
       return
     }
@@ -265,7 +263,13 @@ export function ImportSkillForm({
               <Textarea
                 id="import-skill-markdown"
                 value={raw}
-                onChange={(e) => setRaw(e.target.value)}
+                onChange={(e) => {
+                  setRaw(e.target.value)
+                  if (!e.target.value.trim()) {
+                    setPasteWarnings([])
+                    setPasteError(null)
+                  }
+                }}
                 rows={12}
                 placeholder={t(
                   "capabilities.import.skill.placeholder",
