@@ -12,9 +12,13 @@ import tempfile
 import time
 from urllib.parse import parse_qs, urlsplit
 import uuid
+import sys
+
+sys.dont_write_bytecode = True
 
 import httpx2
 from jsonschema import Draft4Validator
+from official_items import verify_items
 from openai import AuthenticationError, BadRequestError, ConflictError, NotFoundError, OpenAI
 import yaml
 
@@ -41,6 +45,8 @@ def main():
             path = "/agents/sessions/{session_id}"
             if suffix and suffix[0] == "turns":
                 path += "/turns" + ("/{turn_id}" if len(suffix) > 1 else "")
+            elif suffix and suffix[0] == "items":
+                path += "/items"
         schema = contract["paths"][path][response.request.method.lower()]["responses"][str(response.status_code)]["schema"]
         Draft4Validator({"definitions": contract["definitions"], **schema}).validate(response.json())
     pin = json.loads((root / "contracts/agents-api/upstream.json").read_text())
@@ -162,9 +168,11 @@ def main():
                     expect_error(NotFoundError, lambda: turns.retrieve(turn_ids[0], session_id=first.id))
                     expect_error(NotFoundError, lambda: turns.list(first.id, after=turn_ids[0]))
                     expect_error(BadRequestError, lambda: turns.list(turn_session.id, limit=101))
+                    saved_items = verify_items(a, b, invalid, turn_session.id, first.id, turn_ids, expect_error)
                     process.terminate()
                     process.wait(timeout=15)
                     process = start()
+                    assert list(sessions.items.list(turn_session.id, order="asc")) == saved_items
                     assert list(turns.list(turn_session.id, order="asc")) == recovered
                     assert sessions.retrieve(first.id) == first
                     assert sessions.create(**spec, metadata={"workspace": "untrusted-reference"}, extra_headers=headers) == first

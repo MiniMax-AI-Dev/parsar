@@ -249,6 +249,28 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   category; usage remains nullable until its complete upstream breakdown can be
   mapped without inventing measurements. These reads do not enable submission.
 
+
+- Public Items list reads a persisted execution-owned projection, updated in the
+  same Session transaction as admitted messages and journal batches. IDs derive
+  from the Turn and source identity; the first-observation timestamp and stable
+  tie breakers never change when content or status changes. Equal timestamps
+  use per-source position and public ID, not the original event ordinal. Cursors are scoped to the authenticated Session.
+  Terminal Turns expose unfinished Items as `incomplete`, preserving completed
+  message/tool states independently of the Turn outcome.
+- Pre-Items Turns rebuild their index once from paged persisted inputs/events,
+  under the same Session lock before reads or writes. Unknown historical input
+  shapes stay in the source journal without becoming fabricated messages.
+  Legacy aggregate text cannot recover missing native message boundaries, and
+  legacy tool frames without a native status remain `incomplete`. Legacy Done
+  may contain diagnostics: only a successful Turn confirms aggregate answer text;
+  failed Turns retain observed message output. Never replay
+  engine execution to rebuild the index. New reads use the index, not journal replay.
+- Project only the declared public Item variants; native adapter metadata is not
+  a response schema. Preserve structured tool JSON without float conversion.
+  Completion text replaces accumulated deltas. Keep partial output on termination;
+  do not turn an unfinished call into a successful result. Thinking fragments are
+  internal observations, not a claim of upstream reasoning-item support.
+
 ### Agent knowledge references
 
 - Unpublished knowledge retains only the bound version in other workspaces;

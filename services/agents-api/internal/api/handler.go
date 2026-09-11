@@ -15,6 +15,7 @@ import (
 )
 
 type SessionStore interface {
+	ListItems(context.Context, string, string, string, int, bool) (store.ItemPage, error)
 	GetTurn(context.Context, string, string, string) (store.Turn, error)
 	ListTurns(context.Context, string, string, string, int, bool) (store.TurnPage, error)
 	CreateSession(context.Context, string, store.CreateSessionInput) (store.Session, error)
@@ -43,6 +44,7 @@ func NewHandler(s SessionStore, auth *Authenticator, engine string) (http.Handle
 		r.Post("/agents/sessions", h.createSession)
 		r.Get("/agents/sessions", h.listSessions)
 		r.Get("/agents/sessions/{session_id}", h.getSession)
+		r.Get("/agents/sessions/{session_id}/items", h.listItems)
 		r.Get("/agents/sessions/{session_id}/turns", h.listTurns)
 		r.Get("/agents/sessions/{session_id}/turns/{turn_id}", h.getTurn)
 		r.NotFound(func(w http.ResponseWriter, _ *http.Request) {

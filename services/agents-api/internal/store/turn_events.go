@@ -81,6 +81,9 @@ func (s *Store) AppendTurnEvents(ctx context.Context, tenantID, sessionID, turnI
 		if err = q.InsertTurnEventBatch(ctx, sqlc.InsertTurnEventBatchParams{SessionID: p.SessionID, TurnID: p.ID, FirstOrdinal: first, Batch: batch}); err != nil {
 			return err
 		}
+		if err := indexEvents(ctx, q, p.SessionID, p.ID, first); err != nil {
+			return err
+		}
 		return q.CountTurnEvent(ctx, sqlc.CountTurnEventParams{SessionID: p.SessionID, ID: p.ID, EventCount: int32(len(events)), PayloadBytes: int64(payloadBytes)})
 	})
 }
@@ -93,7 +96,7 @@ func insertTurnEvent(ctx context.Context, q *sqlc.Queries, turn sqlc.Turn, kind 
 	if err = q.CountTurnEvent(ctx, sqlc.CountTurnEventParams{SessionID: turn.SessionID, ID: turn.ID, EventCount: 1, PayloadBytes: int64(len(payload))}); err != nil {
 		return err
 	}
-	return nil
+	return indexEvents(ctx, q, turn.SessionID, turn.ID, turn.EventCount+1)
 }
 
 func (s *Store) ListTurnEvents(ctx context.Context, tenantID, sessionID, turnID string, after int32, limit int) ([]TurnEvent, error) {

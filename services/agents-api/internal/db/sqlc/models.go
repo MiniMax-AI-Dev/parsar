@@ -35,6 +35,15 @@ type SessionDevice struct {
 	NativeSessionID string      `json:"native_session_id"`
 }
 
+type SessionItem struct {
+	ID        pgtype.UUID        `json:"id"`
+	SessionID pgtype.UUID        `json:"session_id"`
+	TurnID    pgtype.UUID        `json:"turn_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	Position  int32              `json:"position"`
+	Payload   []byte             `json:"payload"`
+}
+
 type Turn struct {
 	ID                pgtype.UUID        `json:"id"`
 	SessionID         pgtype.UUID        `json:"session_id"`
@@ -46,6 +55,7 @@ type Turn struct {
 	Outcome           []byte             `json:"outcome"`
 	EventCount        int32              `json:"event_count"`
 	EventBytes        int64              `json:"event_bytes"`
+	ItemsIndexed      bool               `json:"items_indexed"`
 }
 
 type TurnEvent struct {
