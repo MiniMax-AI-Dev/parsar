@@ -1577,6 +1577,8 @@
         "systemPrompt": "你是这个团队的 AI 助手。请保持简洁、准确，并优先提供可执行的建议。"
       },
       "errors": {
+        "createFailed": "创建 Agent 失败",
+        "saveFailed": "保存 Agent 失败",
         "modelRequired": "请选择一个模型",
         "modelUnavailable": "当前模型已不可用，请重新选择一个可用模型。",
         "deviceRequired": "请选择一台已接入设备。",

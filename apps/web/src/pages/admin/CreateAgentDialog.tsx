@@ -19,6 +19,7 @@ import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Select, SelectOption } from "../../components/ui/select"
 import { AgentInstructionsField } from "./agents/AgentInstructionsField"
+import { AgentSaveErrorDialog } from "./agents/AgentSaveErrorDialog"
 import { AgentVisibilityField } from "./agents/AgentVisibilityField"
 import { AgentCloudPreflight } from "./agents/AgentCloudPreflight"
 import { AgentModelPrerequisite } from "./agents/AgentModelPrerequisite"
@@ -474,6 +475,8 @@ export function CreateAgentDialog({
   const admin = isAdminRole(workspaceRole)
 
   const modelFieldRef = useRef<HTMLDivElement | null>(null)
+  const dialogScopeRef = useRef<HTMLDivElement | null>(null)
+  const submitRef = useRef<HTMLButtonElement | null>(null)
   const modelComboboxRef = useRef<HTMLDivElement | null>(null)
   const fieldID = useId()
   const modelListboxID = useId()
@@ -878,6 +881,7 @@ export function CreateAgentDialog({
       }}
     >
       <DialogContent
+        ref={dialogScopeRef}
         className="flex max-h-[86vh] flex-col overflow-hidden sm:max-w-2xl"
         onEscapeKeyDown={(event) => {
           if (modelDropdownOpenRef.current) {
@@ -1503,12 +1507,6 @@ export function CreateAgentDialog({
             </>
           )}
 
-          {errMsg && (
-            <p className="flex items-start gap-1.5 text-sm text-fg" role="alert">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-              <span className="min-w-0 break-words">{errMsg}</span>
-            </p>
-          )}
         </form>
 
         <DialogFooter className="shrink-0">
@@ -1531,6 +1529,7 @@ export function CreateAgentDialog({
             </Button>
           ) : (
             <Button
+              ref={submitRef}
               type="button"
               onClick={() => submit()}
               disabled={!canSubmit}
@@ -1539,6 +1538,13 @@ export function CreateAgentDialog({
             </Button>
           )}
         </DialogFooter>
+        <AgentSaveErrorDialog
+          error={error}
+          message={errMsg}
+          title={t(mode === "edit" ? "agents.form.errors.saveFailed" : "agents.form.errors.createFailed")}
+          submitRef={submitRef}
+          scopeRef={dialogScopeRef}
+        />
         {workspaceID && (
           <PairDaemonDialog
             open={pairDialogOpen}
