@@ -63,8 +63,8 @@ const FOLD_KEY = "parsar:conv:sidebarFolded"
 
 /** Reading measure of the thread column; the components below read it. */
 
-/** title · conversation id · age (actions replace the age on hover) */
-const LIST_COLUMNS = [col.title(120, 2), col.id(64, 0.3), col.age(56, 0.3), col.actions(3)]
+/** Conversation summary · actions in the fixed-width sidebar. */
+const LIST_COLUMNS = [col.title(0), col.actions(3)]
 
 import { sandboxSendGuard } from "../../lib/sandbox-send-guard"
 
@@ -517,10 +517,10 @@ function ConversationList(p: ListProps) {
                     if (!isRenaming) p.onPickConversation(c.id)
                   }}
                   onKeyDown={onKeyDown}
-                  className={cn(isRenaming && "h-auto min-h-9 py-1")}
+                  className={cn("h-auto py-2", isRenaming && "min-h-9 py-1")}
                 >
                   {isRenaming ? (
-                    <div className="col-span-4 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="col-span-full flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <Input
                           ref={renameInputRef}
@@ -565,17 +565,21 @@ function ConversationList(p: ListProps) {
                     </div>
                   ) : (
                     <>
-                      <span className="truncate font-medium" title={c.title || undefined}>
-                        {c.title || t("conversations.detail.unnamed")}
-                      </span>
-                      <LedgerId>{tailId(c.id)}</LedgerId>
-                      <span className="truncate text-right text-xs text-fg-muted">
-                        {fmtAgo(c.last_message_at ?? c.updated_at)}
-                      </span>
+                      <div className="min-w-0">
+                        <div className="flex h-7 min-w-0 items-center">
+                          <span className="truncate font-medium" title={c.title || undefined}>
+                            {c.title || t("conversations.detail.unnamed")}
+                          </span>
+                        </div>
+                        <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
+                          <LedgerId>{tailId(c.id)}</LedgerId>
+                          <span className="truncate">{fmtAgo(c.last_message_at ?? c.updated_at)}</span>
+                        </div>
+                      </div>
                       {/* Copying a link needs no write access — a viewer can
                           share what they can already read. Rename and delete
                           keep their own guards (main #283). */}
-                      <RowActions>
+                      <RowActions className="group-[.grid]:top-2 group-[.grid]:translate-y-0">
                         <ActionIconButton
                           icon={Link2}
                           label={copiedId === c.id ? t("conversations.sidebar.copied") : t("conversations.sidebar.copyLinkAria")}
