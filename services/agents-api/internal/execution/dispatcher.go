@@ -95,6 +95,9 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	}
 	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, AgentOptions: options, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true}
 	result, status := d.deliver(ctx, tenantID, sessionID, peer, req, inputs[0].Sequence)
+	if result.Done.Usage.Model == "" {
+		result.Done.Usage.Model = snapshot.Agent.Model
+	}
 	nativeID, _ := result.Done.Metadata[proto.DoneMetaAgentSessionID].(string)
 	finishCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

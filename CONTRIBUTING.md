@@ -203,6 +203,9 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   completion, so the next Turn can resume its durable native ID. Existing product
   requests retain their default idle-process policy. Native history still requires
   the device's persisted engine files; IDs alone cannot restore deleted history.
+  Cancellation receipts carry the stopped engine's continuity snapshot when no
+  Done is emitted. Preserve separately reported usage on failure; do not add the
+  same counters again when Done also includes them.
 - The dispatcher is an internal entry point, not a public event handler or worker.
   Its private `daemon` configuration is neither `environment:none` nor the official
   self-hosted executor protocol. Public environment mapping, durable output events,

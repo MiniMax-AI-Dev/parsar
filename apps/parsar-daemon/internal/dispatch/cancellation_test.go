@@ -16,6 +16,10 @@ type cancelReceiptSession struct {
 	err     error
 }
 
+func (s *cancelReceiptSession) CancellationOutcome() proto.DonePayload {
+	return proto.DonePayload{Metadata: map[string]any{proto.DoneMetaAgentSessionID: "native-cancelled"}}
+}
+
 func TestCompletionWaitsForNativeWriterRelease(t *testing.T) {
 	h := newHarness(t)
 	defer h.router.Shutdown(context.Background())
@@ -88,6 +92,9 @@ func TestCancellationReceiptFollowsAdapterOutcome(t *testing.T) {
 					_ = env.DecodePayload(&ack)
 					if ack.Applied == fails || ack.DeliveryID != "cancel-1" {
 						t.Fatalf("wrong receipt: %+v", ack)
+					}
+					if !fails && (ack.Outcome == nil || ack.Outcome.Metadata[proto.DoneMetaAgentSessionID] != "native-cancelled") {
+						t.Fatal("cancellation receipt lost native identity")
 					}
 				}
 			}

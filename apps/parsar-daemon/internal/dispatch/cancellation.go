@@ -6,6 +6,10 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
+type cancellationOutcomeProvider interface {
+	CancellationOutcome() proto.DonePayload
+}
+
 func (r *Router) releaseCompletedSession(state *sessionState) error {
 	r.mu.Lock()
 	state.retain = false
@@ -39,6 +43,10 @@ func (r *Router) handlePromptCancel(ctx context.Context, env proto.Envelope) err
 			ack.ErrorCode = "cancel_failed"
 		} else {
 			ack.Applied, ack.ErrorCode = true, ""
+			if provider, ok := state.session.(cancellationOutcomeProvider); ok {
+				outcome := provider.CancellationOutcome()
+				ack.Outcome = &outcome
+			}
 		}
 		state.ctxCancel()
 	}

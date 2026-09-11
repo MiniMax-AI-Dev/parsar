@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"time"
 
@@ -76,6 +77,13 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 		select {
 		case reply := <-cancelReply:
 			if reply.err == nil && reply.ack.Applied {
+				if reply.ack.Outcome != nil {
+					raw, _ := json.Marshal(reply.ack.Outcome)
+					_ = result.mergeDone(raw)
+				} else {
+					result.ErrorCode = "cancel_outcome_unavailable"
+					return
+				}
 				status = store.TurnCancelled
 			} else {
 				result.ErrorCode = "cancel_unconfirmed"
@@ -90,6 +98,11 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 				return
 			}
 			switch env.Type {
+			case proto.TypeUsage:
+				if env.DecodePayload(&result.Done.Usage) != nil {
+					result.ErrorCode = "invalid_executor_result"
+					return
+				}
 			case proto.TypeError:
 				var failure proto.ErrorPayload
 				if env.DecodePayload(&failure) != nil {
@@ -98,7 +111,7 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 				}
 				result.ErrorCode, result.Error = "engine_failed", failure.Error
 			case proto.TypeDone:
-				if env.DecodePayload(&result.Done) != nil {
+				if result.mergeDone(env.Payload) != nil {
 					result.ErrorCode = "invalid_executor_result"
 					return
 				}
@@ -106,6 +119,10 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 					select {
 					case reply := <-cancelReply:
 						if reply.err == nil && reply.ack.Applied {
+							if reply.ack.Outcome != nil {
+								raw, _ := json.Marshal(reply.ack.Outcome)
+								_ = result.mergeDone(raw)
+							}
 							status = store.TurnCancelled
 							return
 						}
@@ -201,4 +218,29 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 			}
 		}
 	}
+}
+
+func (r *Result) mergeDone(raw json.RawMessage) error {
+	var done proto.DonePayload
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &done); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	if _, present := fields["usage"]; !present {
+		done.Usage = r.Done.Usage
+	}
+	if done.Usage.Model == "" {
+		done.Usage.Model = r.Done.Usage.Model
+	}
+	if done.Content == "" {
+		done.Content = r.Done.Content
+	}
+	if done.Metadata == nil {
+		done.Metadata = r.Done.Metadata
+	}
+	r.Done = done
+	return nil
 }

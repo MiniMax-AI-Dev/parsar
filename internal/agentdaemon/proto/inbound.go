@@ -108,6 +108,8 @@ type InteractionDecisionAckPayload struct {
 	Applied    bool   `json:"applied"`
 	ErrorCode  string `json:"error_code,omitempty"`
 	Error      string `json:"error,omitempty"`
+	// Outcome preserves native continuity when cancellation does not emit Done.
+	Outcome *DonePayload `json:"outcome,omitempty"`
 }
 
 // PromptForUserChoiceOption is one button / checkbox the user can

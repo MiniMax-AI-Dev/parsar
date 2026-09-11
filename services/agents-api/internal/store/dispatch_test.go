@@ -226,8 +226,19 @@ func TestExecutionCancellationRequiresReceiptAndSurvivesContextEnd(t *testing.T)
 			if withDone {
 				h.write(first.TurnID, proto.TypeDone, proto.DonePayload{})
 			}
-			h.write(first.TurnID, proto.TypeInteractionDecisionAck, proto.InteractionDecisionAckPayload{DeliveryID: cancel.DeliveryID, Applied: true})
+			outcome := &proto.DonePayload{Metadata: map[string]any{proto.DoneMetaAgentSessionID: "cancelled-native"}, Usage: proto.Usage{InputTokens: 10}}
+			h.write(first.TurnID, proto.TypeInteractionDecisionAck, proto.InteractionDecisionAckPayload{DeliveryID: cancel.DeliveryID, Applied: true, Outcome: outcome})
 			h.finished(result, store.TurnCancelled)
+			next := h.message("next", "Continue after cancellation")
+			result = h.run(context.Background(), next.TurnID)
+			env = h.read(proto.TypePromptRequest)
+			var prompt proto.PromptRequestPayload
+			_ = env.DecodePayload(&prompt)
+			if prompt.AgentSessionID != "cancelled-native" {
+				t.Fatal("cancellation lost native continuity")
+			}
+			h.write(next.TurnID, proto.TypeDone, proto.DonePayload{})
+			h.finished(result, store.TurnCompleted)
 		})
 	}
 	h := newDispatchHarness(t)
@@ -255,6 +266,7 @@ func TestExecutionFailureDoesNotBecomeSuccessOrReplay(t *testing.T) {
 			case "disconnect":
 				h.conn.Close()
 			case "engine":
+				h.write(first.TurnID, proto.TypeUsage, proto.UsagePayload{Usage: proto.Usage{InputTokens: 13, OutputTokens: 7}})
 				h.write(first.TurnID, proto.TypeError, proto.ErrorPayload{Error: "Engine failed"})
 				h.write(first.TurnID, proto.TypeDone, proto.DonePayload{})
 			case "late-input":
@@ -265,7 +277,14 @@ func TestExecutionFailureDoesNotBecomeSuccessOrReplay(t *testing.T) {
 				h.read(proto.TypePromptSteer)
 				h.write(first.TurnID, proto.TypeDone, proto.DonePayload{})
 			}
-			h.finished(result, store.TurnFailed)
+			done := h.finished(result, store.TurnFailed)
+			if kind == "engine" {
+				var outcome execution.Result
+				_ = json.Unmarshal(done.Outcome, &outcome)
+				if outcome.Done.Usage.InputTokens != 13 || outcome.Done.Usage.OutputTokens != 7 {
+					t.Fatal("failed execution lost reported usage")
+				}
+			}
 			if kind != "disconnect" {
 				if _, err := h.d.Run(context.Background(), h.tenant, h.session.ID, first.TurnID); !errors.Is(err, store.ErrTurnConflict) {
 					t.Fatalf("terminal replay: %v", err)
