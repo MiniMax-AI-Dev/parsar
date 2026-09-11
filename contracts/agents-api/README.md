@@ -34,10 +34,11 @@ separate future dependency for Team orchestration in Parsar, not the HTTP contra
 | Shared daemon connection layer | Implemented; existing product protocol retained |
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
-| Authenticated Session HTTP API | Pending |
+| Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, environment `none`, metadata and creation retry keys |
 | Turn execution, events, results and cancellation | Pending |
 | Pending actions and environment lifecycle | Pending |
-| Official-client compatibility and product cutover | Pending |
+| Official-client compatibility | Strict SDK checks for the supported Session subset, pagination, retries, errors, tenant isolation and restart |
+| Product cutover | Pending |
 | Team orchestration | Deferred; Parsar-owned |
 
 The Store's internal DTO is not the upstream response model. The API layer must
@@ -52,3 +53,10 @@ errors, idempotency and tenant isolation. A client import or permissive parsing
 alone is not evidence of compatibility. Unsupported capabilities must be explicit
 errors, not successful placeholder resources. Add any provider or engine-specific
 extension separately from upstream fields and document it here when implemented.
+
+`openapi.yaml` is our generated supported surface; it is not the full upstream
+specification. The shared Go wire types are in `v1`. Session update/delete, saved
+Agent references/filtering, other agent options, vaults, initial input, streaming
+and execution/provider resources are not supported by this slice. Reject them
+explicitly. `AGENTS_API_ENGINE` selects the service's engine independently of the
+requested model; it does not add a competing field to the upstream request.

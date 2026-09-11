@@ -23,6 +23,8 @@ on:
       - 'redocly.yaml'
       - 'server/**/*.go'
       - 'internal/agentdaemon/gateway/**/*.go'
+      - 'services/agents-api/**/*.go'
+      - 'contracts/agents-api/**'
       - '.github/workflows/openapi.yml'
       - 'Makefile'
   pull_request:
@@ -31,6 +33,8 @@ on:
       - 'redocly.yaml'
       - 'server/**/*.go'
       - 'internal/agentdaemon/gateway/**/*.go'
+      - 'services/agents-api/**/*.go'
+      - 'contracts/agents-api/**'
       - '.github/workflows/openapi.yml'
       - 'Makefile'
 
@@ -59,9 +63,9 @@ jobs:
         run: make openapi
       - name: Fail on drift
         run: |
-          if ! git diff --exit-code -- docs/openapi/openapi.yaml; then
+          if ! git diff --exit-code -- docs/openapi/openapi.yaml contracts/agents-api/openapi.yaml; then
             echo ""
-            echo "::error::docs/openapi/openapi.yaml is out of sync with the swaggo annotations."
+            echo "::error::Generated OpenAPI contracts are out of sync with the swaggo annotations."
             echo "Run 'make openapi' locally, commit the regenerated file, and push."
             exit 1
           fi
@@ -75,4 +79,4 @@ jobs:
         with:
           node-version: '22'
       - name: Lint OpenAPI spec
-        run: npx --yes @redocly/cli@2.35.1 lint docs/openapi/openapi.yaml
+        run: npx --yes @redocly/cli@2.35.1 lint docs/openapi/openapi.yaml contracts/agents-api/openapi.yaml

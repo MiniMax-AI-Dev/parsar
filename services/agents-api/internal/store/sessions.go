@@ -54,6 +54,8 @@ type Store struct{ queries *sqlc.Queries }
 
 func New(pool *pgxpool.Pool) *Store { return &Store{queries: sqlc.New(pool)} }
 
+func ValidEngine(engine string) bool { return enginePattern.MatchString(engine) }
+
 // CreateSession uses a caller-scoped key to make retries safe, including
 // concurrent submissions. Different input with the same key is a conflict.
 func (s *Store) CreateSession(ctx context.Context, tenantID string, input CreateSessionInput) (Session, error) {
@@ -62,7 +64,7 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 		return Session{}, err
 	}
 	input.Engine = strings.TrimSpace(input.Engine)
-	if !enginePattern.MatchString(input.Engine) || strings.TrimSpace(input.IdempotencyKey) == "" || len(input.IdempotencyKey) > 128 {
+	if !ValidEngine(input.Engine) || strings.TrimSpace(input.IdempotencyKey) == "" || len(input.IdempotencyKey) > 128 {
 		return Session{}, fmt.Errorf("%w: engine and idempotency key are required", ErrInvalidInput)
 	}
 	if input.Metadata == nil {
@@ -72,8 +74,8 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 	if err != nil {
 		return Session{}, fmt.Errorf("%w: metadata: %v", ErrInvalidInput, err)
 	}
-	if len(metadata) > 16*1024 {
-		return Session{}, fmt.Errorf("%w: metadata exceeds 16 KiB", ErrInvalidInput)
+	if len(metadata) > 64*1024 {
+		return Session{}, fmt.Errorf("%w: metadata exceeds 64 KiB", ErrInvalidInput)
 	}
 	if len(input.Configuration) > 512*1024 {
 		return Session{}, fmt.Errorf("%w: configuration exceeds 512 KiB", ErrInvalidInput)
@@ -131,9 +133,9 @@ func (s *Store) GetSession(ctx context.Context, tenantID, sessionID string) (Ses
 	return sessionFromRow(row)
 }
 
-// ListSessions returns newest sessions first. The cursor is the last returned
+// ListSessions orders by creation time and ID. The cursor is the last returned
 // session ID and must belong to the same tenant; it grants no additional access.
-func (s *Store) ListSessions(ctx context.Context, tenantID, cursor string, limit int) (SessionPage, error) {
+func (s *Store) ListSessions(ctx context.Context, tenantID, cursor string, limit int, ascending bool) (SessionPage, error) {
 	tenant, err := parseID(tenantID)
 	if err != nil {
 		return SessionPage{}, err
@@ -141,7 +143,7 @@ func (s *Store) ListSessions(ctx context.Context, tenantID, cursor string, limit
 	if limit < 1 || limit > 100 {
 		return SessionPage{}, fmt.Errorf("%w: page size must be 1..100", ErrInvalidInput)
 	}
-	params := sqlc.ListSessionsParams{TenantID: tenant, PageLimit: int32(limit + 1), AfterID: pgtype.UUID{Valid: true}}
+	params := sqlc.ListSessionsParams{TenantID: tenant, PageLimit: int32(limit + 1), AfterID: pgtype.UUID{Valid: true}, Ascending: ascending}
 	if cursor != "" {
 		after, err := s.GetSession(ctx, tenantID, cursor)
 		if err != nil {

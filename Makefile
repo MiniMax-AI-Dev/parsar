@@ -266,11 +266,20 @@ openapi:
 	    --outputTypes yaml \
 	    --parseInternal \
 	    --parseDepth 100 \
-	    --exclude ./apps,./packages,./services,./node_modules,./tests,./infra
+	    --exclude ./apps,./packages,./services,./contracts,./node_modules,./tests,./infra
 	@mv docs/openapi/gen/swagger.yaml docs/openapi/openapi.yaml
 	@rmdir docs/openapi/gen 2>/dev/null || true
 	@echo "openapi: wrote docs/openapi/openapi.yaml"
 	@echo "openapi: paths=$$(grep -c '^  /' docs/openapi/openapi.yaml)"
+	$(SWAG) init \
+	    -g cmd/server/main.go \
+	    --dir ./services/agents-api,./contracts/agents-api/v1 \
+	    --output contracts/agents-api/gen \
+	    --outputTypes yaml \
+	    --parseInternal
+	@mv contracts/agents-api/gen/swagger.yaml contracts/agents-api/openapi.yaml
+	@rmdir contracts/agents-api/gen
+	@echo "openapi: wrote contracts/agents-api/openapi.yaml"
 
 # --- E2B sandbox template ----------------------------------------------
 #
