@@ -86,12 +86,16 @@ func TestExecutionDoesNotCompleteAfterEventPersistenceFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.write(input.TurnID, proto.TypeDelta, proto.DeltaPayload{Delta: "cannot be stored", Sequence: 1})
-	h.write(input.TurnID, proto.TypeDone, proto.DonePayload{Content: "Do not report success"})
+	h.write(input.TurnID, proto.TypeDone, proto.DonePayload{Content: "Do not report success", Usage: proto.Usage{InputTokens: 13}, Metadata: map[string]any{proto.DoneMetaAgentSessionID: "failed-native"}})
 	turn := h.finished(result, store.TurnFailed)
 	var outcome execution.Result
 	_ = json.Unmarshal(turn.Outcome, &outcome)
 	if outcome.ErrorCode != "event_persistence_failed" {
 		t.Fatal(outcome.ErrorCode)
+	}
+	bound, err := h.s.GetSessionDevice(ctx, h.tenant, h.session.ID)
+	if err != nil || bound.NativeSessionID != "failed-native" || outcome.Done.Usage.InputTokens != 13 {
+		t.Fatalf("terminal failure lost native continuity or usage: %+v %+v %v", bound, outcome, err)
 	}
 	events, err := h.s.ListTurnEvents(ctx, h.tenant, h.session.ID, input.TurnID, 0, 100)
 	if err != nil || len(events) != 1 || events[0].Kind != "execution_failed" {

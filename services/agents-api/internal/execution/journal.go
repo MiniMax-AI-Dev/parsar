@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -9,14 +10,19 @@ import (
 )
 
 type journal struct {
-	store                 *store.Store
+	store                 eventWriter
 	tenant, session, turn string
 	next                  int32
 	batch                 []store.ExecutionEvent
 	bytes                 int
+	pendingCount          int
 }
 
-func recordCancellation(ctx context.Context, journal *journal, reply cancellationResult) error {
+type eventWriter interface {
+	AppendTurnEvents(context.Context, string, string, string, int32, []store.ExecutionEvent) error
+}
+
+func recordCancellation(ctx context.Context, journal *journal, reply cancellationResult, result *Result) error {
 	if reply.err != nil {
 		return nil
 	}
@@ -24,10 +30,29 @@ func recordCancellation(ctx context.Context, journal *journal, reply cancellatio
 	if err != nil {
 		return err
 	}
+	if reply.ack.Applied && reply.ack.Outcome != nil {
+		raw, err := json.Marshal(reply.ack.Outcome)
+		if err != nil {
+			return err
+		}
+		if err := result.mergeDone(raw); err != nil {
+			return err
+		}
+	}
 	return journal.observe(ctx, env)
 }
 
 func (j *journal) observe(ctx context.Context, env proto.Envelope) error {
+	if err := j.enqueue(env); err != nil {
+		return err
+	}
+	if j.bytes > 768*1024 || len(j.batch) >= 64 {
+		return j.flush(ctx)
+	}
+	return nil
+}
+
+func (j *journal) enqueue(env proto.Envelope) error {
 	switch env.Type {
 	case proto.TypeDelta, proto.TypeThinking, proto.TypeToolCall, proto.TypeUsage,
 		proto.TypeError, proto.TypeDone, proto.TypePromptSteerAck, "cancel_receipt":
@@ -36,11 +61,6 @@ func (j *journal) observe(ctx context.Context, env proto.Envelope) error {
 	}
 	if len(env.Payload) > 512*1024 {
 		return store.ErrEventLimit
-	}
-	if j.bytes+len(env.Payload) > 768*1024 || len(j.batch) >= 64 {
-		if err := j.flush(ctx); err != nil {
-			return err
-		}
 	}
 	j.batch = append(j.batch, store.ExecutionEvent{Kind: env.Type, Payload: env.Payload})
 	j.bytes += len(env.Payload)
@@ -53,28 +73,52 @@ func (j *journal) flush(ctx context.Context) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	if err := j.store.AppendTurnEvents(ctx, j.tenant, j.session, j.turn, j.next, j.batch); err != nil {
-		return err
+	for len(j.batch) > 0 {
+		count, size := 0, 0
+		limit := 64
+		if j.pendingCount > 0 {
+			limit = j.pendingCount
+		}
+		for count < len(j.batch) && count < limit {
+			length := len(j.batch[count].Payload)
+			if count > 0 && size+length > 768*1024 {
+				break
+			}
+			size += length
+			count++
+		}
+		// An uncertain commit must retry the same batch even after more frames arrive.
+		j.pendingCount = count
+		if err := j.store.AppendTurnEvents(ctx, j.tenant, j.session, j.turn, j.next, j.batch[:count]); err != nil {
+			return err
+		}
+		j.pendingCount = 0
+		j.next += int32(count)
+		j.bytes -= size
+		j.batch = j.batch[count:]
 	}
-	j.next += int32(len(j.batch))
-	j.batch, j.bytes = nil, 0
+	j.batch = nil
 	return nil
 }
 
 // Cancellation receipts use a separate waiter; preceding frames can still be queued.
-func (j *journal) drain(ctx context.Context, upstream <-chan proto.Envelope) error {
+func (j *journal) drain(upstream <-chan proto.Envelope, result *Result) error {
+	var observedErr error
 	for range 256 {
 		select {
 		case env, ok := <-upstream:
 			if !ok {
-				return nil
+				return observedErr
 			}
-			if err := j.observe(ctx, env); err != nil {
-				return err
+			if err := j.enqueue(env); err != nil {
+				observedErr = err
+			}
+			if err := result.mergeObservation(env); err != nil {
+				observedErr = err
 			}
 		default:
-			return nil
+			return observedErr
 		}
 	}
-	return nil
+	return observedErr
 }

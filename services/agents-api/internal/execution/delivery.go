@@ -67,7 +67,7 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 	defer func() {
 		finishCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if err := journal.drain(finishCtx, upstream); err != nil {
+		if err := journal.drain(upstream, &result); err != nil {
 			result.ErrorCode, status = "event_persistence_failed", store.TurnFailed
 		}
 		if err := journal.flush(finishCtx); err != nil {
@@ -98,15 +98,14 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 				return
 			}
 		case reply := <-cancelReply:
-			if journal.drain(ctx, upstream) != nil || recordCancellation(ctx, journal, reply) != nil {
+			drainErr := journal.drain(upstream, &result)
+			receiptErr := recordCancellation(ctx, journal, reply, &result)
+			if drainErr != nil || receiptErr != nil {
 				result.ErrorCode = "event_persistence_failed"
 				return
 			}
 			if reply.err == nil && reply.ack.Applied {
-				if reply.ack.Outcome != nil {
-					raw, _ := json.Marshal(reply.ack.Outcome)
-					_ = result.mergeDone(raw)
-				} else {
+				if reply.ack.Outcome == nil {
 					result.ErrorCode = "cancel_outcome_unavailable"
 					return
 				}
@@ -123,16 +122,16 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 				result.ErrorCode = "device_disconnected"
 				return
 			}
-			if journal.observe(ctx, env) != nil {
+			writeErr := journal.observe(ctx, env)
+			if result.mergeObservation(env) != nil {
+				result.ErrorCode = "invalid_executor_result"
+				return
+			}
+			if writeErr != nil {
 				result.ErrorCode = "event_persistence_failed"
 				return
 			}
 			switch env.Type {
-			case proto.TypeUsage:
-				if env.DecodePayload(&result.Done.Usage) != nil {
-					result.ErrorCode = "invalid_executor_result"
-					return
-				}
 			case proto.TypeError:
 				var failure proto.ErrorPayload
 				if env.DecodePayload(&failure) != nil {
@@ -141,22 +140,14 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 				}
 				result.ErrorCode, result.Error = "engine_failed", failure.Error
 			case proto.TypeDone:
-				if result.mergeDone(env.Payload) != nil {
-					result.ErrorCode = "invalid_executor_result"
-					return
-				}
 				if cancelReply != nil {
 					select {
 					case reply := <-cancelReply:
-						if recordCancellation(ctx, journal, reply) != nil {
+						if recordCancellation(ctx, journal, reply, &result) != nil {
 							result.ErrorCode = "event_persistence_failed"
 							return
 						}
 						if reply.err == nil && reply.ack.Applied {
-							if reply.ack.Outcome != nil {
-								raw, _ := json.Marshal(reply.ack.Outcome)
-								_ = result.mergeDone(raw)
-							}
 							status = store.TurnCancelled
 							return
 						}
@@ -255,6 +246,16 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 			}
 		}
 	}
+}
+
+func (r *Result) mergeObservation(env proto.Envelope) error {
+	switch env.Type {
+	case proto.TypeUsage:
+		return env.DecodePayload(&r.Done.Usage)
+	case proto.TypeDone:
+		return r.mergeDone(env.Payload)
+	}
+	return nil
 }
 
 func (r *Result) mergeDone(raw json.RawMessage) error {
