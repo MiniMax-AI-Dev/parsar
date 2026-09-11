@@ -182,6 +182,16 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   prepared by the Store tests and `AGENTS_API_SERVER_BIN`; it never starts Docker.
   The same harness runs the official Go client with fresh execution tenants and
   checks its created Sessions through the Python SDK.
+- Execution devices are operator-provisioned in the Agents API database with
+  tenant ownership and a credential digest. Their internal daemon gateway uses
+  `/api/v1/agent-daemon/*`, separately from the official `/v1/agents/*` surface;
+  device credentials grant no Session API or product permissions. The optional
+  `AGENTS_API_DAEMON_WS_URL` enables that gateway. It is a single-process registry,
+  not a claim of multi-pod execution or the public self-hosted executor protocol.
+  Session/device bindings are tenant-scoped and immutable. Revocation denies new
+  connections and binding reads; an existing connection closes on its next
+  heartbeat. Connectivity comes from the live registry, not a persisted online
+  flag. `last_seen_at` is diagnostic only. Product gateway behavior is unchanged.
 
 ### Agent knowledge references
 

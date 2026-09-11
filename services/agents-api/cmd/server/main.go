@@ -24,6 +24,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/api"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/runtime"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -68,9 +69,21 @@ func run() error {
 	if engine == "" {
 		engine = "codex"
 	}
-	handler, err := api.NewHandler(store.New(pool), auth, engine)
+	executionStore := store.New(pool)
+	handler, err := api.NewHandler(executionStore, auth, engine)
 	if err != nil {
 		return err
+	}
+	if wsURL := os.Getenv("AGENTS_API_DAEMON_WS_URL"); wsURL != "" {
+		daemonHandler, registry, err := runtime.NewGateway(executionStore, wsURL)
+		if err != nil {
+			return err
+		}
+		defer runtime.CloseConnections(registry)
+		mux := http.NewServeMux()
+		mux.Handle("/api/v1/agent-daemon/", daemonHandler)
+		mux.Handle("/", handler)
+		handler = mux
 	}
 	addr := os.Getenv("AGENTS_API_ADDR")
 	if addr == "" {
