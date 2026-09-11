@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import QRCode from "qrcode"
 import { ExternalLink, Loader2, QrCode } from "lucide-react"
@@ -129,7 +129,7 @@ export function FeishuConnectorPanel({
   const mut = useUpdateAgentFeishuConnector(workspaceID)
   const createSecretMut = useCreateSecret(workspaceID)
   const beginProvisionMut = useBeginAgentFeishuProvisioning(workspaceID)
-  const pollProvisionMut = usePollAgentFeishuProvisioning(workspaceID)
+  const { mutate: pollProvision, isPending: pollProvisionPending } = usePollAgentFeishuProvisioning(workspaceID)
 
   // Local edit buffer so cancel doesn't ping the server. Re-seeded
   // when the persisted config changes (e.g. PATCH refetch).
@@ -146,9 +146,6 @@ export function FeishuConnectorPanel({
 
   const dirty = !configEqual(draft, current ?? EMPTY_CONFIG) || secretInputsDirty(secretInputs)
   const saving = mut.isPending || createSecretMut.isPending
-  const pollProvisionRef = useRef(pollProvisionMut.mutate)
-  pollProvisionRef.current = pollProvisionMut.mutate
-  const pollProvisionPending = pollProvisionMut.isPending
 
   // Backend re-checks (422/409); pre-validate so the save button is honest.
   const missingRequired = draft.enabled && (
@@ -176,7 +173,7 @@ export function FeishuConnectorPanel({
       return
     }
     const timer = window.setTimeout(() => {
-      pollProvisionRef.current(
+      pollProvision(
         {
           agentID,
           deviceCode: provision.deviceCode,
@@ -226,7 +223,7 @@ export function FeishuConnectorPanel({
       )
     }, Math.max(1, provision.intervalSec) * 1000)
     return () => window.clearTimeout(timer)
-  }, [agentID, agentName, onToast, pollProvisionPending, provision, t])
+  }, [agentID, agentName, onToast, pollProvision, pollProvisionPending, provision, t])
 
   const onSave = async () => {
     setErrorMsg(null)
