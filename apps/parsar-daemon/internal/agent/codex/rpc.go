@@ -275,6 +275,10 @@ func (c *JSONRPCClient) Done() <-chan struct{} {
 // the deadline fires, or the child exits. Returns the raw result JSON
 // so the caller can pick its decode shape.
 func (c *JSONRPCClient) Request(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	return c.request(ctx, method, params, c.writeFrame)
+}
+
+func (c *JSONRPCClient) request(ctx context.Context, method string, params any, write func(any) error) (json.RawMessage, error) {
 	if !c.Alive() {
 		return nil, errors.New("codex rpc: client not alive")
 	}
@@ -291,7 +295,7 @@ func (c *JSONRPCClient) Request(ctx context.Context, method string, params any) 
 	c.pendingMu.Unlock()
 
 	frame := JsonRpcRequest{JsonRpc: JsonRpcVersion, ID: id, Method: method, Params: params}
-	if err := c.writeFrame(frame); err != nil {
+	if err := write(frame); err != nil {
 		c.pendingMu.Lock()
 		delete(c.pending, id)
 		c.pendingMu.Unlock()
@@ -479,7 +483,7 @@ func (c *JSONRPCClient) handleResponse(rawID, rawResult, rawError json.RawMessag
 			p.resp <- rpcResponse{err: fmt.Errorf("codex rpc: malformed error reply on %s: %w", p.method, err)}
 			return
 		}
-		p.resp <- rpcResponse{err: fmt.Errorf("codex rpc: %s: %d %s", p.method, errBody.Code, errBody.Message)}
+		p.resp <- rpcResponse{err: fmt.Errorf("codex rpc: %s: %w", p.method, &errBody)}
 		return
 	}
 	p.resp <- rpcResponse{result: rawResult}
