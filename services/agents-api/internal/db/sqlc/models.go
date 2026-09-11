@@ -36,12 +36,13 @@ type SessionDevice struct {
 }
 
 type SessionItem struct {
-	ID        pgtype.UUID        `json:"id"`
-	SessionID pgtype.UUID        `json:"session_id"`
-	TurnID    pgtype.UUID        `json:"turn_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	Position  int32              `json:"position"`
-	Payload   []byte             `json:"payload"`
+	ID          pgtype.UUID        `json:"id"`
+	SessionID   pgtype.UUID        `json:"session_id"`
+	TurnID      pgtype.UUID        `json:"turn_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Position    int32              `json:"position"`
+	Payload     []byte             `json:"payload"`
+	OutputIndex pgtype.Int4        `json:"output_index"`
 }
 
 type Turn struct {

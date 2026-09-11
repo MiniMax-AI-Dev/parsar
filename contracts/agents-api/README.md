@@ -111,10 +111,12 @@ Legacy Done frames alone do not complete assistant Items. Aggregate answer text
 is confirmed by successful Turn termination; failed Turns retain observed deltas
 instead of treating adapter diagnostics as assistant output.
 
-Pagination orders by first-observation timestamp, then position within that source
-and stable public ID. Distinct observations sharing exactly the same timestamp
-may therefore differ from journal order; preserving source order for that tie is
-a tracked follow-up. Content updates do not move existing Items.
+Pagination orders by first-observation timestamp, then the Item's immutable
+Session position and public ID. New Items retain observation order even when
+timestamps match. The index also stores a zero-based output index per Turn for
+future streaming; inputs do not consume it. Updates and retries do not move Items
+or change output indexes. Existing indexed history retains its pre-upgrade
+deterministic order rather than guessing an unavailable original source order.
 
 ### No-environment execution
 
