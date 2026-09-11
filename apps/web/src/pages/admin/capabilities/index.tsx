@@ -1146,11 +1146,14 @@ function EditCapabilityDialog({ open, capability, pending, error, onOpenChange, 
   const [name, setName] = useState(capability.name)
   const [description, setDescription] = useState(capability.description ?? "")
 
-  useEffect(() => {
-    if (!open) return
+  const [seededCapability, setSeededCapability] = useState<Capability | null>(null)
+  if (!open) {
+    if (seededCapability) setSeededCapability(null)
+  } else if (capability !== seededCapability) {
+    setSeededCapability(capability)
     setName(capability.name)
     setDescription(capability.description ?? "")
-  }, [open, capability])
+  }
 
   const errMsg = error instanceof ApiError ? error.envelope.message : error instanceof Error ? error.message : null
   const trimmedName = name.trim()
