@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useQueries } from "@tanstack/react-query"
 import { KEY_CAPABILITY_VERSIONS, listCapabilityVersions } from "../../../lib/api-capabilities"
 import { noUnreachableRetry } from "../../../lib/api-client"
@@ -19,7 +19,11 @@ export function useAgentCloneCredentials(
   secrets: Secret[],
 ) {
   const [choices, setChoices] = useState<Record<string, Record<string, string>>>({})
-  useEffect(() => setChoices({}), [sourceID])
+  const [choiceSourceID, setChoiceSourceID] = useState(sourceID)
+  if (sourceID !== choiceSourceID) {
+    setChoiceSourceID(sourceID)
+    setChoices({})
+  }
   const selected = sourceID ? capabilities.filter((cap) => selectedIDs.includes(cap.id)) : []
   const hasMarketplace = selected.some((cap) => cap.from_marketplace)
   const marketplace = useMarketplaceList(hasMarketplace ? workspaceID : null)
