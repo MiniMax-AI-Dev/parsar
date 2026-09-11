@@ -121,7 +121,13 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		return nil, fmt.Errorf("codex: build session plan: %w", err)
 	}
 
-	skillRoot, err := prepareManagedSkills(parent, cfg.logger, req)
+	if req.DisableExecutionEnvironment {
+		plan.Env = append(plan.Env, "CODEX_EXEC_SERVER_URL=none")
+	}
+	skillRoot := ""
+	if !req.DisableExecutionEnvironment {
+		skillRoot, err = prepareManagedSkills(parent, cfg.logger, req)
+	}
 	if err != nil {
 		plan.Cleanup()
 		return nil, err
@@ -169,6 +175,14 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		cancelFn()
 		plan.Cleanup()
 		return nil, fmt.Errorf("codex: rpc start: %w", err)
+	}
+	if req.DisableExecutionEnvironment {
+		if err := verifyNoExecutionEnvironment(cancelCtx, rpc); err != nil {
+			cancelFn()
+			_ = rpc.Close()
+			plan.Cleanup()
+			return nil, err
+		}
 	}
 	if skillRoot != "" {
 		if err := setSkillExtraRoots(cancelCtx, rpc, []string{skillRoot}); err != nil {

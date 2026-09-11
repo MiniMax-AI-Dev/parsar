@@ -77,10 +77,11 @@ type PromptRequestPayload struct {
 	AgentStateKey      string `json:"agent_state_key,omitempty"`
 	WorkspaceAuthoring bool   `json:"workspace_authoring,omitempty"`
 	// ReleaseOnCompletion closes the native writer before acknowledging Done.
-	ReleaseOnCompletion bool `json:"release_on_completion,omitempty"`
-	StrictResume        bool `json:"strict_resume,omitempty"`
-	ObserveMessages     bool `json:"observe_messages,omitempty"`
-	ObserveTools        bool `json:"observe_tools,omitempty"`
+	ReleaseOnCompletion         bool `json:"release_on_completion,omitempty"`
+	StrictResume                bool `json:"strict_resume,omitempty"`
+	ObserveMessages             bool `json:"observe_messages,omitempty"`
+	ObserveTools                bool `json:"observe_tools,omitempty"`
+	DisableExecutionEnvironment bool `json:"disable_execution_environment,omitempty"`
 }
 
 // PromptAttachment is one piece of non-text user input the daemon-side

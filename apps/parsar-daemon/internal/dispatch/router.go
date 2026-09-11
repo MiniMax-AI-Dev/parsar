@@ -250,6 +250,11 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 		r.log.ErrorContext(callerCtx, "handlePromptRequest: missing agent_kind", "run_id", runID)
 		return errors.New("dispatch: prompt_request missing agent_kind")
 	}
+	if req.DisableExecutionEnvironment && req.AgentKind != "codex" {
+		err := errors.New("execution environment none requires a supported Codex engine")
+		r.emitTerminalError(callerCtx, runID, err.Error())
+		return err
+	}
 	r.log.InfoContext(callerCtx, "handlePromptRequest: decoded",
 		"run_id", runID, "agent_kind", req.AgentKind,
 		"work_dir", req.WorkDir, "prompt_len", len(req.Prompt),

@@ -247,6 +247,7 @@ type AgentKindCapabilities struct {
 	Steering           bool `json:"steering,omitempty"`
 	MessageItems       bool `json:"message_items,omitempty"`
 	ToolItems          bool `json:"tool_items,omitempty"`
+	EnvironmentNone    bool `json:"environment_none,omitempty"`
 	// DurableTurns includes strict resume, completion release and cancellation snapshots.
 	DurableTurns bool `json:"durable_turns,omitempty"`
 }

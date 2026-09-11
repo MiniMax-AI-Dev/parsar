@@ -213,6 +213,16 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   self-hosted executor protocol. Public environment mapping, output Items/SSE,
   pending interactions, crash reconciliation and provider allocation remain separate
   slices. Unexpected interaction requests fail explicitly until supported.
+- `environment_none` advertises the Codex adapter's explicit environment-disable
+  path. Execution snapshots with public `environment.type=none` require that
+  capability and set `disable_execution_environment` on the internal prompt.
+  The daemon forces `CODEX_EXEC_SERVER_URL=none` after caller environment options
+  and confirms native `local` and `remote` environments are unknown before starting
+  or resuming a thread. Unsupported binaries fail closed. The bound device hosts
+  the engine process; it is not a user execution environment. This is not an OS
+  isolation guarantee, and engine state still lives on that host. Ordinary product
+  requests retain their existing environment. Public event admission and worker
+  scheduling remain separate from this internal dispatch capability.
 - `message_items` advertises native assistant-message observations. Agents API
   opts in with `observe_messages` only for advertised peers; ordinary product
   requests retain their existing frame sequence. Opted-in text deltas carry their
