@@ -75,6 +75,9 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 	if len(metadata) > 16*1024 {
 		return Session{}, fmt.Errorf("%w: metadata exceeds 16 KiB", ErrInvalidInput)
 	}
+	if len(input.Configuration) > 512*1024 {
+		return Session{}, fmt.Errorf("%w: configuration exceeds 512 KiB", ErrInvalidInput)
+	}
 	configuration, err := canonicalConfiguration(input.Configuration)
 	if err != nil {
 		return Session{}, err

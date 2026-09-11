@@ -18,10 +18,35 @@ func TestConfigurationCanonicalization(t *testing.T) {
 	if err != nil || string(got) != want {
 		t.Fatalf("canonical = %s, %v; want %s", got, err, want)
 	}
-	for _, raw := range []string{`null`, `[]`, `"text"`, `{} {}`, `{`, strings.Repeat(" ", 512*1024+1)} {
+	for _, raw := range []string{`null`, `[]`, `"text"`, `{} {}`, `{`} {
 		if _, err := canonicalConfiguration([]byte(raw)); !errors.Is(err, ErrInvalidInput) {
 			t.Fatalf("invalid configuration accepted (length %d): %v", len(raw), err)
 		}
+	}
+}
+
+func TestConfigurationSizeLimitSurvivesJSONBRoundTrip(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	tenant := uuid.NewString()
+	empty := `{"agent":{"model":"example","instructions":""},"environment":{"type":"none"}}`
+	raw := strings.Replace(empty, `"instructions":""`, `"instructions":"`+strings.Repeat("x", 512*1024-len(empty))+`"`, 1)
+	input := CreateSessionInput{Engine: "codex", IdempotencyKey: "size-limit", Configuration: []byte(raw)}
+	first, err := s.CreateSession(ctx, tenant, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetSession(ctx, tenant, first.ID)
+	if err != nil || string(got.Configuration) != string(first.Configuration) {
+		t.Fatalf("configuration failed round trip: %v", err)
+	}
+	page, err := s.ListSessions(ctx, tenant, "", 10)
+	if err != nil || len(page.Sessions) != 1 || page.Sessions[0].ID != first.ID {
+		t.Fatalf("configuration broke listing: %v", err)
+	}
+	input.Configuration = append(input.Configuration, ' ')
+	if _, err := s.CreateSession(ctx, tenant, input); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("oversized request accepted: %v", err)
 	}
 }
 

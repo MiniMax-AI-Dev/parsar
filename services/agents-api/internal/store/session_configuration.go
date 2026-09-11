@@ -11,9 +11,6 @@ func canonicalConfiguration(raw json.RawMessage) (json.RawMessage, error) {
 	if len(raw) == 0 {
 		return json.RawMessage(`{}`), nil
 	}
-	if len(raw) > 512*1024 {
-		return nil, fmt.Errorf("%w: configuration exceeds 512 KiB", ErrInvalidInput)
-	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	var fields map[string]any
