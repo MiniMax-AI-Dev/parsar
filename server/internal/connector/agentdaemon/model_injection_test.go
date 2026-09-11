@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/binding"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )

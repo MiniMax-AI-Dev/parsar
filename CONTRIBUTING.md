@@ -98,6 +98,35 @@ The repo has several concepts that sound similar but must stay separate.
 When adding or changing code, name the boundary explicitly in the PR
 description and keep ownership on the side listed here.
 
+### Product and execution service separation
+
+The target deployment has a Parsar product service and an independently usable
+Agents API, installed together by Compose. They may share a PostgreSQL instance,
+but own separate databases, credentials and migrations. Migrate incrementally;
+the existing server remains the execution owner until a flow is explicitly moved.
+
+- Parsar owns users, workspaces, business authorization, Agent/Team definitions,
+  capabilities, product conversations, IM/sharing, approval decisions and billing.
+- Agents API owns execution sessions, runs, effective configuration snapshots,
+  dispatch/cancel, environments, raw usage, pending interactions and durable events.
+  Neither service reads the other's tables. Parsar uses a versioned client contract.
+- A product conversation may map to several execution sessions. An execution
+  session is distinct from a live daemon socket, process or sandbox. Native engine
+  session identifiers belong to the execution service.
+- Establish single-Agent execution, approval, cancellation, idempotent submission,
+  event cursor replay and persisted recovery queries before Team orchestration.
+  Team definitions stay in Parsar; SDK orchestration and child runs belong to Agents API.
+- Daemon Skill/SP authoring remains a product operation: forward through a scoped
+  product callback with the original requester and workspace checks. A runtime
+  credential alone must not grant business write permissions.
+- `internal/agentdaemon/gateway` is the shared daemon connection implementation.
+  Its persistence interfaces use `internal/agentdaemon/device`, never product Store
+  types. Product adapters live in `server/internal/agentdaemon`. Keep protocol
+  frames in `internal/agentdaemon/proto` until the contracts directory migration.
+  Store aliases preserve existing callers during this transition.
+- Pin a concrete reference contract before claiming compatibility with an external
+  Agents API. SDK workflow objects are not themselves a server API contract.
+
 ### Agent knowledge references
 
 - Unpublished knowledge retains only the bound version in other workspaces;
@@ -1029,7 +1058,7 @@ make check
 
 `make check` is the full local gate. It is composed of narrower targets that
 CI may run independently based on the changed paths: `make check-go` for sqlc
-drift plus non-store Go tests, `make check-store` for migration/store
+drift plus non-store Go tests (including the shared daemon gateway and device packages), `make check-store` for migration/store
 integration tests, `make check-web` for web typecheck plus design lint, and
 `make check-cli` for CLI/plugin typechecks, and `make check-installer` for
 Docker-free installer lifecycle checks. Keep the subtargets aligned with

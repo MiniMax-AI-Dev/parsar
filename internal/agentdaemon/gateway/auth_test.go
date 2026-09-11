@@ -5,16 +5,16 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 )
 
 type stubRuntimeStore struct {
-	row    store.RuntimeRead
+	row    device.Credential
 	ok     bool
 	getErr error
 }
 
-func (s *stubRuntimeStore) GetRuntime(_ context.Context, _ string) (store.RuntimeRead, bool, error) {
+func (s *stubRuntimeStore) GetDeviceCredential(_ context.Context, _ string) (device.Credential, bool, error) {
 	return s.row, s.ok, s.getErr
 }
 
@@ -42,10 +42,10 @@ func TestAuthenticator_RejectsWrongRuntimeType(t *testing.T) {
 	// A legacy local runtime row trying to dial in as agent_daemon
 	// must fail — otherwise a paired local credential could open an
 	// agent_daemon WS and bypass the device picker.
-	row := store.RuntimeRead{
-		ID:     "dev-1",
-		Type:   "local",
-		Config: map[string]any{"runner_credential_hash": store.HashRuntimeCredential("tok")},
+	row := device.Credential{
+		ID:             "dev-1",
+		Type:           "local",
+		CredentialHash: device.HashCredential("tok"),
 	}
 	auth := NewAuthenticator(&stubRuntimeStore{row: row, ok: true})
 	_, err := auth.AuthenticateBearer(context.Background(), "dev-1", "tok")
@@ -55,10 +55,10 @@ func TestAuthenticator_RejectsWrongRuntimeType(t *testing.T) {
 }
 
 func TestAuthenticator_RejectsBadCredential(t *testing.T) {
-	row := store.RuntimeRead{
-		ID:     "dev-1",
-		Type:   RuntimeTypeAgentDaemon,
-		Config: map[string]any{"runner_credential_hash": store.HashRuntimeCredential("real-tok")},
+	row := device.Credential{
+		ID:             "dev-1",
+		Type:           RuntimeTypeAgentDaemon,
+		CredentialHash: device.HashCredential("real-tok"),
 	}
 	auth := NewAuthenticator(&stubRuntimeStore{row: row, ok: true})
 	_, err := auth.AuthenticateBearer(context.Background(), "dev-1", "wrong-tok")
@@ -69,7 +69,7 @@ func TestAuthenticator_RejectsBadCredential(t *testing.T) {
 	// can't distinguish "row exists but credential never stored"
 	// from "credential mismatch".
 	rowNoHash := row
-	rowNoHash.Config = map[string]any{}
+	rowNoHash.CredentialHash = ""
 	auth = NewAuthenticator(&stubRuntimeStore{row: rowNoHash, ok: true})
 	_, err = auth.AuthenticateBearer(context.Background(), "dev-1", "any-tok")
 	if !errors.Is(err, ErrAuthBadCredential) {
@@ -78,12 +78,12 @@ func TestAuthenticator_RejectsBadCredential(t *testing.T) {
 }
 
 func TestAuthenticator_AcceptsValidCredential(t *testing.T) {
-	row := store.RuntimeRead{
-		ID:          "dev-1",
-		WorkspaceID: "wks-1",
-		Name:        "alice-mac",
-		Type:        RuntimeTypeAgentDaemon,
-		Config:      map[string]any{"runner_credential_hash": store.HashRuntimeCredential("real-tok")},
+	row := device.Credential{
+		ID:             "dev-1",
+		WorkspaceID:    "wks-1",
+		Name:           "alice-mac",
+		Type:           RuntimeTypeAgentDaemon,
+		CredentialHash: device.HashCredential("real-tok"),
 	}
 	auth := NewAuthenticator(&stubRuntimeStore{row: row, ok: true})
 	got, err := auth.AuthenticateBearer(context.Background(), "dev-1", "real-tok")

@@ -11,9 +11,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 // Tunables. Package-level so tests can override via small helpers
@@ -96,7 +96,7 @@ type Session struct {
 	// dispatching prompt_request so unsupported engines fail on the server.
 	kindsMu        sync.RWMutex
 	kindsSeen      bool
-	supportedKinds []store.AgentDaemonSupportedAgentKind
+	supportedKinds []device.SupportedAgentKind
 
 	// Subscribers keyed by runID. The read loop only sends on these
 	// channels; Unsubscribe is the only place that closes them.
@@ -186,32 +186,32 @@ func (s *Session) LastSeen() time.Time {
 // distinguishes "no heartbeat yet" from "heartbeat arrived and omitted it".
 // Before the first heartbeat, legacy Claude Code behavior is preserved so
 // older daemons can still receive claude_code prompt_requests immediately.
-func (s *Session) AgentKindStatus(kind string) (info store.AgentDaemonSupportedAgentKind, found bool, snapshotKnown bool) {
+func (s *Session) AgentKindStatus(kind string) (info device.SupportedAgentKind, found bool, snapshotKnown bool) {
 	kind = strings.TrimSpace(kind)
 	if kind == "" {
-		return store.AgentDaemonSupportedAgentKind{}, false, false
+		return device.SupportedAgentKind{}, false, false
 	}
 	s.kindsMu.RLock()
 	seen := s.kindsSeen
-	kinds := make([]store.AgentDaemonSupportedAgentKind, len(s.supportedKinds))
+	kinds := make([]device.SupportedAgentKind, len(s.supportedKinds))
 	copy(kinds, s.supportedKinds)
 	s.kindsMu.RUnlock()
 	if !seen {
 		if kind == "claude_code" {
 			return legacyClaudeCodeKind(), true, false
 		}
-		return store.AgentDaemonSupportedAgentKind{}, false, false
+		return device.SupportedAgentKind{}, false, false
 	}
 	for _, candidate := range kinds {
 		if candidate.Kind == kind {
 			return candidate, true, true
 		}
 	}
-	return store.AgentDaemonSupportedAgentKind{}, false, true
+	return device.SupportedAgentKind{}, false, true
 }
 
-func (s *Session) setSupportedAgentKinds(kinds []store.AgentDaemonSupportedAgentKind) {
-	copyKinds := make([]store.AgentDaemonSupportedAgentKind, len(kinds))
+func (s *Session) setSupportedAgentKinds(kinds []device.SupportedAgentKind) {
+	copyKinds := make([]device.SupportedAgentKind, len(kinds))
 	copy(copyKinds, kinds)
 	s.kindsMu.Lock()
 	s.kindsSeen = true
@@ -219,11 +219,11 @@ func (s *Session) setSupportedAgentKinds(kinds []store.AgentDaemonSupportedAgent
 	s.kindsMu.Unlock()
 }
 
-func legacyClaudeCodeKind() store.AgentDaemonSupportedAgentKind {
-	return store.AgentDaemonSupportedAgentKind{
+func legacyClaudeCodeKind() device.SupportedAgentKind {
+	return device.SupportedAgentKind{
 		Kind:      "claude_code",
 		Available: true,
-		Capabilities: store.AgentDaemonKindCapabilities{
+		Capabilities: device.KindCapabilities{
 			Streaming:   true,
 			Permissions: true,
 			Usage:       true,
@@ -462,7 +462,7 @@ func (s *Session) renewOwnerLease() bool {
 	now := time.Now().UTC()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_, ok, err := s.owner.store.RenewAgentDaemonDeviceOwner(ctx, store.RenewAgentDaemonDeviceOwnerInput{
+	_, ok, err := s.owner.store.RenewAgentDaemonDeviceOwner(ctx, device.RenewOwner{
 		DeviceID:       s.owner.deviceID,
 		OwnerPodID:     s.owner.ownerPodID,
 		Generation:     s.owner.generation,
@@ -488,7 +488,7 @@ func (s *Session) releaseOwnerLease() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if _, err := s.owner.store.ReleaseAgentDaemonDeviceOwner(ctx, store.ReleaseAgentDaemonDeviceOwnerInput{
+	if _, err := s.owner.store.ReleaseAgentDaemonDeviceOwner(ctx, device.ReleaseOwner{
 		DeviceID:   s.owner.deviceID,
 		OwnerPodID: s.owner.ownerPodID,
 		Generation: s.owner.generation,
@@ -514,7 +514,7 @@ func (s *Session) handleHeartbeat(env proto.Envelope) {
 		s.log("agentdaemon gateway: decode heartbeat payload device=%s: %v", s.DeviceID, err)
 		return
 	}
-	kinds := storeKindsFromHeartbeat(p)
+	kinds := deviceKindsFromHeartbeat(p)
 	s.setSupportedAgentKinds(kinds)
 	if s.heartbeat == nil {
 		return
@@ -522,7 +522,7 @@ func (s *Session) handleHeartbeat(env proto.Envelope) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	status, err := s.heartbeat.TouchAgentDaemonHeartbeat(ctx, store.TouchAgentDaemonHeartbeatInput{
+	status, err := s.heartbeat.TouchAgentDaemonHeartbeat(ctx, device.Heartbeat{
 		RuntimeID:           s.DeviceID,
 		DaemonVersion:       p.DaemonVersion,
 		ActiveRequests:      p.ActiveRequests,
@@ -543,15 +543,15 @@ func (s *Session) handleHeartbeat(env proto.Envelope) {
 	}
 }
 
-func storeKindsFromHeartbeat(p proto.HeartbeatPayload) []store.AgentDaemonSupportedAgentKind {
+func deviceKindsFromHeartbeat(p proto.HeartbeatPayload) []device.SupportedAgentKind {
 	if len(p.SupportedAgentKinds) == 0 {
 		if !p.ClaudeAvailable {
 			return nil
 		}
-		return []store.AgentDaemonSupportedAgentKind{{
+		return []device.SupportedAgentKind{{
 			Kind:      "claude_code",
 			Available: true,
-			Capabilities: store.AgentDaemonKindCapabilities{
+			Capabilities: device.KindCapabilities{
 				Streaming:   true,
 				Permissions: true,
 				Usage:       true,
@@ -559,13 +559,13 @@ func storeKindsFromHeartbeat(p proto.HeartbeatPayload) []store.AgentDaemonSuppor
 			},
 		}}
 	}
-	out := make([]store.AgentDaemonSupportedAgentKind, 0, len(p.SupportedAgentKinds))
+	out := make([]device.SupportedAgentKind, 0, len(p.SupportedAgentKinds))
 	for _, info := range p.SupportedAgentKinds {
-		out = append(out, store.AgentDaemonSupportedAgentKind{
+		out = append(out, device.SupportedAgentKind{
 			Kind:      info.Kind,
 			Available: info.Available,
 			Version:   info.Version,
-			Capabilities: store.AgentDaemonKindCapabilities{
+			Capabilities: device.KindCapabilities{
 				Streaming:          info.Capabilities.Streaming,
 				Permissions:        info.Capabilities.Permissions,
 				Usage:              info.Capabilities.Usage,

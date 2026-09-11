@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
+	agentdaemongateway "github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	agentdaemonbinding "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/binding"
-	agentdaemongateway "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
 	connagentdaemon "github.com/MiniMax-AI-Dev/parsar/server/internal/connector/agentdaemon"
 	dockersandbox "github.com/MiniMax-AI-Dev/parsar/server/internal/sandbox/docker"

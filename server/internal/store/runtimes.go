@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	sqlc "github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	"github.com/jackc/pgx/v5"
@@ -205,47 +206,10 @@ func (s *Store) ConsumePairingToken(ctx context.Context, input ConsumePairingTok
 	return runtime, nil
 }
 
-// HeartbeatStatus is the post-heartbeat liveness the runner uses to
-// detect state changes.
-type HeartbeatStatus struct {
-	Liveness string
-	// Deleted is true when the heartbeat UPDATE matched zero rows,
-	// meaning the runtime was soft-deleted (or never existed). The
-	// gateway uses this to send a permanent WS close frame so the
-	// daemon stops reconnecting.
-	Deleted bool
-}
-
-// AgentDaemonKindCapabilities mirrors the daemon heartbeat capability
-// shape after gateway-level normalization. Lives in store rather than
-// importing the wire proto package so runtime config persistence stays
-// decoupled from transport structs.
-type AgentDaemonKindCapabilities struct {
-	Streaming          bool `json:"streaming,omitempty"`
-	Permissions        bool `json:"permissions,omitempty"`
-	Usage              bool `json:"usage,omitempty"`
-	Resume             bool `json:"resume,omitempty"`
-	WorkspaceAuthoring bool `json:"workspace_authoring,omitempty"`
-}
-
-// AgentDaemonSupportedAgentKind is the sanitized runtime.config view
-// of one daemon-side agent_kind.
-type AgentDaemonSupportedAgentKind struct {
-	Kind         string                      `json:"kind"`
-	Available    bool                        `json:"available"`
-	Version      string                      `json:"version,omitempty"`
-	Capabilities AgentDaemonKindCapabilities `json:"capabilities,omitempty"`
-}
-
-// TouchAgentDaemonHeartbeatInput is the WebSocket daemon heartbeat
-// payload after gateway normalization.
-type TouchAgentDaemonHeartbeatInput struct {
-	RuntimeID           string
-	DaemonVersion       string
-	ActiveRequests      int
-	HeartbeatTimestamp  int64
-	SupportedAgentKinds []AgentDaemonSupportedAgentKind
-}
+type HeartbeatStatus = device.HeartbeatStatus
+type AgentDaemonKindCapabilities = device.KindCapabilities
+type AgentDaemonSupportedAgentKind = device.SupportedAgentKind
+type TouchAgentDaemonHeartbeatInput = device.Heartbeat
 
 // TouchRuntimeHeartbeat bumps last_heartbeat_at and promotes
 // offline/error -> online. Deleted rows are not promoted; returns

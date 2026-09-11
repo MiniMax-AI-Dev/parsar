@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 )
 
 // RuntimePairingTokenTTL is the default lifetime applied when callers
@@ -73,5 +75,5 @@ func MintRuntimeCredential() (plaintext, hash string, err error) {
 // separate from HashRuntimePairingToken so a future KDF change on one
 // path doesn't force a coordinated change on the other.
 func HashRuntimeCredential(plaintext string) string {
-	return HashRuntimePairingToken(plaintext)
+	return device.HashCredential(plaintext)
 }

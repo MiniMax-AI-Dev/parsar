@@ -9,51 +9,18 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
-const AgentDaemonOwnerStatusConnected = "connected"
-const AgentDaemonOwnerStatusDraining = "draining"
-const AgentDaemonOwnerStatusExpired = "expired"
+const AgentDaemonOwnerStatusConnected = device.OwnerStatusConnected
+const AgentDaemonOwnerStatusDraining = device.OwnerStatusDraining
+const AgentDaemonOwnerStatusExpired = device.OwnerStatusExpired
 
-// AgentDaemonDeviceOwnerRead is the store-level view of the current
-// WebSocket owner for one agent_daemon device. Generation is a fencing
-// token: renewal/release paths must carry it so stale pods can't act.
-type AgentDaemonDeviceOwnerRead struct {
-	DeviceID       string
-	WorkspaceID    string
-	OwnerPodID     string
-	OwnerURL       string
-	Generation     int64
-	Status         string
-	ConnectedAt    time.Time
-	LastSeenAt     time.Time
-	LeaseExpiresAt time.Time
-	UpdatedAt      time.Time
-}
-
-type ClaimAgentDaemonDeviceOwnerInput struct {
-	DeviceID       string
-	WorkspaceID    string
-	OwnerPodID     string
-	OwnerURL       string
-	LeaseExpiresAt time.Time
-	Now            time.Time
-}
-
-type RenewAgentDaemonDeviceOwnerInput struct {
-	DeviceID       string
-	OwnerPodID     string
-	Generation     int64
-	LeaseExpiresAt time.Time
-	Now            time.Time
-}
-
-type ReleaseAgentDaemonDeviceOwnerInput struct {
-	DeviceID   string
-	OwnerPodID string
-	Generation int64
-}
+type AgentDaemonDeviceOwnerRead = device.Owner
+type ClaimAgentDaemonDeviceOwnerInput = device.ClaimOwner
+type RenewAgentDaemonDeviceOwnerInput = device.RenewOwner
+type ReleaseAgentDaemonDeviceOwnerInput = device.ReleaseOwner
 
 // ClaimAgentDaemonDeviceOwner records this pod as the live WebSocket
 // owner for a device. Latest connection wins and increments generation;

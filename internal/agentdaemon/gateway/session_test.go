@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 // fakeConn is the WSConn implementation used by session + registry
@@ -104,23 +104,23 @@ func (c *fakeConn) Writes() [][]byte {
 
 type fakeHeartbeatStore struct {
 	mu       sync.Mutex
-	daemonCh chan store.TouchAgentDaemonHeartbeatInput
-	daemon   []store.TouchAgentDaemonHeartbeatInput
+	daemonCh chan device.Heartbeat
+	daemon   []device.Heartbeat
 	runtime  []string
 }
 
 func newFakeHeartbeatStore() *fakeHeartbeatStore {
-	return &fakeHeartbeatStore{daemonCh: make(chan store.TouchAgentDaemonHeartbeatInput, 4)}
+	return &fakeHeartbeatStore{daemonCh: make(chan device.Heartbeat, 4)}
 }
 
-func (f *fakeHeartbeatStore) TouchRuntimeHeartbeat(_ context.Context, runtimeID string) (store.HeartbeatStatus, error) {
+func (f *fakeHeartbeatStore) TouchRuntimeHeartbeat(_ context.Context, runtimeID string) (device.HeartbeatStatus, error) {
 	f.mu.Lock()
 	f.runtime = append(f.runtime, runtimeID)
 	f.mu.Unlock()
-	return store.HeartbeatStatus{Liveness: store.RuntimeLivenessOnline}, nil
+	return device.HeartbeatStatus{Liveness: "online"}, nil
 }
 
-func (f *fakeHeartbeatStore) TouchAgentDaemonHeartbeat(_ context.Context, input store.TouchAgentDaemonHeartbeatInput) (store.HeartbeatStatus, error) {
+func (f *fakeHeartbeatStore) TouchAgentDaemonHeartbeat(_ context.Context, input device.Heartbeat) (device.HeartbeatStatus, error) {
 	f.mu.Lock()
 	f.daemon = append(f.daemon, input)
 	f.mu.Unlock()
@@ -128,14 +128,14 @@ func (f *fakeHeartbeatStore) TouchAgentDaemonHeartbeat(_ context.Context, input 
 	case f.daemonCh <- input:
 	default:
 	}
-	return store.HeartbeatStatus{Liveness: store.RuntimeLivenessOnline}, nil
+	return device.HeartbeatStatus{Liveness: "online"}, nil
 }
 
 func (f *fakeHeartbeatStore) MarkRuntimeOffline(_ context.Context, _ string) error {
 	return nil
 }
 
-func (f *fakeHeartbeatStore) waitDaemonHeartbeat(t *testing.T) store.TouchAgentDaemonHeartbeatInput {
+func (f *fakeHeartbeatStore) waitDaemonHeartbeat(t *testing.T) device.Heartbeat {
 	t.Helper()
 	select {
 	case input := <-f.daemonCh:
@@ -143,7 +143,7 @@ func (f *fakeHeartbeatStore) waitDaemonHeartbeat(t *testing.T) store.TouchAgentD
 	case <-time.After(2 * time.Second):
 		t.Fatal("daemon heartbeat was not persisted")
 	}
-	return store.TouchAgentDaemonHeartbeatInput{}
+	return device.Heartbeat{}
 }
 
 // ---- registry tests -------------------------------------------------
@@ -414,7 +414,7 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 	if len(got.SupportedAgentKinds) != 2 {
 		t.Fatalf("SupportedAgentKinds len = %d, want 2: %#v", len(got.SupportedAgentKinds), got.SupportedAgentKinds)
 	}
-	byKind := map[string]store.AgentDaemonSupportedAgentKind{}
+	byKind := map[string]device.SupportedAgentKind{}
 	for _, info := range got.SupportedAgentKinds {
 		byKind[info.Kind] = info
 	}

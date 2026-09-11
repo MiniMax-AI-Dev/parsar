@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-GO_TEST_PACKAGE ?= $(shell cd server && go list ./... | grep -Ev 'internal/(store|seed)$$')
+GO_TEST_PACKAGE ?= $(shell cd server && go list ./... ../internal/agentdaemon/gateway ../internal/agentdaemon/device | grep -Ev 'internal/(store|seed)$$')
 GO_TEST_RUN ?=
 GO_TEST_ARGS ?=
 SQLC_VERSION ?= v1.29.0
@@ -238,7 +238,7 @@ docker-build-no-cache:
 
 # --- OpenAPI spec (generated from swaggo annotations) ------------------
 #
-# Runs `swag init` over server/**/*.go. Every handler carrying a
+# Runs `swag init` over server and shared gateway Go handlers. Every handler carrying a
 #   //  @Router  /path  [verb]
 # annotation block contributes an operation; the general @title/@version
 # come from the swag block above `package main` in cmd/server/main.go.
