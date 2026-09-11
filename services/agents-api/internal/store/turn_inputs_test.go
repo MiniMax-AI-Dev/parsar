@@ -160,7 +160,11 @@ func TestTurnInputRetriesAndRestart(t *testing.T) {
 		t.Fatalf("recovered inputs = %+v", all)
 	}
 	snapshot, err := recovered.GetSession(ctx, tenant, session.ID)
-	if err != nil || !reflect.DeepEqual(snapshot, session) {
+	if err != nil || snapshot.LastTurn == nil || snapshot.LastTurn.ID != next.TurnID || snapshot.LastTurn.Status != TurnQueued {
+		t.Fatal("latest Session activity did not survive restart", err)
+	}
+	snapshot.LastTurn = nil
+	if !reflect.DeepEqual(snapshot, session) {
 		t.Fatal("turn submission mutated the Session snapshot", err)
 	}
 }

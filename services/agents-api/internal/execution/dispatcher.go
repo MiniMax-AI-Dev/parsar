@@ -69,14 +69,7 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if noEnvironment && (session.Engine != "codex" || !info.Capabilities.EnvironmentNone) {
 		return store.Turn{}, errors.New("device must advertise environment_none for Codex")
 	}
-	inputs, err := d.Store.ListTurnInputs(ctx, tenantID, sessionID, turnID, 0, 1)
-	if err != nil {
-		return store.Turn{}, err
-	}
-	if len(inputs) != 1 || inputs[0].Kind != "message" {
-		return store.Turn{}, store.ErrInvalidInput
-	}
-	text, err := messageText(inputs[0].Payload)
+	text, through, err := d.initialInput(ctx, tenantID, sessionID, turnID)
 	if err != nil {
 		return store.Turn{}, err
 	}
@@ -97,7 +90,7 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 		return store.Turn{}, err
 	}
 	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, AgentOptions: options, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: info.Capabilities.MessageItems, ObserveTools: info.Capabilities.ToolItems, DisableExecutionEnvironment: noEnvironment}
-	result, status := d.deliver(ctx, tenantID, sessionID, peer, req, inputs[0].Sequence)
+	result, status := d.deliver(ctx, tenantID, sessionID, peer, req, through)
 	if result.Done.Usage.Model == "" {
 		result.Done.Usage.Model = snapshot.Agent.Model
 	}
@@ -117,14 +110,4 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 		return d.Store.CompleteExecution(finishCtx, tenantID, sessionID, turnID, store.TurnFailed, encoded, nativeID, result.AppliedThrough)
 	}
 	return turn, err
-}
-
-func messageText(raw json.RawMessage) (string, error) {
-	var input struct {
-		Text string `json:"text"`
-	}
-	if json.Unmarshal(raw, &input) != nil || strings.TrimSpace(input.Text) == "" {
-		return "", store.ErrInvalidInput
-	}
-	return input.Text, nil
 }

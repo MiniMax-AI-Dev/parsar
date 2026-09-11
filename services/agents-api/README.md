@@ -2,12 +2,12 @@
 
 Execution service under construction. Current slices provide durable Session/Turn
 storage, an authenticated Session HTTP service, an internal daemon dispatcher and
-an independent migration command. Public execution is not enabled, and Parsar's
-production dispatch is unchanged.
+an independent migration command. Public Codex text execution is enabled with the
+standalone daemon gateway; Parsar's production dispatch is unchanged.
 
 A Session is an execution context with a stable engine choice. Product
 conversations can map to multiple Sessions. Device connections and bindings are
-internal primitives; pending interactions and public execution remain unfinished.
+internal primitives; pending interactions and full environment lifecycle remain unfinished.
 
 ## Database ownership
 
@@ -62,11 +62,11 @@ Outcome is a bounded adapter payload, not a second public response schema.
 Tenant-scoped Turn and ordered input reads survive process restarts. The Session
 configuration remains immutable and shared by its Turns. The internal dispatcher
 claims a Turn before delivery, confirms additional messages through native steering,
-and commits the outcome and native engine ID together. It requires an internally
-resolved `daemon.work_dir` configuration and a bound device advertising streaming
+and commits the outcome and native engine ID together. It accepts public `environment.type=none` or an internally resolved `daemon.work_dir`
+configuration and a bound device advertising streaming
 and steering plus `durable_turns` (strict resume, process release and cancellation
-snapshots). Failed resumes report an error instead of starting a fresh thread. Messages currently use normalized internal `{"text":"..."}` payloads;
-public upstream input mapping is not implemented here.
+snapshots). Failed resumes report an error instead of starting a fresh thread. Public messages retain their upstream input shape; private legacy `{"text":"..."}`
+payloads remain readable.
 
 The dispatcher takes immutable model/instructions from the Session snapshot and
 resolves ephemeral engine credentials separately. Matching daemon versions release
@@ -75,10 +75,8 @@ engine returns. Subsequent Turns resume the native ID on the same device. Device
 history must still exist. This is not the public self-hosted executor protocol.
 
 Uncertain delivery, disconnected devices and unsupported interactions fail rather
-than report success or automatically replay. A hard process crash can leave claimed
-work in progress until future reconciliation; no background worker is wired yet.
-Public event batches, durable output events, pending interactions and SSE are still
-unsupported. Durable input acceptance is not an exactly-once execution guarantee.
+than report success or automatically replay. The standalone worker reconciles previously claimed work as failed on restart
+and preserves queued work. Pending interactions and SSE are still unsupported. Durable input acceptance is not an exactly-once execution guarantee.
 
 ## Standalone HTTP service
 
@@ -92,8 +90,7 @@ bindings and restarting. These service identities do not grant product-user righ
 
 `AGENTS_API_ADDR` defaults to `127.0.0.1:8091`; use a TLS reverse proxy for remote
 access. `AGENTS_API_ENGINE` defaults to `codex` and is stored independently from
-the client's requested model. This slice stores configuration; it does not run
-that engine or connect an environment yet.
+the client's requested model. Public execution currently supports Codex with explicit environment `none`.
 
 The SDK base URL is `http://127.0.0.1:8091/v1`. Supported operations are Session
 create, retrieve and list, with `OpenAI-Beta: agents=v1` (set by the official SDK).
@@ -106,8 +103,7 @@ Inline Agent IDs identify the Session's immutable execution configuration, not a
 reusable Parsar Agent. List supports `after`, `limit` (1–100) and `order` (asc/desc).
 
 Unsupported fields, saved Agent references, vaults, initial input and streaming
-return explicit errors. Session update/delete, event submission and other
-resources remain unsupported. `/healthz` reports process liveness only.
+return explicit errors. Session update/delete and other unsupported resources remain explicit errors. `/healthz` reports process liveness only.
 
 ## Internal execution device connection
 
@@ -144,8 +140,9 @@ An existing connection is retired on its next heartbeat; new connections are
 rejected immediately. The internal Store binds each Session to one same-tenant
 device, preserves that assignment across retries/restarts, and refuses a silent
 move to another device. Revoked bindings cannot be used for dispatch. Device
-connections alone do not start a Turn: public execution and provider lifecycle
-remain under construction. See the [ownership rules](../../CONTRIBUTING.md#product-and-execution-service-separation).
+connections alone do not start a Turn. Submit text/cancellation through the official
+Session events endpoint; the worker assigns a same-tenant host and preserves that
+binding. Provider lifecycle remains under construction. See the [ownership rules](../../CONTRIBUTING.md#product-and-execution-service-separation).
 
 ## Official client verification
 
@@ -177,3 +174,35 @@ IDs without truncating tables. Missing test configuration skips DB tests locally
 the `agents-api` CI workflow always supplies its own PostgreSQL service. Run the
 full `make check` before review as well. Product OpenAPI generation excludes this
 service; its supported HTTP contract is generated separately.
+
+## Public text execution
+
+With the daemon gateway enabled, the service owns one worker per execution database
+and processes up to four Turns concurrently. Other service instances are rejected
+by a PostgreSQL advisory lock. A disconnected host leaves unsent work queued;
+clients may cancel it. Restart marks previously claimed work failed rather than
+replaying an uncertain native operation. Session/Turn/Items queries expose durable
+results. See the [public contract](../../contracts/agents-api/README.md#public-execution-admission)
+for supported inputs and limitations.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:8091/v1", api_key="<execution-key>")
+session = client.beta.agents.sessions.create(
+    agent={"model": "<model-available-on-the-engine-host>"},
+    environment={"type": "none"},
+)
+client.beta.agents.sessions.events.create(
+    session.id,
+    events=[{"type": "agent.session.input.message", "input": [
+        {"role": "user", "content": [{"type": "input_text", "text": "Hello"}]}
+    ]}],
+    idempotency_key="first-message",
+)
+```
+
+Configure model access in the engine host's native configuration. API tenant keys
+and daemon credentials authenticate this service, not a model provider. Never put
+provider secrets in Session metadata. This path does not enable Parsar Skill/SP
+callbacks or bypass the pending product authorization work.

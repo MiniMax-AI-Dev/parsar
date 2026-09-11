@@ -65,7 +65,7 @@ type Session struct {
 	Metadata        map[string]string `json:"metadata" binding:"required"`
 	Object          string            `json:"object" enums:"agent.session" binding:"required"`
 	RequiredActions []json.RawMessage `json:"required_actions" swaggertype:"array,object" binding:"required"`
-	Status          string            `json:"status" enums:"idle" binding:"required"`
+	Status          string            `json:"status" enums:"idle,in_progress,failed" binding:"required"`
 	Usage           json.RawMessage   `json:"usage" swaggertype:"object" extensions:"x-nullable"`
 	VaultIDs        []string          `json:"vault_ids" binding:"required"`
 }

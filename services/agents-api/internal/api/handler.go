@@ -27,13 +27,17 @@ type Handler struct {
 	store  SessionStore
 	auth   *Authenticator
 	engine string
+	inputs InputSubmitter
 }
 
-func NewHandler(s SessionStore, auth *Authenticator, engine string) (http.Handler, error) {
+func NewHandler(s SessionStore, auth *Authenticator, engine string, options ...Option) (http.Handler, error) {
 	if s == nil || auth == nil || !store.ValidEngine(engine) {
 		return nil, errors.New("session store, authentication and a valid execution engine are required")
 	}
 	h := &Handler{store: s, auth: auth, engine: engine}
+	for _, option := range options {
+		option(h)
+	}
 	router := chi.NewRouter()
 	router.Use(log.HTTPMiddleware)
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -44,6 +48,7 @@ func NewHandler(s SessionStore, auth *Authenticator, engine string) (http.Handle
 		r.Post("/agents/sessions", h.createSession)
 		r.Get("/agents/sessions", h.listSessions)
 		r.Get("/agents/sessions/{session_id}", h.getSession)
+		r.Post("/agents/sessions/{session_id}/events", h.createEvents)
 		r.Get("/agents/sessions/{session_id}/items", h.listItems)
 		r.Get("/agents/sessions/{session_id}/turns", h.listTurns)
 		r.Get("/agents/sessions/{session_id}/turns/{turn_id}", h.getTurn)

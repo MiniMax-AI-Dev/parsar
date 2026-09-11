@@ -25,7 +25,7 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 	h := newDispatchHarness(t)
 	oldPeer, _ := h.registry.LookupDevice(h.device.ID)
 	h.conn.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 65*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	home, err := os.MkdirTemp(root, "no-environment-native-")
 	if err != nil {
@@ -98,6 +98,13 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 		n := requests.Add(1)
 		raw, _ := json.MarshalIndent(body, "", "  ")
 		_ = os.WriteFile(filepath.Join(home, fmt.Sprintf("model-request-%d.json", n)), raw, 0600)
+		if strings.Contains(string(raw), "PUBLIC-CANCEL") {
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"cancel_response\",\"status\":\"in_progress\",\"output\":[]}}\n\n")
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
+			return
+		}
 		var item map[string]any
 		if n == 1 {
 			args, _ := json.Marshal(map[string]string{"cmd": "touch " + marker})
@@ -152,5 +159,6 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 	if answers != 2 {
 		t.Fatal(page)
 	}
+	verifyNativePublicExecution(t, h, ctx, home)
 	t.Logf("Native environment none: command rejected, caller override ignored, two Turns resumed and recovered. Evidence: %s", home)
 }

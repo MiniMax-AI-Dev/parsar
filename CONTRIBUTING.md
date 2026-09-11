@@ -151,8 +151,7 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   Store input retry identities and order durably. Cancellation retains its first
   target, including an idle no-op, so retries cannot stop later work. Queued work
   can cancel before dispatch; active work needs an executor outcome. Terminal
-  states and outcomes cannot be overwritten. These Store primitives do not yet
-  implement public event submission or output streams.
+  states and outcomes cannot be overwritten. Public event admission uses these primitives; live output streams remain separate.
 - Input requests are ordered batches committed under the same Session lock. A
   retry key identifies the complete ordered batch; changed length/order/content
   conflicts and a failed transaction leaves no partial inputs or cancellation.
@@ -170,8 +169,8 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   SHA-256 API key bindings from `AGENTS_API_KEYS_FILE`. Tenant identity comes only
   from that binding; metadata and product session cookies grant no access. The
   operator-selected `AGENTS_API_ENGINE` is separate from the requested model.
-  Until execution is connected, support only documented idle Session operations
-  and reject unsupported input/environment/agent options explicitly.
+  Public execution currently supports Codex text inputs with environment `none`;
+  reject unsupported input/environment/agent options explicitly.
 - `packages/agents-client/v1` configures the pinned official `openai-go` Session
   service. Use SDK request/response types, pagination and errors directly rather
   than reimplementing transport or copying wire types. Supply an explicit service
@@ -208,11 +207,10 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   Cancellation receipts carry the stopped engine's continuity snapshot when no
   Done is emitted. Preserve separately reported usage on failure; do not add the
   same counters again when Done also includes them.
-- The dispatcher is an internal entry point, not a public event handler or worker.
+- The dispatcher is an internal entry point used by the standalone service worker.
   Its private `daemon` configuration is neither `environment:none` nor the official
-  self-hosted executor protocol. Public environment mapping, output Items/SSE,
-  pending interactions, crash reconciliation and provider allocation remain separate
-  slices. Unexpected interaction requests fail explicitly until supported.
+  self-hosted executor protocol. Public self-hosted environments, SSE, pending interactions and provider allocation
+  remain separate slices. Unexpected interaction requests fail explicitly until supported.
 - `environment_none` advertises the Codex adapter's explicit environment-disable
   path. Execution snapshots with public `environment.type=none` require that
   capability and set `disable_execution_environment` on the internal prompt.
@@ -221,8 +219,7 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   or resuming a thread. Unsupported binaries fail closed. The bound device hosts
   the engine process; it is not a user execution environment. This is not an OS
   isolation guarantee, and engine state still lives on that host. Ordinary product
-  requests retain their existing environment. Public event admission and worker
-  scheduling remain separate from this internal dispatch capability.
+  requests retain their existing environment. The public worker selects an authenticated same-tenant engine host for this mode.
 - `message_items` advertises native assistant-message observations. Agents API
   opts in with `observe_messages` only for advertised peers; ordinary product
   requests retain their existing frame sequence. Opted-in text deltas carry their
@@ -257,7 +254,7 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   authenticated tenant and Session, ordering by creation time then ID. Do not
   expose adapter outcomes, native IDs or raw errors. Failure uses a customer-safe
   category; usage remains nullable until its complete upstream breakdown can be
-  mapped without inventing measurements. These reads do not enable submission.
+  mapped without inventing measurements. Submission uses the separate Session events endpoint.
 
 
 - Public Items list reads a persisted execution-owned projection, updated in the
@@ -280,6 +277,26 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   Completion text replaces accumulated deltas. Keep partial output on termination;
   do not turn an unfinished call into a successful result. Thinking fragments are
   internal observations, not a claim of upstream reasoning-item support.
+
+- Public `POST /v1/agents/sessions/{session_id}/events` accepts ordered text-message
+  and cancellation batches through the pinned official client. Preserve individual
+  input messages in the Item index while deriving text for native dispatch. Batch
+  idempotency and cancellation targets remain durable; unsupported variants fail
+  before admission. Initial input during Session creation remains unsupported.
+- Enabling `AGENTS_API_DAEMON_WS_URL` also starts a bounded execution worker. Select
+  only connected, capable devices owned by the authenticated tenant; bind once and
+  preserve native continuity. Metadata cannot select a device. Offline work stays
+  queued and can be cancelled. An engine host is not a self-hosted environment.
+- One worker service owns an execution database through a dedicated PostgreSQL
+  advisory-lock connection. Losing that connection stops dispatch. At startup,
+  reconcile previously claimed work as failed, preserve queued inputs and never
+  replay uncertain execution. Shutdown cancels active dispatch and persists its
+  terminal result before releasing the lease. This is not distributed exactly-once
+  side-effect execution or restoration of unreported native outcomes.
+- Session state and last activity derive from its latest persisted Turn. Queued or
+  active work is `in_progress`, successful/cancelled work is `idle`, and failures
+  use a safe public error. The worker does not replace product dispatch, business
+  authorization, or the separate approval/environment lifecycle work.
 
 ### Agent knowledge references
 

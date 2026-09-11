@@ -40,13 +40,13 @@ separate future dependency for Team orchestration in Parsar, not the HTTP contra
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
 | Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, environment `none`, metadata and creation retry keys |
 | Internal Turn/input persistence | Tenant-scoped atomic input batches, steering, request-level retry identity, cancellation targets and terminal outcomes |
-| Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution; no public event submission or execution worker yet |
+| Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution; public text/cancel submission with a bounded standalone worker |
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |
 | Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
 | Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
 | Public SSE | Pending; internal daemon payloads are not upstream wire objects |
 | Pending actions and environment lifecycle | Pending |
-| Official-client compatibility | Strict SDK checks for supported Session, Turn and Items reads, pagination, retries, errors, tenant isolation and restart |
+| Official-client compatibility | Strict SDK checks for Session/Turn/Items reads and native text execution/cancellation; pagination, retries, errors, tenant isolation and recovery |
 | Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |
 | Product cutover | Pending |
 | Team orchestration | Deferred; Parsar-owned |
@@ -79,8 +79,7 @@ support `after`, `limit` (1..100, default 20), and `order` (default `desc`).
 The cursor is a Turn ID in the same tenant and Session. Failed turns expose a
 generic `internal_error`, never raw engine diagnostics. `usage` is currently
 null because the native record does not guarantee the required cache/reasoning
-breakdown; raw measurements remain in execution storage. Public submission,
-SSE and Session runtime-state projection remain pending.
+breakdown; raw measurements remain in execution storage. Session runtime state derives from the latest Turn. Public SSE remains pending.
 
 ### Item recovery reads
 
@@ -106,7 +105,7 @@ Legacy tool results retain their content but have `incomplete` status when the
 source did not record a native outcome. Only recognized historical user text/image
 shapes become messages; arbitrary internal input objects remain in source storage.
 Unsupported native variants, reasoning, subagent Items, Items mutation and live SSE
-are not covered. Public execution submission remains a separate milestone.
+are not covered. Public submission currently supports text messages and cancellation.
 
 Legacy Done frames alone do not complete assistant Items. Aggregate answer text
 is confirmed by successful Turn termination; failed Turns retain observed deltas
@@ -126,11 +125,37 @@ not allocate a local execution environment: the daemon uses upstream Codex's
 starting/resuming. A missing capability or unsupported native method fails rather
 than falling back to local execution. Private `daemon` snapshots remain distinct.
 This is an engine tool/environment boundary, not operating-system isolation.
-Public event submission/worker scheduling and the self-hosted registry/Noise
-transport are still pending.
+The standalone worker uses this mode for public text execution. The self-hosted
+registry/Noise transport remains pending.
 
 The native reference is Codex `rust-v0.153.4`, commit
 `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`, especially
 `codex-rs/exec-server/src/environment_provider.rs`. The self-hosted registry
 requires executor registration, harness authorization and encrypted relay;
 a daemon WebSocket URL is not that protocol.
+
+### Public execution admission
+
+`POST /v1/agents/sessions/{session_id}/events` accepts `agent.session.input.message`
+with user `input_text` content and `agent.session.input.cancel`. Successful atomic
+admission returns 204, as consumed by the official `events.create` method. A retry
+key identifies the entire ordered request; conflict does not partially admit it.
+Messages start queued work or steer the active Turn. Individual input messages
+remain distinct Items even when their text shares one native prompt.
+
+Enable the standalone daemon gateway to run the worker; without it, admission
+returns 503. The worker selects capable same-tenant engine hosts, binds each Session
+once, and runs at most four Turns concurrently. Queued cancellation needs no live
+engine. Active cancellation waits for a native receipt; terminal completion can
+win that race. Query Turn/Items to recover results; live SSE is not implemented.
+
+The service takes a database advisory lease, so a second execution service cannot
+start on the same database. Startup marks previously claimed Turns failed without
+replaying them and retains queued work. This does not recover missing daemon frames
+or guarantee exactly-once external side effects. Session status reflects the latest
+persisted Turn; full usage breakdown and pending actions remain unimplemented.
+
+Native verification uses `PARSAR_NATIVE_DAEMON_BIN`, `PARSAR_NATIVE_PROOF_DIR` under
+`~/.parsar/`, and `PARSAR_OFFICIAL_SDK_PYTHON` pointing to the pinned SDK environment.
+The Store native integration test runs `tests/official_execution.py` against a real
+HTTP handler, PostgreSQL, daemon and Codex with a synthetic model provider.
