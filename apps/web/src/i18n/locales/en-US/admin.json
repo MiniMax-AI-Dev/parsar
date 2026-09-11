@@ -1577,6 +1577,8 @@
         "systemPrompt": "You are a helpful AI assistant for this team. Be concise and accurate."
       },
       "errors": {
+        "createFailed": "Couldn't create Agent",
+        "saveFailed": "Couldn't save Agent",
         "modelRequired": "Pick a model first.",
         "modelUnavailable": "The current model is unavailable. Select an active model.",
         "deviceRequired": "Select a paired machine.",
