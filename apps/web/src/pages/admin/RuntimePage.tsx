@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { AlertTriangle, Loader2, Skull, Zap } from "lucide-react"
 
@@ -288,9 +288,12 @@ function CloudInstancesPanel({
   const fmtAgo = useRelativeTime()
   const checkLabelFor = useConnectivityCheckLabel()
   const [settledError, setSettledError] = useState<{ workspaceID: string | null; error: unknown } | null>(null)
-  useEffect(() => {
-    if (!loading) setSettledError(error ? { workspaceID, error } : null)
-  }, [workspaceID, loading, error])
+  if (!loading) {
+    const nextError = error ? { workspaceID, error } : null
+    if (settledError?.workspaceID !== nextError?.workspaceID || settledError?.error !== nextError?.error) {
+      setSettledError(nextError)
+    }
+  }
   const displayedError = error || (loading && settledError?.workspaceID === workspaceID ? settledError.error : null)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<{ bindingId: string; result: ConnectivityResult } | null>(null)
