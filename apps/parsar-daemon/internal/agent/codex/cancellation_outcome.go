@@ -15,7 +15,7 @@ type cancellationOutcomeState struct {
 func (s *Session) rememberOutcome(outcome proto.DonePayload) {
 	s.usageMu.Lock()
 	if outcome.Usage.Provider == "" && s.latestUsage != nil {
-		outcome.Usage = proto.Usage{Provider: "openai", InputTokens: int32(s.latestUsage.InputTokens), OutputTokens: int32(s.latestUsage.OutputTokens)}
+		outcome.Usage = s.usagePayload(*s.latestUsage)
 	}
 	s.usageMu.Unlock()
 	s.outcome.mu.Lock()
@@ -43,7 +43,7 @@ func (s *Session) CancellationOutcome() proto.DonePayload {
 	s.finalTextMu.Unlock()
 	s.usageMu.Lock()
 	if usage := s.latestUsage; usage != nil {
-		outcome.Usage = proto.Usage{Provider: "openai", InputTokens: int32(usage.InputTokens), OutputTokens: int32(usage.OutputTokens)}
+		outcome.Usage = s.usagePayload(*usage)
 	}
 	s.usageMu.Unlock()
 	return outcome

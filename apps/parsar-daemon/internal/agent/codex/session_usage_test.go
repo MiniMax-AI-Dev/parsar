@@ -89,3 +89,41 @@ func TestLegacyTurnUsagePayload(t *testing.T) {
 		t.Fatalf("explicit zero usage = %+v", s.latestUsage)
 	}
 }
+
+func TestCompleteTokenBreakdownAndCancellation(t *testing.T) {
+	s := &Session{}
+	s.setThreadID("thread")
+	s.onUsageUpdated(json.RawMessage(`{"threadId":"thread","turnId":"old","tokenUsage":{"total":{"inputTokens":100,"cachedInputTokens":20,"outputTokens":50,"reasoningOutputTokens":10,"totalTokens":150}}}`))
+	s.beginUsageTurn(json.RawMessage(`{"turn":{"id":"new"}}`))
+	snapshot := json.RawMessage(`{"threadId":"thread","turnId":"new","tokenUsage":{"total":{"inputTokens":130,"cachedInputTokens":24,"outputTokens":60,"reasoningOutputTokens":12,"totalTokens":190}}}`)
+	s.onUsageUpdated(snapshot)
+	s.onUsageUpdated(snapshot)
+	got := s.CancellationOutcome().Usage.Tokens
+	want := proto.TokenUsage{InputTokens: 30, CachedInputTokens: 4, OutputTokens: 10, ReasoningOutputTokens: 2, TotalTokens: 40}
+	if got == nil || *got != want {
+		t.Fatalf("cancel usage = %+v", got)
+	}
+	for _, raw := range []string{
+		`{"inputTokens":0,"outputTokens":0}`,
+		`{"inputTokens":0,"cachedInputTokens":0,"outputTokens":0,"reasoningOutputTokens":null,"totalTokens":0}`,
+	} {
+		var usage TurnUsage
+		if err := json.Unmarshal([]byte(raw), &usage); err != nil {
+			t.Fatal(err)
+		}
+		if s.usagePayload(usage).Tokens != nil {
+			t.Fatal("missing usage became measured zero")
+		}
+	}
+	var zero TurnUsage
+	if err := json.Unmarshal([]byte(`{"inputTokens":0,"cachedInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0,"totalTokens":0}`), &zero); err != nil {
+		t.Fatal(err)
+	}
+	if s.usagePayload(zero).Tokens == nil {
+		t.Fatal("explicit zero usage lost")
+	}
+	partial := TurnUsage{observed: true, InputTokens: 1}
+	if s.usagePayload(subtractUsage(zero, partial)).Tokens != nil {
+		t.Fatal("incomplete or regressing baseline reported complete")
+	}
+}

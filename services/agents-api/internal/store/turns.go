@@ -34,6 +34,7 @@ type Turn struct {
 	StartedAt             time.Time
 	CompletedAt           time.Time
 	CancelRequestedAt     time.Time
+	Usage                 json.RawMessage
 	Outcome               json.RawMessage
 }
 
@@ -92,7 +93,10 @@ func (s *Store) TransitionTurn(ctx context.Context, tenantID, sessionID, turnID 
 			return ErrTurnConflict
 		}
 		if err == nil && terminalStatus(row.Status) {
-			return projectItemSource(ctx, q, row.SessionID, row.ID, "execution_"+row.Status, 0, row.Outcome, row.CompletedAt)
+			if err = projectSource(ctx, q, row.SessionID, row.ID, "execution_"+row.Status, 0, row.Outcome, row.CompletedAt); err != nil {
+				return err
+			}
+			row, err = q.GetTurn(ctx, params)
 		}
 		return err
 	})
@@ -136,6 +140,6 @@ func turnFromRow(row sqlc.Turn) Turn {
 	return Turn{
 		ID: uuid.UUID(row.ID.Bytes).String(), SessionID: uuid.UUID(row.SessionID.Bytes).String(), Status: row.Status,
 		CreatedAt: row.CreatedAt.Time, StartedAt: row.StartedAt.Time, CompletedAt: row.CompletedAt.Time,
-		CancelRequestedAt: row.CancelRequestedAt.Time, Outcome: json.RawMessage(row.Outcome),
+		CancelRequestedAt: row.CancelRequestedAt.Time, Outcome: json.RawMessage(row.Outcome), Usage: json.RawMessage(row.TokenUsage),
 	}
 }

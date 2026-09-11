@@ -61,7 +61,8 @@ func (s *Store) CompleteExecution(ctx context.Context, tenantID, sessionID, turn
 				return ErrNotFound
 			}
 		}
-		return nil
+		row, err = q.GetTurn(ctx, p)
+		return err
 	})
 	if err != nil {
 		return Turn{}, err

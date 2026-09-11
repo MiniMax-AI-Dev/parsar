@@ -251,11 +251,14 @@ type TurnInterruptParams struct {
 }
 
 type TurnUsage struct {
-	InputTokens          int `json:"inputTokens,omitempty"`
-	OutputTokens         int `json:"outputTokens,omitempty"`
-	CachedInputTokens    int `json:"cachedInputTokens,omitempty"`
-	CacheReadInputTokens int `json:"cacheReadInputTokens,omitempty"`
-	TotalTokens          int `json:"totalTokens,omitempty"`
+	observed              bool
+	complete              bool
+	ReasoningOutputTokens int `json:"reasoningOutputTokens,omitempty"`
+	InputTokens           int `json:"inputTokens,omitempty"`
+	OutputTokens          int `json:"outputTokens,omitempty"`
+	CachedInputTokens     int `json:"cachedInputTokens,omitempty"`
+	CacheReadInputTokens  int `json:"cacheReadInputTokens,omitempty"`
+	TotalTokens           int `json:"totalTokens,omitempty"`
 }
 
 type Turn struct {

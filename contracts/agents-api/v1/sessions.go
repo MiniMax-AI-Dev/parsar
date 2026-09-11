@@ -66,7 +66,7 @@ type Session struct {
 	Object          string            `json:"object" enums:"agent.session" binding:"required"`
 	RequiredActions []json.RawMessage `json:"required_actions" swaggertype:"array,object" binding:"required"`
 	Status          string            `json:"status" enums:"idle,in_progress,failed" binding:"required"`
-	Usage           json.RawMessage   `json:"usage" swaggertype:"object" extensions:"x-nullable"`
+	Usage           *TokenUsage       `json:"usage" extensions:"x-nullable"`
 	VaultIDs        []string          `json:"vault_ids" binding:"required"`
 }
 

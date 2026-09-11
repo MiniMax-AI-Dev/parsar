@@ -56,6 +56,7 @@ type Turn struct {
 	EventCount        int32              `json:"event_count"`
 	EventBytes        int64              `json:"event_bytes"`
 	ItemsIndexed      bool               `json:"items_indexed"`
+	TokenUsage        []byte             `json:"token_usage"`
 }
 
 type TurnEvent struct {

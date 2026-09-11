@@ -60,7 +60,7 @@ func indexInput(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, seque
 	if row.Kind != "message" {
 		return nil
 	}
-	return projectItemSource(ctx, q, session, row.TurnID, row.Kind, row.Sequence, row.Payload, row.CreatedAt)
+	return projectSource(ctx, q, session, row.TurnID, row.Kind, row.Sequence, row.Payload, row.CreatedAt)
 }
 
 func indexEvents(ctx context.Context, q *sqlc.Queries, session, turn pgtype.UUID, first int32) error {
@@ -69,7 +69,7 @@ func indexEvents(ctx context.Context, q *sqlc.Queries, session, turn pgtype.UUID
 		return err
 	}
 	for _, row := range rows {
-		if err = projectItemSource(ctx, q, session, turn, row.Kind, int64(row.Ordinal), row.Payload, row.CreatedAt); err != nil {
+		if err = projectSource(ctx, q, session, turn, row.Kind, int64(row.Ordinal), row.Payload, row.CreatedAt); err != nil {
 			return err
 		}
 	}
@@ -96,7 +96,7 @@ func ensureSessionItems(ctx context.Context, q *sqlc.Queries, session pgtype.UUI
 				break
 			}
 			for _, row := range rows {
-				if err = projectItemSource(ctx, q, session, turn.ID, row.Kind, row.SourceOrder, row.Payload, row.CreatedAt); err != nil {
+				if err = projectSource(ctx, q, session, turn.ID, row.Kind, row.SourceOrder, row.Payload, row.CreatedAt); err != nil {
 					return err
 				}
 				p.AfterCreated = row.CreatedAt
@@ -108,7 +108,7 @@ func ensureSessionItems(ctx context.Context, q *sqlc.Queries, session pgtype.UUI
 		if !created.Valid {
 			created = turn.CreatedAt
 		}
-		if err = projectItemSource(ctx, q, session, turn.ID, "execution_"+turn.Status, 0, turn.Outcome, created); err != nil {
+		if err = projectSource(ctx, q, session, turn.ID, "execution_"+turn.Status, 0, turn.Outcome, created); err != nil {
 			return err
 		}
 		if err = q.MarkItemsIndexed(ctx, sqlc.MarkItemsIndexedParams{SessionID: session, ID: turn.ID}); err != nil {

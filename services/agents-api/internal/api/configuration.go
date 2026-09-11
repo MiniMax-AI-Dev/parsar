@@ -50,7 +50,7 @@ func sessionResponse(session store.Session) (v1.Session, error) {
 		return v1.Session{}, errors.New("unsupported stored session configuration")
 	}
 	response := v1.Session{
-		ID: session.ID, Agent: cfg.Agent, Environment: cfg.Environment,
+		ID: session.ID, Agent: cfg.Agent, Environment: cfg.Environment, Usage: tokenUsage(session.Usage),
 		CreatedAt: session.CreatedAt.Unix(), LastActiveAt: session.CreatedAt.Unix(),
 		Metadata: session.Metadata, Object: "agent.session", Status: "idle",
 		RequiredActions: []json.RawMessage{}, VaultIDs: []string{},
