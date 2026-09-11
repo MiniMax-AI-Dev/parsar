@@ -127,6 +127,7 @@
     },
     "createModel": {
       "title": "Add shared model",
+      "errorTitle": "Couldn't create model",
       "fields": {
         "name": "Display name",
         "namePlaceholder": "e.g. Claude Opus 4.5",
@@ -162,6 +163,7 @@
     },
     "editModel": {
       "title": "Edit \"{{name}}\"",
+      "errorTitle": "Couldn't save model",
       "submit": "Save",
       "locked": {
         "providerType": "Provider type",
