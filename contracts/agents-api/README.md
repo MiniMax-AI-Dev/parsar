@@ -39,7 +39,7 @@ separate future dependency for Team orchestration in Parsar, not the HTTP contra
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
 | Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, environment `none`, metadata and creation retry keys |
-| Internal Turn/input persistence | Tenant-scoped admission, steering, retry identity, cancellation targets and terminal outcomes; no dispatch or public event submission yet |
+| Internal Turn/input persistence | Tenant-scoped atomic input batches, steering, request-level retry identity, cancellation targets and terminal outcomes; no dispatch or public event submission yet |
 | Turn execution, events, results and cancellation | Pending |
 | Pending actions and environment lifecycle | Pending |
 | Official-client compatibility | Strict SDK checks for the supported Session subset, pagination, retries, errors, tenant isolation and restart |

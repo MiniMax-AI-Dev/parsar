@@ -152,7 +152,13 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   target, including an idle no-op, so retries cannot stop later work. Queued work
   can cancel before dispatch; active work needs an executor outcome. Terminal
   states and outcomes cannot be overwritten. These Store primitives do not yet
-  implement daemon delivery, public event batches or output streams.
+  implement daemon delivery, public event submission or output streams.
+- Input requests are ordered batches committed under the same Session lock. A
+  retry key identifies the complete ordered batch; changed length/order/content
+  conflicts and a failed transaction leaves no partial inputs or cancellation.
+  Existing single-event requests retain their identities at batch position zero.
+  Internal admission limits are 64 events and 512 KiB of payload per request;
+  the public API must still validate the upstream event schema.
 - The external protocol reference is `openai/openai-python`'s `beta/agents`, pinned
   in `contracts/agents-api/upstream.json`. Follow its Session/Turn/event semantics
   and verify supported behavior using the official client. Track current coverage

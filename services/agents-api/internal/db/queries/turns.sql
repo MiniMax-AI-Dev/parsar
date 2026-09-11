@@ -11,13 +11,20 @@ INSERT INTO turns(id, session_id) VALUES ($1, $2) RETURNING *;
 SELECT t.* FROM turns t JOIN sessions s ON s.id = t.session_id
 WHERE s.tenant_id = $1 AND t.session_id = $2 AND t.id = $3;
 
--- name: FindTurnInput :one
-SELECT sequence, turn_id, (kind = sqlc.arg(kind) AND payload = sqlc.arg(payload)::jsonb)::boolean AS matches
-FROM turn_inputs WHERE session_id = $1 AND idempotency_key = $2;
+-- name: FindInputBatch :many
+WITH previous AS (
+    SELECT sequence, turn_id, kind, payload, batch_position FROM turn_inputs
+    WHERE session_id = $1 AND idempotency_key = $2
+)
+SELECT sequence, turn_id, COALESCE((
+    SELECT jsonb_agg(jsonb_build_object('kind', kind, 'payload', payload) ORDER BY batch_position)
+        = sqlc.arg(batch)::jsonb FROM previous
+), false)::boolean AS matches
+FROM previous ORDER BY batch_position;
 
 -- name: CreateTurnInput :one
-INSERT INTO turn_inputs(session_id, turn_id, idempotency_key, kind, payload)
-VALUES ($1, $2, $3, $4, $5) RETURNING sequence;
+INSERT INTO turn_inputs(session_id, turn_id, idempotency_key, kind, payload, batch_position)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING sequence;
 
 -- name: RequestTurnCancel :exec
 UPDATE turns SET cancel_requested_at = COALESCE(cancel_requested_at, clock_timestamp()),
