@@ -70,13 +70,14 @@ RUN apt-get update -y \
 # which is the behaviour we want here anyway.
 ARG CODEX_VERSION=0.141.0
 ARG PI_VERSION=0.80.6
+ARG MCODE_VERSION=0.3.11
 # Staged under /opt, NOT /tmp: e2b's builder does not persist /tmp across
 # layers, so `COPY ... /tmp/x` followed by `RUN /tmp/x` in the next layer
 # fails with "No such file or directory". The main Dockerfile can use /tmp
 # because BuildKit keeps it; this one cannot.
 COPY scripts/install-agents.sh /opt/parsar/bin/install-agents.sh
 RUN chmod +x /opt/parsar/bin/install-agents.sh \
- && CODEX_VERSION="$CODEX_VERSION" PI_VERSION="$PI_VERSION" \
+ && CODEX_VERSION="$CODEX_VERSION" PI_VERSION="$PI_VERSION" MCODE_VERSION="$MCODE_VERSION" \
     /opt/parsar/bin/install-agents.sh "$TARGETARCH" \
  && rm -f /opt/parsar/bin/install-agents.sh
 

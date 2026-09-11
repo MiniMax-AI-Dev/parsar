@@ -30,6 +30,7 @@ const (
 	EnvCodex      = "PARSAR_CODEX_BIN"
 	EnvPi         = "PARSAR_PI_BIN"
 	EnvOpenCode   = "PARSAR_OPENCODE_BIN"
+	EnvMCode      = "PARSAR_MCODE_BIN"
 )
 
 // Default executable names, used when the matching env var is unset.
@@ -38,6 +39,7 @@ const (
 	DefaultCodex      = "codex"
 	DefaultPi         = "pi"
 	DefaultOpenCode   = "opencode"
+	DefaultMCode      = "mcode"
 )
 
 // resolve returns the trimmed env override when set, else fallback.
@@ -59,3 +61,6 @@ func Pi() string { return resolve(EnvPi, DefaultPi) }
 
 // OpenCode returns the opencode executable to probe and spawn.
 func OpenCode() string { return resolve(EnvOpenCode, DefaultOpenCode) }
+
+// MCode returns the mcode executable to probe and spawn.
+func MCode() string { return resolve(EnvMCode, DefaultMCode) }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Installs every agent CLI a Parsar sandbox image needs: Node 22 (for npm-
-# based installs), Claude Code, Codex, and Pi. Used by
+# based installs), Claude Code, Codex, Pi, and MiniMax Code. Used by
 # infra/sandbox/Dockerfile (both the local-docker and e2b.app build
 # targets, selected by --build-arg BASE_IMAGE). Edit here, not inline in
 # the Dockerfile.
@@ -10,6 +10,7 @@
 #   CLAUDE_CODE_VERSION   default: latest
 #   CODEX_VERSION         default: 0.141.0
 #   PI_VERSION            default: 0.80.6
+#   MCODE_VERSION         default: 0.3.11
 #
 # All installs are FAIL-LOUD: `set -e` + a `--version` sanity check after
 # each one. A silently missing CLI would only surface at run time when a
@@ -21,6 +22,7 @@ TARGETARCH="${1:?install-agents.sh: TARGETARCH required (amd64|arm64)}"
 CLAUDE_CODE_VERSION="${CLAUDE_CODE_VERSION:-}"
 CODEX_VERSION="${CODEX_VERSION:-0.141.0}"
 PI_VERSION="${PI_VERSION:-0.80.6}"
+MCODE_VERSION="${MCODE_VERSION:-0.3.11}"
 
 case "$TARGETARCH" in
   amd64) CLAUDE_ARCH=linux-x64 CODEX_ARCH=x86_64-unknown-linux-musl ;;
@@ -87,3 +89,8 @@ rm -rf /tmp/codex*
 echo "install-agents: installing pi ${PI_VERSION}"
 npm install -g "@earendil-works/pi-coding-agent@${PI_VERSION}"
 pi --version
+
+# --- MiniMax Code CLI (public npm package) ---
+echo "install-agents: installing mcode ${MCODE_VERSION}"
+npm install -g --ignore-scripts=false --include=optional "@minimax-ai/code@${MCODE_VERSION}"
+mcode --version

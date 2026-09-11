@@ -59,7 +59,7 @@ func remoteMCPFixture() canonical.Spec {
 
 // TestFor_KnownTargets catches "added a Target without wiring For()".
 func TestFor_KnownTargets(t *testing.T) {
-	for _, target := range []Target{TargetOpenCode, TargetClaudeCode, TargetCodex, TargetPi} {
+	for _, target := range []Target{TargetOpenCode, TargetClaudeCode, TargetCodex, TargetPi, TargetMCode} {
 		r, err := For(target)
 		if err != nil {
 			t.Fatalf("For(%q) error: %v", target, err)

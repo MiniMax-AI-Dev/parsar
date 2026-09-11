@@ -10,6 +10,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/claudecode"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/codex"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/mcode"
 	opencodeagent "github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/opencode"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/pi"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -71,6 +72,7 @@ func TestDiscoverAgentCLIsAllowsOpenCodeWithoutClaude(t *testing.T) {
 	stdout, stderr := &strings.Builder{}, &strings.Builder{}
 	rc := &runContext{stdout: stdout, stderr: stderr}
 	got, err := discoverAgentCLIs(rc, agentCLIChecks{
+		MCode: func(context.Context, string) (string, error) { return "", mcode.ErrCLINotFound },
 		ClaudeCode: func(context.Context, string) (string, error) {
 			return "", claudecode.ErrCLINotFound
 		},
@@ -114,6 +116,7 @@ func TestDiscoverAgentCLIsBothMissingFails(t *testing.T) {
 	stdout, stderr := &strings.Builder{}, &strings.Builder{}
 	rc := &runContext{stdout: stdout, stderr: stderr}
 	got, err := discoverAgentCLIs(rc, agentCLIChecks{
+		MCode: func(context.Context, string) (string, error) { return "", mcode.ErrCLINotFound },
 		ClaudeCode: func(context.Context, string) (string, error) {
 			return "", claudecode.ErrCLINotFound
 		},
@@ -142,6 +145,7 @@ func TestDiscoverAgentCLIsBothAvailable(t *testing.T) {
 	stdout, stderr := &strings.Builder{}, &strings.Builder{}
 	rc := &runContext{stdout: stdout, stderr: stderr}
 	got, err := discoverAgentCLIs(rc, agentCLIChecks{
+		MCode: func(context.Context, string) (string, error) { return "0.3.11", nil },
 		ClaudeCode: func(context.Context, string) (string, error) {
 			return "claude 2.0.0", nil
 		},
@@ -179,6 +183,9 @@ func TestDiscoverAgentCLIsBothAvailable(t *testing.T) {
 	if !got.Pi.Capabilities.Streaming || !got.Pi.Capabilities.Usage || !got.Pi.Capabilities.Resume || got.Pi.Capabilities.Permissions {
 		t.Fatalf("Pi capabilities = %#v (want Streaming+Usage+Resume, no Permissions)", got.Pi.Capabilities)
 	}
+	if !got.MCode.Available || !got.MCode.Capabilities.Resume || got.MCode.Capabilities.Usage {
+		t.Fatalf("mcode descriptor = %#v", got.MCode)
+	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
@@ -187,6 +194,7 @@ func TestDiscoverAgentCLIsBothAvailable(t *testing.T) {
 func TestRegisterAgentKindsPreservesDescriptors(t *testing.T) {
 	reg := agent.NewRegistry()
 	registerAgentKinds(reg, agentCLIDiscovery{
+		MCode: proto.SupportedAgentKind{Kind: "mcode", Available: true, Version: "0.3.11", Capabilities: proto.AgentKindCapabilities{Streaming: true, Permissions: true, Resume: true}},
 		ClaudeCode: proto.SupportedAgentKind{
 			Kind:      "claude_code",
 			Available: true,
@@ -231,11 +239,11 @@ func TestRegisterAgentKindsPreservesDescriptors(t *testing.T) {
 	}, "https://parsar.example.test")
 
 	kinds := reg.SupportedAgentKinds()
-	if len(kinds) != 4 {
-		t.Fatalf("SupportedAgentKinds len = %d, want 4: %#v", len(kinds), kinds)
+	if len(kinds) != 5 {
+		t.Fatalf("SupportedAgentKinds len = %d, want 5: %#v", len(kinds), kinds)
 	}
-	// Sorted: claude_code, codex, opencode, pi.
-	if kinds[0].Kind != "claude_code" || kinds[1].Kind != "codex" || kinds[2].Kind != "opencode" || kinds[3].Kind != "pi" {
+	// Sorted: claude_code, codex, mcode, opencode, pi.
+	if kinds[0].Kind != "claude_code" || kinds[1].Kind != "codex" || kinds[2].Kind != "mcode" || kinds[3].Kind != "opencode" || kinds[4].Kind != "pi" {
 		t.Fatalf("SupportedAgentKinds sort = %#v", kinds)
 	}
 	if !kinds[0].Available || kinds[0].Version != "claude 2.0.0" || !kinds[0].Capabilities.Permissions {
@@ -244,11 +252,11 @@ func TestRegisterAgentKindsPreservesDescriptors(t *testing.T) {
 	if !kinds[1].Available || kinds[1].Version != "codex 0.141.0" || !kinds[1].Capabilities.Resume {
 		t.Fatalf("codex descriptor not preserved: %#v", kinds[1])
 	}
-	if kinds[2].Available || kinds[2].Version != "missing" || !kinds[2].Capabilities.Streaming || !kinds[2].Capabilities.Usage {
-		t.Fatalf("opencode descriptor not preserved: %#v", kinds[2])
+	if kinds[3].Available || kinds[3].Version != "missing" || !kinds[3].Capabilities.Streaming || !kinds[3].Capabilities.Usage {
+		t.Fatalf("opencode descriptor not preserved: %#v", kinds[3])
 	}
-	if !kinds[3].Available || kinds[3].Version != "pi 0.1.0" || !kinds[3].Capabilities.Resume || kinds[3].Capabilities.Permissions {
-		t.Fatalf("pi descriptor not preserved: %#v", kinds[3])
+	if !kinds[4].Available || kinds[4].Version != "pi 0.1.0" || !kinds[4].Capabilities.Resume || kinds[4].Capabilities.Permissions {
+		t.Fatalf("pi descriptor not preserved: %#v", kinds[4])
 	}
 	if _, err := reg.Resolve("opencode"); err != nil {
 		t.Fatalf("opencode factory not registered: %v", err)

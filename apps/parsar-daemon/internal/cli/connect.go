@@ -14,6 +14,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/claudecode"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/codex"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/mcode"
 	opencodeagent "github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/opencode"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/pi"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/auth"
@@ -195,6 +196,7 @@ type agentCLIDiscovery struct {
 	OpenCode   proto.SupportedAgentKind
 	Codex      proto.SupportedAgentKind
 	Pi         proto.SupportedAgentKind
+	MCode      proto.SupportedAgentKind
 }
 
 type agentCLIChecks struct {
@@ -202,6 +204,7 @@ type agentCLIChecks struct {
 	OpenCode   func(context.Context, string) (string, error)
 	Codex      func(context.Context, string) (string, error)
 	Pi         func(context.Context, string) (string, error)
+	MCode      func(context.Context, string) (string, error)
 }
 
 func defaultAgentCLIChecks() agentCLIChecks {
@@ -210,6 +213,7 @@ func defaultAgentCLIChecks() agentCLIChecks {
 		OpenCode:   opencodeagent.CheckCLIAvailable,
 		Codex:      codex.CheckCLIAvailable,
 		Pi:         pi.CheckCLIAvailable,
+		MCode:      mcode.CheckCLIAvailable,
 	}
 }
 
@@ -328,8 +332,10 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 		fmt.Fprintf(rc.stderr, "  Re-install or upgrade: %s\n", pi.InstallURL)
 	}
 
-	if !out.ClaudeCode.Available && !out.OpenCode.Available && !out.Codex.Available && !out.Pi.Available {
-		return out, fmt.Errorf("connect: no supported agent CLI available (install Claude Code, OpenCode, Codex, or pi)")
+	out.MCode = discoverMCode(rc, checks.MCode)
+
+	if !out.ClaudeCode.Available && !out.OpenCode.Available && !out.Codex.Available && !out.Pi.Available && !out.MCode.Available {
+		return out, fmt.Errorf("connect: no supported agent CLI available (install Claude Code, OpenCode, Codex, pi, or mcode)")
 	}
 	return out, nil
 }
@@ -339,6 +345,7 @@ func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery, s
 	registry.RegisterKind(agentCLIs.OpenCode, withSkillUploadServer(withCapabilityDownloads(opencodeagent.Factory, serverURL), serverURL))
 	registry.RegisterKind(agentCLIs.Codex, withSkillUploadServer(withCapabilityDownloads(codex.Factory, serverURL), serverURL))
 	registry.RegisterKind(agentCLIs.Pi, withSkillUploadServer(withCapabilityDownloads(pi.Factory, serverURL), serverURL))
+	registry.RegisterKind(agentCLIs.MCode, withSkillUploadServer(withCapabilityDownloads(mcode.Factory, serverURL), serverURL))
 }
 
 // spawnBackground forks the daemon into the background. Parent

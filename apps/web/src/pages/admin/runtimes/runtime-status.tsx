@@ -17,6 +17,8 @@ export function formatAgentKindLabel(kind: string): string {
       return "OpenCode"
     case "codex":
       return "Codex"
+    case "mcode":
+      return "MiniMax Code"
     case "pi":
       return "PI Agent"
     default:
