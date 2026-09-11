@@ -11,7 +11,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Plus, X } from "lucide-react"
-import { ApiError } from "../../lib/api-client"
 import type { Model, ModelCredentialMode, Secret } from "../../lib/api-types"
 import {
   useDetectModelEndpoints,
@@ -36,6 +35,7 @@ import { CredentialKindCombobox } from "./capabilities/CredentialKindCombobox"
 import { ModelKeyCombobox } from "./ModelKeyCombobox"
 import { ProviderTypeCombobox } from "./ProviderTypeCombobox"
 import { ModelEndpointBaseURLsEditor } from "./ModelEndpointBaseURLsEditor"
+import { ModelSaveErrorDialog } from "./ModelSaveErrorDialog"
 import {
   getProviderCatalogSnapshot,
   loadProviderCatalog,
@@ -56,15 +56,6 @@ import {
   shouldReplaceModelName,
   shouldReplaceProviderModelKey,
 } from "../../lib/model-provider-options"
-
-function extractErrorMessage(err: unknown): string | null {
-  if (!err) return null
-  if (err instanceof ApiError) {
-    return err.envelope.message || err.message
-  }
-  if (err instanceof Error) return err.message
-  return String(err)
-}
 
 /* --- HeadersEditor ------------------------------------------------------
  *
@@ -286,6 +277,7 @@ export function CreateModelDialog({
 }: CreateModelDialogProps) {
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
+  const formRef = useRef<HTMLFormElement>(null)
 
   const [providerCatalog, setProviderCatalog] = useState(getProviderCatalogSnapshot)
   useEffect(() => {
@@ -404,7 +396,6 @@ export function CreateModelDialog({
   const showHeadersEditor = true
   const showAuthSchemeSelector = !!cfg?.authSchemeSelector
   const providerModels = cfg?.models ?? []
-  const errMsg = extractErrorMessage(error)
 
   // Resolve each provider option's display label once (literal brand name, or
   // translated key for the generic gateways) for the searchable picker.
@@ -551,7 +542,7 @@ export function CreateModelDialog({
         <DialogHeader>
           <DialogTitle>{t("models.createModel.title")}</DialogTitle>
         </DialogHeader>
-        <form className="flex flex-col" onSubmit={handleSubmit}>
+        <form ref={formRef} className="flex flex-col" onSubmit={handleSubmit}>
           <div className="grid gap-3">
             <TextField
               id="model-name"
@@ -694,8 +685,6 @@ export function CreateModelDialog({
             )}
           </RailSection>
 
-          {errMsg && <ErrorState title={errMsg} className="pb-0" />}
-
           <DialogFooter className="mt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
               {tc("actions.cancel")}
@@ -705,6 +694,7 @@ export function CreateModelDialog({
             </Button>
           </DialogFooter>
         </form>
+        <ModelSaveErrorDialog error={error} title={t("models.createModel.errorTitle")} formRef={formRef} />
       </DialogContent>
     </Dialog>
   )
@@ -743,6 +733,7 @@ export function EditModelDialog({
 }: EditModelDialogProps) {
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
+  const formRef = useRef<HTMLFormElement>(null)
 
   const providerTypeMeta = useMemo(() => {
     if (!model) return undefined
@@ -772,7 +763,6 @@ export function EditModelDialog({
   }, [open, model, providerTypeMeta])
 
   if (!model) return null
-  const errMsg = extractErrorMessage(error)
   const activeSecrets = secrets.filter((s) => s.status === "active" && s.kind === "model_provider")
   const isInline = model.credential_mode === "inline_secret"
   const isCredentialRef = model.credential_mode === "credential_ref"
@@ -839,7 +829,7 @@ export function EditModelDialog({
         <DialogHeader>
           <DialogTitle>{t("models.editModel.title", { name: model.name })}</DialogTitle>
         </DialogHeader>
-        <form className="flex flex-col" onSubmit={handleSubmit}>
+        <form ref={formRef} className="flex flex-col" onSubmit={handleSubmit}>
           {/* --- Locked identity --- */}
           <PropertyList className="mb-3">
             <Property label={t("models.editModel.locked.providerType")}>{model.provider_type}</Property>
@@ -942,8 +932,6 @@ export function EditModelDialog({
             </RailSection>
           )}
 
-          {errMsg && <ErrorState title={errMsg} className="pb-0" />}
-
           <DialogFooter className="mt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
               {tc("actions.cancel")}
@@ -953,6 +941,7 @@ export function EditModelDialog({
             </Button>
           </DialogFooter>
         </form>
+        <ModelSaveErrorDialog error={error} title={t("models.editModel.errorTitle")} formRef={formRef} />
       </DialogContent>
     </Dialog>
   )

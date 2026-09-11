@@ -127,6 +127,7 @@
     },
     "createModel": {
       "title": "新建共享模型",
+      "errorTitle": "创建模型失败",
       "fields": {
         "name": "模型名称",
         "namePlaceholder": "例：Claude Opus 4.5",
@@ -162,6 +163,7 @@
     },
     "editModel": {
       "title": "编辑「{{name}}」",
+      "errorTitle": "保存模型失败",
       "submit": "保存修改",
       "locked": {
         "providerType": "供应商类型",
