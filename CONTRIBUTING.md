@@ -154,9 +154,16 @@ the existing server remains the execution owner until a flow is explicitly moved
   operator-selected `AGENTS_API_ENGINE` is separate from the requested model.
   Until execution is connected, support only documented idle Session operations
   and reject unsupported input/environment/agent options explicitly.
+- `packages/agents-client/v1` configures the pinned official `openai-go` Session
+  service. Use SDK request/response types, pagination and errors directly rather
+  than reimplementing transport or copying wire types. Supply an explicit service
+  base URL/key and creation retry key; SDK retries are disabled by default. Product
+  integration is a later cutover, not a side effect of constructing this client.
 - `services/agents-api/tests/official_client.py` verifies the actual server with
   the pinned SDK and strict response validation. It requires a dedicated test DB
   prepared by the Store tests and `AGENTS_API_SERVER_BIN`; it never starts Docker.
+  The same harness runs the official Go client with fresh execution tenants and
+  checks its created Sessions through the Python SDK.
 
 ### Agent knowledge references
 
@@ -761,6 +768,11 @@ the existing server remains the execution owner until a flow is explicitly moved
   or SQL first, then regenerate.
 
 ## Code quality & architecture
+
+Prefer existing code, official SDKs and maintained third-party components before
+adding custom infrastructure. Keep adapters limited to product-specific behavior;
+pin dependencies and verify compatibility at the service boundary. Record the
+chosen dependency and any necessary custom implementation in the linked task.
 
 Parsar favors small, single-purpose files and reused helpers over growing
 files and copy-pasted logic. These rules are forward-looking: they do not

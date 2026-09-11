@@ -53,7 +53,7 @@ def main():
         address.bind(("127.0.0.1", 0))
         port = address.getsockname()[1]
     base = f"http://127.0.0.1:{port}"
-    tokens = [secrets.token_hex(32), secrets.token_hex(32)]
+    tokens = [secrets.token_hex(32) for _ in range(4)]
     bindings = [{"tenant_id": str(uuid.uuid4()), "token_sha256": hashlib.sha256(token.encode()).hexdigest()} for token in tokens]
     process = None
     with tempfile.TemporaryDirectory(prefix="agents-api-test-") as directory:
@@ -139,6 +139,14 @@ def main():
                     process = start()
                     assert sessions.retrieve(first.id) == first
                     assert sessions.create(**spec, metadata={"workspace": "untrusted-reference"}, extra_headers=headers) == first
+                go_env = dict(os.environ, AGENTS_API_CLIENT_TEST_BASE_URL=base + "/v1",
+                              AGENTS_API_CLIENT_TEST_KEY=tokens[2], AGENTS_API_CLIENT_TEST_OTHER_KEY=tokens[3])
+                subprocess.run(["go", "test", "./packages/agents-client/v1", "-run", "^TestService$", "-count=1"],
+                               cwd=root, env=go_env, check=True, timeout=120)
+                with client(tokens[2]) as go_tenant:
+                    go_sessions = list(go_tenant.beta.agents.sessions.list())
+                    assert len(go_sessions) == 3 and all(item.agent.model == "go-client-test-model" for item in go_sessions)
+                print("Official Go client: creation/retries, retrieval, bidirectional pagination and tenant isolation passed.")
                 print("Official client: upstream and generated response schemas, persistence/restart, retries, pagination, tenant isolation and explicit unsupported options passed.")
             finally:
                 if process and process.poll() is None:

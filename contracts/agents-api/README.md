@@ -38,6 +38,7 @@ separate future dependency for Team orchestration in Parsar, not the HTTP contra
 | Turn execution, events, results and cancellation | Pending |
 | Pending actions and environment lifecycle | Pending |
 | Official-client compatibility | Strict SDK checks for the supported Session subset, pagination, retries, errors, tenant isolation and restart |
+| Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |
 | Product cutover | Pending |
 | Team orchestration | Deferred; Parsar-owned |
 
