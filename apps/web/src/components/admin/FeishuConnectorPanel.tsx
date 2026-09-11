@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, type MouseEvent } from "react"
 import { useTranslation } from "react-i18next"
 import QRCode from "qrcode"
 import { ExternalLink, Loader2, QrCode } from "lucide-react"
@@ -16,6 +16,7 @@ import type { CreateSecretRequest } from "../../lib/api-types"
 import { randomHex } from "../../lib/random"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
+import { ErrorDialog } from "../ui/error-dialog"
 import { Field } from "../ui/label"
 import { Input } from "../ui/input"
 import { PropertyList, Property } from "../ui/property-list"
@@ -137,6 +138,8 @@ export function FeishuConnectorPanel({
   const [secretInputs, setSecretInputs] = useState<SecretInputs>(emptySecretInputs())
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [provision, setProvision] = useState<ProvisionState | null>(null)
+  const panelRef = useRef<HTMLElement>(null)
+  const errorTriggerRef = useRef<HTMLButtonElement | null>(null)
 
   const [draftSource, setDraftSource] = useState(current)
   if (current !== draftSource) {
@@ -227,7 +230,8 @@ export function FeishuConnectorPanel({
     return () => window.clearTimeout(timer)
   }, [agentID, agentName, onToast, pollProvision, pollProvisionPending, provision, t])
 
-  const onSave = async () => {
+  const onSave = async (event: MouseEvent<HTMLButtonElement>) => {
+    errorTriggerRef.current = event.currentTarget
     setErrorMsg(null)
     try {
       const config = await buildConfigWithSecretRefs(draft, secretInputs, async (body) => {
@@ -263,7 +267,8 @@ export function FeishuConnectorPanel({
     setErrorMsg(null)
   }
 
-  const onBeginProvision = () => {
+  const onBeginProvision = (event: MouseEvent<HTMLButtonElement>) => {
+    errorTriggerRef.current = event.currentTarget
     setErrorMsg(null)
     beginProvisionMut.mutate(agentID, {
       onSuccess: async (res) => {
@@ -300,7 +305,7 @@ export function FeishuConnectorPanel({
   const disabled = !canEdit || saving
 
   return (
-    <section className="mt-6 max-w-2xl">
+    <section ref={panelRef} className="mt-6 max-w-2xl">
       <div className="mb-2 flex h-7 items-center justify-between gap-2">
         <h2 className="text-sm font-medium text-fg">{t("agents.feishuConnector.title")}</h2>
       </div>
@@ -466,7 +471,17 @@ export function FeishuConnectorPanel({
         )}
 
         {errorMsg && (
-          <InlineError role="alert" data-testid="feishu-error">{errorMsg}</InlineError>
+          <ErrorDialog
+            title={t("agents.feishuConnector.errors.title")}
+            message={errorMsg}
+            onClose={() => setErrorMsg(null)}
+            onRestoreFocus={() => {
+              const trigger = errorTriggerRef.current
+              if (trigger?.isConnected && !trigger.disabled) trigger.focus()
+              else panelRef.current?.querySelector<HTMLInputElement>("input:not(:disabled)")?.focus()
+            }}
+            focusScopeRef={panelRef}
+          />
         )}
       </div>
 
