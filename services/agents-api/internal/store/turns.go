@@ -98,7 +98,10 @@ func (s *Store) TransitionTurn(ctx context.Context, tenantID, sessionID, turnID 
 			}
 			row, err = q.GetTurn(ctx, params)
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		return recordTurnChange(ctx, q, row, false)
 	})
 	if err != nil {
 		return Turn{}, fmt.Errorf("transition turn: %w", err)

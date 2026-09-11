@@ -122,6 +122,9 @@ func admitInput(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, key s
 	if errors.Is(err, pgx.ErrNoRows) {
 		if input.Kind == "message" {
 			turn, err = q.CreateTurn(ctx, sqlc.CreateTurnParams{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, SessionID: session})
+			if err == nil {
+				err = recordTurnChange(ctx, q, turn, true)
+			}
 		} else {
 			err = nil // Retain even an idle cancellation's retry identity.
 		}
@@ -138,6 +141,15 @@ func admitInput(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, key s
 	if input.Kind == "cancel" && turn.ID.Valid {
 		if err := q.RequestTurnCancel(ctx, sqlc.RequestTurnCancelParams{ID: turn.ID, SessionID: session}); err != nil {
 			return InputReceipt{}, err
+		}
+		if turn.Status == TurnQueued {
+			cancelled, err := q.SessionEventTurn(ctx, sqlc.SessionEventTurnParams{SessionID: session, ID: turn.ID})
+			if err != nil {
+				return InputReceipt{}, err
+			}
+			if err := recordTurnChange(ctx, q, cancelled, false); err != nil {
+				return InputReceipt{}, err
+			}
 		}
 	}
 	if err := indexInput(ctx, q, session, sequence); err != nil {

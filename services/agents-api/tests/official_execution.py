@@ -39,11 +39,26 @@ def main():
         return sessions.create(agent={"model": "gpt-5.5", "instructions": "Keep the conversation."},
                                environment={"type": "none"})
 
+    def until_idle(stream):
+        events = []
+        for event in stream:
+            events.append(event)
+            assert len(events) < 1000
+            if event.type == "agent.session.turn.output_text.delta":
+                assert sessions.turns.retrieve(event.turn_id, session_id=event.session_id).status == "in_progress"
+            if event.type == "agent.session.idle":
+                assert event.session.status == "idle"
+                assert len({value.event_id for value in events}) == len(events)
+                return events
+        raise AssertionError("stream ended without an idle Session")
+
     try:
         session = create()
         event = message("First public message.", "Second message in the same event.")
-        assert sessions.events.create(session.id, events=[event], idempotency_key="first") is None
-        sessions.events.create(session.id, events=[event], idempotency_key="first")
+        with sessions.events.stream(session.id, timeout=20) as stream:
+            assert sessions.events.create(session.id, events=[event], idempotency_key="first") is None
+            sessions.events.create(session.id, events=[event], idempotency_key="first")
+            first_events = until_idle(stream)
         first = wait_turn(session.id, "completed")
         assert sessions.retrieve(session.id).status == "idle"
         expected_usage = {"input_tokens": 10, "input_tokens_details": {"cached_tokens": 4},
@@ -55,6 +70,16 @@ def main():
         answers = [item for item in items if item.type == "message" and item.role == "assistant"]
         assert len(users) == 2 and len(answers) == 1
         assert answers[0].content[0].text == "NO-ENVIRONMENT-OK"
+        types = [value.type for value in first_events]
+        for kind in ("created", "in_progress", "completed", "item.added", "item.done",
+                     "content_part.added", "content_part.done", "output_text.delta", "output_text.done"):
+            assert "agent.session.turn." + kind in types, types
+        terminal = next(value for value in first_events if value.type == "agent.session.turn.completed")
+        assert terminal.turn.usage.model_dump() == expected_usage
+        assert first_events[-1].session.usage.model_dump() == expected_usage
+        text_events = [value for value in first_events if value.type.startswith("agent.session.turn.output_text.")]
+        assert all(value.item_id == answers[0].id and value.output_index == 0 and value.content_index == 0 for value in text_events)
+        assert text_events[-1].text == answers[0].content[0].text
         try:
             sessions.events.create(session.id, events=[message("changed")], idempotency_key="first")
             raise AssertionError("changed retry accepted")
@@ -65,8 +90,11 @@ def main():
             raise AssertionError("foreign tenant admitted")
         except NotFoundError:
             pass
-        sessions.events.create(session.id, events=[message("Continue the same native conversation.")], idempotency_key="second")
+        with sessions.events.stream(session.id, timeout=20, extra_headers={"Last-Event-ID": first_events[-1].event_id}) as stream:
+            sessions.events.create(session.id, events=[message("Continue the same native conversation.")], idempotency_key="second")
+            second_events = until_idle(stream)
         second = wait_turn(session.id, "completed", 2)
+        assert all(getattr(value, "turn_id", None) != first.id for value in second_events)
         assert second.usage.model_dump() == expected_usage, second.usage
         expected_total = {"input_tokens": 20, "input_tokens_details": {"cached_tokens": 8},
                           "output_tokens": 6, "output_tokens_details": {"reasoning_tokens": 4}, "total_tokens": 26}
@@ -85,11 +113,19 @@ def main():
         sessions.events.create(cancelled.id, events=[message("PUBLIC-CANCEL")])
         wait_turn(cancelled.id, "in_progress")
         time.sleep(0.5)
-        sessions.events.create(cancelled.id, events=[{"type": "agent.session.input.cancel"}], idempotency_key="cancel")
+        retained = sessions.items.list(cancelled.id, limit=100).data
+        with sessions.events.stream(cancelled.id, timeout=20) as stream:
+            sessions.events.create(cancelled.id, events=[{"type": "agent.session.input.cancel"}], idempotency_key="cancel")
+            cancelled_events = until_idle(stream)
         stopped = wait_turn(cancelled.id, "cancelled")
+        assert any(value.type == "agent.session.turn.cancelled" and value.turn.id == stopped.id for value in cancelled_events)
+        assert not any(value.type == "agent.session.turn.created" for value in cancelled_events)
+        assert {item.id for item in retained} <= {item.id for item in sessions.items.list(cancelled.id, limit=100).data}
         assert sessions.retrieve(cancelled.id).status == "idle"
         Path(evidence).write_text(json.dumps({"session": session.id, "turns": [first.id, second.id],
-                                              "cancelled_session": cancelled.id, "cancelled_turn": stopped.id}))
+                                              "cancelled_session": cancelled.id, "cancelled_turn": stopped.id,
+                                              "stream_types": types, "reconnected_events": len(second_events),
+                                              "cancelled_events": [value.type for value in cancelled_events]}))
     finally:
         client.close()
         foreign.close()

@@ -99,6 +99,9 @@ func TestItemOrderMigrationPreservesIndexedHistory(t *testing.T) {
 			t.Fatalf("migrated item %d: position=%d output=%+v", i, position, output)
 		}
 	}
+	if _, err = provider.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
 	poolConfig := pool.Config()
 	poolConfig.ConnConfig = cfg
 	migratedPool, err := pgxpool.NewWithConfig(ctx, poolConfig)
@@ -119,13 +122,13 @@ func TestItemOrderMigrationPreservesIndexedHistory(t *testing.T) {
 		t.Fatalf("post-upgrade append: position=%d output=%d err=%v", position, output, err)
 	}
 	want = append(want, addedID)
-	if _, err = provider.Down(ctx); err != nil {
+	if _, err = provider.DownTo(ctx, 10); err != nil {
 		t.Fatal(err)
 	}
 	if got := readIDs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("downgrade reordered history: %v", got)
 	}
-	if _, err = provider.UpTo(ctx, 11); err != nil {
+	if _, err = provider.Up(ctx); err != nil {
 		t.Fatal(err)
 	}
 }

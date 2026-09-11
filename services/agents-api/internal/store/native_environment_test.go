@@ -120,7 +120,15 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 			w.(http.Flusher).Flush()
 		}
 		send("response.created", map[string]any{"response": map[string]any{"id": fmt.Sprintf("response_%d", n), "status": "in_progress", "output": []any{}}})
-		send("response.output_item.added", map[string]any{"output_index": 0, "item": item})
+		if item["type"] == "message" {
+			initial := map[string]any{"id": item["id"], "type": "message", "role": "assistant", "phase": "final_answer", "status": "in_progress", "content": []any{}}
+			send("response.output_item.added", map[string]any{"output_index": 0, "item": initial})
+			send("response.content_part.added", map[string]any{"output_index": 0, "content_index": 0, "item_id": item["id"], "part": map[string]any{"type": "output_text", "text": "", "annotations": []any{}}})
+			send("response.output_text.delta", map[string]any{"output_index": 0, "content_index": 0, "item_id": item["id"], "delta": "NO-ENVIRONMENT-OK"})
+			time.Sleep(time.Second)
+		} else {
+			send("response.output_item.added", map[string]any{"output_index": 0, "item": item})
+		}
 		send("response.output_item.done", map[string]any{"output_index": 0, "item": item})
 		send("response.completed", map[string]any{"response": map[string]any{"id": fmt.Sprintf("response_%d", n), "object": "response", "created_at": time.Now().Unix(), "status": "completed", "model": "gpt-5.5", "output": []any{item}, "usage": map[string]any{"input_tokens": 10, "output_tokens": 3, "total_tokens": 13, "input_tokens_details": map[string]any{"cached_tokens": 4}, "output_tokens_details": map[string]any{"reasoning_tokens": 2}}}})
 	}))

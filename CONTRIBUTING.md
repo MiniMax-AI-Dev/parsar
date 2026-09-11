@@ -209,7 +209,7 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   same counters again when Done also includes them.
 - The dispatcher is an internal entry point used by the standalone service worker.
   Its private `daemon` configuration is neither `environment:none` nor the official
-  self-hosted executor protocol. Public self-hosted environments, SSE, pending interactions and provider allocation
+  self-hosted executor protocol. Public self-hosted environments, pending interactions and provider allocation
   remain separate slices. Unexpected interaction requests fail explicitly until supported.
 - `environment_none` advertises the Codex adapter's explicit environment-disable
   path. Execution snapshots with public `environment.type=none` require that
@@ -248,6 +248,21 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   65,536 observations and 32 MiB per Turn; terminal persistence reserves one
   additional outcome entry. These are internal admission limits, not promises
   about upstream API limits or durable daemon-to-service replay.
+
+- Live Session SSE reads execution-owned `session_events`, committed with the
+  corresponding input, Item or lifecycle transition under the Session lock.
+  Store immutable transition snapshots; never render an old event from a later
+  Turn state. Reuse the API's response mapping and keep internal snapshots out of
+  wire payloads. Historical index rebuilding emits no live events.
+- The notification buffer retains at most 256 events and 64 MiB per Session
+  after each transaction, retaining a single oversized event if necessary.
+  Read batches are bounded to 32 events / 1 MiB, with the same single-event
+  exception. This buffer is not a public replay log: GET begins at the committed
+  high-water mark, ignores Last-Event-ID, and polls committed events every 100 ms.
+  Missing sequence positions produce a safe stream error and close; recover via
+  Session/Turn/Items queries. Socket writes have a five-second deadline and hold
+  no database connection. Client disconnect releases the handler; comments keep
+  idle connections alive. SSE does not close merely because one Turn finishes.
 
 - Public Turn retrieve/list project persisted execution state and the immutable
   Session Agent identity. Scope both resources and pagination cursors to the

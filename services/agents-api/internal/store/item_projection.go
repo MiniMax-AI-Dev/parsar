@@ -45,7 +45,15 @@ func projectItemSource(ctx context.Context, q *sqlc.Queries, session, turn pgtyp
 		if err != nil {
 			return err
 		}
-		if err = q.PutSessionItem(ctx, sqlc.PutSessionItemParams{ID: id, SessionID: session, TurnID: turn, CreatedAt: created, Payload: payload, IsOutput: kind != "message"}); err != nil {
+		stored, err := q.PutSessionItem(ctx, sqlc.PutSessionItemParams{ID: id, SessionID: session, TurnID: turn, CreatedAt: created, Payload: payload, IsOutput: kind != "message"})
+		if err != nil {
+			return err
+		}
+		var delta *string
+		if kind == "delta" {
+			delta = update.Item.Content[0].Text
+		}
+		if err := recordItemChange(ctx, q, session, stored.OutputIndex, previous, item, delta); err != nil {
 			return err
 		}
 	}
@@ -78,6 +86,7 @@ func indexEvents(ctx context.Context, q *sqlc.Queries, session, turn pgtype.UUID
 
 // Only pre-migration Turns need replay; new writes maintain the projection atomically.
 func ensureSessionItems(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
+	ctx = context.WithValue(ctx, suppressSessionEvents{}, true)
 	for {
 		turn, err := q.UnindexedItemTurn(ctx, session)
 		if errors.Is(err, pgx.ErrNoRows) {

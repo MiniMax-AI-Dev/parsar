@@ -44,7 +44,7 @@ separate future dependency for Team orchestration in Parsar, not the HTTP contra
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |
 | Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
 | Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
-| Public SSE | Pending; internal daemon payloads are not upstream wire objects |
+| Public SSE | Live Session/Turn lifecycle, supported Item and text events; bounded commit-before-publish buffering and recovery through saved reads |
 | Pending actions and environment lifecycle | Pending |
 | Official-client compatibility | Strict SDK checks for Session/Turn/Items reads and native text execution/cancellation; pagination, retries, errors, tenant isolation and recovery |
 | Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |
@@ -66,7 +66,7 @@ extension separately from upstream fields and document it here when implemented.
 
 `openapi.yaml` is our generated supported surface; it is not the full upstream
 specification. The shared Go wire types are in `v1`. Session update/delete, saved
-Agent references/filtering, other agent options, vaults, initial input, streaming
+Agent references/filtering, other agent options, vaults, initial input, creation streaming
 and execution/provider resources are not supported by this slice. Reject them
 explicitly. `AGENTS_API_ENGINE` selects the service's engine independently of the
 requested model; it does not add a competing field to the upstream request.
@@ -79,7 +79,7 @@ support `after`, `limit` (1..100, default 20), and `order` (default `desc`).
 The cursor is a Turn ID in the same tenant and Session. Failed turns expose a
 generic `internal_error`, never raw engine diagnostics. `usage` exposes the latest persisted complete token breakdown, including cached input
 and reasoning output. Missing measurements remain null; Session usage sums recorded
-Turn measurements as best-effort usage, without estimating missing history. Session runtime state derives from the latest Turn. Public SSE remains pending.
+Turn measurements as best-effort usage, without estimating missing history. Session runtime state derives from the latest Turn.
 
 ### Item recovery reads
 
@@ -104,7 +104,7 @@ single aggregate: original native message boundaries cannot be reconstructed.
 Legacy tool results retain their content but have `incomplete` status when the
 source did not record a native outcome. Only recognized historical user text/image
 shapes become messages; arbitrary internal input objects remain in source storage.
-Unsupported native variants, reasoning, subagent Items, Items mutation and live SSE
+Unsupported native variants, reasoning, subagent Items and Items mutation
 are not covered. Public submission currently supports text messages and cancellation.
 
 Legacy Done frames alone do not complete assistant Items. Aggregate answer text
@@ -149,7 +149,7 @@ Enable the standalone daemon gateway to run the worker; without it, admission
 returns 503. The worker selects capable same-tenant engine hosts, binds each Session
 once, and runs at most four Turns concurrently. Queued cancellation needs no live
 engine. Active cancellation waits for a native receipt; terminal completion can
-win that race. Query Turn/Items to recover results; live SSE is not implemented.
+win that race. Query Turn/Items to recover results after a stream interruption.
 
 The service takes a database advisory lease, so a second execution service cannot
 start on the same database. Startup marks previously claimed Turns failed without
@@ -167,3 +167,26 @@ Token measurements use the pinned SDK's `TokenUsage` fields. The optional daemon
 replace that Turn's snapshot atomically. Repeated snapshots do not increase totals.
 Unknown historical breakdowns are not backfilled, and a Session total includes only
 recorded measurements. Costs and prices are outside this execution contract.
+
+### Live events
+
+`GET /v1/agents/sessions/{session_id}/events` implements the official live-only
+stream. Open it before submitting input. Session in-progress/idle/failed and Turn
+created/in-progress/completed/failed/cancelled events carry transition snapshots.
+Supported Items emit added/done events; assistant text emits content-part and
+text-delta/done events. Inputs have no output index. Completed text replaces
+accumulated deltas; cancelled unfinished Items retain their partial content and
+`incomplete` status. Tool snapshots are supported; native interim command-output
+and reasoning deltas remain outside the supported surface.
+
+Events publish only after their transaction commits. An idle Session keeps its
+stream open for later Turns. Reconnection starts at the latest committed position,
+including when Last-Event-ID is sent; it does not replay missed work. Connect,
+buffer new events, then retrieve saved Session/Turn/Items state to recover. Deduplicate
+by Item ID and retain finalized Items when applying buffered updates.
+
+The internal buffer is limited to 256 events / 64 MiB per Session, with a single
+oversized-event exception. A lagging reader receives a customer-safe `error` and
+disconnects rather than silently skipping output. Slow socket writes time out
+without blocking execution. Creation streaming and unsupported event variants
+are not implied by this endpoint.

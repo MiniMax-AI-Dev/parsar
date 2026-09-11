@@ -49,6 +49,7 @@ func NewHandler(s SessionStore, auth *Authenticator, engine string, options ...O
 		r.Get("/agents/sessions", h.listSessions)
 		r.Get("/agents/sessions/{session_id}", h.getSession)
 		r.Post("/agents/sessions/{session_id}/events", h.createEvents)
+		r.Get("/agents/sessions/{session_id}/events", h.streamEvents)
 		r.Get("/agents/sessions/{session_id}/items", h.listItems)
 		r.Get("/agents/sessions/{session_id}/turns", h.listTurns)
 		r.Get("/agents/sessions/{session_id}/turns/{turn_id}", h.getTurn)
