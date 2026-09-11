@@ -152,7 +152,7 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   target, including an idle no-op, so retries cannot stop later work. Queued work
   can cancel before dispatch; active work needs an executor outcome. Terminal
   states and outcomes cannot be overwritten. These Store primitives do not yet
-  implement daemon delivery, public event submission or output streams.
+  implement public event submission or output streams.
 - Input requests are ordered batches committed under the same Session lock. A
   retry key identifies the complete ordered batch; changed length/order/content
   conflicts and a failed transaction leaves no partial inputs or cancellation.
@@ -192,6 +192,22 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   connections and binding reads; an existing connection closes on its next
   heartbeat. Connectivity comes from the live registry, not a persisted online
   flag. `last_seen_at` is diagnostic only. Product gateway behavior is unchanged.
+- `services/agents-api/internal/execution` dispatches internally resolved Turns
+  through that gateway. Claim `queued` to `in_progress` before subscribing/sending;
+  never automatically replay a claimed or interrupted Turn. Ordered extra inputs
+  require native steering receipts. Commit terminal outcome and native Session ID
+  together under the admission lock; unapplied messages prevent successful completion.
+  Resolve credentials separately from the immutable non-secret snapshot.
+- Internal execution requires a matching daemon with optional cancellation receipts
+  and `release_on_completion` support. Release the native writer before forwarding
+  completion, so the next Turn can resume its durable native ID. Existing product
+  requests retain their default idle-process policy. Native history still requires
+  the device's persisted engine files; IDs alone cannot restore deleted history.
+- The dispatcher is an internal entry point, not a public event handler or worker.
+  Its private `daemon` configuration is neither `environment:none` nor the official
+  self-hosted executor protocol. Public environment mapping, durable output events,
+  pending interactions, crash reconciliation and provider allocation remain separate
+  slices. Unexpected interaction requests fail explicitly until supported.
 
 ### Agent knowledge references
 

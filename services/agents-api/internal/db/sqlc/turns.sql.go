@@ -155,6 +155,24 @@ func (q *Queries) GetTurn(ctx context.Context, arg GetTurnParams) (Turn, error) 
 	return i, err
 }
 
+const hasUnappliedMessages = `-- name: HasUnappliedMessages :one
+SELECT EXISTS(SELECT 1 FROM turn_inputs
+WHERE session_id = $1 AND turn_id = $2 AND sequence > $3 AND kind = 'message')
+`
+
+type HasUnappliedMessagesParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	TurnID    pgtype.UUID `json:"turn_id"`
+	Sequence  int64       `json:"sequence"`
+}
+
+func (q *Queries) HasUnappliedMessages(ctx context.Context, arg HasUnappliedMessagesParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasUnappliedMessages, arg.SessionID, arg.TurnID, arg.Sequence)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listTurnInputs = `-- name: ListTurnInputs :many
 SELECT i.sequence, i.session_id, i.turn_id, i.idempotency_key, i.kind, i.payload, i.created_at, i.batch_position FROM turn_inputs i JOIN sessions s ON s.id = i.session_id
 WHERE s.tenant_id = $1 AND i.session_id = $2 AND i.turn_id = $3 AND i.sequence > $4

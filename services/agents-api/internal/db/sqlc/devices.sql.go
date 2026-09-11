@@ -96,7 +96,7 @@ func (q *Queries) GetDeviceCredential(ctx context.Context, id pgtype.UUID) (GetD
 }
 
 const getSessionDevice = `-- name: GetSessionDevice :one
-SELECT d.id, d.name FROM session_devices b
+SELECT d.id, d.name, b.native_session_id FROM session_devices b
 JOIN sessions s ON s.id = b.session_id
 JOIN devices d ON d.id = b.device_id AND d.tenant_id = s.tenant_id
 WHERE s.tenant_id = $1 AND s.id = $2 AND d.revoked_at IS NULL
@@ -108,15 +108,33 @@ type GetSessionDeviceParams struct {
 }
 
 type GetSessionDeviceRow struct {
-	ID   pgtype.UUID `json:"id"`
-	Name string      `json:"name"`
+	ID              pgtype.UUID `json:"id"`
+	Name            string      `json:"name"`
+	NativeSessionID string      `json:"native_session_id"`
 }
 
 func (q *Queries) GetSessionDevice(ctx context.Context, arg GetSessionDeviceParams) (GetSessionDeviceRow, error) {
 	row := q.db.QueryRow(ctx, getSessionDevice, arg.TenantID, arg.ID)
 	var i GetSessionDeviceRow
-	err := row.Scan(&i.ID, &i.Name)
+	err := row.Scan(&i.ID, &i.Name, &i.NativeSessionID)
 	return i, err
+}
+
+const rememberNativeSession = `-- name: RememberNativeSession :execrows
+UPDATE session_devices SET native_session_id = $2 WHERE session_id = $1
+`
+
+type RememberNativeSessionParams struct {
+	SessionID       pgtype.UUID `json:"session_id"`
+	NativeSessionID string      `json:"native_session_id"`
+}
+
+func (q *Queries) RememberNativeSession(ctx context.Context, arg RememberNativeSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, rememberNativeSession, arg.SessionID, arg.NativeSessionID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const revokeDevice = `-- name: RevokeDevice :execrows

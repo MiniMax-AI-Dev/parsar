@@ -25,7 +25,10 @@ WHERE session_devices.device_id = EXCLUDED.device_id
 RETURNING device_id;
 
 -- name: GetSessionDevice :one
-SELECT d.id, d.name FROM session_devices b
+SELECT d.id, d.name, b.native_session_id FROM session_devices b
 JOIN sessions s ON s.id = b.session_id
 JOIN devices d ON d.id = b.device_id AND d.tenant_id = s.tenant_id
 WHERE s.tenant_id = $1 AND s.id = $2 AND d.revoked_at IS NULL;
+
+-- name: RememberNativeSession :execrows
+UPDATE session_devices SET native_session_id = $2 WHERE session_id = $1;

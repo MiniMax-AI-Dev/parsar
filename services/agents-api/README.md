@@ -1,13 +1,13 @@
 # Agents API
 
 Execution service under construction. Current slices provide durable Session/Turn
-storage, an authenticated Session HTTP service and an independent migration command. It
-does not run Agents or change Parsar's production dispatch.
+storage, an authenticated Session HTTP service, an internal daemon dispatcher and
+an independent migration command. Public execution is not enabled, and Parsar's
+production dispatch is unchanged.
 
 A Session is an execution context with a stable engine choice. Product
 conversations can map to multiple Sessions. Device connections and bindings are
-internal primitives; native engine IDs, pending interactions and execution
-delivery will be added with their execution flows.
+internal primitives; pending interactions and public execution remain unfinished.
 
 ## Database ownership
 
@@ -60,11 +60,24 @@ once stored, terminal status, timestamps and outcome cannot be overwritten.
 Outcome is a bounded adapter payload, not a second public response schema.
 
 Tenant-scoped Turn and ordered input reads survive process restarts. The Session
-configuration remains immutable and shared by its Turns. These primitives do
-not yet dispatch work, acknowledge input delivery, fence executor ownership,
-resume a native engine session, accept public event batches or emit SSE. Durable
-input acceptance alone is not an exactly-once execution guarantee. Those flows
-must be connected and verified before public execution support is advertised.
+configuration remains immutable and shared by its Turns. The internal dispatcher
+claims a Turn before delivery, confirms additional messages through native steering,
+and commits the outcome and native engine ID together. It requires an internally
+resolved `daemon.work_dir` configuration and a bound device advertising streaming
+and steering. Messages currently use normalized internal `{"text":"..."}` payloads;
+public upstream input mapping is not implemented here.
+
+The dispatcher takes immutable model/instructions from the Session snapshot and
+resolves ephemeral engine credentials separately. Matching daemon versions release
+the native writer before completing a Turn and acknowledge cancellation after the
+engine returns. Subsequent Turns resume the native ID on the same device. Device
+history must still exist. This is not the public self-hosted executor protocol.
+
+Uncertain delivery, disconnected devices and unsupported interactions fail rather
+than report success or automatically replay. A hard process crash can leave claimed
+work in progress until future reconciliation; no background worker is wired yet.
+Public event batches, durable output events, pending interactions and SSE are still
+unsupported. Durable input acceptance is not an exactly-once execution guarantee.
 
 ## Standalone HTTP service
 

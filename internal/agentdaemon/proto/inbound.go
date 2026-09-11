@@ -42,7 +42,7 @@ const (
 	TypePromptForUserChoice = "prompt_for_user_choice"
 
 	// TypeInteractionDecisionAck confirms that the daemon-side agent
-	// accepted (or definitively rejected) a permission/user-input decision.
+	// accepted (or definitively rejected) a permission/user-input decision or cancellation.
 	// The server must not mark the durable interaction terminal before this
 	// frame arrives.
 	TypeInteractionDecisionAck = "interaction_decision_ack"

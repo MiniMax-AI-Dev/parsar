@@ -20,8 +20,9 @@ var ErrDeviceBindingConflict = errors.New("session is already bound to a differe
 
 // ExecutionDevice contains safe identity only, never a device credential.
 type ExecutionDevice struct {
-	ID   string
-	Name string
+	ID              string
+	Name            string
+	NativeSessionID string
 }
 
 // CreateDevice is operator provisioning, not a tenant-facing registration API.
@@ -108,7 +109,7 @@ func (s *Store) GetSessionDevice(ctx context.Context, tenantID, sessionID string
 	if err != nil {
 		return ExecutionDevice{}, err
 	}
-	return ExecutionDevice{ID: uuid.UUID(row.ID.Bytes).String(), Name: row.Name}, nil
+	return ExecutionDevice{ID: uuid.UUID(row.ID.Bytes).String(), Name: row.Name, NativeSessionID: row.NativeSessionID}, nil
 }
 
 func deviceLookup(tenantID, id string) (sqlc.GetDeviceParams, error) {
