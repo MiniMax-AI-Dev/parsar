@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-GO_TEST_PACKAGE ?= $(shell cd server && go list ./... ../internal/agentdaemon/gateway ../internal/agentdaemon/device ../services/agents-api/... ../packages/agents-client/... | grep -Ev '/server/internal/(store|seed)$$')
+GO_TEST_PACKAGE ?= $(shell cd server && go list ./... ../apps/parsar-daemon/... ../internal/agentdaemon/... ../services/agents-api/... ../packages/agents-client/... | grep -Ev '/server/internal/(store|seed)$$')
 GO_TEST_RUN ?=
 GO_TEST_ARGS ?=
 SQLC_VERSION ?= v1.29.0
