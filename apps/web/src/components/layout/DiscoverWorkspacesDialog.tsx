@@ -47,15 +47,17 @@ export function DiscoverWorkspacesDialog({
   const [searchInput, setSearchInput] = useState("")
   const [debouncedQ, setDebouncedQ] = useState("")
   const [page, setPage] = useState(0)
+  const [previousOpen, setPreviousOpen] = useState(open)
 
   // Reset local state on close so reopen starts clean.
-  useEffect(() => {
+  if (open !== previousOpen) {
+    setPreviousOpen(open)
     if (!open) {
       setSearchInput("")
       setDebouncedQ("")
       setPage(0)
     }
-  }, [open])
+  }
 
   // 300ms debounce + reset page (stale offset is meaningless after query change).
   useEffect(() => {
