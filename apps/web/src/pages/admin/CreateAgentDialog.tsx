@@ -439,9 +439,7 @@ export function CreateAgentDialog({
   // If the user had hand-picked a model and then switched to an engine that
   // can't drive it, clear the pick so it falls back to firstModelID (a
   // compatible default) instead of submitting an incompatible model_id.
-  useEffect(() => {
-    if (modelID && incompatibleModelIDs.has(modelID)) setModelID("")
-  }, [modelID, incompatibleModelIDs])
+  if (modelID && incompatibleModelIDs.has(modelID)) setModelID("")
   const allCapabilitiesPool = useMemo<Capability[]>(() => {
     const data = allCapabilitiesQ.data
     const own = data?.capabilities ?? []
