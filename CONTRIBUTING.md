@@ -434,6 +434,38 @@ description and keep ownership on the side listed here.
 - Shared/cloud runtimes remain Agent-owned; uploading does not assign a fixed
   user to the device or change spec/memory identity rules.
 
+### Daemon workspace authoring
+
+- Workspace authoring uses the existing reverse daemon WebSocket. Both request
+  and response keep `Envelope.ID` equal to the active run ID; `request_id` only
+  correlates a command. The run's authenticated subscriber owns the operation,
+  and the server derives workspace, Agent and requester from its persisted run.
+- Commands run with bounded concurrency and cancellation tied to the run stream;
+  their database or archive I/O must not block consumption of lifecycle events.
+- The companion CLI connects through `PARSAR_DAEMON_SOCKET`, a per-run Unix
+  socket under `~/.parsar/authoring/` with mode `0600`. The daemon closes it on
+  turn completion or cancellation, even while retaining the engine process.
+  It does not need a public server URL or a user/device bearer credential.
+  Shared OS identities are for trusted FDE workloads; use separate runtimes
+  when Agents require isolation from each other's local processes or files.
+- Engines advertise `workspace_authoring` in their heartbeat capabilities.
+  Only compatible daemons receive the authoring flag and command instructions.
+  The existing inline bundle upload credential and CLI remain compatible.
+- Every command requires a running user-requested task and current workspace
+  membership. Writes follow the existing owner/admin policy. The allowlist is
+  workspace context, Skill list/read/create/new-version, and read/replace of the
+  current Agent's system prompt. Do not add arbitrary routes, caller-supplied
+  principals, public publishing, credential access or automatic Agent bindings.
+- Skill writes reuse the canonical Markdown parser, stored ZIP and transactional
+  capability/version import. The first release writes single-file Skills and
+  rejects updates to public Skills or updates that would discard supporting
+  files from the stored archive. Preserve original Markdown, including unknown
+  frontmatter, in the stored archive and return it on reads. Existing audit records
+  retain the requester; the import source records the originating run ID.
+  Version writes recheck workspace visibility and the inspected latest version
+  under a capability row lock, rejecting changes made during archive I/O.
+  System-prompt writes use the existing partial Agent update and apply next turn.
+
 ### Plugin Bundle (KindBundle) architecture
 
 - A Plugin Bundle is a `KindBundle` capability that packages server tools,

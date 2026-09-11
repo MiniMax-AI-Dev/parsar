@@ -54,11 +54,16 @@ func ensureSkillImportArchive(ctx context.Context, workspaceID string, spec cano
 	if err != nil {
 		return "", "", &importHTTPError{status: http.StatusInternalServerError, message: "could not encode Skill metadata"}
 	}
+	return storeSkillMarkdownArchive(ctx, workspaceID, "---\n"+string(frontmatter)+"---\n"+spec.Skill.Instruction+"\n", blobs)
+}
+
+// Package original Markdown when callers already have the complete Skill source.
+func storeSkillMarkdownArchive(ctx context.Context, workspaceID, markdown string, blobs blob.Store) (string, string, *importHTTPError) {
 	var archive bytes.Buffer
 	w := zip.NewWriter(&archive)
 	entry, err := w.Create("SKILL.md")
 	if err == nil {
-		_, err = io.WriteString(entry, "---\n"+string(frontmatter)+"---\n"+spec.Skill.Instruction+"\n")
+		_, err = io.WriteString(entry, markdown)
 	}
 	if closeErr := w.Close(); err == nil {
 		err = closeErr

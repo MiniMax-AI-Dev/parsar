@@ -453,6 +453,7 @@ func main() {
 			ExecutionRecorder: dbStore,
 			RunStatusReader:   dbStore,
 			Capabilities:      dbStore,
+			Authoring:         dev.NewAgentAuthoringHandler(dbStore, blobStore),
 			MasterKey:         cfg.Secret.MasterKey,
 			// Auto-mounted fetch_chat_history tool: the endpoint URL the
 			// sandbox calls back into, plus the per-conversation token signer.

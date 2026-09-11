@@ -221,10 +221,11 @@ const (
 // cancellation belong to the daemon connector itself; these bits are
 // the engine-specific surface the UI uses for filtering and copy.
 type AgentKindCapabilities struct {
-	Streaming   bool `json:"streaming,omitempty"`
-	Permissions bool `json:"permissions,omitempty"`
-	Usage       bool `json:"usage,omitempty"`
-	Resume      bool `json:"resume,omitempty"`
+	Streaming          bool `json:"streaming,omitempty"`
+	Permissions        bool `json:"permissions,omitempty"`
+	Usage              bool `json:"usage,omitempty"`
+	Resume             bool `json:"resume,omitempty"`
+	WorkspaceAuthoring bool `json:"workspace_authoring,omitempty"`
 }
 
 // SupportedAgentKind is one daemon-advertised agent engine. Daemons

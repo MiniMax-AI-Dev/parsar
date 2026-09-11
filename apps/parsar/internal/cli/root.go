@@ -37,6 +37,9 @@ func (ctx *runContext) resolveConfig() (Config, error) {
 }
 
 var commands = []command{
+	{name: "workspace", summary: "Inspect this Agent run's workspace context", run: runWorkspace},
+	{name: "skill", summary: "Read and author workspace Skills (list / get / create / update)", run: runSkill},
+	{name: "agent", summary: "Read or update this Agent's saved instructions", run: runAgent},
 	{name: "spec", summary: "Manage workspace spec fragments (list / add / edit / rm)", run: runSpec},
 	{name: "memory", summary: "Manage user / workspace memories (list / add / edit / rm)", run: runMemory},
 	{name: "inject", summary: "Print the injection bundle hook scripts stitch into the prompt", run: runInject},

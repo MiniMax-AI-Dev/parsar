@@ -111,6 +111,7 @@ type Config struct {
 	// the master key). Nil disables the tool injection.
 	IMHistoryTokenSigner   func(conversationID string) string
 	SkillUploadTokenSigner func(runID string) (string, error)
+	Authoring              AuthoringHandler
 
 	// ExecutionRecorder persists the per-run execution snapshot. Nil
 	// keeps tests on the pre-snapshot behavior.
@@ -194,6 +195,7 @@ type Connector struct {
 	imHistoryEndpoint string
 	imHistoryToken    func(conversationID string) string
 	skillUploadToken  func(runID string) (string, error)
+	authoring         AuthoringHandler
 	log               *slog.Logger
 }
 
@@ -280,6 +282,7 @@ func New(cfg Config) *Connector {
 		imHistoryEndpoint: cfg.IMHistoryEndpoint,
 		imHistoryToken:    cfg.IMHistoryTokenSigner,
 		skillUploadToken:  cfg.SkillUploadTokenSigner,
+		authoring:         cfg.Authoring,
 		log:               cfg.Log,
 	}
 }
@@ -522,8 +525,12 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 	kindInfo, _, _ := sess.AgentKindStatus(agentKind)
 	c.recordExecutionSnapshot(ctx, in, bind, agentKind, kindInfo)
 
+	workspaceAuthoring := c.authoring != nil && kindInfo.Capabilities.WorkspaceAuthoring
 	if err := c.applySkillUpload(agentOptions, in.RunID); err != nil {
 		return errorChannel(in.RunID, "Skill upload context could not be prepared"), nil
+	}
+	if workspaceAuthoring {
+		applyAuthoringInstructions(agentOptions)
 	}
 
 	upstream, err := sess.Subscribe(in.RunID)
@@ -533,15 +540,16 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 	}
 
 	req, err := proto.NewEnvelope(proto.TypePromptRequest, in.RunID, proto.PromptRequestPayload{
-		AgentKind:      agentKind,
-		ConversationID: in.ConversationID,
-		RunID:          in.RunID,
-		Prompt:         in.TriggerMessageContent,
-		Attachments:    promptAttachmentsFromStore(in.TriggerAttachments),
-		WorkDir:        bind.WorkDir,
-		AgentOptions:   agentOptions,
-		AgentSessionID: bind.AgentSessionID,
-		AgentStateKey:  bind.AgentStateKey,
+		AgentKind:          agentKind,
+		ConversationID:     in.ConversationID,
+		RunID:              in.RunID,
+		Prompt:             in.TriggerMessageContent,
+		Attachments:        promptAttachmentsFromStore(in.TriggerAttachments),
+		WorkDir:            bind.WorkDir,
+		AgentOptions:       agentOptions,
+		AgentSessionID:     bind.AgentSessionID,
+		AgentStateKey:      bind.AgentStateKey,
+		WorkspaceAuthoring: workspaceAuthoring,
 	})
 	if err != nil {
 		sess.Unsubscribe(in.RunID)
@@ -652,6 +660,9 @@ func (c *Connector) runStreamLoop(
 ) {
 	defer close(out)
 	defer sess.Unsubscribe(in.RunID)
+	ctx, cancelAuthoring := context.WithCancel(ctx)
+	defer cancelAuthoring()
+	authoringSlots := make(chan struct{}, 4)
 
 	c.log.Info("agent_daemon: writing prompt_request to daemon WS",
 		"run_id", in.RunID, "device_id", bind.DeviceID,
@@ -686,6 +697,10 @@ func (c *Connector) runStreamLoop(
 				// were already enqueued by Session.Close before the
 				// channel was closed.
 				return
+			}
+			if env.Type == proto.TypeAuthoringRequest {
+				c.dispatchAuthoringRequest(ctx, sess, in.RunID, env, authoringSlots)
+				continue
 			}
 			c.handleUpstream(ctx, env, in, bind, &seq, out, attribution)
 			if env.Type == proto.TypeDone {
