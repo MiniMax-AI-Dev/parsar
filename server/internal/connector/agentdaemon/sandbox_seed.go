@@ -32,6 +32,7 @@ const (
 	SandboxConnectorOpenCode SandboxConnector = "opencode"
 	SandboxConnectorCodex    SandboxConnector = "codex"
 	SandboxConnectorPi       SandboxConnector = "pi"
+	SandboxConnectorMCode    SandboxConnector = "mcode"
 )
 
 // In-image absolute paths to the hook scripts baked by
@@ -114,6 +115,8 @@ func ConnectorForAgentKind(agentKind string) SandboxConnector {
 		return SandboxConnectorCodex
 	case "opencode":
 		return SandboxConnectorOpenCode
+	case "mcode":
+		return SandboxConnectorMCode
 	case "pi":
 		return SandboxConnectorPi
 	default:
@@ -145,6 +148,9 @@ func seedPlatformConfig(ctx context.Context, client E2BClient, sb e2b.Sandbox, c
 		// TODO: Codex has no hook surface — render spec+memory into
 		// ~/.codex/AGENTS.md at boot. CLI binary is available in the
 		// image; daemon discovers and registers it via heartbeat.
+		return nil
+	case SandboxConnectorMCode:
+		// Current instructions and native state are prepared by the daemon on every turn.
 		return nil
 	case SandboxConnectorPi:
 		// TODO: wire spec/memory injection for pi. CLI binary is

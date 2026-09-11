@@ -135,6 +135,11 @@ func (c *Connector) injectManagedModel(ctx context.Context, in connector.PromptI
 	}
 
 	switch agentKind {
+	case "mcode":
+		if err := injectMCodeManagedModel(opts, modelID, mr, apiKey); err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(mr.ProviderType), nil
 	case "claude_code":
 		if err := injectClaudeManagedModel(opts, modelID, mr, apiKey); err != nil {
 			return "", err

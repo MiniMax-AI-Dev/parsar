@@ -30,6 +30,7 @@ const (
 	TargetClaudeCode Target = "claudecode"
 	TargetCodex      Target = "codex"
 	TargetPi         Target = "pi"
+	TargetMCode      Target = "mcode"
 )
 
 // Output is what a Renderer returns. Content is the scaffold-specific JSON
@@ -60,6 +61,8 @@ func TargetForAgentKind(agentKind string) Target {
 		return TargetOpenCode
 	case "codex":
 		return TargetCodex
+	case "mcode":
+		return TargetMCode
 	case "pi":
 		return TargetPi
 	default:
@@ -81,6 +84,8 @@ func For(target Target) (Renderer, error) {
 		return claudeCodeRenderer{}, nil
 	case TargetCodex:
 		return codexRenderer{}, nil
+	case TargetMCode:
+		return mcodeRenderer{}, nil
 	case TargetPi:
 		return piRenderer{}, nil
 	default:

@@ -2,7 +2,7 @@ import type { TFunction } from "i18next"
 
 import type { Agent, AgentDetail, CapabilityType, Model } from "./api-types"
 
-export type AgentEngine = "claude_code" | "codex" | "pi" | "opencode" | "external"
+export type AgentEngine = "claude_code" | "codex" | "pi" | "opencode" | "mcode" | "external"
 
 export type CodexCollaborationMode = "default" | "plan"
 
@@ -13,6 +13,7 @@ export type AgentEngineLabelKey =
   | "agents.engine.codex.title"
   | "agents.engine.pi.title"
   | "agents.engine.opencode.title"
+  | "agents.engine.mcode.title"
   | "agents.execution.external.title"
 
 type AgentSource = Agent | AgentDetail | null | undefined
@@ -49,6 +50,8 @@ function normalizeEngine(value: string): AgentEngine | null {
       return "claude_code"
     case "codex":
       return "codex"
+    case "mcode":
+      return "mcode"
     case "pi":
       return "pi"
     case "opencode":
@@ -84,6 +87,8 @@ export function agentEngineLabel(engine: AgentEngine): AgentEngineLabelKey {
       return "agents.engine.claudeCode.title"
     case "codex":
       return "agents.engine.codex.title"
+    case "mcode":
+      return "agents.engine.mcode.title"
     case "pi":
       return "agents.engine.pi.title"
     case "opencode":
@@ -99,6 +104,8 @@ export function agentEngineSupportsCapability(engine: AgentEngine, capabilityTyp
       return true
     case "codex":
       return capabilityType === "mcp" || capabilityType === "system_prompt"
+    case "mcode":
+      return capabilityType !== "plugin"
     case "opencode":
       return capabilityType === "skill" || capabilityType === "mcp" || capabilityType === "system_prompt"
     case "pi":
@@ -107,7 +114,7 @@ export function agentEngineSupportsCapability(engine: AgentEngine, capabilityTyp
 }
 
 export function agentEnginesSupportingCapability(capabilityType: CapabilityType): AgentEngine[] {
-  return (["claude_code", "codex", "pi", "opencode"] as const).filter((engine) =>
+  return (["claude_code", "codex", "pi", "opencode", "mcode"] as const).filter((engine) =>
     agentEngineSupportsCapability(engine, capabilityType),
   )
 }

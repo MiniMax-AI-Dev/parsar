@@ -217,7 +217,7 @@ description and keep ownership on the side listed here.
 - `runtime_id` chooses the concrete paired runtime/device/sandbox that will
   receive a run. It is a routing handle, not agent configuration.
 - `agent_kind` chooses the daemon-side engine (`claude_code`, `codex`,
-  `pi`, `opencode`). It is interpreted only by `parsar-daemon`.
+  `pi`, `opencode`, `mcode`). It is interpreted only by `parsar-daemon`.
 - Placement labels such as local device, cloud sandbox, and external agent
   are UI/product concepts. Do not branch business logic on display copy.
   Derive placement from typed runtime/provider/config fields in one shared
@@ -315,6 +315,20 @@ description and keep ownership on the side listed here.
   snapshots.
 
 ### Agent CLI adapter contract
+
+- MiniMax Code (`mcode`) uses native ACP over stdio. The default runtime pins
+  the public `@minimax-ai/code` package; custom devices can override the binary
+  with `PARSAR_MCODE_BIN`. Select the advertised Parsar custom provider/model
+  explicitly; never fall back to the CLI account or native default model.
+- Refresh mcode config, bound Skill archives and `AGENTS.md` under its managed
+  state directory before every turn, including resume. Disable external Skill
+  discovery. Reject combined instructions over the native 32 KiB limit and
+  unsupported attachments rather than silently dropping context.
+- Ignore ACP history replay during session loading. Translate current-turn
+  text, thought, tool, permission and input events into the existing daemon
+  protocol; persist its native session id through the standard Done metadata.
+  ACP context-token occupancy and cumulative cost are not per-turn usage. Do
+  not report them as token consumption or advertise usage accounting.
 
 - Daemon-managed Codex sessions use `approvalPolicy=never` and
   `sandbox=danger-full-access` on both `thread/start` and `thread/resume`,

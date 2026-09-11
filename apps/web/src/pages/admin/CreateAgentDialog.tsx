@@ -33,13 +33,12 @@ import { sharedSecretsForKind } from "../../lib/credential-bindings"
 import { cloneMarketplaceCapabilities, withoutCredentialBindings } from "../../lib/agent-clone"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
+import { agentEngineFromAgent, engineSupportsModel, type DaemonAgentEngine as AgentEngine } from "../../lib/agent-engine-options"
 import { cn } from "../../lib/utils"
 import { agentCodexModeOf, type CodexCollaborationMode } from "../../lib/agent-view-model"
 import {
   modelProtocols,
-  modelSupportedEndpointTypes,
   protocolListLabel,
-  type WireProtocol,
 } from "../../lib/model-protocol"
 import { useCapabilitiesQuery, aggregateRequiredCredentialsByID, useCapabilityVersionsQuery, useAgentCapabilitiesQuery } from "../../lib/api-capabilities"
 import { CredentialCheckPanel } from "../../components/admin/CredentialCheckPanel"
@@ -64,7 +63,6 @@ import { StatusIcon } from "../../components/ui/status-icon"
 const DEFAULT_WORK_DIR = "/workspace"
 
 type ExecutionMode = "sandbox" | "local_device" | "external"
-type AgentEngine = "claude_code" | "opencode" | "codex" | "pi"
 type SandboxSize = "standard" | "xl"
 type RuntimeChoice = AgentRuntime
 type WizardStep = 1 | 2
@@ -81,51 +79,6 @@ function executionModeFromAgent(a?: Agent | null): ExecutionMode {
     return String(agentConfig(a).daemon_mode ?? "local") === "sandbox" ? "sandbox" : "local_device"
   }
   return runtimeFromAgent(a) === "local" ? "local_device" : "sandbox"
-}
-
-function agentEngineFromAgent(a?: Agent | null): AgentEngine {
-  const v = String(agentConfig(a).agent_kind ?? "claude_code")
-  if (v === "opencode") return "opencode"
-  if (v === "codex") return "codex"
-  if (v === "pi") return "pi"
-  return "claude_code"
-}
-
-/** Which wire protocols an agent engine can drive. Mirrors the per-engine
- * injector gating in model_injection.go: claude_code→Anthropic only,
- * codex→OpenAI only, pi→any of the three, opencode→any adapter. */
-function engineSupportsProtocol(engine: AgentEngine, protocol: WireProtocol | null): boolean {
-  switch (engine) {
-    case "claude_code":
-      return protocol === "anthropic"
-    case "codex":
-      return protocol === "openai"
-    case "pi":
-      return protocol === "anthropic" || protocol === "openai" || protocol === "google"
-    case "opencode":
-      return true
-  }
-}
-
-function engineSupportsModel(engine: AgentEngine, model: Model): boolean {
-  const endpointTypes = modelSupportedEndpointTypes(model)
-  if (endpointTypes.length > 0) {
-    switch (engine) {
-      case "claude_code":
-        return endpointTypes.includes("anthropic")
-      case "codex":
-        return endpointTypes.includes("openai") || endpointTypes.includes("openai-response")
-      case "pi":
-        return (
-          endpointTypes.includes("anthropic") ||
-          endpointTypes.includes("openai") ||
-          endpointTypes.includes("google_generative_ai")
-        )
-      case "opencode":
-        return true
-    }
-  }
-  return modelProtocols(model).some((protocol) => engineSupportsProtocol(engine, protocol))
 }
 
 function sandboxSizeFromAgent(a?: Agent | null): SandboxSize {
@@ -645,7 +598,7 @@ export function CreateAgentDialog({
   const hasConnector = true
   const connector = mode === "edit" && agent ? agent.connector_type : connectorForExecutionMode(executionMode)
   const hasModel = activeModels.length > 0
-  const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex" || agentEngine === "pi" || agentEngine === "opencode"
+  const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex" || agentEngine === "pi" || agentEngine === "opencode" || agentEngine === "mcode"
   const selectedModelUnavailable = mode === "edit" && requiresModel && selectedModelID !== "" && selectedModel === null
   const hasRequiredModel = !requiresModel || (selectedModel !== null && !incompatibleModelIDs.has(selectedModel.id))
   const publicModelBindingValid = mode !== "create" || visibility !== "public"
@@ -982,7 +935,7 @@ export function CreateAgentDialog({
                         value={agentEngine}
                         onValueChange={(nextValue) => {
                           const next = nextValue
-                          if (next === "claude_code" || next === "codex" || next === "pi" || next === "opencode") setAgentEngine(next)
+                          if (next === "claude_code" || next === "codex" || next === "pi" || next === "opencode" || next === "mcode") setAgentEngine(next)
                         }}
                         disabled={pending}
                         aria-label={t("agents.form.fields.agentEngine")}
@@ -991,6 +944,7 @@ export function CreateAgentDialog({
                         <SelectOption value="codex">{t("agents.engine.codex.title")}</SelectOption>
                         <SelectOption value="pi">{t("agents.engine.pi.title")}</SelectOption>
                         <SelectOption value="opencode">{t("agents.engine.opencode.title")}</SelectOption>
+                        <SelectOption value="mcode">{t("agents.engine.mcode.title")}</SelectOption>
                       </Select>
                     </Field>
                   )}

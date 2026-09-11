@@ -13,6 +13,7 @@ func TestResolvers(t *testing.T) {
 	}{
 		{name: "claude", envVar: EnvClaudeCode, fallback: DefaultClaudeCode, resolve: ClaudeCode, override: "  /opt/agents/claude  ", wantPinned: "/opt/agents/claude"},
 		{name: "codex", envVar: EnvCodex, fallback: DefaultCodex, resolve: Codex, override: "  /opt/agents/codex  ", wantPinned: "/opt/agents/codex"},
+		{name: "mcode", envVar: EnvMCode, fallback: DefaultMCode, resolve: MCode, override: "  /opt/agents/mcode  ", wantPinned: "/opt/agents/mcode"},
 		{name: "pi", envVar: EnvPi, fallback: DefaultPi, resolve: Pi, override: "  /opt/agents/pi  ", wantPinned: "/opt/agents/pi"},
 		{name: "opencode", envVar: EnvOpenCode, fallback: DefaultOpenCode, resolve: OpenCode, override: "  /opt/agents/opencode  ", wantPinned: "/opt/agents/opencode"},
 	}
