@@ -37,7 +37,10 @@ def main():
         response.read()
         path = response.request.url.path.removeprefix("/v1")
         if path.startswith("/agents/sessions/"):
+            suffix = path.split("/")[4:]
             path = "/agents/sessions/{session_id}"
+            if suffix and suffix[0] == "turns":
+                path += "/turns" + ("/{turn_id}" if len(suffix) > 1 else "")
         schema = contract["paths"][path][response.request.method.lower()]["responses"][str(response.status_code)]["schema"]
         Draft4Validator({"definitions": contract["definitions"], **schema}).validate(response.json())
     pin = json.loads((root / "contracts/agents-api/upstream.json").read_text())
@@ -134,9 +137,35 @@ def main():
                     metadata = {str(i): "🧪" * 512 for i in range(16)}
                     large = sessions.create(**spec, metadata=metadata)
                     assert sessions.retrieve(large.id).metadata == metadata
+                    turn_session = sessions.create(**spec)
+                    fixture = Path(directory) / "turns.json"
+                    fixture.write_text(json.dumps({"tenant": bindings[0]["tenant_id"], "session": turn_session.id}))
+                    subprocess.run(["go", "run", "./services/agents-api/tests/fixtures"], cwd=root,
+                                   env=dict(os.environ, AGENTS_API_TURN_FIXTURE=str(fixture)), check=True, timeout=120)
+                    turn_ids = json.loads(fixture.read_text())["turns"]
+                    turns = sessions.turns
+                    recovered = list(turns.list(turn_session.id, limit=1, order="asc"))
+                    assert [turn.id for turn in recovered] == turn_ids
+                    assert [turn.status for turn in recovered] == ["completed", "failed", "cancelled", "in_progress"]
+                    assert all(turn.agent_id == turn_session.agent.id and turn.session_id == turn_session.id for turn in recovered)
+                    assert all(turn.started_at is not None for turn in recovered)
+                    assert all(turn.completed_at is not None for turn in recovered[:3]) and recovered[-1].completed_at is None
+                    assert recovered[1].error.code == "internal_error" and all(turn.error is None for turn in [recovered[0], *recovered[2:]])
+                    assert all(turn.usage is None for turn in recovered)
+                    assert "SECRET" not in repr(recovered) and "PRIVATE" not in repr(recovered)
+                    assert [turn.id for turn in turns.list(turn_session.id, limit=2)] == list(reversed(turn_ids))
+                    assert list(turns.list(turn_session.id, after=turn_ids[-1], order="asc")) == []
+                    assert list(turns.list(first.id)) == []
+                    assert turns.retrieve(turn_ids[0], session_id=turn_session.id) == recovered[0]
+                    expect_error(NotFoundError, lambda: b.beta.agents.sessions.turns.list(turn_session.id))
+                    expect_error(NotFoundError, lambda: b.beta.agents.sessions.turns.retrieve(turn_ids[0], session_id=turn_session.id))
+                    expect_error(NotFoundError, lambda: turns.retrieve(turn_ids[0], session_id=first.id))
+                    expect_error(NotFoundError, lambda: turns.list(first.id, after=turn_ids[0]))
+                    expect_error(BadRequestError, lambda: turns.list(turn_session.id, limit=101))
                     process.terminate()
                     process.wait(timeout=15)
                     process = start()
+                    assert list(turns.list(turn_session.id, order="asc")) == recovered
                     assert sessions.retrieve(first.id) == first
                     assert sessions.create(**spec, metadata={"workspace": "untrusted-reference"}, extra_headers=headers) == first
                 go_env = dict(os.environ, AGENTS_API_CLIENT_TEST_BASE_URL=base + "/v1",
@@ -146,6 +175,7 @@ def main():
                 with client(tokens[2]) as go_tenant:
                     go_sessions = list(go_tenant.beta.agents.sessions.list())
                     assert len(go_sessions) == 3 and all(item.agent.model == "go-client-test-model" for item in go_sessions)
+                print("Official Turn client: lifecycle, Agent identity, safe errors, restart recovery, pagination and tenant/Session isolation passed.")
                 print("Official Go client: creation/retries, retrieval, bidirectional pagination and tenant isolation passed.")
                 print("Official client: upstream and generated response schemas, persistence/restart, retries, pagination, tenant isolation and explicit unsupported options passed.")
             finally:
