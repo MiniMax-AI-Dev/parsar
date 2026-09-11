@@ -19,7 +19,11 @@ func TestSteeringReceiptTimeoutAndCompletionKeepProcessAlive(t *testing.T) {
 			s := &Session{rpc: client.JSONRPCClient, cancelCtx: context.Background(), out: out, cfg: sessionConfig{logger: obslog.Bg()}}
 			s.setThreadID("thread")
 			s.startSteering(json.RawMessage(`{"threadId":"thread","turn":{"id":"turn"}}`))
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			timeout := 50 * time.Millisecond
+			if complete {
+				timeout = time.Second
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			done := make(chan error, 1)
 			go func() { done <- s.Steer(ctx, proto.PromptSteerPayload{InputID: "input", Text: "extra"}) }()
@@ -29,6 +33,21 @@ func TestSteeringReceiptTimeoutAndCompletionKeepProcessAlive(t *testing.T) {
 			}
 			// Withhold the response after reading the entire request frame.
 			if complete {
+				// Reading the pipe does not mean its writer has returned yet.
+				for {
+					client.pendingMu.Lock()
+					pending := client.pending[request.ID]
+					waiting := pending != nil && pending.timer != nil
+					client.pendingMu.Unlock()
+					if waiting {
+						break
+					}
+					select {
+					case <-ctx.Done():
+						t.Fatal("steering request did not reach response wait")
+					case <-time.After(time.Millisecond):
+					}
+				}
 				s.onTurnCompleted(json.RawMessage(`{"threadId":"thread","turn":{"id":"turn","status":"completed"}}`))
 			}
 			select {
