@@ -660,6 +660,9 @@ func (c *Connector) runStreamLoop(
 ) {
 	defer close(out)
 	defer sess.Unsubscribe(in.RunID)
+	ctx, cancelAuthoring := context.WithCancel(ctx)
+	defer cancelAuthoring()
+	authoringSlots := make(chan struct{}, 4)
 
 	c.log.Info("agent_daemon: writing prompt_request to daemon WS",
 		"run_id", in.RunID, "device_id", bind.DeviceID,
@@ -696,7 +699,7 @@ func (c *Connector) runStreamLoop(
 				return
 			}
 			if env.Type == proto.TypeAuthoringRequest {
-				c.handleAuthoringRequest(ctx, sess, in.RunID, env)
+				c.dispatchAuthoringRequest(ctx, sess, in.RunID, env, authoringSlots)
 				continue
 			}
 			c.handleUpstream(ctx, env, in, bind, &seq, out, attribution)

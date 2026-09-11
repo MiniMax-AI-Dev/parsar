@@ -440,6 +440,8 @@ description and keep ownership on the side listed here.
   and response keep `Envelope.ID` equal to the active run ID; `request_id` only
   correlates a command. The run's authenticated subscriber owns the operation,
   and the server derives workspace, Agent and requester from its persisted run.
+- Commands run with bounded concurrency and cancellation tied to the run stream;
+  their database or archive I/O must not block consumption of lifecycle events.
 - The companion CLI connects through `PARSAR_DAEMON_SOCKET`, a per-run Unix
   socket under `~/.parsar/authoring/` with mode `0600`. The daemon closes it on
   turn completion or cancellation, even while retaining the engine process.
@@ -456,7 +458,8 @@ description and keep ownership on the side listed here.
   principals, public publishing, credential access or automatic Agent bindings.
 - Skill writes reuse the canonical Markdown parser, stored ZIP and transactional
   capability/version import. The first release writes single-file Skills and
-  rejects updates that would discard supporting files. Existing audit records
+  rejects updates to public Skills or updates that would discard supporting
+  files from the stored archive. Existing audit records
   retain the requester; the import source records the originating run ID.
   System-prompt writes use the existing partial Agent update and apply next turn.
 

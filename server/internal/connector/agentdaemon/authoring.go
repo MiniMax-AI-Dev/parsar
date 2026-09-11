@@ -46,15 +46,34 @@ func applyAuthoringInstructions(opts map[string]any) {
 	opts[key] = base + authoringInstructions
 }
 
-func (c *Connector) handleAuthoringRequest(ctx context.Context, session *gateway.Session, runID string, env proto.Envelope) {
+// Bound concurrent commands without blocking lifecycle events on their I/O.
+func (c *Connector) dispatchAuthoringRequest(ctx context.Context, session *gateway.Session, runID string, env proto.Envelope, slots chan struct{}) {
+	select {
+	case slots <- struct{}{}:
+		go func() {
+			defer func() { <-slots }()
+			c.handleAuthoringRequest(ctx, session, runID, env, "")
+		}()
+	default:
+		// An overloaded command must not hold up run completion either.
+		replyCtx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
+		defer cancel()
+		c.handleAuthoringRequest(replyCtx, session, runID, env, "too many workspace commands; try again after a command finishes")
+	}
+}
+
+func (c *Connector) handleAuthoringRequest(ctx context.Context, session *gateway.Session, runID string, env proto.Envelope, rejection string) {
+	if ctx.Err() != nil {
+		return
+	}
 	var request proto.AuthoringRequestPayload
 	if env.DecodePayload(&request) != nil || request.RequestID == "" {
 		return
 	}
-	response := proto.AuthoringResponsePayload{RequestID: request.RequestID}
+	response := proto.AuthoringResponsePayload{RequestID: request.RequestID, Error: rejection}
 	if len(env.Payload) > proto.AuthoringMaxBytes || env.ID != runID || c.authoring == nil {
 		response.Error = "workspace authoring is unavailable for this request"
-	} else {
+	} else if response.Error == "" {
 		workCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		data, err := c.authoring(workCtx, runID, request)
 		cancel()

@@ -109,8 +109,8 @@ func TestAgentAuthoringSkillArchiveAndVersionScope(t *testing.T) {
 	}
 	assertMarkdownArchive(t, blobs, "workspace", input.OssKey, input.SHA256, input.Spec)
 	const id = "00000000-0000-0000-0000-000000000777"
-	s.capability = store.CapabilityRead{ID: id, WorkspaceID: "foreign", Type: "skill", LatestVersionID: "version"}
-	s.version = store.CapabilityVersionRead{CapabilityID: id, CanonicalSpec: json.RawMessage(mustJSON(t, input.Spec))}
+	s.capability = store.CapabilityRead{ID: id, WorkspaceID: "foreign", Visibility: "workspace", Type: "skill", LatestVersionID: "version"}
+	s.version = store.CapabilityVersionRead{CapabilityID: id, OssKey: input.OssKey, CanonicalSpec: json.RawMessage(mustJSON(t, input.Spec))}
 	for _, op := range []string{proto.AuthoringSkillRead, proto.AuthoringSkillUpdate} {
 		if _, err := handler(t.Context(), uploadTestRun, proto.AuthoringRequestPayload{Operation: op, CapabilityID: id, Content: markdown}); !errors.Is(err, store.ErrUnknownCapability) {
 			t.Fatalf("cross-workspace access: %v", err)

@@ -1,6 +1,8 @@
 package dev
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -35,12 +37,18 @@ func (s *agentAuthoringService) readSkill(ctx context.Context, workspaceID, id s
 
 func (s *agentAuthoringService) writeSkill(ctx context.Context, run store.AgentRunInvocation, request proto.AuthoringRequestPayload) (any, error) {
 	if request.Operation == proto.AuthoringSkillUpdate {
-		_, current, err := s.readSkill(ctx, run.WorkspaceID, request.CapabilityID)
+		capability, current, err := s.readSkill(ctx, run.WorkspaceID, request.CapabilityID)
 		if err != nil {
 			return nil, err
 		}
+		if capability.Visibility != "workspace" {
+			return nil, errors.New("only unpublished workspace Skills can be updated through this command")
+		}
 		if len(current.Skill.Files) != 0 {
 			return nil, errors.New("this Skill has supporting files; use a ZIP version upload to preserve them")
+		}
+		if err := s.checkSingleFileArchive(ctx, capability.LatestVersionID); err != nil {
+			return nil, err
 		}
 	} else if request.CapabilityID != "" {
 		return nil, errors.New("skill.create does not accept a capability ID")
@@ -71,4 +79,33 @@ func (s *agentAuthoringService) writeSkill(ctx context.Context, run store.AgentR
 		return nil, err
 	}
 	return map[string]string{"id": result.Capability.ID, "name": result.Capability.Name, "version": result.CapabilityVersion.Version, "version_id": result.CapabilityVersion.ID, "visibility": "workspace"}, nil
+}
+
+// Canonical files may omit oversized assets which still exist in the archive.
+func (s *agentAuthoringService) checkSingleFileArchive(ctx context.Context, versionID string) error {
+	version, err := s.store.GetCapabilityVersion(ctx, versionID)
+	if err != nil || version.OssKey == "" {
+		return err
+	}
+	if s.blobs == nil {
+		return errors.New("Skill archive is unavailable; cannot safely replace its contents")
+	}
+	data, err := s.blobs.Download(ctx, version.OssKey)
+	if err != nil {
+		return err
+	}
+	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return err
+	}
+	files := 0
+	for _, entry := range archive.File {
+		if !entry.FileInfo().IsDir() {
+			files++
+		}
+	}
+	if files != 1 {
+		return errors.New("this Skill archive contains other files; use a ZIP version upload to preserve them")
+	}
+	return nil
 }
