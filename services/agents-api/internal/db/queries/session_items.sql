@@ -2,8 +2,12 @@
 SELECT * FROM session_items WHERE session_id = $1 AND id = $2;
 
 -- name: PutSessionItem :exec
-INSERT INTO session_items(id, session_id, turn_id, created_at, payload, position)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO session_items(id, session_id, turn_id, created_at, payload, position, output_index)
+VALUES (sqlc.arg(id), sqlc.arg(session_id), sqlc.arg(turn_id), sqlc.arg(created_at), sqlc.arg(payload),
+    (SELECT COALESCE(max(position), -1) + 1 FROM session_items WHERE session_id = sqlc.arg(session_id)),
+    CASE WHEN sqlc.arg(is_output)::boolean THEN
+        (SELECT COALESCE(max(output_index), -1) + 1 FROM session_items WHERE turn_id = sqlc.arg(turn_id))
+    END)
 ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload;
 
 -- name: ListSessionItems :many

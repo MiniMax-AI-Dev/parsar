@@ -19,7 +19,7 @@ func projectItemSource(ctx context.Context, q *sqlc.Queries, session, turn pgtyp
 	if err != nil {
 		return fmt.Errorf("project execution item: %w", err)
 	}
-	for position, update := range updates {
+	for _, update := range updates {
 		id, _ := parseID(update.Item.ID)
 		if update.LegacyFinal {
 			native, err := q.HasNativeMessageItem(ctx, sqlc.HasNativeMessageItemParams{TurnID: turn, ID: id})
@@ -45,7 +45,7 @@ func projectItemSource(ctx context.Context, q *sqlc.Queries, session, turn pgtyp
 		if err != nil {
 			return err
 		}
-		if err = q.PutSessionItem(ctx, sqlc.PutSessionItemParams{ID: id, SessionID: session, TurnID: turn, CreatedAt: created, Payload: payload, Position: int32(position)}); err != nil {
+		if err = q.PutSessionItem(ctx, sqlc.PutSessionItemParams{ID: id, SessionID: session, TurnID: turn, CreatedAt: created, Payload: payload, IsOutput: kind != "message"}); err != nil {
 			return err
 		}
 	}
