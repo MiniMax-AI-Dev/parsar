@@ -12,15 +12,16 @@ type cancellationOutcomeState struct {
 	terminal       *proto.DonePayload
 }
 
-func (s *Session) rememberOutcome(outcome proto.DonePayload) {
+func (s *Session) rememberOutcome(outcome proto.DonePayload) proto.DonePayload {
 	s.usageMu.Lock()
 	if outcome.Usage.Provider == "" && s.latestUsage != nil {
-		outcome.Usage = proto.Usage{Provider: "openai", InputTokens: int32(s.latestUsage.InputTokens), OutputTokens: int32(s.latestUsage.OutputTokens)}
+		outcome.Usage = s.usagePayload(*s.latestUsage)
 	}
 	s.usageMu.Unlock()
 	s.outcome.mu.Lock()
 	s.outcome.terminal = &outcome
 	s.outcome.mu.Unlock()
+	return outcome
 }
 
 // CancellationOutcome remains readable after Cancel stops the native process.
@@ -43,7 +44,7 @@ func (s *Session) CancellationOutcome() proto.DonePayload {
 	s.finalTextMu.Unlock()
 	s.usageMu.Lock()
 	if usage := s.latestUsage; usage != nil {
-		outcome.Usage = proto.Usage{Provider: "openai", InputTokens: int32(usage.InputTokens), OutputTokens: int32(usage.OutputTokens)}
+		outcome.Usage = s.usagePayload(*usage)
 	}
 	s.usageMu.Unlock()
 	return outcome

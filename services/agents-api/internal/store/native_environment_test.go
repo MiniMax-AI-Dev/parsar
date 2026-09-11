@@ -122,7 +122,7 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 		send("response.created", map[string]any{"response": map[string]any{"id": fmt.Sprintf("response_%d", n), "status": "in_progress", "output": []any{}}})
 		send("response.output_item.added", map[string]any{"output_index": 0, "item": item})
 		send("response.output_item.done", map[string]any{"output_index": 0, "item": item})
-		send("response.completed", map[string]any{"response": map[string]any{"id": fmt.Sprintf("response_%d", n), "object": "response", "created_at": time.Now().Unix(), "status": "completed", "model": "gpt-5.5", "output": []any{item}, "usage": map[string]any{"input_tokens": 10, "output_tokens": 3, "total_tokens": 13}}})
+		send("response.completed", map[string]any{"response": map[string]any{"id": fmt.Sprintf("response_%d", n), "object": "response", "created_at": time.Now().Unix(), "status": "completed", "model": "gpt-5.5", "output": []any{item}, "usage": map[string]any{"input_tokens": 10, "output_tokens": 3, "total_tokens": 13, "input_tokens_details": map[string]any{"cached_tokens": 4}, "output_tokens_details": map[string]any{"reasoning_tokens": 2}}}})
 	}))
 	defer model.Close()
 	h.d.Options = func(context.Context, store.Session) (map[string]any, error) {

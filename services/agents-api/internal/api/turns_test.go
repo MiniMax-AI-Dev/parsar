@@ -56,7 +56,7 @@ func TestTurnRoutesUseAuthenticatedScopeAndSafeProjection(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.AgentID != "agent_snapshot" || got.Error == nil || got.Error.Code != "internal_error" || got.CreatedAt != 1700000000 || got.StartedAt != nil || got.CompletedAt != nil || string(got.Usage) != "null" {
+	if got.AgentID != "agent_snapshot" || got.Error == nil || got.Error.Code != "internal_error" || got.CreatedAt != 1700000000 || got.StartedAt != nil || got.CompletedAt != nil || got.Usage != nil {
 		t.Fatalf("bad projection: %+v", got)
 	}
 	if w := request("/v1/agents/sessions/session/turns?after=last&limit=2&order=asc"); w.Code != 200 || s.cursor != "last" || s.limit != 2 || !s.ascending {

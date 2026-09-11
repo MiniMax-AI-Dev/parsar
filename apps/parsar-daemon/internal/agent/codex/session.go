@@ -591,14 +591,9 @@ func (s *Session) emitDone(content string, usage *TurnUsage) {
 	}
 	payload := proto.DonePayload{Content: content, Metadata: doneMeta}
 	if usage != nil {
-		payload.Usage = proto.Usage{
-			Provider:     "openai",
-			Model:        s.resolvedModel,
-			InputTokens:  int32(usage.InputTokens),
-			OutputTokens: int32(usage.OutputTokens),
-		}
+		payload.Usage = s.usagePayload(*usage)
 	}
-	s.rememberOutcome(payload)
+	payload = s.rememberOutcome(payload)
 	env, err := proto.NewEnvelope(proto.TypeDone, s.runID, payload)
 	if err != nil {
 		return
@@ -608,12 +603,7 @@ func (s *Session) emitDone(content string, usage *TurnUsage) {
 
 func (s *Session) emitUsage(u TurnUsage) {
 	env, err := proto.NewEnvelope(proto.TypeUsage, s.runID, proto.UsagePayload{
-		Usage: proto.Usage{
-			Provider:     "openai",
-			Model:        s.resolvedModel,
-			InputTokens:  int32(u.InputTokens),
-			OutputTokens: int32(u.OutputTokens),
-		},
+		Usage: s.usagePayload(u),
 	})
 	if err != nil {
 		return
@@ -656,7 +646,7 @@ func (s *Session) emitTerminal(message string, asError bool) {
 		Content:  message,
 		Metadata: doneMeta,
 	}
-	s.rememberOutcome(payload)
+	payload = s.rememberOutcome(payload)
 	env, err := proto.NewEnvelope(proto.TypeDone, s.runID, payload)
 	if err != nil {
 		return

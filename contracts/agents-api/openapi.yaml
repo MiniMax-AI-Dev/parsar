@@ -143,6 +143,13 @@ definitions:
     - content
     - role
     type: object
+  v1.InputTokenDetails:
+    properties:
+      cached_tokens:
+        type: integer
+    required:
+    - cached_tokens
+    type: object
   v1.Item:
     properties:
       action:
@@ -241,6 +248,13 @@ definitions:
     required:
     - enabled
     type: object
+  v1.OutputTokenDetails:
+    properties:
+      reasoning_tokens:
+        type: integer
+    required:
+    - reasoning_tokens
+    type: object
   v1.Reasoning:
     properties:
       effort:
@@ -284,7 +298,8 @@ definitions:
         - failed
         type: string
       usage:
-        type: object
+        allOf:
+        - $ref: '#/definitions/v1.TokenUsage'
         x-nullable: true
       vault_ids:
         items:
@@ -349,6 +364,25 @@ definitions:
     required:
     - type
     type: object
+  v1.TokenUsage:
+    properties:
+      input_tokens:
+        type: integer
+      input_tokens_details:
+        $ref: '#/definitions/v1.InputTokenDetails'
+      output_tokens:
+        type: integer
+      output_tokens_details:
+        $ref: '#/definitions/v1.OutputTokenDetails'
+      total_tokens:
+        type: integer
+    required:
+    - input_tokens
+    - input_tokens_details
+    - output_tokens
+    - output_tokens_details
+    - total_tokens
+    type: object
   v1.Turn:
     properties:
       agent_id:
@@ -383,7 +417,8 @@ definitions:
         - cancelled
         type: string
       usage:
-        type: object
+        allOf:
+        - $ref: '#/definitions/v1.TokenUsage'
         x-nullable: true
     required:
     - agent_id
@@ -730,8 +765,8 @@ paths:
   /agents/sessions/{session_id}/turns:
     get:
       description: Returns persisted state in creation order. The cursor belongs to
-        the same Session and tenant. Usage is null until the complete upstream token
-        breakdown is available.
+        the same Session and tenant. Usage contains the latest recorded complete token
+        breakdown; missing measurements remain null.
       parameters:
       - description: agents=v1
         in: header

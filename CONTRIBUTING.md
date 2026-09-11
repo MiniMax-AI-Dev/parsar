@@ -253,8 +253,7 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   Session Agent identity. Scope both resources and pagination cursors to the
   authenticated tenant and Session, ordering by creation time then ID. Do not
   expose adapter outcomes, native IDs or raw errors. Failure uses a customer-safe
-  category; usage remains nullable until its complete upstream breakdown can be
-  mapped without inventing measurements. Submission uses the separate Session events endpoint.
+  category; usage is nullable when a complete upstream breakdown is unavailable. Submission uses the separate Session events endpoint.
 
 
 - Public Items list reads a persisted execution-owned projection, updated in the
@@ -1338,3 +1337,20 @@ Verification reports and delivery reports default to English.
 
 Except for user-facing internationalized bilingual copy, comments and
 documentation must be written in English.
+
+### Execution token measurements
+
+- Codex preserves input, cached input, output, reasoning output and total token
+  counters through the optional daemon `usage.tokens` object. Native thread totals
+  are differenced against the restored baseline once per Turn. Incomplete or
+  regressing baselines must not become complete measurements; legacy input/output
+  fields retain their existing product behavior.
+- Agents API atomically projects the latest complete per-Turn measurement alongside
+  journal/terminal writes, including applied cancellation receipts. Snapshots replace,
+  rather than add to, previous values;
+  duplicate usage and Done frames cannot double count. Failure and cancellation
+  retain already measured usage even when the terminal payload omits it.
+- Session usage sums recorded Turn measurements only, as best-effort usage under
+  the pinned protocol. No measurements means null; explicitly measured zero remains
+  zero. Old records without the complete breakdown stay unknown. This is neither
+  pricing nor a claim that unreported work consumed zero tokens.

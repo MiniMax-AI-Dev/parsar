@@ -37,6 +37,7 @@ type Session struct {
 	CreatedAt     time.Time
 	Configuration json.RawMessage
 	LastTurn      *Turn
+	Usage         json.RawMessage
 }
 
 type CreateSessionInput struct {

@@ -93,5 +93,6 @@ func (s *Store) sessionActivity(ctx context.Context, session Session, err error)
 	}
 	turn := turnFromRow(row)
 	session.LastTurn = &turn
-	return session, nil
+	session.Usage, err = s.queries.SessionTokenUsage(ctx, id)
+	return session, err
 }

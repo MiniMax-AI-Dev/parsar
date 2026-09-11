@@ -77,9 +77,9 @@ requested model; it does not add a competing field to the upstream request.
 return persisted Turn states using the pinned official client contract. Lists
 support `after`, `limit` (1..100, default 20), and `order` (default `desc`).
 The cursor is a Turn ID in the same tenant and Session. Failed turns expose a
-generic `internal_error`, never raw engine diagnostics. `usage` is currently
-null because the native record does not guarantee the required cache/reasoning
-breakdown; raw measurements remain in execution storage. Session runtime state derives from the latest Turn. Public SSE remains pending.
+generic `internal_error`, never raw engine diagnostics. `usage` exposes the latest persisted complete token breakdown, including cached input
+and reasoning output. Missing measurements remain null; Session usage sums recorded
+Turn measurements as best-effort usage, without estimating missing history. Session runtime state derives from the latest Turn. Public SSE remains pending.
 
 ### Item recovery reads
 
@@ -153,9 +153,15 @@ The service takes a database advisory lease, so a second execution service canno
 start on the same database. Startup marks previously claimed Turns failed without
 replaying them and retains queued work. This does not recover missing daemon frames
 or guarantee exactly-once external side effects. Session status reflects the latest
-persisted Turn; full usage breakdown and pending actions remain unimplemented.
+persisted Turn; usage reports recorded measurements; pending actions remain unimplemented.
 
 Native verification uses `PARSAR_NATIVE_DAEMON_BIN`, `PARSAR_NATIVE_PROOF_DIR` under
 `~/.parsar/`, and `PARSAR_OFFICIAL_SDK_PYTHON` pointing to the pinned SDK environment.
 The Store native integration test runs `tests/official_execution.py` against a real
 HTTP handler, PostgreSQL, daemon and Codex with a synthetic model provider.
+
+Token measurements use the pinned SDK's `TokenUsage` fields. The optional daemon
+`usage.tokens` supplies complete per-Turn counters; journal and terminal writes
+replace that Turn's snapshot atomically. Repeated snapshots do not increase totals.
+Unknown historical breakdowns are not backfilled, and a Session total includes only
+recorded measurements. Costs and prices are outside this execution contract.

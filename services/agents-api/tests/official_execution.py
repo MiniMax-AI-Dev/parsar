@@ -46,6 +46,10 @@ def main():
         sessions.events.create(session.id, events=[event], idempotency_key="first")
         first = wait_turn(session.id, "completed")
         assert sessions.retrieve(session.id).status == "idle"
+        expected_usage = {"input_tokens": 10, "input_tokens_details": {"cached_tokens": 4},
+                          "output_tokens": 3, "output_tokens_details": {"reasoning_tokens": 2}, "total_tokens": 13}
+        assert first.usage is not None and first.usage.model_dump() == expected_usage, first.usage
+        assert sessions.retrieve(session.id).usage.model_dump() == expected_usage
         items = sessions.items.list(session.id, limit=100, order="asc").data
         users = [item for item in items if item.type == "message" and item.role == "user"]
         answers = [item for item in items if item.type == "message" and item.role == "assistant"]
@@ -63,6 +67,10 @@ def main():
             pass
         sessions.events.create(session.id, events=[message("Continue the same native conversation.")], idempotency_key="second")
         second = wait_turn(session.id, "completed", 2)
+        assert second.usage.model_dump() == expected_usage, second.usage
+        expected_total = {"input_tokens": 20, "input_tokens_details": {"cached_tokens": 8},
+                          "output_tokens": 6, "output_tokens_details": {"reasoning_tokens": 4}, "total_tokens": 26}
+        assert sessions.retrieve(session.id).usage.model_dump() == expected_total
         sessions.events.create(session.id, events=[event], idempotency_key="first")
         assert len(sessions.turns.list(session.id).data) == 2
         client.close()
@@ -71,6 +79,8 @@ def main():
         sessions = client.beta.agents.sessions
         assert sessions.turns.retrieve(second.id, session_id=session.id).status == "completed"
         assert len(sessions.items.list(session.id, limit=100).data) == 5
+        assert sessions.retrieve(session.id).usage.model_dump() == expected_total
+        assert sessions.turns.retrieve(first.id, session_id=session.id).usage.model_dump() == expected_usage
         cancelled = create()
         sessions.events.create(cancelled.id, events=[message("PUBLIC-CANCEL")])
         wait_turn(cancelled.id, "in_progress")

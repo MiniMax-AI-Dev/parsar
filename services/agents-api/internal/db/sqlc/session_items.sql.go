@@ -277,7 +277,7 @@ func (q *Queries) PutSessionItem(ctx context.Context, arg PutSessionItemParams) 
 }
 
 const unindexedItemTurn = `-- name: UnindexedItemTurn :one
-SELECT id, session_id, status, created_at, started_at, completed_at, cancel_requested_at, outcome, event_count, event_bytes, items_indexed FROM turns WHERE session_id = $1 AND NOT items_indexed ORDER BY created_at, id LIMIT 1
+SELECT id, session_id, status, created_at, started_at, completed_at, cancel_requested_at, outcome, event_count, event_bytes, items_indexed, token_usage FROM turns WHERE session_id = $1 AND NOT items_indexed ORDER BY created_at, id LIMIT 1
 `
 
 func (q *Queries) UnindexedItemTurn(ctx context.Context, sessionID pgtype.UUID) (Turn, error) {
@@ -295,6 +295,7 @@ func (q *Queries) UnindexedItemTurn(ctx context.Context, sessionID pgtype.UUID) 
 		&i.EventCount,
 		&i.EventBytes,
 		&i.ItemsIndexed,
+		&i.TokenUsage,
 	)
 	return i, err
 }
