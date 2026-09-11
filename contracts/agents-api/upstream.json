@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/openai/openai-python",
+  "commit": "d7c41efee1b0802b79f3f88a678ef2052b06e9ce",
+  "sdk_version": "3.13.0",
+  "resource_path": "src/openai/resources/beta/agents",
+  "type_path": "src/openai/types/beta",
+  "beta_header": "agents=v1"
+}

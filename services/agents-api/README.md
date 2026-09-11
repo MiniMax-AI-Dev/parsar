@@ -30,6 +30,15 @@ same key returns a conflict. Read/list operations are tenant-scoped, including
 pagination cursors. Metadata is limited to 16 KiB of JSON string pairs and should
 contain references or labels, not credentials or Agent configuration.
 
+The separate `configuration` field preserves the resolved non-secret Agent and
+environment snapshot as a JSON object, up to 512 KiB. Creation retries include
+that snapshot in their identity; changed configuration conflicts rather than
+mutating an existing Session. Legacy Sessions without configuration keep their
+original retry identity. JSON key order and whitespace do not affect matching.
+The API layer will validate the pinned upstream schema before calling the Store;
+the Store does not invent defaults or claim a daemon environment is connected.
+See [the compatibility boundary](../../contracts/agents-api/README.md).
+
 ## Checks
 
 ```bash

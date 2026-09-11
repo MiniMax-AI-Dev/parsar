@@ -30,17 +30,19 @@ var (
 // Session is a durable execution context, separate from product conversations
 // and from live daemon connections. Engine session IDs will be bound at execution.
 type Session struct {
-	ID        string
-	TenantID  string
-	Engine    string
-	Metadata  map[string]string
-	CreatedAt time.Time
+	ID            string
+	TenantID      string
+	Engine        string
+	Metadata      map[string]string
+	CreatedAt     time.Time
+	Configuration json.RawMessage
 }
 
 type CreateSessionInput struct {
 	Engine         string
 	Metadata       map[string]string
 	IdempotencyKey string
+	Configuration  json.RawMessage
 }
 
 type SessionPage struct {
@@ -73,11 +75,21 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 	if len(metadata) > 16*1024 {
 		return Session{}, fmt.Errorf("%w: metadata exceeds 16 KiB", ErrInvalidInput)
 	}
+	configuration, err := canonicalConfiguration(input.Configuration)
+	if err != nil {
+		return Session{}, err
+	}
+	hashConfiguration := configuration
+	// Empty configuration retains the idempotency hashes from the first schema.
+	if string(configuration) == "{}" {
+		hashConfiguration = nil
+	}
 	// JSON map keys are sorted by encoding/json, so key order does not affect retries.
 	canonical, err := json.Marshal(struct {
-		Engine   string
-		Metadata map[string]string
-	}{input.Engine, input.Metadata})
+		Engine        string
+		Metadata      map[string]string
+		Configuration json.RawMessage `json:",omitempty"`
+	}{input.Engine, input.Metadata, hashConfiguration})
 	if err != nil {
 		return Session{}, fmt.Errorf("%w: input: %v", ErrInvalidInput, err)
 	}
@@ -85,6 +97,7 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 	row, err := s.queries.CreateSession(ctx, sqlc.CreateSessionParams{
 		ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, TenantID: tenant, Engine: input.Engine,
 		Metadata: metadata, IdempotencyKey: input.IdempotencyKey, RequestHash: hex.EncodeToString(hash[:]),
+		Configuration: configuration,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Session{}, ErrIdempotencyConflict
@@ -163,6 +176,11 @@ func parseID(value string) (pgtype.UUID, error) {
 
 func sessionFromRow(row sqlc.Session) (Session, error) {
 	session := Session{ID: uuid.UUID(row.ID.Bytes).String(), TenantID: uuid.UUID(row.TenantID.Bytes).String(), Engine: row.Engine, CreatedAt: row.CreatedAt.Time}
+	configuration, err := canonicalConfiguration(row.Configuration)
+	if err != nil {
+		return Session{}, fmt.Errorf("decode session configuration: %w", err)
+	}
+	session.Configuration = configuration
 	if err := json.Unmarshal(row.Metadata, &session.Metadata); err != nil {
 		return Session{}, fmt.Errorf("decode session metadata: %w", err)
 	}
