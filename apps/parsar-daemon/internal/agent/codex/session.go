@@ -56,6 +56,7 @@ func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- pro
 //  5. turn/completed emits TypeDone + closes out. Cancel can short-cut
 //     this by killing the child early.
 type Session struct {
+	functions       *functionCalls
 	observeMessages bool
 	observeTools    bool
 	runID           string
@@ -114,6 +115,10 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	if cfg.killTimeout <= 0 {
 		cfg.killTimeout = rpcKillTimeout
 	}
+	functions, err := prepareFunctionTools(req.FunctionTools)
+	if err != nil {
+		return nil, err
+	}
 	req.AgentStateKey = effectiveAgentStateKey(req)
 
 	plan, err := BuildSessionPlan(req.RunID, req.AgentStateKey, req.WorkDir, req.AgentOptions)
@@ -152,6 +157,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 
 	s := &Session{
 		runID:           req.RunID,
+		functions:       functions,
 		observeMessages: req.ObserveMessages,
 		observeTools:    req.ObserveTools,
 		cfg:             cfg,
@@ -240,6 +246,7 @@ func (s *Session) SubmitPromptForUserChoice(_ context.Context, askID string, dec
 func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 	defer close(s.waitDone)
 	defer s.stopCodexInteractionTimers()
+	defer s.stopFunctionCalls()
 	defer s.cleanup()
 	defer s.closeOut()
 
@@ -298,63 +305,6 @@ func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 	}
 }
 
-func (s *Session) startThread(plan SessionPlan) error {
-	params := ThreadStartParams{
-		Cwd:                   plan.Cwd,
-		Model:                 plan.Model,
-		ModelProvider:         plan.ModelProvider,
-		ApprovalPolicy:        plan.ApprovalPolicy,
-		Sandbox:               plan.Sandbox,
-		DeveloperInstructions: plan.SystemPrompt,
-	}
-	s.cfg.logger.Info("codex: thread/start request",
-		"run_id", s.runID,
-		"cwd", params.Cwd,
-		"model", params.Model,
-		"model_provider", params.ModelProvider,
-		"sandbox", string(params.Sandbox),
-		"approval_silent", IsSilent(&params.ApprovalPolicy),
-		"developer_instructions_len", len(params.DeveloperInstructions))
-	raw, err := s.rpc.Request(s.cancelCtx, "thread/start", params)
-	if err != nil {
-		return err
-	}
-	var res ThreadStartResult
-	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &res)
-	}
-	if res.Thread.ID != "" {
-		s.setThreadID(res.Thread.ID)
-	}
-	if res.Model != "" {
-		s.resolvedModel = res.Model
-	}
-	return nil
-}
-
-func (s *Session) resumeThread(threadID string, plan SessionPlan) error {
-	raw, err := s.rpc.Request(s.cancelCtx, "thread/resume", ThreadResumeParams{
-		ThreadID: threadID, ApprovalPolicy: plan.ApprovalPolicy, Sandbox: plan.Sandbox,
-		DeveloperInstructions: plan.SystemPrompt,
-	})
-	if err != nil {
-		return err
-	}
-	var res ThreadStartResult
-	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &res)
-	}
-	id := res.Thread.ID
-	if id == "" {
-		id = threadID
-	}
-	s.setThreadID(id)
-	if res.Model != "" {
-		s.resolvedModel = res.Model
-	}
-	return nil
-}
-
 // ---------------------------------------------------------------------------
 // notification handlers
 // ---------------------------------------------------------------------------
@@ -381,6 +331,7 @@ func (s *Session) registerHandlers() {
 	// Older app-server releases used this unseparated method name.
 	rpc.OnServerRequest("item/permissionsRequestApproval", s.handleCodexPermissionsApproval)
 	rpc.OnServerRequest("item/tool/requestUserInput", s.handleCodexUserInput)
+	rpc.OnServerRequest("item/tool/call", s.handleFunctionCall)
 	rpc.OnServerRequest("mcpServer/elicitation/request", s.handleCodexMCPElicitation)
 }
 

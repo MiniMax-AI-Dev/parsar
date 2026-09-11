@@ -220,6 +220,14 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   the engine process; it is not a user execution environment. This is not an OS
   isolation guarantee, and engine state still lives on that host. Ordinary product
   requests retain their existing environment. The public worker selects an authenticated same-tenant engine host for this mode.
+- `function_tools` advertises the optional native function-call bridge. Explicit
+  prompt definitions become Codex dynamic tools; unchanged prompts carry none.
+  Requests and textual results are scoped by Run and native call ID. Reuse
+  application receipts and conflict detection; a receipt confirms the native
+  reply was written, not that an external side effect succeeded. Pending calls
+  end with their Run; the execution service owns persistence and recovery, while
+  Parsar retains business approval and credential-owner authorization. Do not
+  map native approval requests to invented official protocol resources.
 - `message_items` advertises native assistant-message observations. Agents API
   opts in with `observe_messages` only for advertised peers; ordinary product
   requests retain their existing frame sequence. Opted-in text deltas carry their
