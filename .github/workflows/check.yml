@@ -10,6 +10,7 @@ on:
       - "server/**"
       - "services/agents-api/**"
       - "contracts/agents-api/**"
+      - "packages/agents-client/**"
       - "internal/**"
       - "apps/web/**"
       - "packages/cli/**"
@@ -32,6 +33,7 @@ on:
       - "server/**"
       - "services/agents-api/**"
       - "contracts/agents-api/**"
+      - "packages/agents-client/**"
       - "internal/**"
       - "apps/web/**"
       - "packages/cli/**"
@@ -104,7 +106,7 @@ jobs:
                 go=true
                 store=true
                 ;;
-              server/*|internal/*|services/agents-api/*|contracts/agents-api/*)
+              server/*|internal/*|services/agents-api/*|contracts/agents-api/*|packages/agents-client/*)
                 go=true
                 ;;
               apps/web/*)

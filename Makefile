@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-GO_TEST_PACKAGE ?= $(shell cd server && go list ./... ../internal/agentdaemon/gateway ../internal/agentdaemon/device ../services/agents-api/... | grep -Ev '/server/internal/(store|seed)$$')
+GO_TEST_PACKAGE ?= $(shell cd server && go list ./... ../internal/agentdaemon/gateway ../internal/agentdaemon/device ../services/agents-api/... ../packages/agents-client/... | grep -Ev '/server/internal/(store|seed)$$')
 GO_TEST_RUN ?=
 GO_TEST_ARGS ?=
 SQLC_VERSION ?= v1.29.0
@@ -341,4 +341,4 @@ e2b-template-binaries:
 # Dedicated execution-store tests require their own PostgreSQL database.
 .PHONY: check-agents-api
 check-agents-api:
-	go test ./services/agents-api/... -count=1
+	go test ./services/agents-api/... ./packages/agents-client/... -count=1
