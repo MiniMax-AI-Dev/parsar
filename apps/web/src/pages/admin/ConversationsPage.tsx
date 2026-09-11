@@ -64,7 +64,7 @@ const FOLD_KEY = "parsar:conv:sidebarFolded"
 /** Reading measure of the thread column; the components below read it. */
 
 /** title · conversation id · age (actions replace the age on hover) */
-const LIST_COLUMNS = [col.title(120, 2), col.id(64, 0.3), col.age(56, 0.3), col.actions(2)]
+const LIST_COLUMNS = [col.title(120, 2), col.id(64, 0.3), col.age(56, 0.3), col.actions(3)]
 
 import { sandboxSendGuard } from "../../lib/sandbox-send-guard"
 
