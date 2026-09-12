@@ -1,4 +1,5 @@
 import { getSessionInfo, query, type McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
+import { resultUsage, type NativeUsage } from "./usage.js";
 import { spawnNative } from "./native.js";
 import { MessageObserver, type MessageEvent } from "./messages.js";
 import { createFunctionServer } from "./functions.js";
@@ -19,6 +20,7 @@ export type Start = {
 export type Event =
   | MessageEvent
   | FunctionEvent
+  | { type: "usage"; session_id: string; usage: NativeUsage }
   | { type: "delta"; delta: string }
   | { type: "result"; session_id: string; text: string }
   | { type: "error"; code: "invalid_request" | "history_unavailable" | "execution_failed" | "cancelled" };
@@ -54,6 +56,7 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
   const children: Promise<number | null>[] = [];
   let result: Extract<Event, { type: "result" }> | undefined;
   let nativeID = "";
+  let resultSeen = false;
   let failed = false;
   const messages = request.observe_messages ? new MessageObserver() : undefined;
   let stream: ReturnType<typeof query> | undefined;
@@ -90,9 +93,10 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
                  message.event.type === "content_block_delta" && message.event.delta.type === "text_delta") {
         await emit({ type: "delta", delta: message.event.delta.text });
       } else if (message.type === "result") {
-        if (result || message.subtype !== "success" || message.is_error || !nativeID || message.session_id !== nativeID) {
-          throw new Error("unsuccessful native result");
-        }
+        if (resultSeen || !nativeID || message.session_id !== nativeID) throw new Error("invalid native result identity");
+        resultSeen = true;
+        await emit({ type: "usage", session_id: nativeID, usage: resultUsage(message) });
+        if (message.subtype !== "success" || message.is_error) throw new Error("unsuccessful native result");
         functions.assertComplete();
         result = { type: "result", session_id: nativeID, text: message.result };
       }

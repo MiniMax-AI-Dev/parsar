@@ -250,6 +250,9 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 	if functionSecond.Failure != "" || functionSecond.FunctionCalls != 1 || functionSecond.AppliedResults != 1 || functionSecond.SessionID != functionFirst.SessionID || !strings.Contains(functionSecond.Text, functionNonce) || !strings.Contains(functionSecond.Text, "synthetic-current-failure") || !strings.Contains(functionSecond.Text, "do-not-retry") || functionSecond.NodePID == functionFirst.NodePID {
 		t.Fatalf("live function resume failed: %+v", functionSecond)
 	}
+	for _, completed := range []evidence{first, second, functionFirst, functionSecond} {
+		verifyLiveUsageEvents(t, completed.Events)
+	}
 	mu.Lock()
 	before := len(models)
 	mu.Unlock()

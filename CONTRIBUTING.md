@@ -560,8 +560,8 @@ or containment of descendants that deliberately leave the group.
 and native message translation. The Go `claudesdk.NewFactory` uses the shared
 owned process runner and emits the existing daemon delta/error/Done frames.
 The SDK owns the model loop. Its narrow stdio protocol carries a start request,
-text deltas, function calls/results/receipts and one terminal result/error; native
-payloads stay inside the SDK package.
+text deltas, function calls/results/receipts, a usage snapshot and one terminal
+result/error; native translation stays inside the adapter.
 With `observe_messages`, it also emits the existing neutral `output_message`
 start/completion snapshots and tags deltas with the native Messages API message
 ID, not the SDK event UUID. Text blocks in one native message share that identity.
@@ -607,7 +607,18 @@ existing router owns receipt retry/conflict handling. This does not establish
 crash recovery or exactly-once effects. Public schemas outside MCP's object-root
 contract and image result mapping remain admission/execution gaps.
 
-This does not establish full tool/environment/text-verbosity policy, usage,
+The SDK result supplies one native usage snapshot, including reported failures,
+under `Usage.Raw.claude_sdk_result`. Retain main-loop `usage`, query-pipeline
+`modelUsage`, `total_cost_usd` and result subtype/error provenance. Reuse the same
+snapshot in Usage and Done; consumers must not add them. Each factory invocation
+owns one SDK query, including cold resume, so no prior query counters are carried
+forward. Missing native results do not imply zero consumption. SDK estimates stay
+in raw evidence, outside the billed cost field; do not select an arbitrary model
+or invent missing public token breakdowns. The API does not parse native counters.
+Precise public usage projection, unreported costs and crash/partial accounting
+remain gaps; the native snapshot alone is not complete protocol Usage compatibility.
+
+This does not establish full tool/environment/text-verbosity policy, public usage,
 image results, steering, public cancellation receipts or process-loss recovery.
 Those capabilities require their own acceptance before public dispatch. Registry
 adoption and release packaging are separate tasks. `make check-cli` also builds
