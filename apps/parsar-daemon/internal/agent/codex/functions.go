@@ -107,12 +107,23 @@ func (s *Session) SubmitFunctionResult(ctx context.Context, result proto.Functio
 	if !exists || s.functions.closed || s.cancelled.Load() || s.terminal.Load() {
 		return agent.ErrUnknownFunctionCall
 	}
+	if err := result.ValidateContent(); err != nil {
+		return err
+	}
+	content := make([]functionContent, 0, len(result.Content))
+	for _, part := range result.Content {
+		kind := "inputText"
+		if part.Type == "input_image" {
+			kind = "inputImage"
+		}
+		content = append(content, functionContent{Type: kind, Text: part.Text, ImageURL: part.ImageURL})
+	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	reply := struct {
-		Success      bool           `json:"success"`
-		ContentItems []functionText `json:"contentItems"`
-	}{Success: result.Success, ContentItems: []functionText{{Type: "inputText", Text: result.Text}}}
+		Success      bool              `json:"success"`
+		ContentItems []functionContent `json:"contentItems"`
+	}{Success: result.Success, ContentItems: content}
 	if err := s.rpc.writeFrameContext(ctx, JsonRpcResponse{JsonRpc: JsonRpcVersion, ID: id, Result: reply}); err != nil {
 		return fmt.Errorf("write function result: %w", err)
 	}
@@ -120,9 +131,10 @@ func (s *Session) SubmitFunctionResult(ctx context.Context, result proto.Functio
 	return nil
 }
 
-type functionText struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+type functionContent struct {
+	Type     string  `json:"type"`
+	Text     *string `json:"text,omitempty"`
+	ImageURL *string `json:"imageUrl,omitempty"`
 }
 
 func (s *Session) stopFunctionCalls() {

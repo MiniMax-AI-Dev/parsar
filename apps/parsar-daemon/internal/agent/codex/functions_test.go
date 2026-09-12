@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -36,9 +37,14 @@ func TestFunctionCallWaitsAndRepliesOnce(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("missing function call")
 			}
+			text, image, empty := "answer", "https://example.com/result.png", ""
+			content := []proto.FunctionResultContent{{Type: "input_text", Text: &text}, {Type: "input_image", ImageURL: &image}, {Type: "input_text", Text: &empty}}
+			if err := s.SubmitFunctionResult(t.Context(), proto.FunctionResultPayload{CallID: "call", Content: []proto.FunctionResultContent{{Type: "input_audio"}}}); err == nil {
+				t.Fatal("invalid result consumed the pending call")
+			}
 			finished := make(chan error, 1)
 			go func() {
-				finished <- s.SubmitFunctionResult(t.Context(), proto.FunctionResultPayload{CallID: "call", Success: success, Text: "answer"})
+				finished <- s.SubmitFunctionResult(t.Context(), proto.FunctionResultPayload{CallID: "call", Success: success, Content: content})
 			}()
 			var reply struct {
 				ID     string          `json:"id"`
@@ -54,10 +60,10 @@ func TestFunctionCallWaitsAndRepliesOnce(t *testing.T) {
 				t.Fatal(err)
 			}
 			var result struct {
-				Success bool           `json:"success"`
-				Content []functionText `json:"contentItems"`
+				Success bool              `json:"success"`
+				Content []functionContent `json:"contentItems"`
 			}
-			if err := json.Unmarshal(reply.Result, &result); err != nil || result.Success != success || len(result.Content) != 1 || result.Content[0].Text != "answer" || result.Content[0].Type != "inputText" {
+			if err := json.Unmarshal(reply.Result, &result); err != nil || result.Success != success || !reflect.DeepEqual(result.Content, []functionContent{{Type: "inputText", Text: &text}, {Type: "inputImage", ImageURL: &image}, {Type: "inputText", Text: &empty}}) {
 				t.Fatal(string(reply.Result), err)
 			}
 			if err := s.SubmitFunctionResult(t.Context(), proto.FunctionResultPayload{CallID: "call"}); !errors.Is(err, agent.ErrUnknownFunctionCall) {

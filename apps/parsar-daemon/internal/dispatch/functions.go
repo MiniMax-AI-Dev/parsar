@@ -27,6 +27,9 @@ func (r *Router) handleFunctionResult(ctx context.Context, env proto.Envelope) e
 	if env.ID == "" || result.CallID == "" || result.DeliveryID == "" {
 		return errors.New("function result requires run, call and delivery identities")
 	}
+	if err := result.ValidateContent(); err != nil {
+		return r.sendInteractionDecisionAck(ctx, env.ID, result.DeliveryID, false, "invalid_result", err.Error())
+	}
 	decision := result
 	decision.DeliveryID = ""
 	encoded, err := json.Marshal(decision)
