@@ -52,9 +52,10 @@ Direct development on `main` is not allowed. Every session honours this rule.
 
 ## Independent blind review
 
-Fix one issue per PR. State the expected behavior, acceptance criteria, and
-explicit scope exclusions before implementation. Keep unrelated refactors,
-features, formatting, and dependency updates in separate PRs.
+Each PR should contain one independently verifiable change; a feature may span
+several small PRs. State the expected behavior, acceptance criteria, and explicit
+scope exclusions before implementation. Keep unrelated refactors, features,
+formatting, and dependency updates in separate PRs.
 
 Small, low-impact changes may use developer self-review and relevant
 verification without a subagent. Examples include isolated copy, spacing,
@@ -100,18 +101,53 @@ description and keep ownership on the side listed here.
 
 ### Product and execution service separation
 
-The target deployment has a Parsar product service and an independently usable
-Agents API, installed together by Compose. They may share a PostgreSQL instance,
-but own separate databases, credentials and migrations. Migrate incrementally;
-the existing server remains the execution owner until a flow is explicitly moved.
-Agents API is general infrastructure: third-party clients must be able to use
-the declared supported protocol through the official SDK with a different base
-URL, without creating Parsar business objects. Parsar is one client of that API.
+Agents API is the primary infrastructure deliverable. Parsar is an ordinary client
+and example application; its feature backlog must not dictate the execution
+service's public protocol or internal model. Agents API must build, deploy and run
+without the Parsar product service, frontend or database. An optional Compose
+deployment may install both services with one PostgreSQL instance, but separate
+databases, credentials and migrations. The existing product keeps its execution
+path until an explicit client cutover.
+
+#### Design and compatibility requirements
+
+- The complete pinned `openai/openai-python` `beta/agents` protocol is the target,
+  including its referenced resources and types. Match paths, methods, headers,
+  field presence, nullability, discriminators, defaults, status transitions,
+  pagination, errors and streaming behavior. Engine limitations are implementation
+  gaps to solve, not grounds for narrowing or redefining the upstream contract.
+- Pin upstream source and SDK versions in `contracts/agents-api/upstream.json`.
+  Use official SDKs for clients and reuse upstream types or schemas where suitable.
+  SDK deserialization alone is not server validation or proof of compatibility:
+  test raw HTTP payloads and observable workflows as well. Record unspecified or
+  unverified behavior explicitly; never invent official semantics. Track partial
+  coverage in `contracts/agents-api/README.md` until the complete target is verified.
+- No legacy Agents API compatibility requirement takes precedence over this
+  design. Replace an unsuitable implementation instead of growing compatibility
+  branches. Preserve reusable, verified infrastructure rather than rewriting it
+  merely for new names or directories. Replacements may retire obsolete private
+  interfaces and history backfills in bounded PRs; this does not authorize deleting
+  product data or changing unrelated product behavior.
+- Keep engine-specific types, process management and protocol translation inside
+  execution adapters. The public API and persistence/application core must not
+  interpret Parsar product payloads or depend on one engine's native item types.
+  Prefer maintained upstream SDKs and native execution protocols over a second
+  hand-written model/tool loop or a general-purpose compatibility framework.
+- Verify an independent official-client workflow before a Parsar integration.
+  Parsar uses the same public contract as any other client, with no privileged
+  endpoint or direct execution-table access. An OpenAI endpoint is a possible
+  client target only where the requested capabilities and credentials support it.
+- Maintain tasks, priorities and evidence in the Feishu board. Complete each
+  bounded task and its required checks/review, then mark it done after merge and
+  choose the next dependency. Agent API protocol and atomic execution work takes
+  priority over product integration, UI work and business Team orchestration.
 
 - Parsar owns users, workspaces, business authorization, Agent/Team definitions,
   capabilities, product conversations, IM/sharing, approval decisions and billing.
-- Agents API owns execution sessions, runs, effective configuration snapshots,
-  dispatch/cancel, environments, raw usage, pending interactions and durable events.
+- Agents API owns protocol saved Agents, execution sessions/turns, effective
+  configuration snapshots, dispatch/cancel, environments, vaults, raw usage,
+  pending interactions, protocol subagents and durable events. Protocol saved
+  Agents/vaults are execution resources, not Parsar marketplace or business roles.
   Neither service reads the other's tables. Parsar uses a versioned client contract.
 - A product conversation may map to several execution sessions. An execution
   session is distinct from a live daemon socket, process or sandbox. Native engine
@@ -121,11 +157,21 @@ URL, without creating Parsar business objects. Parsar is one client of that API.
   is live-only; recover through Session/Turn/Items reads. Any additional product
   cursor replay must be documented as an extension, not upstream semantics.
   Team definitions, management and orchestration belong to Parsar. Agents API
-  provides single-Agent execution primitives; Team loops are deferred. Future Team
-  orchestration directly depends on `openai/openai-agents-python` in Parsar.
+  establishes single-Agent execution first; business Team loops are deferred.
+  This does not exclude upstream `multi_agent` configuration or subagent resources
+  from protocol coverage. Future business Team orchestration directly depends on
+  `openai/openai-agents-python` in Parsar.
 - Daemon Skill/SP authoring remains a product operation: forward through a scoped
   product callback with the original requester and workspace checks. A runtime
   credential alone must not grant business write permissions.
+
+#### Current implementation
+
+The constraints below describe existing code, not requirements to preserve legacy
+design. The [protocol assessment](contracts/agents-api/README.md#implementation-direction)
+identifies replacements and gaps. Update these rules when their implementation is
+replaced; do not carry obsolete compatibility code forward to satisfy this section.
+
 - `internal/agentdaemon/gateway` is the shared daemon connection implementation.
   Its persistence interfaces use `internal/agentdaemon/device`, never product Store
   types. Product adapters live in `server/internal/agentdaemon`. Keep protocol

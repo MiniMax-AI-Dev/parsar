@@ -5,9 +5,71 @@ pinned in `upstream.json`. Its resource methods, corresponding types, pagination
 and streaming helpers define the compatibility target. This directory records
 the boundary; it does not imply that every upstream feature is implemented.
 
-Parsar owns product Agents and Teams. This service owns execution configuration
-snapshots and single-Agent sessions/turns. The OpenAI Agents Python **SDK** is a
-separate future dependency for Team orchestration in Parsar, not the HTTP contract.
+Parsar owns product Agents and Teams. This service owns upstream execution
+resources, including reusable Agents and protocol subagents. The OpenAI Agents
+Python **SDK** is a separate future dependency for business Team orchestration in
+Parsar, not the HTTP contract. Design rules live in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#design-and-compatibility-requirements).
+
+## Implementation direction
+
+Keep the independent service, authentication, PostgreSQL/sqlc persistence,
+transactional admission and official-client test harness. Replace the parts that
+let legacy daemon representations define execution semantics. Starting over is
+permitted where a replacement is smaller and clearer; neither a wholesale rewrite
+nor compatibility with the old private implementation is a goal.
+
+Concentrate native configuration, structured input/output and Item translation
+in an execution adapter. The application core owns execution state and persistence;
+engine-specific shapes stay at the adapter boundary. Reuse the native Codex
+app-server and exec-server protocols before adding another orchestration layer.
+Verify configuration against actual execution: response defaults must not merely
+describe values the adapter never applied.
+
+The next slices are contract conformance checks, effective configuration and the
+adapter boundary, complete function actions, then environment/file resources.
+Reusable Agents, vaults and protocol subagents remain in the coverage backlog.
+Parsar cutover follows an independent client workflow; its business Team loop is
+separate. Each slice can use multiple small PRs tracked in the Feishu board.
+
+## Upstream resource inventory
+
+This inventory is based on the pinned Python source, not our generated OpenAPI.
+It contains 42 distinct HTTP operations in 15 resource classes, excluding async
+duplicates, overloads and client-side helpers. Eight operations currently have
+handlers; that count is not a compatibility score. Even those operations implement
+only part of the upstream input, configuration and event variants.
+
+Paths below are SDK resource paths beneath `client.beta.agents`. Method names use
+the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
+
+| Resource | Upstream operations | Current coverage |
+| --- | --- | --- |
+| Root reusable Agents | create, retrieve, update, list, delete | Missing |
+| sessions | create, retrieve, update, list, delete | Partial create/retrieve/list; update/delete missing |
+| sessions.events | create, stream | Partial text/cancel and live events; function actions pending |
+| sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
+| sessions.items | list | Partial Item variants |
+| sessions.artifacts | retrieve, list, delete, content | Missing |
+| sessions.subagents | retrieve, list | Missing |
+| sessions.subagents.items | list | Missing |
+| sessions.subagents.turns | retrieve, list | Missing |
+| sessions.subagents.turns.items | list | Missing |
+| environments | retrieve | Missing |
+| environments.files | create, list | Missing |
+| environments.templates | create, retrieve, update, list, delete | Missing |
+| vaults | create, retrieve, list, delete | Missing |
+| vaults.credentials | create, retrieve, update, list, delete | Missing |
+
+For each resource, verify the referenced request/response unions and observable
+behavior, not just the route. Creation streaming/initial input, configuration
+options, text/image content, function results, environment variants, full Item/SSE
+variants, defaults, field omission/nullability and errors need their own cases.
+Use strict official-client tests plus raw HTTP assertions; SDKs can accept extra
+fields and cannot prove that reported configuration matches the running engine.
+Where SDK types or public documentation do not establish behavior, record the
+uncertainty and obtain upstream evidence before marking it conformant. Temporary
+unsupported errors are implementation gaps, never evidence of full compatibility.
 
 ## Public semantics
 
