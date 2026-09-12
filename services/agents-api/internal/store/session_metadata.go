@@ -19,7 +19,7 @@ func (s *Store) UpdateSessionMetadata(ctx context.Context, tenantID, sessionID s
 	if err != nil {
 		return Session{}, err
 	}
-	encoded, err := encodeSessionMetadata(metadata)
+	encoded, err := encodeMetadata(metadata)
 	if err != nil {
 		return Session{}, err
 	}
@@ -34,7 +34,7 @@ func (s *Store) UpdateSessionMetadata(ctx context.Context, tenantID, sessionID s
 	return s.sessionActivity(ctx, session, decodeErr)
 }
 
-func encodeSessionMetadata(metadata map[string]string) ([]byte, error) {
+func encodeMetadata(metadata map[string]string) ([]byte, error) {
 	if metadata == nil {
 		metadata = map[string]string{}
 	}
