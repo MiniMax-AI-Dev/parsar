@@ -107,6 +107,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Capability | Current state |
 | --- | --- |
 | Shared daemon connection layer | Implemented; existing product protocol retained |
+| Saved Agent persistence | Internal create/read with tenant scope, independent configuration and timestamps; public resource operations and Session references remain missing |
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
 | Authenticated Session HTTP API | Create/retrieve/list and metadata-only update; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |

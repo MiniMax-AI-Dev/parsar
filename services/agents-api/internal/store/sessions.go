@@ -77,7 +77,7 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 	if input.Metadata == nil {
 		input.Metadata = map[string]string{}
 	}
-	metadata, err := encodeSessionMetadata(input.Metadata)
+	metadata, err := encodeMetadata(input.Metadata)
 	if err != nil {
 		return Session{}, err
 	}

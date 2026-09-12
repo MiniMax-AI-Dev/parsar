@@ -214,6 +214,15 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   migrations. `AGENTS_API_DATABASE_URL` is required; never fall back to the product
   database URL. Its first persistence slice stores tenant-scoped Sessions with a
   stable engine and idempotent creation. It does not switch production execution.
+- Reusable Agents have their own tenant-scoped `agents` records, independent of
+  Session snapshots, engine bindings and product Agent definitions. The Store
+  persists caller-validated non-secret configuration and metadata without applying
+  harness capability restrictions or model defaults. Resource identity and equal
+  initial creation/update timestamps come from the persistence boundary. The
+  create primitive creates a fresh resource; it does not establish public retry
+  semantics. Public Agent routes, configuration resolution and Session references
+  are separate work. Internal storage admission is 512 KiB for configuration and
+  64 KiB for metadata, not a claim about upstream limits.
 - Tenant scope must come from authenticated service identity before calling the
   execution Store. Product workspace/user references in metadata grant no access.
   Keep credentials and effective execution options out of Session metadata.
