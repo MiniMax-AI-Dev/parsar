@@ -72,7 +72,7 @@ func (s *Store) AppendTurnEvents(ctx context.Context, tenantID, sessionID, turnI
 			}
 			return nil
 		}
-		if turn.Status != TurnInProgress || first != turn.EventCount+1 {
+		if (turn.Status != TurnInProgress && turn.Status != TurnWaiting) || first != turn.EventCount+1 {
 			return ErrTurnConflict
 		}
 		if turn.EventCount+int32(len(events)) > 65536 || turn.EventBytes+int64(payloadBytes) > 32*1024*1024 {

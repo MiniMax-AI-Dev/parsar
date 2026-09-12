@@ -68,6 +68,13 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if json.Unmarshal(session.Configuration, &snapshot) != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
 		return store.Turn{}, store.ErrInvalidInput
 	}
+	functions, err := functionTools(snapshot.Agent.Tools)
+	if err != nil {
+		return store.Turn{}, err
+	}
+	if len(functions) > 0 && !info.Capabilities.FunctionTools {
+		return store.Turn{}, errors.New("device must advertise function_tools")
+	}
 	workDir, noEnvironment, err := resolveExecutionEnvironment(snapshot)
 	if err != nil {
 		return store.Turn{}, err
@@ -103,7 +110,7 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if _, err := d.Store.TransitionTurn(ctx, tenantID, sessionID, turnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress}); err != nil {
 		return store.Turn{}, err
 	}
-	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, AgentOptions: options, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: info.Capabilities.MessageItems, ObserveTools: info.Capabilities.ToolItems, DisableExecutionEnvironment: noEnvironment}
+	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, FunctionTools: functions, AgentOptions: options, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: info.Capabilities.MessageItems, ObserveTools: info.Capabilities.ToolItems, DisableExecutionEnvironment: noEnvironment}
 	result, status := d.deliver(ctx, tenantID, sessionID, peer, req, through)
 	if result.Done.Usage.Model == "" {
 		result.Done.Usage.Model = snapshot.Agent.Model

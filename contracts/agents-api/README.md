@@ -107,8 +107,8 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
 | Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
 | Public SSE | Live Session/Turn lifecycle, supported Item and text events; bounded commit-before-publish buffering and recovery through saved reads |
-| Internal function bridge | Native Codex definitions and ordered text/image results, Run/call-scoped receipts, retries and cancellation; public function actions still pending |
-| Function-call persistence and reads | Immutable scoped calls/results/receipts; Session `required_actions`, `requires_action`, Turn `waiting` and live state snapshots; public result admission and native dispatch integration pending |
+| Internal function bridge | Native Codex definitions and ordered text/image/error results, persisted callbacks and application receipts, cancellation and native resume; public function configuration/result admission pending |
+| Function-call persistence and reads | Immutable scoped calls/results/receipts; Session `required_actions`, `requires_action`, Turn `waiting` and live state snapshots; internal native dispatch integrated; public configuration/result admission pending |
 | Pending actions and environment lifecycle | Pending |
 | Official-client compatibility | Strict SDK checks for Session/Turn/Items reads and native text execution/cancellation/verbosity; pagination, retries, errors, tenant isolation and recovery |
 | Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |
@@ -219,7 +219,7 @@ The service takes a database advisory lease, so a second execution service canno
 start on the same database. Startup marks previously claimed Turns failed without
 replaying them and retains queued work. This does not recover missing daemon frames
 or guarantee exactly-once external side effects. Session status reflects the latest
-persisted Turn; usage reports recorded measurements; pending actions remain unimplemented.
+persisted Turn; usage reports recorded measurements; public function configuration and result admission remain unimplemented.
 
 Native verification uses `PARSAR_NATIVE_DAEMON_BIN`, `PARSAR_NATIVE_PROOF_DIR` under
 `~/.parsar/`, and `PARSAR_OFFICIAL_SDK_PYTHON` pointing to the pinned SDK environment.
@@ -254,6 +254,14 @@ oversized-event exception. A lagging reader receives a customer-safe `error` and
 disconnects rather than silently skipping output. Slow socket writes time out
 without blocking execution. Creation streaming and unsupported event variants
 are not implied by this endpoint.
+
+Internal function execution uses the same native daemon harness, with resolved
+non-deferred definitions and Store result admission. It verifies ordered text/image
+results, error text, application receipts, matching action/Item call IDs, cancellation
+and native Session continuity. Codex supplies the model transport's default image
+detail. This proof uses a synthetic model responder and the real daemon/Codex;
+it does not exercise a public tool-result submission endpoint. Deferred functions,
+other tool kinds and the native 64-definition limit remain compatibility gaps.
 
 Function-action read coverage uses persisted-call fixtures with the real service
 handler, PostgreSQL and pinned official client. It does not yet demonstrate a

@@ -88,10 +88,21 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 	var pending *pendingInput
 	var cancelSent time.Time
 	var cancelReply <-chan cancellationResult
+	functions := &functionExchange{store: d.Store, tenant: tenantID, session: sessionID, turn: request.RunID, tools: request.FunctionTools}
+	done := false
 	cancelCtx, stopCancellation := context.WithCancel(ctx)
 	defer stopCancellation()
 	for {
+		if done && functions.reply == nil {
+			status = finishDelivery(ctx, journal, &result, cancelReply, pending != nil, functions)
+			return
+		}
 		select {
+		case reply := <-functions.reply:
+			if err := functions.confirm(ctx, reply); err != nil {
+				result.ErrorCode = "function_result_unconfirmed"
+				return
+			}
 		case <-flushTicker.C:
 			if journal.flush(ctx) != nil {
 				result.ErrorCode = "event_persistence_failed"
@@ -140,34 +151,17 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 				}
 				result.ErrorCode, result.Error = "engine_failed", failure.Error
 			case proto.TypeDone:
-				if cancelReply != nil {
-					select {
-					case reply := <-cancelReply:
-						if recordCancellation(ctx, journal, reply, &result) != nil {
-							result.ErrorCode = "event_persistence_failed"
-							return
-						}
-						if reply.err == nil && reply.ack.Applied {
-							status = store.TurnCancelled
-							return
-						}
-						if reply.err != nil || reply.ack.ErrorCode != "run_inactive" {
-							result.ErrorCode = "cancel_unconfirmed"
-							return
-						}
-					case <-ctx.Done():
-						result.ErrorCode = "cancel_unconfirmed"
-						return
-					}
+				// Done closes the event subscription; application receipts have a separate waiter.
+				done, upstream = true, nil
+			case proto.TypeFunctionCall:
+				if err := journal.flush(ctx); err != nil {
+					result.ErrorCode = "event_persistence_failed"
+					return
 				}
-				if result.ErrorCode == "" {
-					if pending != nil {
-						result.ErrorCode = "input_outcome_unknown"
-					} else {
-						status = store.TurnCompleted
-					}
+				if err := functions.record(ctx, env); err != nil {
+					result.ErrorCode = "function_call_invalid"
+					return
 				}
-				return
 			case proto.TypePromptSteerAck:
 				var ack proto.PromptSteerAckPayload
 				if env.DecodePayload(&ack) != nil {
@@ -205,13 +199,20 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 				result.ErrorCode = "execution_state_unavailable"
 				return
 			}
-			if turn.Status != store.TurnInProgress {
+			if turn.Status != store.TurnInProgress && turn.Status != store.TurnWaiting {
 				result.ErrorCode = "execution_state_changed"
 				return
 			}
 			if !turn.CancelRequestedAt.IsZero() {
 				cancelReply = requestCancellation(cancelCtx, peer, request.RunID)
 				cancelSent = time.Now()
+				continue
+			}
+			if err := functions.start(cancelCtx, peer); err != nil {
+				result.ErrorCode = "function_result_invalid"
+				return
+			}
+			if done {
 				continue
 			}
 			if pending == nil {
