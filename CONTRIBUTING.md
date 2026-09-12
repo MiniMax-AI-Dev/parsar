@@ -196,7 +196,17 @@ module manifests and trimmed paths. It requires no Node, Docker or product setup
 `make check-agents-api` runs this build before its tests, so the full `make check`
 and the dedicated CI workflow enforce the same boundary. CI exercises the built
 migration command and uses the built server for official-client HTTP checks.
-Container distribution, daemon packaging and product cutover remain separate work.
+`make docker-build-agents-api` reuses that build for Linux amd64 and sends only
+its three executables and `services/agents-api/Dockerfile` to Docker. The pinned
+Distroless runtime runs without root, a shell, product assets or an embedded
+harness. Keep runtime credentials outside the image and migrations explicit.
+`make check-agents-api-container` runs the existing official-client suite against
+the image with a read-only root filesystem; it requires Linux Docker, a non-root
+host user, the pinned SDK and a dedicated execution test database. Dedicated CI
+runs this after binary validation. Changes to the image/build path require this
+check in addition to `make check`; do not make ordinary Go builds require Docker.
+Registry publication, additional runtime architectures, daemon packaging and
+product cutover remain separate work.
 
 #### Current implementation
 

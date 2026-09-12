@@ -12,6 +12,7 @@ on:
       - 'go.sum'
       - 'Makefile'
       - 'scripts/build-agents-api.sh'
+      - 'scripts/build-agents-api-image.sh'
       - '.github/workflows/agents-api.yml'
   pull_request:
     paths:
@@ -23,6 +24,7 @@ on:
       - 'go.sum'
       - 'Makefile'
       - 'scripts/build-agents-api.sh'
+      - 'scripts/build-agents-api-image.sh'
       - '.github/workflows/agents-api.yml'
 
 permissions:
@@ -82,3 +84,9 @@ jobs:
         run: |
           python services/agents-api/tests/official_client.py
           go test ./services/agents-api/internal/store -run '^TestFunctionStateOfficialClientReadsAndLiveEvents$' -count=1
+      - name: Verify standalone container distribution
+        env:
+          PARSAR_AGENTS_API_TEST_DATABASE_URL: postgres://agents_api:agents_api_test_only@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/parsar_agents_api_ci_tests?sslmode=disable
+          AGENTS_API_IMAGE: agents-api:ci
+          PARSAR_OFFICIAL_SDK_PYTHON: python
+        run: make check-agents-api-container
