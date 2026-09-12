@@ -99,7 +99,8 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 		}
 		select {
 		case reply := <-functions.reply:
-			if err := functions.confirm(ctx, reply); err != nil {
+			// Once cancellation is sent, its receipt owns the terminal outcome.
+			if err := functions.confirm(ctx, reply); err != nil && cancelReply == nil {
 				result.ErrorCode = "function_result_unconfirmed"
 				return
 			}

@@ -140,12 +140,24 @@ func TestExecutionFunctionsCancellationAndUnconfirmedResults(t *testing.T) {
 				}
 				var request proto.PromptCancelPayload
 				_ = h.read(proto.TypePromptCancel).DecodePayload(&request)
-				h.write(input.TurnID, proto.TypeInteractionDecisionAck, proto.InteractionDecisionAckPayload{DeliveryID: request.DeliveryID, Applied: true, Outcome: &proto.DonePayload{}})
+				h.write(input.TurnID, proto.TypeInteractionDecisionAck, proto.InteractionDecisionAckPayload{DeliveryID: reply.DeliveryID, ErrorCode: "not_pending"})
+				select {
+				case got := <-result:
+					t.Fatal("function rejection bypassed outstanding cancellation", got)
+				case <-time.After(40 * time.Millisecond):
+				}
+				h.write(input.TurnID, proto.TypeInteractionDecisionAck, proto.InteractionDecisionAckPayload{DeliveryID: request.DeliveryID, Applied: true, Outcome: &proto.DonePayload{Metadata: map[string]any{proto.DoneMetaAgentSessionID: "native-cancelled-functions"}}})
 				status = store.TurnCancelled
 			} else {
 				h.write(input.TurnID, proto.TypeInteractionDecisionAck, proto.InteractionDecisionAckPayload{DeliveryID: reply.DeliveryID, ErrorCode: "not_pending"})
 			}
 			h.finished(result, status)
+			if cancel {
+				bound, err := h.s.GetSessionDevice(t.Context(), h.tenant, h.session.ID)
+				if err != nil || bound.NativeSessionID != "native-cancelled-functions" {
+					t.Fatal(bound, err)
+				}
+			}
 			saved, err := h.s.GetFunctionCall(t.Context(), h.tenant, h.session.ID, input.TurnID, id)
 			if err != nil || saved.Applied || len(saved.Result) == 0 {
 				t.Fatal(saved, err)
