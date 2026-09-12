@@ -545,13 +545,14 @@ must close their query, await their native child and drain observations before
 publishing completion. Process groups are lifecycle supervision, not OS isolation
 or containment of descendants that deliberately leave the group.
 
-### Claude SDK text adapter foundation
+### Claude SDK adapter foundation
 
 `packages/claude-sdk-adapter` privately owns the pinned official TypeScript SDK
 and native message translation. The Go `claudesdk.NewFactory` uses the shared
 owned process runner and emits the existing daemon delta/error/Done frames.
 The SDK owns the model loop. Its narrow stdio protocol carries a start request,
-text deltas and one result/error; native payloads stay inside the SDK package.
+text deltas, function calls/results/receipts and one terminal result/error; native
+payloads stay inside the SDK package.
 With `observe_messages`, it also emits the existing neutral `output_message`
 start/completion snapshots and tags deltas with the native Messages API message
 ID, not the SDK event UUID. Text blocks in one native message share that identity.
@@ -563,8 +564,9 @@ SDK/native child release and output draining precede daemon completion.
 
 This factory is not registered and advertises no public capability. Existing
 product Claude execution remains unchanged. The bounded profile accepts only
-text, explicit model/system instructions, managed state and exact native resume.
-It rejects unsupported request options and disables native tools/MCP discovery.
+text, explicit model/system instructions, managed state, exact native resume and
+declared functions with ordered text results. It rejects unsupported request
+options and disables built-in tools and undeclared MCP discovery.
 Use the SDK's history lookup before explicit resume; never fall back to a new
 Session. Native files remain device-affine under a caller-selected managed
 runtime directory. The launch configuration supplies trusted provider environment;
@@ -577,13 +579,27 @@ are always loaded. Native call identity comes from the pinned harness's
 `claudecode/toolUseId` MCP metadata, independently of request IDs, names or arrival
 order. Missing identities and undeclared tools fail before invoking the host.
 Return content/error fields unchanged over MCP and forward its per-request abort
-signal. This helper does not register tools on the text factory or expose public
-function execution. Public schema variants outside MCP's object-root contract,
-native result normalization and daemon result/application receipts need separate
-admission and execution acceptance; do not infer application from MCP delivery.
+signal. The private Go factory connects declared functions through this helper and
+reuses the daemon function-call/result interface and opt-in neutral observations.
+The native registry must contain exactly those functions. SDK allowlisting admits
+only these host callbacks; the host still owns result decisions and any business
+permission checks. It grants no runtime-token business authority.
+
+Function results remain pending after stdin/MCP delivery. A matching live, root
+native user tool_result confirms application only when its Session/call identity,
+error flag and returned text match the submission. Ignore replayed, synthetic and
+subagent messages. Native error text joins the submitted text parts with newlines;
+neutral observations retain their original order and separate failure status.
+Missing/mismatched receipts fail the execution; do not replay unknown delivery.
+Result submission waits at most ten seconds for a receipt and cancels uncertain
+execution on timeout. Invalid or unsupported image results fail before consuming
+a pending call. Function state belongs to one live Run and ends with it; the
+existing router owns receipt retry/conflict handling. This does not establish
+crash recovery or exactly-once effects. Public schemas outside MCP's object-root
+contract and image result mapping remain admission/execution gaps.
 
 This does not establish full tool/environment/text-verbosity policy, usage,
-function results, images, steering, cancellation receipts or process-loss recovery.
+image results, steering, public cancellation receipts or process-loss recovery.
 Those capabilities require their own acceptance before public dispatch. Registry
 adoption and release packaging are separate tasks. `make check-cli` also builds
 and tests the SDK package, including native output draining; CI selects that check

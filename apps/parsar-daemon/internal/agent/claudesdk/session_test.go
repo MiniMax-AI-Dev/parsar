@@ -117,6 +117,10 @@ func runSDKHelper() {
 	}
 	encode := func(event bridgeEvent) { _ = json.NewEncoder(os.Stdout).Encode(event) }
 	mode := os.Getenv("SDK_HELPER_MODE")
+	if strings.HasPrefix(mode, "functions-") {
+		runFunctionHelper(request, mode, scanner, encode)
+		return
+	}
 	if strings.HasPrefix(mode, "messages-") {
 		runMessageHelper(request, mode, encode)
 		return

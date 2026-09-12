@@ -7,13 +7,18 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/clirunner"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
-type session struct{ process *clirunner.Process }
+type session struct {
+	process   *clirunner.Process
+	writeMu   sync.Mutex
+	functions functionState
+}
 
 func NewFactory(config Config) agent.Factory {
 	return func(ctx context.Context, req proto.PromptRequestPayload, out chan<- proto.Envelope) (agent.Session, error) {
@@ -35,24 +40,28 @@ func NewFactory(config Config) agent.Factory {
 		if err != nil {
 			return nil, err
 		}
-		s := &session{process: process}
+		s := &session{process: process, functions: functionState{calls: map[string]*pendingFunction{}}}
 		go s.run(ctx, req.RunID, start, out)
 		return s, nil
 	}
 }
 
 type bridgeEvent struct {
-	Type      string                      `json:"type"`
-	Delta     string                      `json:"delta"`
-	SessionID string                      `json:"session_id"`
-	Text      string                      `json:"text"`
-	Code      string                      `json:"code"`
-	ItemID    string                      `json:"item_id"`
-	Message   *proto.OutputMessagePayload `json:"message"`
+	Type       string                      `json:"type"`
+	Delta      string                      `json:"delta"`
+	SessionID  string                      `json:"session_id"`
+	Text       string                      `json:"text"`
+	Code       string                      `json:"code"`
+	ItemID     string                      `json:"item_id"`
+	Message    *proto.OutputMessagePayload `json:"message"`
+	Call       *proto.FunctionCallPayload  `json:"call"`
+	CallID     string                      `json:"call_id"`
+	DeliveryID string                      `json:"delivery_id"`
 }
 
 func (s *session) run(ctx context.Context, runID string, start startRequest, out chan<- proto.Envelope) {
 	defer close(out)
+	defer s.stopFunctions()
 	emit := func(kind string, payload any) {
 		event, err := proto.NewEnvelope(kind, runID, payload)
 		if err != nil {
@@ -103,9 +112,14 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 				break
 			}
 			emit(proto.TypeOutputMessage, message)
+		case "function_call", "function_applied":
+			if err := s.receiveFunction(event, start, emit); err != nil {
+				failure = err
+				s.process.Cancel()
+			}
 		case "result":
-			if event.SessionID == "" || start.Resume != "" && event.SessionID != start.Resume {
-				failure = fmt.Errorf("claudesdk: invalid native session identity")
+			if event.SessionID == "" || start.Resume != "" && event.SessionID != start.Resume || !s.functionsComplete() {
+				failure = fmt.Errorf("claudesdk: invalid native completion or unconfirmed function result")
 				s.process.Cancel()
 			} else {
 				result = &event
@@ -140,6 +154,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	if result == nil && failure == nil {
 		failure = fmt.Errorf("claudesdk: SDK result is missing")
 	}
+	s.stopFunctions()
 	metadata := map[string]any{proto.DoneMetaAgentSessionType: "claude_session"}
 	if failure != nil {
 		emit(proto.TypeError, proto.ErrorPayload{Error: failure.Error()})
@@ -151,7 +166,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	emit(proto.TypeDone, proto.DonePayload{Content: content.String(), Metadata: metadata})
 }
 
-func (s *session) Cancel(context.Context) error { s.process.Cancel(); return nil }
+func (s *session) Cancel(context.Context) error { s.stopFunctions(); s.process.Cancel(); return nil }
 func (s *session) SubmitPermission(context.Context, string, proto.PermissionDecisionPayload) error {
 	return agent.ErrUnknownPermission
 }

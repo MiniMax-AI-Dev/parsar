@@ -1,6 +1,9 @@
-import { getSessionInfo, query } from "@anthropic-ai/claude-agent-sdk";
+import { getSessionInfo, query, type McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
 import { spawnNative } from "./native.js";
 import { MessageObserver, type MessageEvent } from "./messages.js";
+import { createFunctionServer } from "./functions.js";
+import { FunctionBridge, type FunctionEvent } from "./function_bridge.js";
+import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { isAbsolute } from "node:path";
 
 export type Start = {
@@ -11,9 +14,11 @@ export type Start = {
   cwd: string;
   resume?: string;
   observe_messages?: boolean;
+  functions?: { name: string; description: string; parameters: Tool["inputSchema"] }[];
 };
 export type Event =
   | MessageEvent
+  | FunctionEvent
   | { type: "delta"; delta: string }
   | { type: "result"; session_id: string; text: string }
   | { type: "error"; code: "invalid_request" | "history_unavailable" | "execution_failed" | "cancelled" };
@@ -22,7 +27,7 @@ export function parseStart(line: string): Start {
   const value: unknown = JSON.parse(line);
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_request");
   const request = value as Record<string, unknown>;
-  const allowed = new Set(["type", "prompt", "model", "system_prompt", "cwd", "resume", "observe_messages"]);
+  const allowed = new Set(["type", "prompt", "model", "system_prompt", "cwd", "resume", "observe_messages", "functions"]);
   if (Object.keys(request).some(key => !allowed.has(key)) || request.type !== "start" ||
       typeof request.prompt !== "string" || !request.prompt.trim() ||
       typeof request.model !== "string" || !request.model.trim() ||
@@ -32,14 +37,20 @@ export function parseStart(line: string): Start {
       (request.resume !== undefined && (typeof request.resume !== "string" || !request.resume))) {
     throw new Error("invalid_request");
   }
+  if (request.functions !== undefined && (!Array.isArray(request.functions) || request.functions.some(tool =>
+      !tool || typeof tool.name !== "string" || !tool.name || typeof tool.description !== "string" ||
+      !tool.parameters || tool.parameters.type !== "object"))) throw new Error("invalid_request");
   return request as Start;
 }
 
-export async function execute(request: Start, emit: (event: Event) => Promise<void>, abort: AbortController): Promise<void> {
+export async function execute(request: Start, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit)): Promise<void> {
   if (request.resume && !await getSessionInfo(request.resume, { dir: request.cwd })) {
     await emit({ type: "error", code: "history_unavailable" });
     return;
   }
+  const definitions = (request.functions ?? []).map(tool => ({ name: tool.name, description: tool.description, inputSchema: tool.parameters }));
+  const names = definitions.map(tool => `mcp__functions__${tool.name}`);
+  const mcpServers: Record<string, McpServerConfig> = definitions.length ? { functions: createFunctionServer(definitions, functions.invoke) } : {};
   const children: Promise<number | null>[] = [];
   let result: Extract<Event, { type: "result" }> | undefined;
   let nativeID = "";
@@ -55,7 +66,7 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
         model: request.model,
         systemPrompt: request.system_prompt,
         ...(request.resume ? { resume: request.resume } : {}),
-        tools: [], mcpServers: {}, strictMcpConfig: true, settingSources: [],
+        tools: [], mcpServers, allowedTools: names, strictMcpConfig: true, settingSources: [],
         persistSession: true, includePartialMessages: true, abortController: abort,
         canUseTool: async () => ({ behavior: "deny", message: "Tools are unavailable in this execution profile." }),
         spawnClaudeCodeProcess: options => {
@@ -66,10 +77,13 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
       },
     });
     for await (const message of stream) {
+      await functions.consume(message, nativeID);
       if (messages) for (const event of messages.consume(message)) await emit(event);
       if (message.type === "system" && message.subtype === "init") {
         nativeID = message.session_id;
-        if (!nativeID || (request.resume && nativeID !== request.resume) || message.tools.length || message.mcp_servers.length) {
+        if (!nativeID || (request.resume && nativeID !== request.resume) || message.tools.length !== names.length || message.tools.some(name => !names.includes(name)) ||
+            message.mcp_servers.length !== (definitions.length ? 1 : 0) ||
+            message.mcp_servers.some(server => server.name !== "functions" || server.status !== "connected")) {
           throw new Error("unexpected native configuration");
         }
       } else if (!messages && message.type === "stream_event" && message.parent_tool_use_id === null &&
@@ -79,12 +93,14 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
         if (result || message.subtype !== "success" || message.is_error || !nativeID || message.session_id !== nativeID) {
           throw new Error("unsuccessful native result");
         }
+        functions.assertComplete();
         result = { type: "result", session_id: nativeID, text: message.result };
       }
     }
   } catch {
     failed = true;
   } finally {
+    functions.close();
     stream?.close();
     const exits = await Promise.all(children);
     if (!exits.length || exits.some(code => code !== 0)) failed = true;
