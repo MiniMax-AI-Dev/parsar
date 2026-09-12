@@ -344,6 +344,9 @@ e2b-template-binaries:
 	@echo "e2b-template: staged linux/amd64 binaries in $(E2B_BUILD_DIR)"
 
 # Dedicated execution-store tests require their own PostgreSQL database.
-.PHONY: check-agents-api
-check-agents-api:
+.PHONY: build-agents-api check-agents-api
+build-agents-api:
+	./scripts/build-agents-api.sh
+
+check-agents-api: build-agents-api
 	go test ./services/agents-api/... ./packages/agents-client/... -count=1

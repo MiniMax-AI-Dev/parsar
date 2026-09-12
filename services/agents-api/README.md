@@ -9,6 +9,28 @@ A Session is an execution context with a stable engine choice. Product
 conversations can map to multiple Sessions. Device connections and bindings are
 internal primitives; pending interactions and full environment lifecycle remain unfinished.
 
+## Build standalone binaries
+
+```bash
+make build-agents-api
+# Optional absolute output directory:
+AGENTS_API_BUILD_DIR="$HOME/.parsar/build/agents-api-test" make build-agents-api
+```
+
+The default output is `${PARSAR_HOME:-$HOME/.parsar}/build/agents-api`:
+
+- `agents-api`: HTTP service and execution worker.
+- `agents-api-migrate`: this service's embedded database migrations.
+- `agents-api-device`: operator device provisioning and revocation.
+
+Use these executables in place of the corresponding `go run` commands below.
+The build needs Go and access to its pinned module dependencies; it does not need
+Node, Docker, the product service or frontend. An isolated source context enforces
+that boundary on every build. [Contributor rules](../../CONTRIBUTING.md#independent-build-artifacts)
+define the allowed shared packages and required checks. Runtime database/key
+configuration and a separately installed execution daemon are still required;
+these binaries do not establish full protocol coverage or include a deployment.
+
 ## Database ownership
 
 Use a dedicated PostgreSQL database and account, separate from the Parsar product.
@@ -151,8 +173,9 @@ the official client installed from the commit in `contracts/agents-api/upstream.
 
 ```bash
 python -m pip install -r services/agents-api/tests/requirements.txt
-go build -o /tmp/agents-api ./services/agents-api/cmd/server
-AGENTS_API_SERVER_BIN=/tmp/agents-api python services/agents-api/tests/official_client.py
+make build-agents-api
+AGENTS_API_SERVER_BIN="${PARSAR_HOME:-$HOME/.parsar}/build/agents-api/agents-api" \
+  python services/agents-api/tests/official_client.py
 ```
 
 The test uses `PARSAR_AGENTS_API_TEST_DATABASE_URL`, temporary service keys and
