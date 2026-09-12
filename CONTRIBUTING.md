@@ -311,7 +311,18 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   can fail or cancel before a result arrives; successful execution requires resume.
   Actions remain visible until native application is acknowledged. This timing is
   an implementation choice, not verified upstream event sequencing. Public tool
-  configuration, result admission and execution integration remain pending.
+  configuration and result admission remain pending.
+- Internal function execution requires an advertised `function_tools` capability
+  before claiming a Turn. Translate resolved definitions in the execution adapter,
+  persist declared callbacks before exposing actions, and deliver each saved result
+  once per live dispatch. Keep its success flag and ordered text/image output;
+  append a non-null error as a final text part because the native result has no
+  separate error field. Retain the original complete result in storage. Do not
+  treat transport delivery as application or automatically replay an uncertain
+  result. The adapter waits for outstanding application receipts even when Done
+  arrives first. Waiting Turns still accept execution observations and cancellation.
+  Public `tools` and `tool_result` admission remain a separate protocol slice;
+  internal execution is not proof of full public function compatibility.
 - `message_items` advertises native assistant-message observations. Agents API
   opts in with `observe_messages` only for advertised peers; ordinary product
   requests retain their existing frame sequence. Opted-in text deltas carry their
