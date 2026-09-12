@@ -18,6 +18,18 @@ type Device struct {
 	RevokedAt      pgtype.Timestamptz `json:"revoked_at"`
 }
 
+type FunctionCall struct {
+	SessionID      pgtype.UUID        `json:"session_id"`
+	TurnID         pgtype.UUID        `json:"turn_id"`
+	CallID         string             `json:"call_id"`
+	ExecutorCallID string             `json:"executor_call_id"`
+	Name           string             `json:"name"`
+	Arguments      []byte             `json:"arguments"`
+	Result         []byte             `json:"result"`
+	Applied        bool               `json:"applied"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
 type Session struct {
 	ID             pgtype.UUID        `json:"id"`
 	TenantID       pgtype.UUID        `json:"tenant_id"`
