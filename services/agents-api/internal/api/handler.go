@@ -48,6 +48,7 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 	router.Route("/v1", func(r chi.Router) {
 		r.Use(h.authenticate)
 		r.Post("/agents", h.createAgent)
+		r.Get("/agents", h.listAgents)
 		r.Get("/agents/{agent_id}", h.getAgent)
 		r.Post("/agents/sessions", h.createSession)
 		r.Get("/agents/sessions", h.listSessions)

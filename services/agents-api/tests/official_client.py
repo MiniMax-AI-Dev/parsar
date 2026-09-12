@@ -20,6 +20,7 @@ import httpx2
 from jsonschema import Draft4Validator
 from official_items import verify_items
 from official_agents import verify_agents
+from official_agent_list import verify_agent_list
 from official_agent_references import verify_agent_references
 from official_session_requests import verify_session_create_requests
 from official_session_metadata import verify_session_metadata, verify_active_session_metadata
@@ -112,6 +113,7 @@ def main():
                 process = start()
                 with client(tokens[0]) as a, client(tokens[1]) as b, client("invalid-key") as invalid:
                     saved_agents = verify_agents(a, b, invalid, expect_error)
+                    listed_agents = verify_agent_list(a, b, invalid, saved_agents, expect_error)
                     sessions = a.beta.agents.sessions
                     spec = {"agent": {"model": "requested-test-model", "instructions": "Keep the configuration."}, "environment": {"type": "none"}}
                     headers = {"Idempotency-Key": "same-key"}
@@ -185,6 +187,7 @@ def main():
                     process.wait(timeout=15)
                     process = start()
                     assert [a.beta.agents.retrieve(item.id) for item in saved_agents] == saved_agents
+                    assert [item.id for item in a.beta.agents.list(limit=2, order="asc") if item.id in listed_agents] == listed_agents
                     assert [sessions.retrieve(item.id) for item in request_sessions] == request_sessions
                     reference_spec, reference_headers, reference_result = reference_retry
                     assert sessions.create(**reference_spec, extra_headers=reference_headers) == reference_result

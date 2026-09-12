@@ -405,6 +405,29 @@ definitions:
     - tools
     - updated_at
     type: object
+  v1.SavedAgentList:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/v1.SavedAgent'
+        type: array
+      first_id:
+        type: string
+        x-nullable: true
+      has_more:
+        type: boolean
+      last_id:
+        type: string
+        x-nullable: true
+      object:
+        enum:
+        - list
+        type: string
+    required:
+    - data
+    - has_more
+    - object
+    type: object
   v1.SavedAgentText:
     properties:
       format:
@@ -731,6 +754,62 @@ info:
   version: "1"
 paths:
   /agents:
+    get:
+      description: Lists only the authenticated tenant's saved Agents, independently
+        of Sessions. Positive int64 limits are accepted; each page returns at most
+        100 resources with continuation. The local default is 20; exact upstream default/cap,
+        empty cursor fields and error conformance remain unverified.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Last Agent ID from the previous page
+        in: query
+        name: after
+        type: string
+      - description: Maximum requested resources; pages contain at most 100
+        in: query
+        minimum: 1
+        name: limit
+        type: integer
+      - default: desc
+        description: Creation order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SavedAgentList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List reusable Agents
+      tags:
+      - Agents
     post:
       consumes:
       - application/json
