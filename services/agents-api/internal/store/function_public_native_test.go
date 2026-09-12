@@ -28,39 +28,13 @@ func TestNativePublicFunctionExecution(t *testing.T) {
 	h.d.Options = func(context.Context, store.Session) (map[string]any, error) {
 		return map[string]any{"codex_provider": map[string]any{"base_url": model.URL + "/v1", "bearer_token": "synthetic-test-token"}}, nil
 	}
-	worker, err := execution.StartWorker(ctx, h.d)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- worker.Run(ctx) }()
-	defer func() {
-		cancel()
-		select {
-		case <-done:
-		case <-time.After(15 * time.Second):
-			t.Error("worker did not stop")
-		}
-	}()
-	token := uuid.NewString()
-	auth, err := api.NewAuthenticator([]api.APIKey{{TokenSHA256: device.HashCredential(token), TenantID: h.tenant}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler, err := api.NewHandler(h.s, auth, "codex", api.WithExecution(worker))
-	if err != nil {
-		t.Fatal(err)
-	}
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	serverURL, token := nativePublicFunctionServer(t, h, ctx)
 	outputPath, proofPath := filepath.Join(home, "function-output.json"), filepath.Join(home, "public-functions.json")
 	raw, _ := json.Marshal(output)
 	if err := os.WriteFile(outputPath, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.CommandContext(ctx, python, "../../tests/official_functions.py", server.URL, token, outputPath, proofPath)
+	command := exec.CommandContext(ctx, python, "../../tests/official_functions.py", serverURL, token, outputPath, proofPath)
 	if log, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("official native functions: %v %s", err, log)
 	}
@@ -69,7 +43,7 @@ func TestNativePublicFunctionExecution(t *testing.T) {
 		Turns   []string `json:"turns"`
 		Calls   []string `json:"calls"`
 	}
-	raw, err = os.ReadFile(proofPath)
+	raw, err := os.ReadFile(proofPath)
 	if err != nil || json.Unmarshal(raw, &proof) != nil || len(proof.Turns) != 3 || len(proof.Calls) != 3 {
 		t.Fatal(proof, err)
 	}
@@ -87,4 +61,36 @@ func TestNativePublicFunctionExecution(t *testing.T) {
 		t.Fatal("unexpected replay or missing native continuation", requests.Load())
 	}
 	t.Logf("Official SDK configured functions, native text/image/error results, application receipts, next Turn and cancellation passed; evidence %s", home)
+}
+
+func nativePublicFunctionServer(t *testing.T, h *dispatchHarness, ctx context.Context) (string, string) {
+	t.Helper()
+	worker, err := execution.StartWorker(ctx, h.d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	t.Cleanup(cancel)
+	done := make(chan error, 1)
+	go func() { done <- worker.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(15 * time.Second):
+			t.Error("worker did not stop")
+		}
+	})
+	token := uuid.NewString()
+	auth, err := api.NewAuthenticator([]api.APIKey{{TokenSHA256: device.HashCredential(token), TenantID: h.tenant}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := api.NewHandler(h.s, auth, "codex", api.WithExecution(worker))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	return server.URL, token
 }
