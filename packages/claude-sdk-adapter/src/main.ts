@@ -1,3 +1,4 @@
+import { FunctionBridge } from "./function_bridge.js";
 import { createInterface } from "node:readline";
 import { execute, parseStart, type Event } from "./adapter.js";
 
@@ -11,11 +12,24 @@ const emit = (event: Event): Promise<void> => new Promise((resolve, reject) => {
   process.stdout.write(JSON.stringify(event) + "\n", error => error ? reject(error) : resolve());
 });
 try {
-  const first = await lines[Symbol.asyncIterator]().next();
+  const input = lines[Symbol.asyncIterator]();
+  const first = await input.next();
   if (first.done || Buffer.byteLength(first.value) > 1024 * 1024) throw new Error("invalid_request");
   const request = parseStart(first.value);
-  try { await execute(request, emit, abort); }
+  const functions = new FunctionBridge(emit);
+  const incoming = (async () => {
+    try { for await (const line of { [Symbol.asyncIterator]: () => input }) functions.submit(line); }
+    catch { abort.abort(); }
+  })();
+  try { await execute(request, emit, abort, functions); }
   catch { await emit({ type: "error", code: "execution_failed" }); }
+  finally {
+    functions.close();
+    lines.removeListener("close", stop);
+    lines.close();
+    process.stdin.destroy();
+    await incoming;
+  }
 } catch {
   await emit({ type: "error", code: "invalid_request" });
 } finally {

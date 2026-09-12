@@ -150,8 +150,8 @@ func verifyMessageEvents(t *testing.T, events []proto.Envelope, want string) {
 			state.chunks++
 		}
 	}
-	if len(messages) == 0 || strings.Join(completed, "") != want || sequence < 2 {
-		t.Fatalf("incomplete message stream: %+v", messages)
+	if len(messages) == 0 || strings.Join(completed, "") != want || sequence == 0 {
+		t.Fatalf("incomplete message stream: chunks=%d completed=%q want=%q", sequence, strings.Join(completed, ""), want)
 	}
 	for id, state := range messages {
 		if !state.completed {

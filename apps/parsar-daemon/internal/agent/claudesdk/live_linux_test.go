@@ -81,20 +81,28 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		"ANTHROPIC_DEFAULT_SONNET_MODEL=MiniMax-M3", "ANTHROPIC_DEFAULT_OPUS_MODEL=MiniMax-M3", "ANTHROPIC_DEFAULT_HAIKU_MODEL=MiniMax-M3",
 	}}
 	type evidence struct {
-		SessionID  string           `json:"session_id"`
-		NodePID    int              `json:"node_pid"`
-		NativePIDs []int            `json:"native_pids"`
-		ChildPIDs  []int            `json:"child_pids"`
-		Text       string           `json:"text"`
-		Failure    string           `json:"failure,omitempty"`
-		Events     []proto.Envelope `json:"events"`
+		SessionID      string           `json:"session_id"`
+		NodePID        int              `json:"node_pid"`
+		NativePIDs     []int            `json:"native_pids"`
+		ChildPIDs      []int            `json:"child_pids"`
+		Text           string           `json:"text"`
+		Failure        string           `json:"failure,omitempty"`
+		Events         []proto.Envelope `json:"events"`
+		FunctionCalls  int              `json:"function_calls"`
+		AppliedResults int              `json:"applied_results"`
 	}
-	run := func(prompt, resume string) evidence {
+	functionNonce := "function-" + uuid.NewString()
+	run := func(prompt, resume string, success *bool) evidence {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 		out := make(chan proto.Envelope, 64)
 		request := proto.PromptRequestPayload{RunID: uuid.NewString(), Prompt: prompt, AgentSessionID: resume, StrictResume: true, ReleaseOnCompletion: true, ObserveMessages: true, AgentOptions: map[string]any{"model": "MiniMax-M3", "system_prompt": "Answer briefly and preserve the exact verification value in the conversation. Use no tools."}}
+		if success != nil {
+			request.ObserveToolObservations = true
+			request.AgentOptions["system_prompt"] = "Call lookup exactly once as requested, then report both result parts and any prior verification value. Never retry a failed tool."
+			request.FunctionTools = []proto.FunctionTool{{Name: "lookup", Description: "Return a synthetic verification value.", Parameters: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}`)}}
+		}
 		running, err := NewFactory(config)(ctx, request, out)
 		if err != nil {
 			t.Fatal(err)
@@ -141,6 +149,41 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		for event := range out {
 			proof.Events = append(proof.Events, event)
 			switch event.Type {
+			case proto.TypeToolCall:
+				var tool proto.ToolCallPayload
+				if err := event.DecodePayload(&tool); err != nil {
+					t.Fatal(err)
+				}
+				if tool.Observation == nil || tool.Observation.Kind != "function" || tool.NativeItem != nil || (tool.Stage != "before" && tool.Stage != "after") {
+					t.Fatal("invalid live neutral function observation")
+				}
+				if tool.Stage == "after" {
+					expectedStatus := "completed"
+					if success != nil && !*success {
+						expectedStatus = "failed"
+					}
+					if tool.Observation.Status != expectedStatus || tool.Observation.Content == nil || len(*tool.Observation.Content) != 2 {
+						t.Fatal("live result observation lost status or content")
+					}
+				}
+			case proto.TypeFunctionCall:
+				var call proto.FunctionCallPayload
+				if err := event.DecodePayload(&call); err != nil {
+					t.Fatal(err)
+				}
+				proof.FunctionCalls++
+				if success == nil || proof.FunctionCalls != 1 || call.Name != "lookup" {
+					t.Fatal("unexpected live function call")
+				}
+				first, second := functionNonce, "ordered-second-part"
+				if !*success {
+					first, second = "synthetic-current-failure", "do-not-retry"
+				}
+				value := proto.FunctionResultPayload{CallID: call.CallID, DeliveryID: uuid.NewString(), Success: *success, Content: []proto.FunctionResultContent{{Type: "input_text", Text: &first}, {Type: "input_text", Text: &second}}}
+				if err := s.SubmitFunctionResult(ctx, value); err != nil {
+					t.Fatalf("live native result receipt failed: %v; proof root %s", err, root)
+				}
+				proof.AppliedResults++
 			case proto.TypeError:
 				var payload proto.ErrorPayload
 				_ = json.Unmarshal(event.Payload, &payload)
@@ -171,15 +214,22 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 				}
 			}
 		}
+		data, err := json.MarshalIndent(proof, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, fmt.Sprintf("execution-%d.json", proof.NodePID)), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
 		return proof
 	}
 	nonce := "sdk-adapter-" + uuid.NewString()
-	first := run("Remember this exact verification value and reply with it: "+nonce, "")
+	first := run("Remember this exact verification value and reply with it: "+nonce, "", nil)
 	if first.Failure != "" || first.SessionID == "" || !strings.Contains(first.Text, nonce) || len(first.NativePIDs) == 0 {
 		t.Fatalf("first execution failed: %+v; evidence root %s", first, root)
 	}
 	verifyMessageEvents(t, first.Events, first.Text)
-	second := run("Return only the exact verification value from the previous user message.", first.SessionID)
+	second := run("Return only the exact verification value from the previous user message.", first.SessionID, nil)
 	if second.Failure != "" || second.SessionID != first.SessionID || !strings.Contains(second.Text, nonce) || first.NodePID == second.NodePID || len(second.NativePIDs) == 0 {
 		t.Fatalf("cold resume failed: %+v; evidence root %s", second, root)
 	}
@@ -191,10 +241,19 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 			}
 		}
 	}
+	accepted, rejected := true, false
+	functionFirst := run("Call lookup once with id 42 as a string. Report both returned parts verbatim.", "", &accepted)
+	if functionFirst.Failure != "" || functionFirst.FunctionCalls != 1 || functionFirst.AppliedResults != 1 || !strings.Contains(functionFirst.Text, functionNonce) || !strings.Contains(functionFirst.Text, "ordered-second-part") {
+		t.Fatalf("live function failed: %+v", functionFirst)
+	}
+	functionSecond := run("Call lookup once with id 42 as a string. Report the prior verification value and both current result parts. Do not retry.", functionFirst.SessionID, &rejected)
+	if functionSecond.Failure != "" || functionSecond.FunctionCalls != 1 || functionSecond.AppliedResults != 1 || functionSecond.SessionID != functionFirst.SessionID || !strings.Contains(functionSecond.Text, functionNonce) || !strings.Contains(functionSecond.Text, "synthetic-current-failure") || !strings.Contains(functionSecond.Text, "do-not-retry") || functionSecond.NodePID == functionFirst.NodePID {
+		t.Fatalf("live function resume failed: %+v", functionSecond)
+	}
 	mu.Lock()
 	before := len(models)
 	mu.Unlock()
-	missing := run("Say hello.", uuid.NewString())
+	missing := run("Say hello.", uuid.NewString(), nil)
 	mu.Lock()
 	measured := append([]string{}, models...)
 	mu.Unlock()
@@ -209,7 +268,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 			t.Fatalf("unexpected requested model %q", model)
 		}
 	}
-	data, _ := json.MarshalIndent(map[string]any{"scope": "Go daemon factory -> official SDK -> real MiniMax API; public API not enabled", "turns": []evidence{first, second}, "missing_history": missing, "model_requests": measured}, "", "  ")
+	data, _ := json.MarshalIndent(map[string]any{"scope": "Go daemon factory -> official SDK -> real MiniMax API; public API not enabled", "turns": []evidence{first, second, functionFirst, functionSecond}, "missing_history": missing, "model_requests": measured}, "", "  ")
 	if err := os.WriteFile(filepath.Join(root, "proof.json"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
