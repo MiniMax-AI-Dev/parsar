@@ -126,6 +126,10 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		return nil, fmt.Errorf("codex: build session plan: %w", err)
 	}
 
+	if req.DisableSubagents {
+		disableSubagents(&plan)
+	}
+
 	if stringOpt(req.AgentOptions, "model_verbosity") != "" {
 		if err := prepareModelVerbosity(parent, cfg.codexBinary, &plan); err != nil {
 			plan.Cleanup()

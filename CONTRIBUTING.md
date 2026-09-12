@@ -151,7 +151,10 @@ path until an explicit client cutover.
   each bounded task passes checks/review and merges, mark it done, reread the full
   board and choose the next task by value, dependencies, risk and effort. Agent API
   protocol and atomic execution work takes priority over product integration, UI
-  work and business Team orchestration.
+  work and business Team orchestration. Prioritize a sound architecture skeleton
+  and correct principal workflows with real API validation. Record and defer
+  low-frequency corner cases when risk and ROI permit; do not let minor details
+  delay the main work. Required checks and material correctness guarantees apply.
 
 - Parsar owns users, workspaces, business authorization, Agent/Team definitions,
   capabilities, product conversations, IM/sharing, approval decisions and billing.
@@ -301,6 +304,14 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   unsupported non-default levels remain an explicit implementation gap.
   Product requests that omit the native option retain their existing defaults.
   Structured output formats remain a separate protocol gap.
+- `subagent_control` advertises native subagent tool control. Agents API requires
+  it when resolved `multi_agent.enabled` is false and sends the typed internal
+  `disable_subagents` policy on both new and resumed Turns. Native translation
+  stays in the adapter: Codex disables both multi-agent feature generations,
+  overriding operator feature preferences. Product prompts that omit the policy
+  retain their defaults. Enabled multi-agent execution and public Subagent
+  resources remain separate implementation gaps; the Agent tools list is not
+  proven to enumerate every harness-internal utility.
 - `function_tools` advertises the optional native function-call bridge. Explicit
   prompt definitions become Codex dynamic tools; unchanged prompts carry none.
   Requests and ordered text/image results are scoped by Run and native call ID.

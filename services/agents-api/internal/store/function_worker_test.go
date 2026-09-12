@@ -22,7 +22,7 @@ func TestFunctionWorkerWaitsForCapableDevice(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			caps := proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true}
+			caps := proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true, SubagentControl: true}
 			heartbeat := func() {
 				h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: caps}}})
 			}

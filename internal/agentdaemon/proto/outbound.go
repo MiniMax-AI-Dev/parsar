@@ -83,6 +83,7 @@ type PromptRequestPayload struct {
 	ObserveTools                bool           `json:"observe_tools,omitempty"`
 	FunctionTools               []FunctionTool `json:"function_tools,omitempty"`
 	DisableExecutionEnvironment bool           `json:"disable_execution_environment,omitempty"`
+	DisableSubagents            bool           `json:"disable_subagents,omitempty"`
 }
 
 // PromptAttachment is one piece of non-text user input the daemon-side

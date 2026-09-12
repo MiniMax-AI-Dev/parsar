@@ -111,7 +111,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
 | Authenticated Session HTTP API | Create/retrieve/list and metadata-only update; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |
 | Internal Turn/input persistence | Tenant-scoped atomic message/cancel/function-result batches, steering, request-level retry identity, cancellation targets and terminal outcomes; public function-result decoding and mixed-batch admission supported |
-| Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution; public text/cancel submission with a bounded standalone worker |
+| Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution and disabled native subagent tools for the resolved false default; public text/cancel submission with a bounded standalone worker |
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |
 | Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
 | Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
@@ -143,6 +143,21 @@ Agent references/filtering, structured output, other agent options, vaults, init
 and execution/provider resources are not supported by this slice. Reject them
 explicitly. `AGENTS_API_ENGINE` selects the service's engine independently of the
 requested model; it does not add a competing field to the upstream request.
+
+### Native subagent control
+
+The pinned `types/beta/multi_agent_config.py` defines `enabled=false` as disabling
+subagent tools. The dispatcher enforces that effective value with a typed daemon
+policy and capability admission; the Codex adapter applies native feature controls
+on fresh and resumed Turns. Operator feature preferences cannot re-enable them.
+Controlled model-boundary tests check absence of direct/deferred subagent tools
+while the official function workflow continues to run.
+
+Explicit inline `multi_agent` input, enabled multi-agent execution and public
+Subagent resources are still unsupported. Do not infer that `Agent.tools` is the
+complete native tool registry: environment and subagent tools have separate
+configuration. The upstream behavior of internal Goal, Skills and user-input
+utilities needs further evidence; their presence alone is not proof of a mismatch.
 
 ### Turn recovery reads
 
