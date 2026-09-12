@@ -331,7 +331,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   treat transport delivery as application or automatically replay an uncertain
   result. The adapter waits for outstanding application receipts even when Done
   arrives first. Waiting Turns still accept execution observations and cancellation.
-  Public `tools` and `tool_result` admission remain a separate protocol slice;
+  Public `tools` configuration remains a separate protocol slice;
   internal execution is not proof of full public function compatibility.
 - `message_items` advertises native assistant-message observations. Agents API
   opts in with `observe_messages` only for advertised peers; ordinary product
