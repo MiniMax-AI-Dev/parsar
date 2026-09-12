@@ -345,15 +345,26 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   the engine process; it is not a user execution environment. This is not an OS
   isolation guarantee, and engine state still lives on that host. Ordinary product
   requests retain their existing environment. The public worker selects an authenticated same-tenant engine host for this mode.
+- `execution_controls` advertises the typed search/verbosity block on the daemon
+  prompt. Agents API requires it in addition to the individual native capabilities
+  before binding/claiming work. Older peers with only option-based capabilities
+  must not receive controls they would ignore. The API sends resolved search and
+  text verbosity values; native option names belong to adapters. Codex translates
+  them using its existing validation/catalog path after cloning operator options,
+  so explicit controls take precedence without mutating those options. Omitting
+  the entire block preserves ordinary product behavior; a supplied block requires
+  both valid fields. This internal contract does not add public configuration or
+  engine support. Future native adapters must verify the same semantics before
+  advertising the capability.
 - `web_search_control` advertises the Codex adapter's explicit `web_search` option
   (`disabled`, `cached`, or `live`). Agents API requires this capability before dispatch;
-  it forces search off on both new and resumed Turns. Native configuration translation stays in the
+  the typed execution controls force search off on new and resumed Turns. Native configuration translation stays in the
   adapter. Product requests that omit the option inherit their existing defaults.
   This is tool selection, not a network isolation guarantee.
 - Inline Agent `text.verbosity` accepts `low`, `medium` and `high`; omitted or
   null values resolve to `medium` in the immutable configuration snapshot. The
-  dispatcher requires `text_verbosity` support and passes the effective value
-  through the Codex adapter for both new and resumed Turns. The adapter queries
+  dispatcher requires `text_verbosity` support and sends the effective value in
+  typed execution controls through the Codex adapter for both new and resumed Turns. The adapter queries
   the native active catalog with `codex debug models`, checks model support and
   pins that catalog snapshot for execution. The probe requires Unix process-group
   cancellation; other daemon hosts do not advertise this capability. For models

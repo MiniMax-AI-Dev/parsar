@@ -260,8 +260,10 @@ type AgentKindCapabilities struct {
 	ToolObservations   bool `json:"tool_observations,omitempty"`
 	EnvironmentNone    bool `json:"environment_none,omitempty"`
 	WebSearchControl   bool `json:"web_search_control,omitempty"`
-	TextVerbosity      bool `json:"text_verbosity,omitempty"`
-	SubagentControl    bool `json:"subagent_control,omitempty"`
+	// ExecutionControls supports typed search and verbosity controls.
+	ExecutionControls bool `json:"execution_controls,omitempty"`
+	TextVerbosity     bool `json:"text_verbosity,omitempty"`
+	SubagentControl   bool `json:"subagent_control,omitempty"`
 	// DurableTurns includes strict resume, completion release and cancellation snapshots.
 	DurableTurns  bool `json:"durable_turns,omitempty"`
 	FunctionTools bool `json:"function_tools,omitempty"`

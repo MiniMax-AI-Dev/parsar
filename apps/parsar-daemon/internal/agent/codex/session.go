@@ -122,6 +122,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	}
 	req.AgentStateKey = effectiveAgentStateKey(req)
 
+	req.AgentOptions = executionOptions(req)
 	plan, err := BuildSessionPlan(req.RunID, req.AgentStateKey, req.WorkDir, req.AgentOptions)
 	if err != nil {
 		return nil, fmt.Errorf("codex: build session plan: %w", err)

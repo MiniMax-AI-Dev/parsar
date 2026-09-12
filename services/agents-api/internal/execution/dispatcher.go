@@ -58,11 +58,14 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if !known || !found || !info.Available || !info.Capabilities.Streaming || !info.Capabilities.Steering || !info.Capabilities.DurableTurns {
 		return store.Turn{}, errors.New("device must advertise streaming, steering and durable turns for this engine")
 	}
-	if session.Engine == "codex" && !info.Capabilities.WebSearchControl {
-		return store.Turn{}, errors.New("device must advertise web_search_control for Codex")
+	if !info.Capabilities.ExecutionControls {
+		return store.Turn{}, errors.New("device must advertise execution_controls")
 	}
-	if session.Engine == "codex" && !info.Capabilities.TextVerbosity {
-		return store.Turn{}, errors.New("device must advertise text_verbosity for Codex")
+	if !info.Capabilities.WebSearchControl {
+		return store.Turn{}, errors.New("device must advertise web_search_control")
+	}
+	if !info.Capabilities.TextVerbosity {
+		return store.Turn{}, errors.New("device must advertise text_verbosity")
 	}
 	if !info.Capabilities.ToolObservations {
 		return store.Turn{}, errors.New("device must advertise tool_observations")
@@ -105,18 +108,15 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	}
 	options["model"], options["system_prompt"] = snapshot.Agent.Model, snapshot.Agent.Instructions
 	delete(options, "override_system_prompt")
-	if session.Engine == "codex" {
-		options["web_search"] = "disabled"
-		verbosity := snapshot.Agent.Text.Verbosity
-		if verbosity == "" {
-			verbosity = "medium"
-		}
-		options["model_verbosity"] = verbosity
+	verbosity := snapshot.Agent.Text.Verbosity
+	if verbosity == "" {
+		verbosity = "medium"
 	}
+	controls := &proto.ExecutionControls{WebSearch: "disabled", TextVerbosity: verbosity}
 	if _, err := d.Store.TransitionTurn(ctx, tenantID, sessionID, turnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress}); err != nil {
 		return store.Turn{}, err
 	}
-	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, FunctionTools: functions, AgentOptions: options, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: info.Capabilities.MessageItems, ObserveToolObservations: true, DisableExecutionEnvironment: noEnvironment, DisableSubagents: !snapshot.Agent.MultiAgent.Enabled}
+	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, FunctionTools: functions, AgentOptions: options, ExecutionControls: controls, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: info.Capabilities.MessageItems, ObserveToolObservations: true, DisableExecutionEnvironment: noEnvironment, DisableSubagents: !snapshot.Agent.MultiAgent.Enabled}
 	result, status := d.deliver(ctx, tenantID, sessionID, peer, req, through)
 	if result.Done.Usage.Model == "" {
 		result.Done.Usage.Model = snapshot.Agent.Model
