@@ -14,7 +14,7 @@ import (
 )
 
 type turnReadStore struct {
-	SessionStore
+	ResourceStore
 	tenant, sessionID, turnID, cursor string
 	limit                             int
 	ascending                         bool
@@ -38,7 +38,7 @@ func (s *turnReadStore) ListTurns(_ context.Context, tenant, session, cursor str
 func TestTurnRoutesUseAuthenticatedScopeAndSafeProjection(t *testing.T) {
 	h, record, tenant := testHandler(t)
 	s := &turnReadStore{session: store.Session{Configuration: json.RawMessage(`{"agent":{"id":"agent_snapshot"}}`)}, turn: store.Turn{ID: "turn", SessionID: "session", Status: store.TurnFailed, CreatedAt: time.Unix(1700000000, 999), Outcome: json.RawMessage(`{"error":"Bearer SECRET","done":{"metadata":{"password":"SECRET"}}}`)}}
-	record.SessionStore = s
+	record.ResourceStore = s
 	request := func(path string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodGet, path, nil)
 		r.Header.Set("Authorization", "Bearer test-api-key")

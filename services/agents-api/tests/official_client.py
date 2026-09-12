@@ -19,6 +19,7 @@ sys.dont_write_bytecode = True
 import httpx2
 from jsonschema import Draft4Validator
 from official_items import verify_items
+from official_agents import verify_agents
 from official_session_requests import verify_session_create_requests
 from official_session_metadata import verify_session_metadata, verify_active_session_metadata
 from openai import AuthenticationError, BadRequestError, ConflictError, NotFoundError, OpenAI
@@ -49,6 +50,8 @@ def main():
                 path += "/turns" + ("/{turn_id}" if len(suffix) > 1 else "")
             elif suffix and suffix[0] == "items":
                 path += "/items"
+        elif path.startswith("/agents/") and path != "/agents/sessions":
+            path = "/agents/{agent_id}"
         schema = contract["paths"][path][response.request.method.lower()]["responses"][str(response.status_code)]["schema"]
         Draft4Validator({"definitions": contract["definitions"], **schema}).validate(response.json())
     pin = json.loads((root / "contracts/agents-api/upstream.json").read_text())
@@ -107,6 +110,7 @@ def main():
             try:
                 process = start()
                 with client(tokens[0]) as a, client(tokens[1]) as b, client("invalid-key") as invalid:
+                    saved_agents = verify_agents(a, b, invalid, expect_error)
                     sessions = a.beta.agents.sessions
                     spec = {"agent": {"model": "requested-test-model", "instructions": "Keep the configuration."}, "environment": {"type": "none"}}
                     headers = {"Idempotency-Key": "same-key"}
@@ -177,6 +181,7 @@ def main():
                     process.terminate()
                     process.wait(timeout=15)
                     process = start()
+                    assert [a.beta.agents.retrieve(item.id) for item in saved_agents] == saved_agents
                     assert [sessions.retrieve(item.id) for item in request_sessions] == request_sessions
                     assert list(sessions.items.list(turn_session.id, order="asc")) == saved_items
                     assert list(turns.list(turn_session.id, order="asc")) == recovered

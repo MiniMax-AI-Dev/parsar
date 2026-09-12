@@ -219,10 +219,22 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   persists caller-validated non-secret configuration and metadata without applying
   harness capability restrictions or model defaults. Resource identity and equal
   initial creation/update timestamps come from the persistence boundary. The
-  create primitive creates a fresh resource; it does not establish public retry
-  semantics. Public Agent routes, configuration resolution and Session references
-  are separate work. Internal storage admission is 512 KiB for configuration and
-  64 KiB for metadata, not a claim about upstream limits.
+  create primitive creates a fresh resource; public retry conformance remains
+  unverified. Internal storage admission is 512 KiB for configuration and 64 KiB
+  for metadata, not a claim about upstream limits.
+- Public reusable Agent create/retrieve uses `/v1/agents` and the same authenticated
+  tenant/Beta-header boundary as Sessions. The resource envelope owns identity,
+  timestamps and metadata, separately from saved configuration and Session state.
+  Resolve known defaults and validate supported schema before writing. Preserve
+  model/name/instructions verbatim, nullable fields and structured JSON numbers.
+  Stored reasoning/service tiers, enabled multi-agent settings, JSON Schema output
+  and deferred/tool-search/programmatic tools do not imply execution support.
+  Reuse function wire validation, keeping Session execution restrictions separate.
+  Model-derived reasoning effort is unresolved when omitted; do not infer it from
+  the selected harness. Omitted/null service tier currently uses `auto`; complete
+  upstream default/error/retry conformance and persisted MCP/web-search tools remain
+  gaps. Unknown/unsupported variants fail explicitly. Session references and the
+  remaining resource operations are separate work; no product lookup is permitted.
 - Tenant scope must come from authenticated service identity before calling the
   execution Store. Product workspace/user references in metadata grant no access.
   Keep credentials and effective execution options out of Session metadata.
