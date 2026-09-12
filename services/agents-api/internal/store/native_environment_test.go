@@ -95,6 +95,12 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 			t.Error(err)
 			return
 		}
+		for _, value := range body["tools"].([]any) {
+			tool := value.(map[string]any)
+			if kind, _ := tool["type"].(string); strings.HasPrefix(kind, "web_search") {
+				t.Error("undeclared web search reached the model")
+			}
+		}
 		n := requests.Add(1)
 		raw, _ := json.MarshalIndent(body, "", "  ")
 		_ = os.WriteFile(filepath.Join(home, fmt.Sprintf("model-request-%d.json", n)), raw, 0600)
@@ -134,7 +140,7 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 	}))
 	defer model.Close()
 	h.d.Options = func(context.Context, store.Session) (map[string]any, error) {
-		return map[string]any{"codex_provider": map[string]any{"base_url": model.URL + "/v1", "bearer_token": "synthetic-test-token"}, "env": map[string]any{"CODEX_EXEC_SERVER_URL": "ws://127.0.0.1:1"}}, nil
+		return map[string]any{"web_search": "live", "codex_provider": map[string]any{"base_url": model.URL + "/v1", "bearer_token": "synthetic-test-token"}, "env": map[string]any{"CODEX_EXEC_SERVER_URL": "ws://127.0.0.1:1"}}, nil
 	}
 	first := h.message("first", "Return an answer.")
 	h.finished(h.run(ctx, first.TurnID), store.TurnCompleted)

@@ -266,6 +266,12 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   the engine process; it is not a user execution environment. This is not an OS
   isolation guarantee, and engine state still lives on that host. Ordinary product
   requests retain their existing environment. The public worker selects an authenticated same-tenant engine host for this mode.
+- `web_search_control` advertises the Codex adapter's explicit `web_search` option
+  (`disabled`, `cached`, or `live`). Agents API currently accepts no configured
+  tools and requires this capability before dispatch; it forces search off on
+  both new and resumed Turns. Native configuration translation stays in the
+  adapter. Product requests that omit the option inherit their existing defaults.
+  This is tool selection, not a network isolation guarantee.
 - `function_tools` advertises the optional native function-call bridge. Explicit
   prompt definitions become Codex dynamic tools; unchanged prompts carry none.
   Requests and textual results are scoped by Run and native call ID. Reuse

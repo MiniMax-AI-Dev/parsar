@@ -68,6 +68,7 @@ type KindCapabilities struct {
 	MessageItems       bool `json:"message_items,omitempty"`
 	ToolItems          bool `json:"tool_items,omitempty"`
 	EnvironmentNone    bool `json:"environment_none,omitempty"`
+	WebSearchControl   bool `json:"web_search_control,omitempty"`
 	FunctionTools      bool `json:"function_tools,omitempty"`
 	DurableTurns       bool `json:"durable_turns,omitempty"`
 	WorkspaceAuthoring bool `json:"workspace_authoring,omitempty"`

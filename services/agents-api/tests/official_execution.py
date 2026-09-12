@@ -54,7 +54,8 @@ def main():
 
     try:
         session = create()
-        event = message("First public message.", "Second message in the same event.")
+        assert session.agent.tools == []
+        event = message("Search the web for this answer.", "Second message in the same event.")
         with sessions.events.stream(session.id, timeout=20) as stream:
             assert sessions.events.create(session.id, events=[event], idempotency_key="first") is None
             sessions.events.create(session.id, events=[event], idempotency_key="first")
