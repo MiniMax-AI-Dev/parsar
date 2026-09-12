@@ -15,8 +15,9 @@ type CreateSessionRequest struct {
 }
 
 type InlineAgent struct {
-	Model        string  `json:"model" binding:"required"`
-	Instructions *string `json:"instructions,omitempty" extensions:"x-nullable"`
+	Model        string           `json:"model" binding:"required"`
+	Instructions *string          `json:"instructions,omitempty" extensions:"x-nullable"`
+	Text         *TextConfigInput `json:"text,omitempty" extensions:"x-nullable"`
 }
 
 // Environment currently supports the upstream environment-free configuration.
@@ -46,9 +47,14 @@ type Reasoning struct {
 	Summary *string `json:"summary,omitempty" extensions:"x-nullable"`
 }
 
+type TextConfigInput struct {
+	Format    *TextFormat `json:"format,omitempty" extensions:"x-nullable"`
+	Verbosity *string     `json:"verbosity,omitempty" enums:"low,medium,high" extensions:"x-nullable"`
+}
+
 type TextConfig struct {
 	Format    TextFormat `json:"format" binding:"required"`
-	Verbosity string     `json:"verbosity" enums:"medium" binding:"required"`
+	Verbosity string     `json:"verbosity" enums:"low,medium,high" binding:"required"`
 }
 
 type TextFormat struct {

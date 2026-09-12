@@ -266,6 +266,7 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 				ToolItems:        true,
 				EnvironmentNone:  true,
 				WebSearchControl: true,
+				TextVerbosity:    codex.SupportsTextVerbosity,
 			},
 		},
 		Pi: proto.SupportedAgentKind{

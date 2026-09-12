@@ -100,7 +100,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Shared daemon connection layer | Implemented; existing product protocol retained |
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
-| Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, environment `none`, metadata and creation retry keys |
+| Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon and native model support required), environment `none`, metadata and creation retry keys |
 | Internal Turn/input persistence | Tenant-scoped atomic input batches, steering, request-level retry identity, cancellation targets and terminal outcomes |
 | Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution; public text/cancel submission with a bounded standalone worker |
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |
@@ -108,7 +108,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
 | Public SSE | Live Session/Turn lifecycle, supported Item and text events; bounded commit-before-publish buffering and recovery through saved reads |
 | Pending actions and environment lifecycle | Pending |
-| Official-client compatibility | Strict SDK checks for Session/Turn/Items reads and native text execution/cancellation; pagination, retries, errors, tenant isolation and recovery |
+| Official-client compatibility | Strict SDK checks for Session/Turn/Items reads and native text execution/cancellation/verbosity; pagination, retries, errors, tenant isolation and recovery |
 | Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |
 | Product cutover | Pending |
 | Team orchestration | Deferred; Parsar-owned |
@@ -128,7 +128,7 @@ extension separately from upstream fields and document it here when implemented.
 
 `openapi.yaml` is our generated supported surface; it is not the full upstream
 specification. The shared Go wire types are in `v1`. Session update/delete, saved
-Agent references/filtering, other agent options, vaults, initial input, creation streaming
+Agent references/filtering, structured output, other agent options, vaults, initial input, creation streaming
 and execution/provider resources are not supported by this slice. Reject them
 explicitly. `AGENTS_API_ENGINE` selects the service's engine independently of the
 requested model; it does not add a competing field to the upstream request.

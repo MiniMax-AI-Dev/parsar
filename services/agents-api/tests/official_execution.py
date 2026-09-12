@@ -123,10 +123,35 @@ def main():
         assert not any(value.type == "agent.session.turn.created" for value in cancelled_events)
         assert {item.id for item in retained} <= {item.id for item in sessions.items.list(cancelled.id, limit=100).data}
         assert sessions.retrieve(cancelled.id).status == "idle"
+        for verbosity in ("low", "medium", "high"):
+            agent = {"model": "gpt-5.5", "text": {"verbosity": verbosity, "format": {"type": "text"}}}
+            key = "text-" + verbosity
+            configured = sessions.create(agent=agent, environment={"type": "none"}, extra_headers={"Idempotency-Key": key})
+            agent["text"]["format"] = None
+            assert sessions.create(agent=agent, environment={"type": "none"}, extra_headers={"Idempotency-Key": key}).id == configured.id
+            assert configured.agent.text.model_dump() == {"format": {"type": "text"}, "verbosity": verbosity}
+            for count in (1, 2):
+                sessions.events.create(configured.id, events=[message("TEXT-VERBOSITY:" + verbosity)])
+                wait_turn(configured.id, "completed", count)
+                assert sessions.retrieve(configured.id).agent.text == configured.agent.text
+            agent["text"]["verbosity"] = "high" if verbosity != "high" else "low"
+            try:
+                sessions.create(agent=agent, environment={"type": "none"}, extra_headers={"Idempotency-Key": key})
+                raise AssertionError("changed text configuration reused a retry key")
+            except ConflictError:
+                pass
+        unsupported = sessions.create(agent={"model": "custom-provider-model", "text": {"verbosity": "high"}},
+                                      environment={"type": "none"})
+        sessions.events.create(unsupported.id, events=[message("UNSUPPORTED-VERBOSITY")])
+        failed = wait_turn(unsupported.id, "failed")
+        assert failed.error is not None and failed.error.code == "internal_error", failed.error
+        assert sessions.retrieve(unsupported.id).status == "failed"
         Path(evidence).write_text(json.dumps({"session": session.id, "turns": [first.id, second.id],
                                               "cancelled_session": cancelled.id, "cancelled_turn": stopped.id,
                                               "stream_types": types, "reconnected_events": len(second_events),
-                                              "cancelled_events": [value.type for value in cancelled_events]}))
+                                              "cancelled_events": [value.type for value in cancelled_events],
+                                              "verbosity_new_and_resumed": ["low", "medium", "high"],
+                                              "unsupported_verbosity": failed.error.model_dump()}))
     finally:
         client.close()
         foreign.close()

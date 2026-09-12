@@ -85,7 +85,7 @@ func tenantID(r *http.Request) string { return r.Context().Value(tenantContextKe
 
 // createSession creates an idle execution Session without submitting a Turn.
 // @Summary Create an execution Session
-// @Description Supports inline model/instructions and environment type none. Execution input and other options are explicitly unsupported in this slice.
+// @Description Supports inline model/instructions, text verbosity and environment type none. Execution input and other options are explicitly unsupported in this slice.
 // @Tags Sessions
 // @Accept json
 // @Produce json

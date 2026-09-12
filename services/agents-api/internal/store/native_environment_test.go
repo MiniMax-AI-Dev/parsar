@@ -95,11 +95,26 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 			t.Error(err)
 			return
 		}
+		if body["model"] == "custom-provider-model" {
+			t.Error("unsupported verbosity reached model execution")
+		}
 		for _, value := range body["tools"].([]any) {
 			tool := value.(map[string]any)
 			if kind, _ := tool["type"].(string); strings.HasPrefix(kind, "web_search") {
 				t.Error("undeclared web search reached the model")
 			}
+		}
+
+		encoded, _ := json.Marshal(body)
+		expected := "medium"
+		for _, level := range []string{"low", "high"} {
+			if strings.Contains(string(encoded), "TEXT-VERBOSITY:"+level) {
+				expected = level
+			}
+		}
+		textConfig, _ := body["text"].(map[string]any)
+		if textConfig["verbosity"] != expected {
+			t.Errorf("effective verbosity = %v, want %s", textConfig["verbosity"], expected)
 		}
 		n := requests.Add(1)
 		raw, _ := json.MarshalIndent(body, "", "  ")
@@ -140,7 +155,7 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 	}))
 	defer model.Close()
 	h.d.Options = func(context.Context, store.Session) (map[string]any, error) {
-		return map[string]any{"web_search": "live", "codex_provider": map[string]any{"base_url": model.URL + "/v1", "bearer_token": "synthetic-test-token"}, "env": map[string]any{"CODEX_EXEC_SERVER_URL": "ws://127.0.0.1:1"}}, nil
+		return map[string]any{"model_verbosity": "high", "web_search": "live", "codex_provider": map[string]any{"base_url": model.URL + "/v1", "bearer_token": "synthetic-test-token"}, "env": map[string]any{"CODEX_EXEC_SERVER_URL": "ws://127.0.0.1:1"}}, nil
 	}
 	first := h.message("first", "Return an answer.")
 	h.finished(h.run(ctx, first.TurnID), store.TurnCompleted)

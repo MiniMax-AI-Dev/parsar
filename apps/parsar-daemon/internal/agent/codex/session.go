@@ -126,6 +126,13 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		return nil, fmt.Errorf("codex: build session plan: %w", err)
 	}
 
+	if stringOpt(req.AgentOptions, "model_verbosity") != "" {
+		if err := prepareModelVerbosity(parent, cfg.codexBinary, &plan); err != nil {
+			plan.Cleanup()
+			return nil, err
+		}
+	}
+
 	if req.DisableExecutionEnvironment {
 		plan.Env = append(plan.Env, "CODEX_EXEC_SERVER_URL=none")
 	}
