@@ -344,9 +344,18 @@ e2b-template-binaries:
 	@echo "e2b-template: staged linux/amd64 binaries in $(E2B_BUILD_DIR)"
 
 # Dedicated execution-store tests require their own PostgreSQL database.
-.PHONY: build-agents-api check-agents-api
+.PHONY: build-agents-api check-agents-api docker-build-agents-api check-agents-api-container
 build-agents-api:
 	./scripts/build-agents-api.sh
 
 check-agents-api: build-agents-api
 	go test ./services/agents-api/... ./packages/agents-client/... -count=1
+
+# Image acceptance requires Linux Docker, a dedicated test DB and the pinned SDK.
+docker-build-agents-api:
+	./scripts/build-agents-api-image.sh
+
+check-agents-api-container: docker-build-agents-api
+	AGENTS_API_IMAGE="$${AGENTS_API_IMAGE:-agents-api:dev}" \
+	AGENTS_API_SERVER_BIN="$(CURDIR)/services/agents-api/tests/container_server.py" \
+	$${PARSAR_OFFICIAL_SDK_PYTHON:-python3} services/agents-api/tests/official_client.py

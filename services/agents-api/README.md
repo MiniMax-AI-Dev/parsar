@@ -47,7 +47,8 @@ Node, Docker, the product service or frontend. An isolated source context enforc
 that boundary on every build. [Contributor rules](../../CONTRIBUTING.md#independent-build-artifacts)
 define the allowed shared packages and required checks. Runtime database/key
 configuration and a separately installed execution daemon are still required;
-these binaries do not establish full protocol coverage or include a deployment.
+these binaries do not establish full protocol coverage. For a standalone Linux
+container, see [Container deployment](CONTAINER.md).
 
 ## Database ownership
 
