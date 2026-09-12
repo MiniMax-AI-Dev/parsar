@@ -76,6 +76,7 @@ type ownedGroup struct {
 	killAfter time.Duration
 	mu        sync.Mutex
 	timer     *time.Timer
+	graceDone chan struct{}
 	cancelled bool
 	finished  bool
 }
@@ -94,18 +95,27 @@ func (g *ownedGroup) cancel() error {
 	if errors.Is(err, syscall.ESRCH) {
 		return os.ErrProcessDone
 	}
+	g.graceDone = make(chan struct{})
 	g.timer = time.AfterFunc(g.killAfter, func() {
 		g.mu.Lock()
 		defer g.mu.Unlock()
 		if !g.finished {
 			_ = syscall.Kill(-g.cmd.Process.Pid, syscall.SIGKILL)
 		}
+		close(g.graceDone)
 	})
 	return err
 }
 
 func (g *ownedGroup) finish() {
 	g.mu.Lock()
+	if g.graceDone != nil && !errors.Is(syscall.Kill(-g.cmd.Process.Pid, 0), syscall.ESRCH) {
+		// Descendants retain their TERM grace even when the leader has already exited.
+		graceDone := g.graceDone
+		g.mu.Unlock()
+		<-graceDone
+		g.mu.Lock()
+	}
 	defer g.mu.Unlock()
 	g.finished = true
 	if g.timer != nil {

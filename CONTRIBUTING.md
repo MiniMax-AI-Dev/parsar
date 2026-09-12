@@ -479,7 +479,8 @@ adapters whose SDK launches a native child. Existing callers keep their current
 process policy. Explicit cancellation and parent-context cancellation share a
 TERM grace period and bounded KILL escalation. An internal reaper also cleans
 remaining group members when the direct process exits, even if a descendant
-still holds stdout open. Unsupported hosts reject this mode before launch.
+still holds stdout open. During cancellation, surviving descendants keep the
+remaining TERM grace after the leader exits. Unsupported hosts reject this mode before launch.
 
 Owned output pipes remain readable after the leader exits. Consumers must drain
 stdout and stderr before calling `Wait`, which joins the cached process result

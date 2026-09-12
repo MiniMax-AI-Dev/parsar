@@ -19,7 +19,7 @@ import (
 )
 
 func TestOwnedGroupCancellation(t *testing.T) {
-	for _, mode := range []string{"graceful", "ignore-term", "leader-exits"} {
+	for _, mode := range []string{"graceful", "ignore-term", "leader-exits", "child-cleanup"} {
 		for _, parentCancel := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/parent=%t", mode, parentCancel), func(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
@@ -54,6 +54,11 @@ func TestOwnedGroupCancellation(t *testing.T) {
 				}
 				p.Cancel()
 				waitExited(t, child)
+				if mode == "child-cleanup" {
+					if _, err := os.Stat(filepath.Join(dir, "child-stopped")); err != nil {
+						t.Fatalf("child lost its TERM cleanup grace: %v", err)
+					}
+				}
 				if mode == "graceful" {
 					for _, name := range []string{"child-stopped", "leader-stopped"} {
 						if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
@@ -196,17 +201,20 @@ func TestOwnedGroupHelper(t *testing.T) {
 		os.Exit(0)
 	}
 	terminated := make(chan os.Signal, 1)
-	if mode == "ignore-term" || role == "child" && mode != "graceful" {
+	if mode == "ignore-term" || role == "child" && mode != "graceful" && mode != "child-cleanup" {
 		signal.Ignore(syscall.SIGTERM)
 	} else {
 		signal.Notify(terminated, syscall.SIGTERM)
 	}
 	if role == "child" {
 		_ = os.WriteFile(filepath.Join(dir, "child-ready"), []byte(strconv.Itoa(os.Getpid())), 0o600)
-		if mode != "graceful" {
+		if mode != "graceful" && mode != "child-cleanup" {
 			time.Sleep(time.Hour)
 		}
 		<-terminated
+		if mode == "child-cleanup" {
+			time.Sleep(100 * time.Millisecond)
+		}
 		_ = os.WriteFile(filepath.Join(dir, "child-stopped"), nil, 0o600)
 		os.Exit(0)
 	}
@@ -217,7 +225,7 @@ func TestOwnedGroupHelper(t *testing.T) {
 	}
 	if mode == "natural-exit" {
 		for {
-			if _, err := os.Stat(filepath.Join(dir, "child-ready")); err == nil {
+			if value, err := os.ReadFile(filepath.Join(dir, "child-ready")); err == nil && len(value) > 0 {
 				os.Exit(0)
 			}
 			time.Sleep(time.Millisecond)
@@ -227,7 +235,7 @@ func TestOwnedGroupHelper(t *testing.T) {
 		time.Sleep(time.Hour)
 	}
 	<-terminated
-	if mode == "leader-exits" {
+	if mode == "leader-exits" || mode == "child-cleanup" {
 		os.Exit(0)
 	}
 	_ = child.Wait()
