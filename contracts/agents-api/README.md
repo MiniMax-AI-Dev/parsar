@@ -312,3 +312,9 @@ Turn verifies error output, and a third verifies cancellation while waiting.
 The test checks native result receipts, retained function Items and no duplicate
 native continuation. This proves the implemented workflow, not compatibility
 with every tool variant or the upstream service's exact event timing.
+
+Accepted results currently enter public Items through native execution observations.
+If cancellation prevents native application (for example, a result followed by
+cancel in one admitted batch), the submission remains saved internally but has no
+public result Item or `item.added`. Admission-time result indexing and unapplied
+result recovery remain a separate compatibility gap; retries do not repair it.
