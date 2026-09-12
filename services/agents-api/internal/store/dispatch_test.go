@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http/httptest"
 	"net/url"
 	"sync"
@@ -69,7 +68,7 @@ func newDispatchHarness(t *testing.T) *dispatchHarness {
 		t.Fatal("device connection failed")
 	}
 	t.Cleanup(func() { h.conn.Close() })
-	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true, WebSearchControl: true}}}})
+	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true, WebSearchControl: true, TextVerbosity: true}}}})
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		peer, e := h.registry.LookupDevice(h.device.ID)
@@ -337,15 +336,16 @@ func TestExecutionOutcomeAndNativeBindingCommitTogether(t *testing.T) {
 }
 
 func TestExecutionRejectsLegacyDaemonBeforeClaim(t *testing.T) {
-	for _, durable := range []bool{false, true} {
-		t.Run(fmt.Sprintf("durable_%t", durable), func(t *testing.T) {
+	for _, missing := range []string{"durable_turns", "web_search_control", "text_verbosity"} {
+		durable, search := missing != "durable_turns", missing == "text_verbosity"
+		t.Run(missing, func(t *testing.T) {
 			h := newDispatchHarness(t)
-			h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: durable}}}})
+			h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: durable, WebSearchControl: search}}}})
 			deadline := time.Now().Add(3 * time.Second)
 			for {
 				peer, _ := h.registry.LookupDevice(h.device.ID)
 				info, _, _ := peer.AgentKindStatus("codex")
-				if info.Capabilities.DurableTurns == durable && !info.Capabilities.WebSearchControl {
+				if info.Capabilities.DurableTurns == durable && info.Capabilities.WebSearchControl == search && !info.Capabilities.TextVerbosity {
 					break
 				}
 				if time.Now().After(deadline) {

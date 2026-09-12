@@ -272,6 +272,16 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   both new and resumed Turns. Native configuration translation stays in the
   adapter. Product requests that omit the option inherit their existing defaults.
   This is tool selection, not a network isolation guarantee.
+- Inline Agent `text.verbosity` accepts `low`, `medium` and `high`; omitted or
+  null values resolve to `medium` in the immutable configuration snapshot. The
+  dispatcher requires `text_verbosity` support and passes the effective value
+  through the Codex adapter for both new and resumed Turns. The adapter queries
+  the native active catalog with `codex debug models`, checks model support and
+  pins that catalog snapshot for execution. Unknown/unsupported models or an
+  unreadable catalog fail before model execution instead of silently ignoring
+  verbosity. This is an explicit engine limitation until those models are supported.
+  Product requests that omit the native option retain their existing defaults.
+  Structured output formats remain a separate protocol gap.
 - `function_tools` advertises the optional native function-call bridge. Explicit
   prompt definitions become Codex dynamic tools; unchanged prompts carry none.
   Requests and textual results are scoped by Run and native call ID. Reuse

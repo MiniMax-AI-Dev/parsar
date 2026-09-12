@@ -119,6 +119,14 @@ func BuildSessionPlan(runID, agentStateKey, workDir string, opts map[string]any)
 		}
 	}
 
+	if value, present := opts["model_verbosity"]; present {
+		switch value {
+		case "low", "medium", "high":
+		default:
+			return plan, fmt.Errorf("codex: model_verbosity must be low, medium or high")
+		}
+	}
+
 	resolvedCwd, err := resolveWorkDirCodex(workDir)
 	if err != nil {
 		return plan, err
@@ -301,19 +309,6 @@ func buildSessionEnv(opts map[string]any) ([]string, error) {
 		env = append(env, k+"="+s)
 	}
 	return env, nil
-}
-
-func extraConfigFromOpts(opts map[string]any) [][2]string {
-	var out [][2]string
-	if rs := stringOpt(opts, "reasoning_summary"); rs != "" {
-		// codex app-server has no per-call flag; route via -c override.
-		// TOML literal — quoted string keeps shell-safe special chars.
-		out = append(out, [2]string{"model_reasoning_summary", strconv(rs)})
-	}
-	if mode := stringOpt(opts, "web_search"); mode != "" {
-		out = append(out, [2]string{"web_search", strconv(mode)})
-	}
-	return out
 }
 
 func stringListOpt(opts map[string]any, key string) []string {

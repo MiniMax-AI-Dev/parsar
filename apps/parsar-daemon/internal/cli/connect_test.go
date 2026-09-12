@@ -174,7 +174,7 @@ func TestDiscoverAgentCLIsBothAvailable(t *testing.T) {
 	if !got.ClaudeCode.Capabilities.Permissions || !got.ClaudeCode.Capabilities.Resume {
 		t.Fatalf("ClaudeCode capabilities = %#v", got.ClaudeCode.Capabilities)
 	}
-	if !got.Codex.Capabilities.WebSearchControl || !got.Codex.Capabilities.EnvironmentNone || !got.Codex.Capabilities.ToolItems || !got.Codex.Capabilities.MessageItems || !got.Codex.Capabilities.Streaming || !got.Codex.Capabilities.Permissions || !got.Codex.Capabilities.Resume {
+	if !got.Codex.Capabilities.TextVerbosity || !got.Codex.Capabilities.WebSearchControl || !got.Codex.Capabilities.EnvironmentNone || !got.Codex.Capabilities.ToolItems || !got.Codex.Capabilities.MessageItems || !got.Codex.Capabilities.Streaming || !got.Codex.Capabilities.Permissions || !got.Codex.Capabilities.Resume {
 		t.Fatalf("Codex capabilities = %#v (want Streaming+Permissions+Resume)", got.Codex.Capabilities)
 	}
 	if !got.Pi.Available || got.Pi.Version != "pi 0.1.0" {

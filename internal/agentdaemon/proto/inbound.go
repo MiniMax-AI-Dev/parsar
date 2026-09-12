@@ -258,6 +258,7 @@ type AgentKindCapabilities struct {
 	ToolItems          bool `json:"tool_items,omitempty"`
 	EnvironmentNone    bool `json:"environment_none,omitempty"`
 	WebSearchControl   bool `json:"web_search_control,omitempty"`
+	TextVerbosity      bool `json:"text_verbosity,omitempty"`
 	// DurableTurns includes strict resume, completion release and cancellation snapshots.
 	DurableTurns  bool `json:"durable_turns,omitempty"`
 	FunctionTools bool `json:"function_tools,omitempty"`

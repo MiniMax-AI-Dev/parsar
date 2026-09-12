@@ -110,6 +110,10 @@ definitions:
         x-nullable: true
       model:
         type: string
+      text:
+        allOf:
+        - $ref: '#/definitions/v1.TextConfigInput'
+        x-nullable: true
     required:
     - model
     type: object
@@ -393,11 +397,27 @@ definitions:
         $ref: '#/definitions/v1.TextFormat'
       verbosity:
         enum:
+        - low
         - medium
+        - high
         type: string
     required:
     - format
     - verbosity
+    type: object
+  v1.TextConfigInput:
+    properties:
+      format:
+        allOf:
+        - $ref: '#/definitions/v1.TextFormat'
+        x-nullable: true
+      verbosity:
+        enum:
+        - low
+        - medium
+        - high
+        type: string
+        x-nullable: true
     type: object
   v1.TextFormat:
     properties:
@@ -588,8 +608,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Supports inline model/instructions and environment type none. Execution
-        input and other options are explicitly unsupported in this slice.
+      description: Supports inline model/instructions, text verbosity and environment
+        type none. Execution input and other options are explicitly unsupported in
+        this slice.
       parameters:
       - description: agents=v1
         in: header

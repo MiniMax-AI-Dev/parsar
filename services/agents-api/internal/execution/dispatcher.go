@@ -61,6 +61,9 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if session.Engine == "codex" && !info.Capabilities.WebSearchControl {
 		return store.Turn{}, errors.New("device must advertise web_search_control for Codex")
 	}
+	if session.Engine == "codex" && !info.Capabilities.TextVerbosity {
+		return store.Turn{}, errors.New("device must advertise text_verbosity for Codex")
+	}
 	var snapshot Snapshot
 	if json.Unmarshal(session.Configuration, &snapshot) != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
 		return store.Turn{}, store.ErrInvalidInput
@@ -91,6 +94,11 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	delete(options, "override_system_prompt")
 	if session.Engine == "codex" {
 		options["web_search"] = "disabled"
+		verbosity := snapshot.Agent.Text.Verbosity
+		if verbosity == "" {
+			verbosity = "medium"
+		}
+		options["model_verbosity"] = verbosity
 	}
 	if _, err := d.Store.TransitionTurn(ctx, tenantID, sessionID, turnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress}); err != nil {
 		return store.Turn{}, err
