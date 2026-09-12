@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"unicode/utf8"
 
@@ -28,14 +27,8 @@ func (h *Handler) updateSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported_parameter", "Session updates do not accept query parameters.")
 		return
 	}
-	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1024*1024))
-	if err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "Request exceeds 1 MiB.")
-		} else {
-			writeError(w, http.StatusBadRequest, "invalid_request", "Request must contain one JSON object.")
-		}
+	raw, ok := readJSONBody(w, r)
+	if !ok {
 		return
 	}
 	var request struct {
@@ -46,6 +39,7 @@ func (h *Handler) updateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var session store.Session
+	var err error
 	if len(request.Metadata) == 0 {
 		session, err = h.store.GetSession(r.Context(), tenantID(r), chi.URLParam(r, "session_id"))
 	} else {

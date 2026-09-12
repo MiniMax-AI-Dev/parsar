@@ -36,7 +36,7 @@ separate. Each slice can use multiple small PRs tracked in the Feishu board.
 
 This inventory is based on the pinned Python source, not our generated OpenAPI.
 It contains 42 distinct HTTP operations in 15 resource classes, excluding async
-duplicates, overloads and client-side helpers. Nine operations currently have
+duplicates, overloads and client-side helpers. Eleven operations currently have
 handlers; that count is not a compatibility score. Even those operations implement
 only part of the upstream input, configuration and event variants.
 
@@ -45,7 +45,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 
 | Resource | Upstream operations | Current coverage |
 | --- | --- | --- |
-| Root reusable Agents | create, retrieve, update, list, delete | Missing |
+| Root reusable Agents | create, retrieve, update, list, delete | Partial create/retrieve; update/list/delete and Session references missing |
 | sessions | create, retrieve, update, list, delete | Partial create/retrieve/list; metadata update implemented; delete missing |
 | sessions.events | create, stream | Text/cancel/function-result admission and live events; function-action state snapshots supported |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
@@ -72,6 +72,21 @@ uncertainty and obtain upstream evidence before marking it conformant. Temporary
 unsupported errors are implementation gaps, never evidence of full compatibility.
 
 ## Public semantics
+
+- Reusable Agents use `POST /agents` and `GET /agents/{agent_id}`. Keep their own
+  identity, timestamps and metadata separate from Session effective configuration.
+  Omitted/null name and instructions resolve to null, metadata to `{}`, tools to
+  `[]`, text to ordinary/medium, and multi-agent settings to disabled/null. Enabled
+  multi-agent settings default to six concurrent subagents. Function defer-loading
+  defaults to false and programmatic tool calling to true. Saving these values
+  does not admit a native execution or enable Session `agent_id` references yet.
+- Saved Agent model-default reasoning resolution remains missing: an omitted effort
+  stays unresolved rather than being populated from a guessed model default. An
+  explicit effort/summary is retained. Omitted/null service tier currently follows
+  the service's `auto` policy; complete upstream-default/error/retry conformance is
+  unverified. Persisted MCP/web-search variants are explicitly unsupported pending
+  their credential-free transport/schema/default work. These are implementation
+  gaps, not changes to the pinned target or claims of complete resource coverage.
 
 - Use `/agents/sessions` beneath the configured API base URL, bearer authentication
   and `OpenAI-Beta: agents=v1`. Do not introduce a competing `/sessions` surface.
@@ -107,7 +122,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Capability | Current state |
 | --- | --- |
 | Shared daemon connection layer | Implemented; existing product protocol retained |
-| Saved Agent persistence | Internal create/read with tenant scope, independent configuration and timestamps; public resource operations and Session references remain missing |
+| Reusable Agents | Tenant-scoped public create/retrieve, metadata, explicit reasoning/service tiers, multi_agent, text/json_schema and function/tool_search/programmatic tool configuration; not execution admission |
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
 | Authenticated Session HTTP API | Create/retrieve/list and metadata-only update; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |

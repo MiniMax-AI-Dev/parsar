@@ -17,7 +17,7 @@ import (
 )
 
 type recordingStore struct {
-	SessionStore
+	ResourceStore
 	tenant string
 	input  store.CreateSessionInput
 }

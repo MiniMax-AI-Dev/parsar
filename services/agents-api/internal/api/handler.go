@@ -14,7 +14,8 @@ import (
 	"github.com/google/uuid"
 )
 
-type SessionStore interface {
+type ResourceStore interface {
+	AgentStore
 	ListItems(context.Context, string, string, string, int, bool) (store.ItemPage, error)
 	GetTurn(context.Context, string, string, string) (store.Turn, error)
 	ListTurns(context.Context, string, string, string, int, bool) (store.TurnPage, error)
@@ -25,15 +26,15 @@ type SessionStore interface {
 }
 
 type Handler struct {
-	store  SessionStore
+	store  ResourceStore
 	auth   *Authenticator
 	engine string
 	inputs InputSubmitter
 }
 
-func NewHandler(s SessionStore, auth *Authenticator, engine string, options ...Option) (http.Handler, error) {
+func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...Option) (http.Handler, error) {
 	if s == nil || auth == nil || !store.ValidEngine(engine) {
-		return nil, errors.New("session store, authentication and a valid execution engine are required")
+		return nil, errors.New("resource store, authentication and a valid execution engine are required")
 	}
 	h := &Handler{store: s, auth: auth, engine: engine}
 	for _, option := range options {
@@ -46,6 +47,8 @@ func NewHandler(s SessionStore, auth *Authenticator, engine string, options ...O
 	})
 	router.Route("/v1", func(r chi.Router) {
 		r.Use(h.authenticate)
+		r.Post("/agents", h.createAgent)
+		r.Get("/agents/{agent_id}", h.getAgent)
 		r.Post("/agents/sessions", h.createSession)
 		r.Get("/agents/sessions", h.listSessions)
 		r.Get("/agents/sessions/{session_id}", h.getSession)

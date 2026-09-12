@@ -11,7 +11,7 @@ import (
 )
 
 type itemReadStore struct {
-	SessionStore
+	ResourceStore
 	tenant, session, cursor string
 	limit                   int
 	ascending               bool
@@ -24,7 +24,7 @@ func (s *itemReadStore) ListItems(_ context.Context, tenant, session, cursor str
 func TestItemRouteUsesAuthenticationAndSharedPagination(t *testing.T) {
 	h, record, tenant := testHandler(t)
 	s := &itemReadStore{}
-	record.SessionStore = s
+	record.ResourceStore = s
 	request := func(query, token string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodGet, "/v1/agents/sessions/session/items"+query, nil)
 		r.Header.Set("Authorization", "Bearer "+token)

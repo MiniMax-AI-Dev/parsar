@@ -9,6 +9,18 @@ A Session is an execution context with a stable engine choice. Product
 conversations can map to multiple Sessions. Device connections and bindings are
 internal primitives; pending interactions and full environment lifecycle remain unfinished.
 
+## Reusable Agents
+
+The pinned Python client can create and retrieve configuration independently of a
+Session: `agent = client.beta.agents.create(model="your-model", name="Example",
+reasoning={"effort": "medium"})`, followed by
+`client.beta.agents.retrieve(agent.id)`. These operations use the service's normal
+base URL, bearer key and `agents=v1` header. Resources remain private to that
+execution tenant and survive service restart. Saving configuration does not launch
+an engine; Session references and other Agent operations are not implemented yet.
+See the [coverage and default gaps](../../contracts/agents-api/README.md#public-semantics)
+before using optional configuration.
+
 ## Build standalone binaries
 
 ```bash

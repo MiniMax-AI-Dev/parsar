@@ -51,6 +51,50 @@ definitions:
     - text
     - tools
     type: object
+  v1.CreateAgentRequest:
+    properties:
+      instructions:
+        type: string
+        x-nullable: true
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+        x-nullable: true
+      model:
+        type: string
+      multi_agent:
+        type: object
+        x-nullable: true
+      name:
+        maxLength: 128
+        type: string
+        x-nullable: true
+      reasoning:
+        allOf:
+        - $ref: '#/definitions/v1.Reasoning'
+        x-nullable: true
+      service_tier:
+        enum:
+        - auto
+        - default
+        - flex
+        - priority
+        - fast
+        type: string
+        x-nullable: true
+      text:
+        allOf:
+        - $ref: '#/definitions/v1.SavedAgentTextInput'
+        x-nullable: true
+      tools:
+        items:
+          type: object
+        type: array
+        x-nullable: true
+    required:
+    - model
+    type: object
   v1.CreateEventsRequest:
     properties:
       events:
@@ -310,6 +354,100 @@ definitions:
         type: string
         x-nullable: true
       summary:
+        type: string
+        x-nullable: true
+    type: object
+  v1.SavedAgent:
+    properties:
+      created_at:
+        type: integer
+      id:
+        type: string
+      instructions:
+        type: string
+        x-nullable: true
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      model:
+        type: string
+      multi_agent:
+        $ref: '#/definitions/v1.MultiAgentConfig'
+      name:
+        type: string
+        x-nullable: true
+      object:
+        enum:
+        - agent
+        type: string
+      reasoning:
+        $ref: '#/definitions/v1.Reasoning'
+      service_tier:
+        enum:
+        - auto
+        - default
+        - flex
+        - priority
+        - fast
+        type: string
+      text:
+        $ref: '#/definitions/v1.SavedAgentText'
+      tools:
+        items:
+          type: object
+        type: array
+      updated_at:
+        type: integer
+    required:
+    - created_at
+    - id
+    - metadata
+    - model
+    - multi_agent
+    - object
+    - reasoning
+    - service_tier
+    - text
+    - tools
+    - updated_at
+    type: object
+  v1.SavedAgentText:
+    properties:
+      format:
+        $ref: '#/definitions/v1.SavedAgentTextFormat'
+      verbosity:
+        enum:
+        - low
+        - medium
+        - high
+        type: string
+    required:
+    - format
+    - verbosity
+    type: object
+  v1.SavedAgentTextFormat:
+    properties:
+      schema:
+        type: object
+      type:
+        enum:
+        - text
+        - json_schema
+        type: string
+    required:
+    - type
+    type: object
+  v1.SavedAgentTextInput:
+    properties:
+      format:
+        type: object
+        x-nullable: true
+      verbosity:
+        enum:
+        - low
+        - medium
+        - high
         type: string
         x-nullable: true
     type: object
@@ -613,6 +751,97 @@ info:
   title: Agents API
   version: "1"
 paths:
+  /agents:
+    post:
+      consumes:
+      - application/json
+      description: Persists configuration independently of execution. Supports model/name/instructions/metadata,
+        explicit reasoning and service tiers, multi_agent, text/json_schema, function/tool_search/programmatic_tool_calling.
+        Model-derived reasoning defaults, MCP/web_search and public retry conformance
+        remain incomplete. Session references and execution admission are separate.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Reusable Agent configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v1.CreateAgentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SavedAgent'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a reusable Agent
+      tags:
+      - Agents
+  /agents/{agent_id}:
+    get:
+      description: Reads the saved resource owned by the authenticated tenant, independently
+        of execution Sessions.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Agent ID
+        in: path
+        name: agent_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SavedAgent'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve a reusable Agent
+      tags:
+      - Agents
   /agents/sessions:
     get:
       description: Cursor and results are scoped to the authenticated execution tenant.

@@ -19,7 +19,7 @@ import (
 )
 
 type streamFixture struct {
-	SessionStore
+	ResourceStore
 	session store.Session
 	mu      sync.Mutex
 	changes []store.SessionChange
