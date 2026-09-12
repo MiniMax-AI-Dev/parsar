@@ -233,8 +233,20 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Model-derived reasoning effort is unresolved when omitted; do not infer it from
   the selected harness. Omitted/null service tier currently uses `auto`; complete
   upstream default/error/retry conformance and persisted MCP/web-search tools remain
-  gaps. Unknown/unsupported variants fail explicitly. Session references and the
-  remaining resource operations are separate work; no product lookup is permitted.
+  gaps. Unknown/unsupported variants fail explicitly. No product lookup is permitted.
+- Session `agent_id` lookup uses the authenticated tenant. Copy the saved resource
+  ID and effective configuration into the immutable Session snapshot; saved metadata
+  does not become Session metadata. Never look up the source Agent when reading or
+  executing an existing Session. Omitted override fields inherit; supplied objects
+  and arrays replace whole fields before defaults and execution admission apply.
+  Reuse saved configuration validation and keep native capability restrictions at
+  Session admission. Reject unsupported effective options instead of dropping them;
+  an explicit supported replacement may make a saved configuration executable.
+  Inline Sessions use the same admission path and keep their existing retry identity.
+  The current resource has no public update/delete operation. Before adding either,
+  resolve creation retries across source mutation/deletion: the current request hash
+  includes the resolved snapshot and creation performs a fresh Agent lookup. Do not
+  claim mutation-independent retries or invent a general revision framework.
 - Tenant scope must come from authenticated service identity before calling the
   execution Store. Product workspace/user references in metadata grant no access.
   Keep credentials and effective execution options out of Session metadata.
