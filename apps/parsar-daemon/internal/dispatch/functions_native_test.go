@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -57,7 +58,34 @@ func TestNativeFunctionBridge(t *testing.T) {
 			}
 			item = map[string]any{"id": fmt.Sprintf("fc_%d", n), "type": "function_call", "call_id": fmt.Sprintf("call_%d", n), "name": "lookup_ticket", "arguments": `{"ticket":"42"}`, "status": "completed"}
 		} else {
-			if !strings.Contains(string(raw), "TICKET-RESULT") {
+
+			var request struct {
+				Input []struct {
+					Type   string          `json:"type"`
+					CallID string          `json:"call_id"`
+					Output json.RawMessage `json:"output"`
+				} `json:"input"`
+			}
+			if err := json.Unmarshal(raw, &request); err != nil {
+				t.Error(err)
+			}
+			found := false
+			for _, entry := range request.Input {
+				if entry.Type != "function_call_output" || entry.CallID != fmt.Sprintf("call_%d", n-1) {
+					continue
+				}
+				found = true
+				var parts []proto.FunctionResultContent
+				if err := json.Unmarshal(entry.Output, &parts); err != nil {
+					t.Error(err)
+					continue
+				}
+				expected := functionResultContent("TICKET-RESULT")
+				if !reflect.DeepEqual(parts, expected) {
+					t.Errorf("native result lost text/image content or order: %s", entry.Output)
+				}
+			}
+			if !found {
 				t.Error("native model did not receive function result")
 			}
 			item = map[string]any{"id": fmt.Sprintf("msg_%d", n), "type": "message", "role": "assistant", "phase": "final_answer", "status": "completed", "content": []any{map[string]any{"type": "output_text", "text": "FUNCTION-OK", "annotations": []any{}}}}
@@ -127,7 +155,7 @@ func TestNativeFunctionBridge(t *testing.T) {
 			if !receipt.Applied {
 				t.Fatal(receipt)
 			}
-			late, _ := proto.NewEnvelope(proto.TypeFunctionResult, run, proto.FunctionResultPayload{CallID: payload.CallID, Success: true, Text: "late", DeliveryID: "late"})
+			late, _ := proto.NewEnvelope(proto.TypeFunctionResult, run, proto.FunctionResultPayload{CallID: payload.CallID, Success: true, Content: functionResultContent("late"), DeliveryID: "late"})
 			if err := router.Handle(ctx, late); err != nil {
 				t.Fatal(err)
 			}
@@ -137,7 +165,7 @@ func TestNativeFunctionBridge(t *testing.T) {
 			}
 			break
 		}
-		result, _ := proto.NewEnvelope(proto.TypeFunctionResult, run, proto.FunctionResultPayload{CallID: payload.CallID, Success: index == 0, Text: "TICKET-RESULT", DeliveryID: "result"})
+		result, _ := proto.NewEnvelope(proto.TypeFunctionResult, run, proto.FunctionResultPayload{CallID: payload.CallID, Success: index == 0, Content: functionResultContent("TICKET-RESULT"), DeliveryID: "result"})
 		if err := router.Handle(ctx, result); err != nil {
 			t.Fatal(err)
 		}

@@ -107,6 +107,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
 | Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
 | Public SSE | Live Session/Turn lifecycle, supported Item and text events; bounded commit-before-publish buffering and recovery through saved reads |
+| Internal function bridge | Native Codex definitions and ordered text/image results, Run/call-scoped receipts, retries and cancellation; public function actions still pending |
 | Pending actions and environment lifecycle | Pending |
 | Official-client compatibility | Strict SDK checks for Session/Turn/Items reads and native text execution/cancellation/verbosity; pagination, retries, errors, tenant isolation and recovery |
 | Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |

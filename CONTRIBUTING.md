@@ -285,7 +285,12 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Structured output formats remain a separate protocol gap.
 - `function_tools` advertises the optional native function-call bridge. Explicit
   prompt definitions become Codex dynamic tools; unchanged prompts carry none.
-  Requests and textual results are scoped by Run and native call ID. Reuse
+  Requests and ordered text/image results are scoped by Run and native call ID.
+  Normalize string results into one text part at the public execution boundary;
+  the internal result carries a typed content array, and adapters translate it
+  to native content without fetching images or dropping parts. Validate content
+  before consuming a pending call. Retry identity includes the complete ordered
+  content and success flag. Reuse
   application receipts and conflict detection; a receipt confirms the native
   reply was written, not that an external side effect succeeded. Pending calls
   end with their Run; the execution service owns persistence and recovery, while

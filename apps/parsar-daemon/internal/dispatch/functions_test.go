@@ -1,8 +1,13 @@
 package dispatch_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
 	"sync"
 	"testing"
 
@@ -48,7 +53,7 @@ func TestFunctionReceiptsScopeRetriesAndConflicts(t *testing.T) {
 	}
 	submit := func(run, call, text, delivery string) proto.InteractionDecisionAckPayload {
 		t.Helper()
-		env, _ := proto.NewEnvelope(proto.TypeFunctionResult, run, proto.FunctionResultPayload{CallID: call, Success: true, Text: text, DeliveryID: delivery})
+		env, _ := proto.NewEnvelope(proto.TypeFunctionResult, run, proto.FunctionResultPayload{CallID: call, Success: true, Content: functionResultContent(text), DeliveryID: delivery})
 		if err := router.Handle(t.Context(), env); err != nil {
 			t.Fatal(err)
 		}
@@ -66,11 +71,22 @@ func TestFunctionReceiptsScopeRetriesAndConflicts(t *testing.T) {
 	if a := submit("one", "missing", "answer", "b"); a.Applied || a.ErrorCode != "not_pending" {
 		t.Fatal(a)
 	}
+
+	invalid, _ := proto.NewEnvelope(proto.TypeFunctionResult, "one", proto.FunctionResultPayload{CallID: "call", DeliveryID: "invalid", Content: []proto.FunctionResultContent{{Type: "input_audio"}}})
+	if err := router.Handle(t.Context(), invalid); err != nil {
+		t.Fatal(err)
+	}
+	frames := sender.snapshot()
+	var invalidAck proto.InteractionDecisionAckPayload
+	_ = frames[len(frames)-1].DecodePayload(&invalidAck)
+	if invalidAck.Applied || invalidAck.ErrorCode != "invalid_result" {
+		t.Fatal(invalidAck)
+	}
 	// A lost receipt may be retried without writing the native result twice.
 	sender.mu.Lock()
 	sender.failNow = true
 	sender.mu.Unlock()
-	first, _ := proto.NewEnvelope(proto.TypeFunctionResult, "one", proto.FunctionResultPayload{CallID: "call", Success: true, Text: "answer", DeliveryID: "lost"})
+	first, _ := proto.NewEnvelope(proto.TypeFunctionResult, "one", proto.FunctionResultPayload{CallID: "call", Success: true, Content: functionResultContent("answer"), DeliveryID: "lost"})
 	if err := router.Handle(t.Context(), first); err == nil {
 		t.Fatal("receipt send failure was hidden")
 	}
@@ -79,6 +95,29 @@ func TestFunctionReceiptsScopeRetriesAndConflicts(t *testing.T) {
 	}
 	if a := submit("one", "call", "changed", "conflict"); a.Applied || a.ErrorCode != "decision_conflict" {
 		t.Fatal(a)
+	}
+
+	for _, mutation := range []string{"image", "order", "success"} {
+		result := proto.FunctionResultPayload{CallID: "call", Success: true, Content: functionResultContent("answer"), DeliveryID: mutation}
+		switch mutation {
+		case "image":
+			other := "https://example.com/other.png"
+			result.Content[1].ImageURL = &other
+		case "order":
+			result.Content[0], result.Content[1] = result.Content[1], result.Content[0]
+		case "success":
+			result.Success = false
+		}
+		env, _ := proto.NewEnvelope(proto.TypeFunctionResult, "one", result)
+		if err := router.Handle(t.Context(), env); err != nil {
+			t.Fatal(err)
+		}
+		frames := sender.snapshot()
+		var ack proto.InteractionDecisionAckPayload
+		_ = frames[len(frames)-1].DecodePayload(&ack)
+		if ack.Applied || ack.ErrorCode != "decision_conflict" {
+			t.Fatal(mutation, ack)
+		}
 	}
 	if a := submit("two", "call", "second answer", "other-run"); !a.Applied {
 		t.Fatal(a)
@@ -107,4 +146,16 @@ func TestFunctionToolsRequireAdvertisedSupport(t *testing.T) {
 	if err := router.Handle(t.Context(), env); err == nil || called {
 		t.Fatal("unsupported engine silently ignored tools", err)
 	}
+}
+
+func functionResultContent(text string) []proto.FunctionResultContent {
+	picture := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	picture.Set(0, 0, color.RGBA{R: 255, A: 255})
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, picture); err != nil {
+		panic(err)
+	}
+	imageURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(encoded.Bytes())
+	after := "AFTER-IMAGE"
+	return []proto.FunctionResultContent{{Type: "input_text", Text: &text}, {Type: "input_image", ImageURL: &imageURL}, {Type: "input_text", Text: &after}}
 }
