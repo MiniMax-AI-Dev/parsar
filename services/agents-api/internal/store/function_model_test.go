@@ -26,6 +26,16 @@ func nativeFunctionModel(t *testing.T, home string) (*httptest.Server, []any, *a
 		t.Fatal(err)
 	}
 	output := []any{map[string]any{"type": "input_text", "text": "before"}, map[string]any{"type": "input_image", "image_url": "data:image/png;base64," + base64.StdEncoding.EncodeToString(encoded.Bytes())}, map[string]any{"type": "input_text", "text": "after"}}
+	expected := append([]any(nil), output...)
+	// Codex adds its default image detail at the model transport boundary.
+	expected[1] = map[string]any{"type": "input_image", "image_url": output[1].(map[string]any)["image_url"], "detail": "high"}
+	failure := append(append([]any(nil), expected...), map[string]any{"type": "input_text", "text": "synthetic failure"})
+	model, requests := nativeFunctionResultsModel(t, home, []any{expected, failure})
+	return model, output, requests
+}
+
+func nativeFunctionResultsModel(t *testing.T, home string, results []any) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
 	var requests atomic.Int32
 	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
@@ -66,12 +76,11 @@ func nativeFunctionModel(t *testing.T, home string) (*httptest.Server, []any, *a
 					continue
 				}
 				found = true
-				expected := append([]any(nil), output...)
-				// Codex adds its default image detail at the model transport boundary.
-				expected[1] = map[string]any{"type": "input_image", "image_url": output[1].(map[string]any)["image_url"], "detail": "high"}
-				if n == 4 {
-					expected = append(expected, map[string]any{"type": "input_text", "text": "synthetic failure"})
+				if int(n/2) > len(results) {
+					t.Error("unexpected native result continuation", n)
+					return
 				}
+				expected := results[n/2-1]
 				if !reflect.DeepEqual(item["output"], expected) {
 					t.Errorf("complete result changed: %v", item["output"])
 				}
@@ -93,5 +102,5 @@ func nativeFunctionModel(t *testing.T, home string) (*httptest.Server, []any, *a
 		send("response.output_item.done", map[string]any{"output_index": 0, "item": entry})
 		send("response.completed", map[string]any{"response": map[string]any{"id": fmt.Sprintf("r_%d", n), "object": "response", "created_at": 0, "status": "completed", "model": "gpt-5.5", "output": []any{entry}}})
 	}))
-	return model, output, &requests
+	return model, &requests
 }

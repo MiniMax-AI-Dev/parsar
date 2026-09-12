@@ -122,8 +122,13 @@ path until an explicit client cutover.
 - Pin upstream source and SDK versions in `contracts/agents-api/upstream.json`.
   Use official SDKs for clients and reuse upstream types or schemas where suitable.
   SDK deserialization alone is not server validation or proof of compatibility:
-  test raw HTTP payloads and observable workflows as well. Record unspecified or
-  unverified behavior explicitly; never invent official semantics. Track partial
+  test raw HTTP payloads and observable workflows as well. Synthetic data and mock
+  model responses may support controlled tests; live execution acceptance must
+  call a real model API through the service, daemon and harness. A real daemon
+  with a synthetic model does not constitute live model validation. Keep provider
+  credentials in private test configuration, outside source, logs and task records.
+  Record unspecified or unverified behavior explicitly; never invent official
+  semantics. Track partial
   coverage in `contracts/agents-api/README.md` until the complete target is verified.
 - No legacy Agents API compatibility requirement takes precedence over this
   design. Replace an unsuitable implementation instead of growing compatibility

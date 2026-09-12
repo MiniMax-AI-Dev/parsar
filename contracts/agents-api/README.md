@@ -322,3 +322,14 @@ If cancellation prevents native application (for example, a result followed by
 cancel in one admitted batch), the submission remains saved internally but has no
 public result Item or `item.added`. Admission-time result indexing and unapplied
 result recovery remain a separate compatibility gap; retries do not repair it.
+
+`TestNativePublicFunctionStreamHelper` runs `tests/official_function_stream.py`
+with the same native fixture and pinned SDK. `sessions.stream(tool_handlers=...)`
+submits a mapping returned by a handler and a generic failure when the handler
+raises. It verifies one invocation per call, retained output/error field presence,
+native application, and termination after the matching Turn completes and Session
+returns idle. These are controlled tests with synthetic model responses. Live
+execution acceptance additionally requires a real model API; provider connectivity
+alone does not prove the Agents API/daemon/harness workflow. Live MiniMax-M3
+execution currently fails the native verbosity capability check because the
+Session defaults to `medium`; this model-support gap remains open.
