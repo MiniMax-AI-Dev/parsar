@@ -26,6 +26,9 @@ func TestCatalogVerbositySupport(t *testing.T) {
 }
 
 func TestPrepareModelVerbosity(t *testing.T) {
+	if !SupportsTextVerbosity {
+		t.Skip("catalog probe requires Unix")
+	}
 	t.Setenv("PARSAR_HOME", t.TempDir())
 	binary := filepath.Join(t.TempDir(), "codex")
 	catalog := `{"models":[{"slug":"known-model","support_verbosity":true,"native_extra":{"keep":true}}]}`

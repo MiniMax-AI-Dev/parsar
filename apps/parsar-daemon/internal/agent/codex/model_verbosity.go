@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -20,7 +19,10 @@ func prepareModelVerbosity(ctx context.Context, binary string, plan *SessionPlan
 	args = append(args, "debug", "models")
 	ctx, cancel := context.WithTimeout(ctx, rpcDefaultRequestTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd, err := modelCatalogCommand(ctx, binary, args...)
+	if err != nil {
+		return err
+	}
 	cmd.Dir = plan.Cwd
 	cmd.Env = append(os.Environ(), plan.Env...)
 	catalog, err := cmd.Output()

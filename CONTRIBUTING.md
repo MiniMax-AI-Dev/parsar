@@ -277,7 +277,8 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   dispatcher requires `text_verbosity` support and passes the effective value
   through the Codex adapter for both new and resumed Turns. The adapter queries
   the native active catalog with `codex debug models`, checks model support and
-  pins that catalog snapshot for execution. Unknown/unsupported models or an
+  pins that catalog snapshot for execution. The probe requires Unix process-group
+  cancellation; other daemon hosts do not advertise this capability. Unknown/unsupported models or an
   unreadable catalog fail before model execution instead of silently ignoring
   verbosity. This is an explicit engine limitation until those models are supported.
   Product requests that omit the native option retain their existing defaults.
