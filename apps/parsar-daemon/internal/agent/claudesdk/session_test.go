@@ -74,13 +74,15 @@ func TestTextFactoryCompletionAndFailures(t *testing.T) {
 }
 
 func TestTextFactoryRejectsUnsupportedInput(t *testing.T) {
-	for _, kind := range []string{"tool", "option", "relative", "outside"} {
+	for _, kind := range []string{"execution-controls", "tool", "option", "relative", "outside"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
 			t.Setenv("PARSAR_HOME", root)
 			config := Config{Node: "must-not-run", Entrypoint: filepath.Join(root, "worker"), StateDir: filepath.Join(root, "state")}
 			request := proto.PromptRequestPayload{RunID: "run", Prompt: "hello", AgentOptions: map[string]any{"model": "fake"}}
 			switch kind {
+			case "execution-controls":
+				request.ExecutionControls = &proto.ExecutionControls{WebSearch: "disabled", TextVerbosity: "medium"}
 			case "tool":
 				request.FunctionTools = []proto.FunctionTool{{}}
 			case "option":

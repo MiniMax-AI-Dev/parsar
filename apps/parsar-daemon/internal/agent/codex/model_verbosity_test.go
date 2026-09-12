@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
 func TestCatalogVerbositySupport(t *testing.T) {
@@ -78,7 +80,7 @@ func TestPrepareDefaultModelVerbosity(t *testing.T) {
 	for _, model := range []string{"supported", "unsupported", "unknown-provider-model"} {
 		for _, level := range []string{"low", "medium", "high"} {
 			t.Run(model+"/"+level, func(t *testing.T) {
-				plan, err := BuildSessionPlan("run", "state", "", map[string]any{"model": model, "model_verbosity": level})
+				plan, err := BuildSessionPlan("run", "state", "", executionOptions(proto.PromptRequestPayload{AgentOptions: map[string]any{"model": model}, ExecutionControls: &proto.ExecutionControls{WebSearch: "disabled", TextVerbosity: level}}))
 				if err != nil {
 					t.Fatal(err)
 				}

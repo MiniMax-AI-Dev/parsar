@@ -12,7 +12,7 @@ import (
 )
 
 func TestWorkerWaitsForToolCapabilities(t *testing.T) {
-	for _, missing := range []string{"function_tools", "tool_observations"} {
+	for _, missing := range []string{"execution_controls", "function_tools", "tool_observations"} {
 		for _, prebound := range []bool{false, true} {
 			t.Run(missing+"/"+map[bool]string{false: "select", true: "bound"}[prebound], func(t *testing.T) {
 				h := newFunctionHarness(t)
@@ -23,7 +23,7 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				caps := proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true, SubagentControl: true, ToolObservations: missing != "tool_observations", FunctionTools: missing != "function_tools"}
+				caps := proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: missing != "execution_controls", SubagentControl: true, ToolObservations: missing != "tool_observations", FunctionTools: missing != "function_tools"}
 				heartbeat := func() {
 					h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: caps}}})
 				}
@@ -32,7 +32,7 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 				for {
 					peer, _ := h.registry.LookupDevice(h.device.ID)
 					info, _, _ := peer.AgentKindStatus("codex")
-					if info.Capabilities.FunctionTools == caps.FunctionTools && info.Capabilities.ToolObservations == caps.ToolObservations {
+					if info.Capabilities.ExecutionControls == caps.ExecutionControls && info.Capabilities.FunctionTools == caps.FunctionTools && info.Capabilities.ToolObservations == caps.ToolObservations {
 						break
 					}
 					if time.Now().After(deadline) {
@@ -67,7 +67,7 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 						t.Fatal("bound an incapable device", err)
 					}
 				}
-				caps.FunctionTools, caps.ToolObservations = true, true
+				caps.ExecutionControls, caps.FunctionTools, caps.ToolObservations = true, true, true
 				heartbeat()
 				request := h.read(proto.TypePromptRequest)
 				var prompt proto.PromptRequestPayload

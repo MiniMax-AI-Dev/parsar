@@ -70,6 +70,9 @@ type PromptRequestPayload struct {
 	// inspects them.
 	AgentOptions map[string]any `json:"agent_options,omitempty"`
 
+	// ExecutionControls are authoritative engine-neutral settings, translated by the adapter.
+	ExecutionControls *ExecutionControls `json:"execution_controls,omitempty"`
+
 	// AgentSessionID is the upstream engine session id to resume.
 	AgentSessionID string `json:"agent_session_id,omitempty"`
 
@@ -151,4 +154,11 @@ type PromptForUserChoiceDecisionPayload struct {
 // lines / metrics on the daemon side). Optional.
 type DeviceShutdownPayload struct {
 	Reason string `json:"reason,omitempty"`
+}
+
+// ExecutionControls requires both values when supplied; omitting the block preserves agent options.
+// Send only to a peer advertising execution_controls, independently of older option capabilities.
+type ExecutionControls struct {
+	WebSearch     string `json:"web_search"`
+	TextVerbosity string `json:"text_verbosity"`
 }
