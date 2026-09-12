@@ -95,7 +95,9 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 			initial := map[string]any{"id": item["id"], "type": "message", "role": "assistant", "phase": "final_answer", "status": "in_progress", "content": []any{}}
 			send("response.output_item.added", map[string]any{"output_index": 0, "item": initial})
 			send("response.content_part.added", map[string]any{"output_index": 0, "content_index": 0, "item_id": item["id"], "part": map[string]any{"type": "output_text", "text": "", "annotations": []any{}}})
-			send("response.output_text.delta", map[string]any{"output_index": 0, "content_index": 0, "item_id": item["id"], "delta": "NO-ENVIRONMENT-OK"})
+			for _, fragment := range []string{"NO-", "ENVIRONMENT-", "OK"} {
+				send("response.output_text.delta", map[string]any{"output_index": 0, "content_index": 0, "item_id": item["id"], "delta": fragment})
+			}
 			time.Sleep(time.Second)
 		} else {
 			send("response.output_item.added", map[string]any{"output_index": 0, "item": item})

@@ -81,6 +81,8 @@ def main():
         text_events = [value for value in first_events if value.type.startswith("agent.session.turn.output_text.")]
         assert all(value.item_id == answers[0].id and value.output_index == 0 and value.content_index == 0 for value in text_events)
         assert text_events[-1].text == answers[0].content[0].text
+        deltas = [value.delta for value in text_events if value.type.endswith(".delta")]
+        assert len(deltas) >= 2 and "".join(deltas) == answers[0].content[0].text, deltas
         try:
             sessions.events.create(session.id, events=[message("changed")], idempotency_key="first")
             raise AssertionError("changed retry accepted")
