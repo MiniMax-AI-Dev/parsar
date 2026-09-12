@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/items"
@@ -99,9 +100,35 @@ func TestItemOrderMigrationPreservesIndexedHistory(t *testing.T) {
 			t.Fatalf("migrated item %d: position=%d output=%+v", i, position, output)
 		}
 	}
+	if _, err = provider.UpTo(ctx, 14); err != nil {
+		t.Fatal(err)
+	}
+	var before string
+	if err = db.QueryRowContext(ctx, "SELECT jsonb_agg(to_jsonb(i) ORDER BY id)::text FROM session_items i").Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, "UPDATE turns SET items_indexed=false WHERE id=$1", turn); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = provider.Up(ctx); err == nil || !strings.Contains(err.Error(), "Unindexed Agents API history") {
+		t.Fatalf("unprepared upgrade: %v", err)
+	}
+	var indexed bool
+	if err = db.QueryRowContext(ctx, "SELECT items_indexed FROM turns WHERE id=$1", turn).Scan(&indexed); err != nil || indexed {
+		t.Fatal("failed migration changed preparation state", err)
+	}
+	// Simulate the previous release finishing its index before retrying the upgrade.
+	if _, err = db.ExecContext(ctx, "UPDATE turns SET items_indexed=true WHERE id=$1", turn); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = provider.Up(ctx); err != nil {
 		t.Fatal(err)
 	}
+	var after string
+	if err = db.QueryRowContext(ctx, "SELECT jsonb_agg(to_jsonb(i) ORDER BY id)::text FROM session_items i").Scan(&after); err != nil || after != before {
+		t.Fatal("upgrade changed indexed history", err)
+	}
+
 	poolConfig := pool.Config()
 	poolConfig.ConnConfig = cfg
 	migratedPool, err := pgxpool.NewWithConfig(ctx, poolConfig)

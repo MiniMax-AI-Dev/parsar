@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
@@ -15,42 +14,17 @@ import (
 func TestExecutionNegotiatesAndPersistsToolObservations(t *testing.T) {
 	h := newDispatchHarness(t)
 	ctx := context.Background()
-	first := h.message("legacy", "legacy observation policy")
-	result := h.run(ctx, first.TurnID)
-	var request proto.PromptRequestPayload
-	env := h.read(proto.TypePromptRequest)
-	_ = env.DecodePayload(&request)
-	if request.ObserveTools {
-		t.Fatal("unadvertised observation capability requested")
-	}
-	h.write(first.TurnID, proto.TypeDone, proto.DonePayload{})
-	h.finished(result, store.TurnCompleted)
-	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true, WebSearchControl: true, TextVerbosity: true, SubagentControl: true, ToolItems: true}}}})
-	deadline := time.Now().Add(3 * time.Second)
-	for {
-		peer, err := h.registry.LookupDevice(h.device.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		info, _, _ := peer.AgentKindStatus("codex")
-		if info.Capabilities.ToolItems {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("tool capability lost in gateway")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
 	input := h.message("observed", "run tools")
-	result = h.run(ctx, input.TurnID)
-	env = h.read(proto.TypePromptRequest)
+	result := h.run(ctx, input.TurnID)
+	env := h.read(proto.TypePromptRequest)
+	var request proto.PromptRequestPayload
 	_ = env.DecodePayload(&request)
-	if !request.ObserveTools || request.ObserveMessages {
+	if !request.ObserveToolObservations || request.ObserveTools || request.ObserveMessages {
 		t.Fatal("advertised capability was not requested")
 	}
-	start := json.RawMessage(`{"type":"mcpToolCall","id":"a","server":"reference","tool":"lookup","arguments":{"key":"value"},"status":"inProgress","result":null,"error":null}`)
-	complete := json.RawMessage(`{"type":"mcpToolCall","id":"a","server":"reference","tool":"lookup","arguments":{"key":"value"},"status":"completed","result":{"content":[{"type":"text","text":"answer"}],"structuredContent":{"version":9007199254740993}},"error":null}`)
-	partial := json.RawMessage(`{"type":"commandExecution","id":"b","command":"long-running","status":"inProgress","aggregatedOutput":null,"exitCode":null}`)
+	start := json.RawMessage(`{"kind":"mcp","server":"reference","name":"lookup","arguments":{"key":"value"},"status":"in_progress","output":null,"error":null}`)
+	complete := json.RawMessage(`{"kind":"mcp","server":"reference","name":"lookup","arguments":{"key":"value"},"status":"completed","output":{"content":[{"type":"text","text":"answer"}],"structuredContent":{"version":9007199254740993}},"error":null}`)
+	partial := json.RawMessage(`{"kind":"command","command":"long-running","status":"in_progress"}`)
 	for i, raw := range []json.RawMessage{start, complete, partial} {
 		id, stage := "a", "before"
 		if i == 1 {
@@ -59,7 +33,11 @@ func TestExecutionNegotiatesAndPersistsToolObservations(t *testing.T) {
 		if i == 2 {
 			id = "b"
 		}
-		h.write(input.TurnID, proto.TypeToolCall, proto.ToolCallPayload{ID: id, Stage: stage, NativeItem: raw})
+		var observation proto.ToolObservation
+		if err := json.Unmarshal(raw, &observation); err != nil {
+			t.Fatal(err)
+		}
+		h.write(input.TurnID, proto.TypeToolCall, proto.ToolCallPayload{ID: id, Stage: stage, Observation: &observation})
 	}
 	if _, err := h.s.RequestCancel(ctx, h.tenant, h.session.ID, "cancel"); err != nil {
 		t.Fatal(err)
@@ -92,10 +70,11 @@ func TestExecutionNegotiatesAndPersistsToolObservations(t *testing.T) {
 				t.Fatal(e)
 			}
 		}
-		decode(tool.NativeItem, &actualValue)
+		actual, _ := json.Marshal(tool.Observation)
+		decode(actual, &actualValue)
 		decode(expected, &expectedValue)
 		if !reflect.DeepEqual(actualValue, expectedValue) {
-			t.Fatalf("tool snapshot changed: %s", tool.NativeItem)
+			t.Fatalf("tool snapshot changed: %s", actual)
 		}
 		if i == 2 && tool.Stage != "before" {
 			t.Fatal("unfinished call acquired a completion")

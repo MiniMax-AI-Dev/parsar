@@ -23,7 +23,7 @@ func publicSession(t *testing.T, h *dispatchHarness, key string) store.Session {
 
 func TestExecutionWorkerAdmissionBindingAndRecovery(t *testing.T) {
 	h := newDispatchHarness(t)
-	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, WebSearchControl: true, TextVerbosity: true, SubagentControl: true, EnvironmentNone: true}}}})
+	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, WebSearchControl: true, TextVerbosity: true, SubagentControl: true, ToolObservations: true, EnvironmentNone: true}}}})
 	h.session = publicSession(t, h, "public")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

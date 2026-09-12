@@ -74,7 +74,7 @@ func TestSessionEventsCommitSnapshotsRetriesAndIsolation(t *testing.T) {
 	}
 	batch := []store.ExecutionEvent{
 		{Kind: "delta", Payload: json.RawMessage(`{"item_id":"first","delta":"partial"}`)},
-		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"cmd","stage":"before","native_item":{"id":"cmd","type":"commandExecution","command":"sleep 10","status":"inProgress"}}`)},
+		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"cmd","stage":"before","observation":{"status":"in_progress","kind":"command","command":"sleep 10"}}`)},
 	}
 	for range 2 {
 		if err = s.AppendTurnEvents(ctx, tenant, session.ID, input.TurnID, 1, batch); err != nil {
@@ -128,15 +128,12 @@ func TestSessionEventsCommitSnapshotsRetriesAndIsolation(t *testing.T) {
 		t.Fatal("foreign event access", err)
 	}
 	before, _ = s.SessionEventCursor(ctx, tenant, session.ID)
-	if _, err = pool.Exec(ctx, "UPDATE turns SET items_indexed=false WHERE id=$1", input.TurnID); err != nil {
-		t.Fatal(err)
-	}
 	if _, err = s.ListItems(ctx, tenant, session.ID, "", 100, true); err != nil {
 		t.Fatal(err)
 	}
 	after, _ = s.SessionEventCursor(ctx, tenant, session.ID)
 	if before != after {
-		t.Fatal("history rebuilding published live events")
+		t.Fatal("history read published live events")
 	}
 }
 

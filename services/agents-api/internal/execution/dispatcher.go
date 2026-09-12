@@ -64,6 +64,9 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if session.Engine == "codex" && !info.Capabilities.TextVerbosity {
 		return store.Turn{}, errors.New("device must advertise text_verbosity for Codex")
 	}
+	if !info.Capabilities.ToolObservations {
+		return store.Turn{}, errors.New("device must advertise tool_observations")
+	}
 	var snapshot Snapshot
 	if json.Unmarshal(session.Configuration, &snapshot) != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
 		return store.Turn{}, store.ErrInvalidInput
@@ -113,7 +116,7 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if _, err := d.Store.TransitionTurn(ctx, tenantID, sessionID, turnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress}); err != nil {
 		return store.Turn{}, err
 	}
-	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, FunctionTools: functions, AgentOptions: options, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: info.Capabilities.MessageItems, ObserveTools: info.Capabilities.ToolItems, DisableExecutionEnvironment: noEnvironment, DisableSubagents: !snapshot.Agent.MultiAgent.Enabled}
+	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, FunctionTools: functions, AgentOptions: options, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: info.Capabilities.MessageItems, ObserveToolObservations: true, DisableExecutionEnvironment: noEnvironment, DisableSubagents: !snapshot.Agent.MultiAgent.Enabled}
 	result, status := d.deliver(ctx, tenantID, sessionID, peer, req, through)
 	if result.Done.Usage.Model == "" {
 		result.Done.Usage.Model = snapshot.Agent.Model

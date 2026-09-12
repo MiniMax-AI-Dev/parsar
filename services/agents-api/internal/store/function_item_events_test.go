@@ -13,7 +13,7 @@ func TestFunctionResultEventsAreInputs(t *testing.T) {
 	turn := submitMessage(t, s, tenant, session.ID, "start").TurnID
 	transition(t, s, tenant, session.ID, turn, TurnQueued, TurnInProgress)
 	events := []ExecutionEvent{
-		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"call","stage":"after","native_item":{"type":"dynamicToolCall","id":"call","tool":"lookup","status":"completed","success":true,"arguments":{},"contentItems":[{"type":"inputText","text":"result"}]}}`)},
+		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"call","stage":"after","observation":{"status":"completed","kind":"function","name":"lookup","arguments":{},"content":[{"type":"input_text","text":"result"}]}}`)},
 		{Kind: "delta", Payload: json.RawMessage(`{"item_id":"answer","delta":"answer"}`)},
 	}
 	if err := s.AppendTurnEvents(t.Context(), tenant, session.ID, turn, 1, events); err != nil {
@@ -73,7 +73,7 @@ func TestFunctionResultItemsRetainSubmittedFields(t *testing.T) {
 			if err := s.SubmitFunctionResult(t.Context(), tenant, session.ID, turn, call.CallID, json.RawMessage(raw)); err != nil {
 				t.Fatal(err)
 			}
-			event := ExecutionEvent{Kind: "tool_call", Payload: json.RawMessage(`{"id":"call","stage":"after","native_item":{"type":"dynamicToolCall","id":"call","tool":"lookup","status":"completed","success":true,"arguments":{},"contentItems":[{"type":"inputText","text":"normalized"}]}}`)}
+			event := ExecutionEvent{Kind: "tool_call", Payload: json.RawMessage(`{"id":"call","stage":"after","observation":{"status":"completed","kind":"function","name":"lookup","arguments":{},"content":[{"type":"input_text","text":"normalized"}]}}`)}
 			if err := s.AppendTurnEvents(t.Context(), tenant, session.ID, turn, 1, []ExecutionEvent{event}); err != nil {
 				t.Fatal(err)
 			}

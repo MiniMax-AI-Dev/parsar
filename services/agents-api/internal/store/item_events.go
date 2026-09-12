@@ -10,7 +10,7 @@ import (
 )
 
 func recordItemChange(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, index pgtype.Int4, previous, item v1.Item, delta *string) error {
-	if reflect.DeepEqual(previous, item) || ctx.Value(suppressSessionEvents{}) != nil {
+	if reflect.DeepEqual(previous, item) {
 		return nil
 	}
 	// Function results are Session inputs, not AgentOutputItem variants.

@@ -32,12 +32,12 @@ func TestItemsRecoverSnapshotsPartialResultsPaginationAndIsolation(t *testing.T)
 	batch := []store.ExecutionEvent{
 		{Kind: "output_message", Payload: json.RawMessage(`{"id":"answer","status":"in_progress"}`)},
 		{Kind: "delta", Payload: json.RawMessage(`{"item_id":"answer","delta":"draft"}`)},
-		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"cmd","stage":"before","native_item":{"id":"cmd","type":"commandExecution","command":"exit 7","status":"inProgress"}}`)},
-		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"cmd","stage":"after","native_item":{"id":"cmd","type":"commandExecution","command":"exit 7","status":"failed","aggregatedOutput":"expected failure","exitCode":7}}`)},
+		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"cmd","stage":"before","observation":{"status":"in_progress","kind":"command","command":"exit 7"}}`)},
+		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"cmd","stage":"after","observation":{"status":"failed","kind":"command","command":"exit 7","output":"expected failure","exit_code":7}}`)},
 		{Kind: "output_message", Payload: json.RawMessage(`{"id":"answer","status":"completed","text":"corrected answer","phase":"final_answer"}`)},
-		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"mcp","stage":"after","native_item":{"id":"mcp","type":"mcpToolCall","server":"reference","tool":"lookup","arguments":{},"status":"completed","result":{"structuredContent":{"number":9007199254740993}}}}`)},
+		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"mcp","stage":"after","observation":{"status":"completed","kind":"mcp","server":"reference","name":"lookup","arguments":{},"output":{"structuredContent":{"number":9007199254740993}}}}`)},
 		{Kind: "delta", Payload: json.RawMessage(`{"item_id":"partial","delta":"unfinished"}`)},
-		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"waiting","stage":"before","native_item":{"id":"waiting","type":"commandExecution","command":"sleep 10","status":"inProgress"}}`)},
+		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"waiting","stage":"before","observation":{"status":"in_progress","kind":"command","command":"sleep 10"}}`)},
 		{Kind: "done", Payload: json.RawMessage(`{"content":"corrected answer","metadata":{"agent_session_id":"PRIVATE"}}`)},
 	}
 	for range 2 {
@@ -107,25 +107,11 @@ func TestItemsRecoverSnapshotsPartialResultsPaginationAndIsolation(t *testing.T)
 			t.Fatal(err)
 		}
 	}
-	// Simulate upgrading persisted journal history; reindex must preserve IDs and content.
-	if _, err = pool.Exec(ctx, "DELETE FROM session_items WHERE session_id=$1", session.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = pool.Exec(ctx, "UPDATE turns SET items_indexed=false WHERE session_id=$1", session.ID); err != nil {
-		t.Fatal(err)
-	}
-	rebuilt, err := s.ListItems(ctx, tenant, session.ID, "", 100, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(rebuilt, page) {
-		t.Fatalf("history changed after rebuilding: %+v", rebuilt)
-	}
 }
 
-func TestItemProjectionFailureRollsBackJournalAndLegacyAggregateRecovers(t *testing.T) {
+func TestItemProjectionFailureRollsBackJournalAndAggregateRecovers(t *testing.T) {
 	ctx := context.Background()
-	s, pool := store.NewTestStore(t)
+	s, _ := store.NewTestStore(t)
 	tenant := uuid.NewString()
 	session, _ := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "legacy"})
 	input, err := s.SubmitMessage(ctx, tenant, session.ID, "input", json.RawMessage(`{"text":"test"}`))
@@ -136,7 +122,7 @@ func TestItemProjectionFailureRollsBackJournalAndLegacyAggregateRecovers(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	bad := []store.ExecutionEvent{{Kind: "delta", Payload: json.RawMessage(`{"delta":"must roll back"}`)}, {Kind: "tool_call", Payload: json.RawMessage(`{"id":"mismatch","stage":"after","native_item":{"id":"other","type":"commandExecution"}}`)}}
+	bad := []store.ExecutionEvent{{Kind: "delta", Payload: json.RawMessage(`{"delta":"must roll back"}`)}, {Kind: "tool_call", Payload: json.RawMessage(`{"id":"mismatch","stage":"after","observation":{"status":"completed","kind":"invalid"}}`)}}
 	if err = s.AppendTurnEvents(ctx, tenant, session.ID, input.TurnID, 1, bad); err == nil {
 		t.Fatal("invalid snapshot accepted")
 	}
@@ -155,16 +141,6 @@ func TestItemProjectionFailureRollsBackJournalAndLegacyAggregateRecovers(t *test
 	current, err := s.ListItems(ctx, tenant, session.ID, "", 100, true)
 	if err != nil || len(current.Items) != 2 || *current.Items[1].Content[0].Text != "legacy answer" {
 		t.Fatal(current, err)
-	}
-	if _, err = pool.Exec(ctx, "UPDATE turns SET items_indexed=false WHERE id=$1", input.TurnID); err != nil {
-		t.Fatal(err)
-	}
-	page, err = s.ListItems(ctx, tenant, session.ID, "", 100, true)
-	if err != nil || len(page.Items) != 2 {
-		t.Fatal(page, err)
-	}
-	if *page.Items[1].Content[0].Text != "legacy answer" {
-		t.Fatal(page)
 	}
 }
 
@@ -196,16 +172,6 @@ func TestReceiptOnlyTextRecoversWithoutInventingCompletion(t *testing.T) {
 		if err != nil || len(page.Items) != 2 || page.Items[1].Status != "incomplete" || *page.Items[1].Content[0].Text != "retained cancellation text" {
 			t.Fatal(page, err)
 		}
-		if _, err = pool.Exec(ctx, "DELETE FROM session_items WHERE session_id=$1", session.ID); err != nil {
-			t.Fatal(err)
-		}
-		if _, err = pool.Exec(ctx, "UPDATE turns SET items_indexed=false WHERE id=$1", input.TurnID); err != nil {
-			t.Fatal(err)
-		}
-		rebuilt, err := s.ListItems(ctx, tenant, session.ID, "", 100, true)
-		if err != nil || !reflect.DeepEqual(page, rebuilt) {
-			t.Fatal(rebuilt, err)
-		}
 	}
 }
 
@@ -227,8 +193,8 @@ func TestLegacyFailureRetainsPartialAnswerAcrossRecovery(t *testing.T) {
 	}
 	batch := []store.ExecutionEvent{
 		{Kind: "delta", Payload: json.RawMessage(`{"delta":"partial answer"}`)},
-		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"open","stage":"after","native_item":{"id":"open","type":"webSearch","action":{"type":"openPage","url":"https://example.com"}}}`)},
-		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"find","stage":"after","native_item":{"id":"find","type":"webSearch","action":{"type":"findInPage","url":"https://example.com","pattern":"needle"}}}`)},
+		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"open","stage":"after","observation":{"status":"completed","kind":"web_search","action":{"type":"open_page","url":"https://example.com"}}}`)},
+		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"find","stage":"after","observation":{"status":"completed","kind":"web_search","action":{"type":"find_in_page","url":"https://example.com","pattern":"needle"}}}`)},
 		{Kind: "error", Payload: json.RawMessage(`{"error":"provider failure"}`)},
 		{Kind: "done", Payload: json.RawMessage(`{"content":"provider failure"}`)},
 	}
@@ -245,15 +211,5 @@ func TestLegacyFailureRetainsPartialAnswerAcrossRecovery(t *testing.T) {
 	}
 	if page.Items[1].Status != "incomplete" || *page.Items[1].Content[0].Text != "partial answer" || page.Items[2].Action.Type != "open_page" || page.Items[3].Action.Type != "find_in_page" {
 		t.Fatal(page)
-	}
-	if _, err = pool.Exec(ctx, "DELETE FROM session_items WHERE session_id=$1", session.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = pool.Exec(ctx, "UPDATE turns SET items_indexed=false WHERE id=$1", input.TurnID); err != nil {
-		t.Fatal(err)
-	}
-	rebuilt, err := s.ListItems(ctx, tenant, session.ID, "", 100, true)
-	if err != nil || !reflect.DeepEqual(page, rebuilt) {
-		t.Fatal(rebuilt, err)
 	}
 }

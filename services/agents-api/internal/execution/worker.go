@@ -185,7 +185,7 @@ func (w *Worker) ready(deviceID string, functions bool) bool {
 		return false
 	}
 	info, found, known := peer.AgentKindStatus("codex")
-	return found && known && info.Available && info.Capabilities.Streaming && info.Capabilities.Steering && info.Capabilities.DurableTurns && info.Capabilities.EnvironmentNone && info.Capabilities.WebSearchControl && info.Capabilities.TextVerbosity && info.Capabilities.SubagentControl && (!functions || info.Capabilities.FunctionTools)
+	return found && known && info.Available && info.Capabilities.Streaming && info.Capabilities.Steering && info.Capabilities.DurableTurns && info.Capabilities.ToolObservations && info.Capabilities.EnvironmentNone && info.Capabilities.WebSearchControl && info.Capabilities.TextVerbosity && info.Capabilities.SubagentControl && (!functions || info.Capabilities.FunctionTools)
 }
 
 func (w *Worker) runClaim(ctx context.Context, item store.ExecutionWork) error {

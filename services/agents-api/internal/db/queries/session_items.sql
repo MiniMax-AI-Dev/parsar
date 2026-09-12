@@ -29,24 +29,6 @@ ORDER BY
     CASE WHEN NOT sqlc.arg(ascending)::boolean THEN i.id END DESC
 LIMIT sqlc.arg(page_limit);
 
--- name: UnindexedItemTurn :one
-SELECT * FROM turns WHERE session_id = $1 AND NOT items_indexed ORDER BY created_at, id LIMIT 1;
-
--- name: MarkItemsIndexed :exec
-UPDATE turns SET items_indexed = true WHERE session_id = $1 AND id = $2;
-
--- name: ItemSources :many
-SELECT kind, payload, created_at, source_order, source_type FROM (
-    SELECT kind, payload, created_at, sequence AS source_order, 0::integer AS source_type
-    FROM turn_inputs inp WHERE inp.session_id = sqlc.arg(session_id) AND inp.turn_id = sqlc.arg(turn_id) AND kind = 'message'
-    UNION ALL
-    SELECT kind, payload, created_at, ordinal::bigint AS source_order, 1::integer AS source_type
-    FROM turn_events evt WHERE evt.session_id = sqlc.arg(session_id) AND evt.turn_id = sqlc.arg(turn_id)
-) AS sources
-WHERE (sqlc.narg(after_created)::timestamptz IS NULL
-    OR (created_at, source_type, source_order) > (sqlc.narg(after_created)::timestamptz, sqlc.arg(after_type)::integer, sqlc.arg(after_order)::bigint))
-ORDER BY created_at, source_type, source_order LIMIT 100;
-
 -- name: ItemInputSource :one
 SELECT * FROM turn_inputs WHERE session_id = $1 AND sequence = $2;
 
