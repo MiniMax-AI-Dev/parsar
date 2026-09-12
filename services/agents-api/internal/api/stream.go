@@ -121,6 +121,8 @@ func streamResponse(session store.Session, change store.SessionChange) (v1.Sessi
 		event.Turn = &turn
 		return event, err
 	}
+	event.SessionID = ""
+	session.RequiredActions = change.RequiredActions
 	session.LastTurn, session.Usage = change.Turn, change.SessionUsage
 	value, err := sessionResponse(session)
 	event.Session = &value

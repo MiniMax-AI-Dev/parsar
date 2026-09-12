@@ -173,7 +173,7 @@ func TestFunctionResultsCannotApplyAfterCancellationOrCompletion(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			transition(t, s, tenant, session.ID, turn, TurnInProgress, terminal)
+			transition(t, s, tenant, session.ID, turn, TurnWaiting, terminal)
 			assertNoPendingFunctions(t, s, tenant, session.ID, turn)
 			if err := s.ConfirmFunctionResult(t.Context(), tenant, session.ID, turn, "submitted"); !errors.Is(err, ErrTurnConflict) {
 				t.Fatal(err)

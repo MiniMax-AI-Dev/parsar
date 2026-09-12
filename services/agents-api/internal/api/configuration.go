@@ -57,7 +57,7 @@ func sessionResponse(session store.Session) (v1.Session, error) {
 		ID: session.ID, Agent: cfg.Agent, Environment: cfg.Environment, Usage: tokenUsage(session.Usage),
 		CreatedAt: session.CreatedAt.Unix(), LastActiveAt: session.CreatedAt.Unix(),
 		Metadata: session.Metadata, Object: "agent.session", Status: "idle",
-		RequiredActions: []json.RawMessage{}, VaultIDs: []string{},
+		RequiredActions: []v1.FunctionCallAction{}, VaultIDs: []string{},
 	}
 	if turn := session.LastTurn; turn != nil {
 		active := turn.CreatedAt
@@ -71,6 +71,10 @@ func sessionResponse(session store.Session) (v1.Session, error) {
 		switch turn.Status {
 		case store.TurnQueued, store.TurnInProgress, store.TurnWaiting:
 			response.Status = "in_progress"
+			if turn.CancelRequestedAt.IsZero() && len(session.RequiredActions) > 0 {
+				response.Status = "requires_action"
+				response.RequiredActions = session.RequiredActions
+			}
 		case store.TurnFailed:
 			response.Status = "failed"
 			message := "The execution could not complete."

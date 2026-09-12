@@ -46,7 +46,10 @@ func (s *Store) ConfirmFunctionResult(ctx context.Context, tenantID, sessionID, 
 		if len(call.Result) == 0 || !acceptsFunctionResult(turn) {
 			return ErrTurnConflict
 		}
-		return q.ApplyFunctionResult(ctx, sqlc.ApplyFunctionResultParams{SessionID: turn.SessionID, TurnID: turn.ID, CallID: call.CallID})
+		if err := q.ApplyFunctionResult(ctx, sqlc.ApplyFunctionResultParams{SessionID: turn.SessionID, TurnID: turn.ID, CallID: call.CallID}); err != nil {
+			return err
+		}
+		return recordFunctionState(ctx, q, turn)
 	})
 }
 

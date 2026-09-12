@@ -27,10 +27,14 @@ func (s *Store) CompleteExecution(ctx context.Context, tenantID, sessionID, turn
 	}
 	var row sqlc.Turn
 	err = s.withSession(ctx, tenantID, sessionID, func(q *sqlc.Queries, session pgtype.UUID) error {
-		if _, err := q.GetTurn(ctx, p); errors.Is(err, pgx.ErrNoRows) {
+		current, err := q.GetTurn(ctx, p)
+		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		} else if err != nil {
 			return err
+		}
+		if current.Status != TurnInProgress && (current.Status != TurnWaiting || status == TurnCompleted) {
+			return ErrTurnConflict
 		}
 		if status == TurnCompleted {
 			pending, err := q.HasUnappliedMessages(ctx, sqlc.HasUnappliedMessagesParams{SessionID: session, TurnID: p.ID, Sequence: appliedThrough})
@@ -41,8 +45,7 @@ func (s *Store) CompleteExecution(ctx context.Context, tenantID, sessionID, turn
 				return ErrUnappliedInputs
 			}
 		}
-		var err error
-		row, err = q.TransitionTurn(ctx, sqlc.TransitionTurnParams{ID: p.ID, SessionID: session, ExpectedStatus: TurnInProgress, NewStatus: status, Outcome: outcome})
+		row, err = q.TransitionTurn(ctx, sqlc.TransitionTurnParams{ID: p.ID, SessionID: session, ExpectedStatus: current.Status, NewStatus: status, Outcome: outcome})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrTurnConflict
 		}

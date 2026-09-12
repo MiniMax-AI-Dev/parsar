@@ -103,6 +103,26 @@ definitions:
     required:
     - error
     type: object
+  v1.FunctionCallAction:
+    properties:
+      arguments: {}
+      call_id:
+        type: string
+      name:
+        type: string
+      turn_id:
+        type: string
+      type:
+        enum:
+        - function_call
+        type: string
+    required:
+    - arguments
+    - call_id
+    - name
+    - turn_id
+    - type
+    type: object
   v1.InlineAgent:
     properties:
       instructions:
@@ -293,12 +313,13 @@ definitions:
         type: string
       required_actions:
         items:
-          type: object
+          $ref: '#/definitions/v1.FunctionCallAction'
         type: array
       status:
         enum:
         - idle
         - in_progress
+        - requires_action
         - failed
         type: string
       usage:
@@ -353,7 +374,6 @@ definitions:
         type: string
     required:
     - event_id
-    - session_id
     - type
     type: object
   v1.SessionInput:

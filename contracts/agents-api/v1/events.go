@@ -4,7 +4,7 @@ package v1
 type SessionEvent struct {
 	Type         string       `json:"type" binding:"required"`
 	EventID      string       `json:"event_id" binding:"required"`
-	SessionID    string       `json:"session_id" binding:"required"`
+	SessionID    string       `json:"session_id,omitempty"`
 	TurnID       string       `json:"turn_id,omitempty"`
 	Session      *Session     `json:"session,omitempty"`
 	Turn         *Turn        `json:"turn,omitempty"`

@@ -150,6 +150,14 @@ func admitInput(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, key s
 			if err := recordTurnChange(ctx, q, cancelled, false); err != nil {
 				return InputReceipt{}, err
 			}
+		} else if turn.Status == TurnWaiting && !turn.CancelRequestedAt.Valid {
+			cancelling, err := q.SessionEventTurn(ctx, sqlc.SessionEventTurnParams{SessionID: session, ID: turn.ID})
+			if err != nil {
+				return InputReceipt{}, err
+			}
+			if err := recordSessionActivity(ctx, q, cancelling, nil); err != nil {
+				return InputReceipt{}, err
+			}
 		}
 	}
 	if err := indexInput(ctx, q, session, sequence); err != nil {
