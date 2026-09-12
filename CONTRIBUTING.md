@@ -38,7 +38,7 @@ commits to `main` are forbidden.**
 - After implementing and verifying, push the feature branch and open a PR
   against `main`. **Merging into `main` requires PR review** — local
   fast-forward or local merge to bypass review is not allowed. Self-review
-  qualifies for low-impact changes under the review policy below.
+  qualifies when the developer judges it sufficient under the review policy below.
 - Run `make check` (and any relevant E2E target) before requesting review.
 - Place worktrees under `.worktrees/<feature-name>/` so they don't litter
   the repo root.
@@ -57,22 +57,25 @@ several small PRs. State the expected behavior, acceptance criteria, and explici
 scope exclusions before implementation. Keep unrelated refactors, features,
 formatting, and dependency updates in separate PRs.
 
-Small, low-impact changes may use developer self-review and relevant
-verification without a subagent. Examples include isolated copy, spacing,
-documentation, and local corrections to an already-reviewed change.
+The developer chooses the review method based on scope, risk, uncertainty and
+expected value. Self-review with suitable verification is acceptable when it is
+sufficient. Use an independent assessment when it would materially help, especially
+for security-sensitive, shared or uncertain behavior; a subagent is not mandatory
+for every change.
 
-Substantial changes, shared interaction behavior, security-sensitive changes,
-and changes whose impact is uncertain require an independent blind review.
-After implementation and required checks, ask one fresh subagent to review
-the entire diff. Give it requirements, acceptance criteria, project rules,
-and scope boundaries, without the developer's conversation, implementation
-summary, suspected defects, or previous review findings.
+When using blind review, finish implementation and required checks first, then ask
+one fresh subagent in an independent context to review the entire diff. Give it
+only requirements, acceptance criteria, project rules, scope boundaries, repository
+location and comparison baseline. Do not provide the developer's conversation,
+implementation summary, self-assessment, suspected defects or previous findings.
 
-Address blocking findings within the same scope and rerun the relevant checks.
-Revisions with material behavior changes need a fresh blind reviewer; small
-local corrections may be self-reviewed. Required checks still apply to every
-PR. Merge only after checks pass and all blocking findings are resolved.
-Record the review method, verification, and PR outcome in the linked issue.
+Evaluate suggestions by evidence, actual risk, task scope and ROI. Low-value or
+out-of-scope suggestions may be declined; record real deferred issues without
+expanding the PR to address every comment. Address in-scope blocking findings and
+rerun relevant checks, then decide whether a fresh independent review adds value.
+Required checks still apply to every PR. Merge through the PR once checks pass and
+blocking findings are resolved. Record the review method, verification, material
+deferrals and PR outcome in the linked issue.
 
 If review and fixes keep cycling, stop patching and reassess the design. If
 the design still does not converge, document the unresolved problem and defer
