@@ -1,9 +1,16 @@
 package v1
 
-// SessionInput contains the supported message and cancellation event variants.
+import "encoding/json"
+
+// SessionInput contains the message, cancellation and function-result event variants.
 type SessionInput struct {
-	Type  string         `json:"type" enums:"agent.session.input.message,agent.session.input.cancel" binding:"required"`
-	Input []InputMessage `json:"input,omitempty"`
+	Type    string          `json:"type" enums:"agent.session.input.message,agent.session.input.cancel,agent.session.input.tool_result" binding:"required"`
+	Input   []InputMessage  `json:"input,omitempty"`
+	CallID  string          `json:"call_id,omitempty"`
+	TurnID  string          `json:"turn_id,omitempty"`
+	Success *bool           `json:"success,omitempty"`
+	Error   json.RawMessage `json:"error,omitempty" swaggertype:"string" extensions:"x-nullable"`
+	Output  any             `json:"output,omitempty" extensions:"x-nullable"`
 }
 
 type InputMessage struct {
