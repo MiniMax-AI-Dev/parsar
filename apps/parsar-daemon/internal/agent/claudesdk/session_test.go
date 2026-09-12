@@ -42,7 +42,12 @@ func TestTextFactoryCompletionAndFailures(t *testing.T) {
 				case proto.TypeDelta:
 					var payload proto.DeltaPayload
 					_ = json.Unmarshal(event.Payload, &payload)
+					if payload.ItemID != "" {
+						t.Fatal("ordinary deltas acquired message identity")
+					}
 					deltas += payload.Delta
+				case proto.TypeOutputMessage:
+					t.Fatal("ordinary requests acquired message observations")
 				case proto.TypeError:
 					failed = true
 				case proto.TypeDone:
@@ -112,6 +117,10 @@ func runSDKHelper() {
 	}
 	encode := func(event bridgeEvent) { _ = json.NewEncoder(os.Stdout).Encode(event) }
 	mode := os.Getenv("SDK_HELPER_MODE")
+	if strings.HasPrefix(mode, "messages-") {
+		runMessageHelper(request, mode, encode)
+		return
+	}
 	switch mode {
 	case "missing":
 		return

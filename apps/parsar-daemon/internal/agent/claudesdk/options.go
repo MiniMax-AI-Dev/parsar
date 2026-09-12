@@ -18,23 +18,24 @@ type Config struct {
 }
 
 type startRequest struct {
-	Type         string `json:"type"`
-	Prompt       string `json:"prompt"`
-	Model        string `json:"model"`
-	SystemPrompt string `json:"system_prompt"`
-	Cwd          string `json:"cwd"`
-	Resume       string `json:"resume,omitempty"`
+	Type            string `json:"type"`
+	Prompt          string `json:"prompt"`
+	Model           string `json:"model"`
+	SystemPrompt    string `json:"system_prompt"`
+	Cwd             string `json:"cwd"`
+	Resume          string `json:"resume,omitempty"`
+	ObserveMessages bool   `json:"observe_messages,omitempty"`
 }
 
 func prepare(config Config, req proto.PromptRequestPayload) (startRequest, []string, error) {
-	start := startRequest{Type: "start", Prompt: req.Prompt, Resume: req.AgentSessionID}
+	start := startRequest{Type: "start", Prompt: req.Prompt, Resume: req.AgentSessionID, ObserveMessages: req.ObserveMessages}
 	fail := func(reason string) (startRequest, []string, error) {
 		return startRequest{}, nil, fmt.Errorf("claudesdk: %s", reason)
 	}
 	if req.RunID == "" || strings.TrimSpace(req.Prompt) == "" {
 		return fail("run id and prompt are required")
 	}
-	if len(req.Attachments) > 0 || len(req.FunctionTools) > 0 || req.WorkspaceAuthoring || req.ObserveMessages || req.ObserveTools || req.ObserveToolObservations || req.DisableExecutionEnvironment || req.DisableSubagents {
+	if len(req.Attachments) > 0 || len(req.FunctionTools) > 0 || req.WorkspaceAuthoring || req.ObserveTools || req.ObserveToolObservations || req.DisableExecutionEnvironment || req.DisableSubagents {
 		return fail("requested capability is not available in the text adapter")
 	}
 	for name, raw := range req.AgentOptions {
