@@ -4,6 +4,7 @@ package items
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -112,6 +113,7 @@ func Merge(update Update, previous v1.Item) v1.Item {
 			return previous
 		}
 		text := *previous.Content[0].Text + *item.Content[0].Text
+		item.Content = slices.Clone(item.Content)
 		item.Content[0].Text = &text
 		if item.Phase == "" {
 			item.Phase = previous.Phase

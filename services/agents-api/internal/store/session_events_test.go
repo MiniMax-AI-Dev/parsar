@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/db/sqlc"
@@ -74,6 +75,8 @@ func TestSessionEventsCommitSnapshotsRetriesAndIsolation(t *testing.T) {
 	}
 	batch := []store.ExecutionEvent{
 		{Kind: "delta", Payload: json.RawMessage(`{"item_id":"first","delta":"partial"}`)},
+		{Kind: "delta", Payload: json.RawMessage(`{"item_id":"first","delta":" partial"}`)},
+		{Kind: "delta", Payload: json.RawMessage(`{"item_id":"first","delta":" partial"}`)},
 		{Kind: "tool_call", Payload: json.RawMessage(`{"id":"cmd","stage":"before","observation":{"status":"in_progress","kind":"command","command":"sleep 10"}}`)},
 	}
 	for range 2 {
@@ -82,7 +85,7 @@ func TestSessionEventsCommitSnapshotsRetriesAndIsolation(t *testing.T) {
 		}
 	}
 	before, _ = s.SessionEventCursor(ctx, tenant, session.ID)
-	if err = s.AppendTurnEvents(ctx, tenant, session.ID, input.TurnID, 3, []store.ExecutionEvent{
+	if err = s.AppendTurnEvents(ctx, tenant, session.ID, input.TurnID, 5, []store.ExecutionEvent{
 		{Kind: "delta", Payload: json.RawMessage(`{"item_id":"discarded","delta":"rollback"}`)},
 		{Kind: "output_message", Payload: json.RawMessage(`{"status":"invalid"}`)},
 	}); err == nil {
@@ -112,8 +115,15 @@ func TestSessionEventsCommitSnapshotsRetriesAndIsolation(t *testing.T) {
 		t.Fatalf("transition snapshots changed: %+v", all)
 	}
 	counts := map[string]int{}
+	var deltas []string
 	for _, change := range all {
 		counts[change.Event.Type]++
+		if change.Event.Type == "agent.session.turn.output_text.delta" {
+			deltas = append(deltas, *change.Event.Delta)
+		}
+		if change.Event.Type == "agent.session.turn.item.done" && change.Event.Item.Type == "message" && *change.Event.Item.Content[0].Text != "partial partial partial" {
+			t.Fatal("cancelled message lost accumulated text", change.Event.Item)
+		}
 		if change.Turn != nil && len(change.Turn.Outcome) > 0 && string(change.Turn.Outcome) != "null" {
 			t.Fatal("raw outcome retained in public notification")
 		}
@@ -121,7 +131,10 @@ func TestSessionEventsCommitSnapshotsRetriesAndIsolation(t *testing.T) {
 			t.Fatal("cancelled unfinished item reported complete")
 		}
 	}
-	if counts["agent.session.turn.output_text.delta"] != 1 || counts["agent.session.turn.item.done"] != 2 {
+	if !slices.Equal(deltas, []string{"partial", " partial", " partial"}) {
+		t.Fatalf("public deltas were not incremental: %q", deltas)
+	}
+	if counts["agent.session.turn.output_text.delta"] != 3 || counts["agent.session.turn.item.done"] != 2 {
 		t.Fatal(counts)
 	}
 	if _, err = s.ListSessionEvents(ctx, uuid.NewString(), session.ID, 0); !errors.Is(err, store.ErrNotFound) {

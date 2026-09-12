@@ -500,7 +500,10 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   never mark unprepared history indexed by hand or replay engine execution.
 - Project only the declared public Item variants; native adapter metadata is not
   a response schema. Preserve structured tool JSON without float conversion.
-  Completion text replaces accumulated deltas. Keep partial output on termination;
+  Completion text replaces accumulated deltas. Item merging must not mutate the
+  incoming observation or the previous snapshot: public text delta events read the
+  original fragment after merging, while Items retain the accumulated text.
+  Copy the content slice before replacing its text pointer. Keep partial output on termination;
   do not turn an unfinished call into a successful result. Thinking fragments are
   internal observations, not a claim of upstream reasoning-item support.
 

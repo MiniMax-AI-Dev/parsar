@@ -62,3 +62,24 @@ func TestLegacyDoneDoesNotConfirmSuccessfulAnswer(t *testing.T) {
 		t.Fatal(previous)
 	}
 }
+
+func TestMergePreservesIncomingDeltasAndPreviousSnapshots(t *testing.T) {
+	var previous v1.Item
+	fragments := []string{"go ", "go ", "结束"}
+	for i, fragment := range fragments {
+		update := Update{Item: message(testTurn, "message:native", "assistant", fragment, "in_progress"), AppendText: true}
+		before, _ := json.Marshal(previous)
+		merged := Merge(update, previous)
+		after, _ := json.Marshal(previous)
+		if string(before) != string(after) {
+			t.Fatal("merge mutated the previous snapshot")
+		}
+		if *update.Item.Content[0].Text != fragment {
+			t.Fatalf("incoming delta changed: got %q, want %q", *update.Item.Content[0].Text, fragment)
+		}
+		if *merged.Content[0].Text != strings.Join(fragments[:i+1], "") {
+			t.Fatalf("accumulated text changed: %+v", merged)
+		}
+		previous = merged
+	}
+}
