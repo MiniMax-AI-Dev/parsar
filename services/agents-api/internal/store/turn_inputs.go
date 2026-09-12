@@ -79,7 +79,7 @@ func (s *Store) SubmitInputs(ctx context.Context, tenantID, sessionID, key strin
 			return nil
 		}
 		for position, input := range batch {
-			receipt, err := admitInput(ctx, q, session, key, int32(position), input)
+			receipt, err := admitInput(ctx, q, tenantID, session, key, int32(position), input)
 			if err != nil {
 				return err
 			}
@@ -101,8 +101,8 @@ func validateInputs(inputs []Input) ([]Input, json.RawMessage, error) {
 	size := 0
 	for i, input := range inputs {
 		size += len(input.Payload)
-		if size > 512*1024 || len(input.Payload) == 0 || (input.Kind != "message" && input.Kind != "cancel") {
-			return nil, nil, fmt.Errorf("%w: message/cancel payloads must be nonempty and total at most 512 KiB", ErrInvalidInput)
+		if size > 512*1024 || len(input.Payload) == 0 || (input.Kind != "message" && input.Kind != "cancel" && input.Kind != "tool_result") {
+			return nil, nil, fmt.Errorf("%w: input payloads must be nonempty and total at most 512 KiB", ErrInvalidInput)
 		}
 		payload, err := canonicalJSONObject(input.Payload)
 		if err != nil {
@@ -111,13 +111,21 @@ func validateInputs(inputs []Input) ([]Input, json.RawMessage, error) {
 		if input.Kind == "cancel" && string(payload) != "{}" {
 			return nil, nil, fmt.Errorf("%w: cancel payload must be empty", ErrInvalidInput)
 		}
+		if input.Kind == "tool_result" {
+			if _, err := functionInput(payload); err != nil {
+				return nil, nil, err
+			}
+		}
 		batch[i] = Input{Kind: input.Kind, Payload: payload}
 	}
 	encoded, err := json.Marshal(batch)
 	return batch, encoded, err
 }
 
-func admitInput(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, key string, position int32, input Input) (InputReceipt, error) {
+func admitInput(ctx context.Context, q *sqlc.Queries, tenantID string, session pgtype.UUID, key string, position int32, input Input) (InputReceipt, error) {
+	if input.Kind == "tool_result" {
+		return admitFunctionResult(ctx, q, tenantID, session, key, position, input)
+	}
 	turn, err := q.GetActiveTurn(ctx, session)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if input.Kind == "message" {

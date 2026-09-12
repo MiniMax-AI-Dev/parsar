@@ -225,6 +225,11 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 				if len(inputs) == 0 {
 					continue
 				}
+				if inputs[0].Kind == "tool_result" {
+					// Function results use their own application receipts, not message steering.
+					result.AppliedThrough = inputs[0].Sequence
+					continue
+				}
 				if inputs[0].Kind == "cancel" {
 					continue
 				}

@@ -101,7 +101,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
 | Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon and native model support required), environment `none`, metadata and creation retry keys |
-| Internal Turn/input persistence | Tenant-scoped atomic input batches, steering, request-level retry identity, cancellation targets and terminal outcomes |
+| Internal Turn/input persistence | Tenant-scoped atomic message/cancel/function-result batches, steering, request-level retry identity, cancellation targets and terminal outcomes; public result decoding pending |
 | Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution; public text/cancel submission with a bounded standalone worker |
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |
 | Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |

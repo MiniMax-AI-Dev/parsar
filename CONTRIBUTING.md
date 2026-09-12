@@ -312,6 +312,14 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Actions remain visible until native application is acknowledged. This timing is
   an implementation choice, not verified upstream event sequencing. Public tool
   configuration and result admission remain pending.
+- Function results can join internal message/cancel input batches. Their explicit
+  Turn/call identity selects an existing call; admission never creates a Turn for
+  a result. Save the complete result and its input retry record in the same Session
+  transaction. Any invalid target, conflicting result or later batch error rolls
+  back the whole request. Identical saved results remain retryable after termination
+  without applying them again. The execution input cursor skips function results;
+  their separate native receipts still determine application. Public event decoding
+  and function configuration remain pending.
 - Internal function execution requires an advertised `function_tools` capability
   before claiming a Turn. Translate resolved definitions in the execution adapter,
   persist declared callbacks before exposing actions, and deliver each saved result
