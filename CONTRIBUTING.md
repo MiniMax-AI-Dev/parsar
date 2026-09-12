@@ -296,6 +296,15 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   end with their Run; the execution service owns persistence and recovery, while
   Parsar retains business approval and credential-owner authorization. Do not
   map native approval requests to invented official protocol resources.
+- Function-call storage is scoped by authenticated tenant, Session and Turn, with
+  immutable public/executor call identities and arguments. Result admission and
+  application receipts serialize on the same Session lock as cancellation and
+  terminal transitions. Store the complete caller-validated result object; wire
+  validation and native translation belong to their API and execution boundaries.
+  Identical retries return the saved decision; changed results conflict. Pending
+  reads exclude applied calls and cancelling/terminal Turns while history remains
+  readable. Persistence does not imply transparent native-process recovery.
+  Public actions, state/event projection and execution integration remain pending.
 - `message_items` advertises native assistant-message observations. Agents API
   opts in with `observe_messages` only for advertised peers; ordinary product
   requests retain their existing frame sequence. Opted-in text deltas carry their
