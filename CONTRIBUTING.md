@@ -490,6 +490,32 @@ must close their query, await their native child and drain observations before
 publishing completion. Process groups are lifecycle supervision, not OS isolation
 or containment of descendants that deliberately leave the group.
 
+### Claude SDK text adapter foundation
+
+`packages/claude-sdk-adapter` privately owns the pinned official TypeScript SDK
+and native message translation. The Go `claudesdk.NewFactory` uses the shared
+owned process runner and emits the existing daemon delta/error/Done frames.
+The SDK owns the model loop. Its narrow stdio protocol carries a start request,
+text deltas and one result/error; native payloads stay inside the SDK package.
+SDK/native child release and output draining precede daemon completion.
+
+This factory is not registered and advertises no public capability. Existing
+product Claude execution remains unchanged. The bounded profile accepts only
+text, explicit model/system instructions, managed state and exact native resume.
+It rejects unsupported request options and disables native tools/MCP discovery.
+Use the SDK's history lookup before explicit resume; never fall back to a new
+Session. Native files remain device-affine under a caller-selected managed
+runtime directory. The launch configuration supplies trusted provider environment;
+request options cannot supply environment variables or business write authority.
+
+This does not establish full tool/environment/text-verbosity policy, usage,
+function results, images, steering, cancellation receipts or process-loss recovery.
+Those capabilities require their own acceptance before public dispatch. Registry
+adoption and release packaging are separate tasks. `make check-cli` also builds
+and tests the SDK package, including native output draining; CI selects that check
+for changes to the package. Live adapter
+acceptance is opt-in and must use a real provider with private credentials.
+
 ### Agent knowledge references
 
 - Unpublished knowledge retains only the bound version in other workspaces;

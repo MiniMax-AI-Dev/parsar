@@ -16,6 +16,7 @@ on:
       - "apps/web/**"
       - "packages/cli/**"
       - "packages/opencode-plugin/**"
+      - "packages/claude-sdk-adapter/**"
       - "packages/eslint-config/**"
       - "packages/tsconfig/**"
       - "scripts/**"
@@ -40,6 +41,7 @@ on:
       - "apps/web/**"
       - "packages/cli/**"
       - "packages/opencode-plugin/**"
+      - "packages/claude-sdk-adapter/**"
       - "packages/eslint-config/**"
       - "packages/tsconfig/**"
       - "scripts/**"
@@ -114,7 +116,7 @@ jobs:
               apps/web/*)
                 web=true
                 ;;
-              packages/cli/*|packages/opencode-plugin/*)
+              packages/cli/*|packages/opencode-plugin/*|packages/claude-sdk-adapter/*)
                 cli=true
                 ;;
               packages/eslint-config/*)
