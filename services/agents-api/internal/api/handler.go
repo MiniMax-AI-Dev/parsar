@@ -85,7 +85,7 @@ func tenantID(r *http.Request) string { return r.Context().Value(tenantContextKe
 
 // createSession creates an idle execution Session without submitting a Turn.
 // @Summary Create an execution Session
-// @Description Supports inline model/instructions, text verbosity, non-deferred function tools and environment type none. Execution input and other options are explicitly unsupported in this slice.
+// @Description Supports inline model/instructions, text verbosity, non-deferred function tools and environment type none. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Execution input and other options are explicitly unsupported in this slice.
 // @Tags Sessions
 // @Accept json
 // @Produce json
@@ -101,10 +101,10 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported_parameter", "Session creation does not accept query parameters.")
 		return
 	}
-	var input v1.CreateSessionRequest
+	var request decodedSessionRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024*1024))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decoder.Decode(&request); err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
 			writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "Request exceeds 1 MiB.")
@@ -115,6 +115,11 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		writeError(w, http.StatusBadRequest, "invalid_request", "Request must contain exactly one JSON object.")
+		return
+	}
+	input, err := request.validated()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "stream and agent_id cannot be null; metadata values must be strings.")
 		return
 	}
 	key := r.Header.Get("Idempotency-Key")

@@ -66,7 +66,6 @@ definitions:
         $ref: '#/definitions/v1.InlineAgent'
       agent_id:
         type: string
-        x-nullable: true
       environment:
         $ref: '#/definitions/v1.Environment'
       input:
@@ -78,6 +77,7 @@ definitions:
         type: object
         x-nullable: true
       stream:
+        default: false
         type: boolean
       vault_ids:
         items:
@@ -666,8 +666,10 @@ paths:
       consumes:
       - application/json
       description: Supports inline model/instructions, text verbosity, non-deferred
-        function tools and environment type none. Execution input and other options
-        are explicitly unsupported in this slice.
+        function tools and environment type none. Omitted stream defaults to false;
+        stream and agent_id cannot be null. Metadata may be null, but its values must
+        be strings. Execution input and other options are explicitly unsupported in
+        this slice.
       parameters:
       - description: agents=v1
         in: header

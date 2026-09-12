@@ -77,6 +77,10 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   and `OpenAI-Beta: agents=v1`. Do not introduce a competing `/sessions` surface.
 - Session creation takes an environment and inline agent configuration or a saved
   agent reference. A model name is not a daemon engine name.
+  In the pinned `session_create_params.py`, `stream` defaults to false and neither
+  `stream` nor `agent_id` permits null. Metadata omission/null defaults to an empty
+  map; individual values must be strings, including valid empty strings. Validate
+  these distinctions before persistence rather than coercing null to Go zero values.
 - `AgentSession` includes the effective agent/environment, Unix-second timestamps,
   `object: agent.session`, metadata, required actions, status, usage and vault IDs.
   A Session remains reusable after its current Turn completes.

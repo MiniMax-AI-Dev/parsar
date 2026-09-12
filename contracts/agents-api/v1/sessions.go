@@ -6,11 +6,11 @@ import "encoding/json"
 // CreateSessionRequest currently supports inline agents without initial input.
 type CreateSessionRequest struct {
 	Agent       *InlineAgent      `json:"agent" binding:"required"`
-	AgentID     *string           `json:"agent_id,omitempty" extensions:"x-nullable"`
+	AgentID     *string           `json:"agent_id,omitempty"`
 	Environment *Environment      `json:"environment" binding:"required"`
 	Input       json.RawMessage   `json:"input,omitempty" swaggertype:"object" extensions:"x-nullable"`
 	Metadata    map[string]string `json:"metadata,omitempty" extensions:"x-nullable"`
-	Stream      bool              `json:"stream,omitempty"`
+	Stream      bool              `json:"stream,omitempty" default:"false"`
 	VaultIDs    []string          `json:"vault_ids,omitempty"`
 }
 

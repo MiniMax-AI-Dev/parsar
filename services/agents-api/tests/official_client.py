@@ -19,6 +19,7 @@ sys.dont_write_bytecode = True
 import httpx2
 from jsonschema import Draft4Validator
 from official_items import verify_items
+from official_session_requests import verify_session_create_requests
 from openai import AuthenticationError, BadRequestError, ConflictError, NotFoundError, OpenAI
 import yaml
 
@@ -143,6 +144,7 @@ def main():
                     metadata = {str(i): "🧪" * 512 for i in range(16)}
                     large = sessions.create(**spec, metadata=metadata)
                     assert sessions.retrieve(large.id).metadata == metadata
+                    request_sessions = verify_session_create_requests(a, spec)
                     turn_session = sessions.create(**spec)
                     fixture = Path(directory) / "turns.json"
                     fixture.write_text(json.dumps({"tenant": bindings[0]["tenant_id"], "session": turn_session.id}))
@@ -172,6 +174,7 @@ def main():
                     process.terminate()
                     process.wait(timeout=15)
                     process = start()
+                    assert [sessions.retrieve(item.id) for item in request_sessions] == request_sessions
                     assert list(sessions.items.list(turn_session.id, order="asc")) == saved_items
                     assert list(turns.list(turn_session.id, order="asc")) == recovered
                     assert sessions.retrieve(first.id) == first
