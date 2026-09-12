@@ -20,20 +20,7 @@ func (s *Store) SubmitFunctionResult(ctx context.Context, tenantID, sessionID, t
 		return err
 	}
 	return s.withFunctionCall(ctx, tenantID, sessionID, turnID, callID, func(q *sqlc.Queries, turn sqlc.Turn, call sqlc.FunctionCall) error {
-		match, err := q.MatchFunctionResult(ctx, sqlc.MatchFunctionResultParams{SessionID: turn.SessionID, TurnID: turn.ID, CallID: callID, Result: result})
-		if err != nil {
-			return err
-		}
-		if match.Submitted {
-			if !match.Matches {
-				return ErrIdempotencyConflict
-			}
-			return nil
-		}
-		if !acceptsFunctionResult(turn) {
-			return ErrTurnConflict
-		}
-		return q.SubmitFunctionResult(ctx, sqlc.SubmitFunctionResultParams{SessionID: turn.SessionID, TurnID: turn.ID, CallID: call.CallID, Result: result})
+		return storeFunctionResult(ctx, q, turn, call.CallID, result)
 	})
 }
 
@@ -78,4 +65,24 @@ func (s *Store) withFunctionCall(ctx context.Context, tenantID, sessionID, turnI
 		}
 		return fn(q, turn, call)
 	})
+}
+
+func storeFunctionResult(ctx context.Context, q *sqlc.Queries, turn sqlc.Turn, callID string, result json.RawMessage) error {
+	match, err := q.MatchFunctionResult(ctx, sqlc.MatchFunctionResultParams{SessionID: turn.SessionID, TurnID: turn.ID, CallID: callID, Result: result})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if match.Submitted {
+		if !match.Matches {
+			return ErrIdempotencyConflict
+		}
+		return nil
+	}
+	if !acceptsFunctionResult(turn) {
+		return ErrTurnConflict
+	}
+	return q.SubmitFunctionResult(ctx, sqlc.SubmitFunctionResultParams{SessionID: turn.SessionID, TurnID: turn.ID, CallID: callID, Result: result})
 }
