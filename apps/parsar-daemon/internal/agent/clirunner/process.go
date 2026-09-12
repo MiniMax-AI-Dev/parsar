@@ -18,6 +18,8 @@ type StartOptions struct {
 	Env         []string
 	NeedStdin   bool
 	KillTimeout time.Duration
+	// OwnProcessGroup bounds the lifetime of subprocess descendants on Unix.
+	OwnProcessGroup bool
 }
 
 type Process struct {
@@ -31,8 +33,10 @@ type Process struct {
 	done      chan struct{}
 	killAfter time.Duration
 
-	cancelOnce sync.Once
-	waitOnce   sync.Once
+	cancelOnce    sync.Once
+	waitOnce      sync.Once
+	cancelProcess func() error
+	waitProcess   func() error
 }
 
 func Start(opts StartOptions) (*Process, error) {
@@ -44,6 +48,10 @@ func Start(opts StartOptions) (*Process, error) {
 	}
 	if opts.KillTimeout <= 0 {
 		opts.KillTimeout = 3 * time.Second
+	}
+
+	if opts.OwnProcessGroup {
+		return startProcessGroup(opts)
 	}
 
 	ctx, cancel := context.WithCancel(opts.Parent)
@@ -113,6 +121,11 @@ func (p *Process) Cancel() {
 		return
 	}
 	p.cancelOnce.Do(func() {
+		if p.cancelProcess != nil {
+			_ = p.cancelProcess()
+			p.cancel()
+			return
+		}
 		if p.Cmd != nil && p.Cmd.Process != nil {
 			_ = p.Cmd.Process.Signal(syscall.SIGTERM)
 			go func() {
@@ -132,6 +145,9 @@ func (p *Process) Cancel() {
 func (p *Process) Wait() error {
 	if p == nil || p.Cmd == nil {
 		return nil
+	}
+	if p.waitProcess != nil {
+		return p.waitProcess()
 	}
 	err := p.Cmd.Wait()
 	p.waitOnce.Do(func() { close(p.done) })
