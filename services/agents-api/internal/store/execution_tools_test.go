@@ -25,7 +25,7 @@ func TestExecutionNegotiatesAndPersistsToolObservations(t *testing.T) {
 	}
 	h.write(first.TurnID, proto.TypeDone, proto.DonePayload{})
 	h.finished(result, store.TurnCompleted)
-	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true, ToolItems: true}}}})
+	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true, WebSearchControl: true, ToolItems: true}}}})
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		peer, err := h.registry.LookupDevice(h.device.ID)

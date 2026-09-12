@@ -58,6 +58,9 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if !known || !found || !info.Available || !info.Capabilities.Streaming || !info.Capabilities.Steering || !info.Capabilities.DurableTurns {
 		return store.Turn{}, errors.New("device must advertise streaming, steering and durable turns for this engine")
 	}
+	if session.Engine == "codex" && !info.Capabilities.WebSearchControl {
+		return store.Turn{}, errors.New("device must advertise web_search_control for Codex")
+	}
 	var snapshot Snapshot
 	if json.Unmarshal(session.Configuration, &snapshot) != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
 		return store.Turn{}, store.ErrInvalidInput
@@ -86,6 +89,9 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	}
 	options["model"], options["system_prompt"] = snapshot.Agent.Model, snapshot.Agent.Instructions
 	delete(options, "override_system_prompt")
+	if session.Engine == "codex" {
+		options["web_search"] = "disabled"
+	}
 	if _, err := d.Store.TransitionTurn(ctx, tenantID, sessionID, turnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress}); err != nil {
 		return store.Turn{}, err
 	}

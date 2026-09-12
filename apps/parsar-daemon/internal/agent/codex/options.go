@@ -111,6 +111,14 @@ func BuildSessionPlan(runID, agentStateKey, workDir string, opts map[string]any)
 		Cleanup:           cleanup,
 	}
 
+	if value, present := opts["web_search"]; present {
+		switch value {
+		case "disabled", "cached", "live":
+		default:
+			return plan, fmt.Errorf("codex: web_search must be disabled, cached or live")
+		}
+	}
+
 	resolvedCwd, err := resolveWorkDirCodex(workDir)
 	if err != nil {
 		return plan, err
@@ -301,6 +309,9 @@ func extraConfigFromOpts(opts map[string]any) [][2]string {
 		// codex app-server has no per-call flag; route via -c override.
 		// TOML literal — quoted string keeps shell-safe special chars.
 		out = append(out, [2]string{"model_reasoning_summary", strconv(rs)})
+	}
+	if mode := stringOpt(opts, "web_search"); mode != "" {
+		out = append(out, [2]string{"web_search", strconv(mode)})
 	}
 	return out
 }
