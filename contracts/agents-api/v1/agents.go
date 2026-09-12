@@ -52,3 +52,11 @@ type SavedAgent struct {
 	CreatedAt int64             `json:"created_at" binding:"required"`
 	UpdatedAt int64             `json:"updated_at" binding:"required"`
 }
+
+type SavedAgentList struct {
+	Object  string       `json:"object" binding:"required" enums:"list"`
+	Data    []SavedAgent `json:"data" binding:"required"`
+	HasMore bool         `json:"has_more" binding:"required"`
+	FirstID *string      `json:"first_id" extensions:"x-nullable"`
+	LastID  *string      `json:"last_id" extensions:"x-nullable"`
+}

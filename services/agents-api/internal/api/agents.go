@@ -12,6 +12,7 @@ import (
 )
 
 type AgentStore interface {
+	ListAgents(context.Context, string, string, int, bool) (store.AgentPage, error)
 	CreateAgent(context.Context, string, store.CreateAgentInput) (store.SavedAgent, error)
 	GetAgent(context.Context, string, string) (store.SavedAgent, error)
 }
@@ -78,15 +79,23 @@ func (h *Handler) getAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) respondAgent(w http.ResponseWriter, r *http.Request, agent store.SavedAgent) {
-	var response v1.SavedAgent
-	if err := json.Unmarshal(agent.Configuration, &response.SavedAgentConfiguration); err != nil {
+	response, err := agentResponse(agent)
+	if err != nil {
 		writeStoreError(w, r, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func agentResponse(agent store.SavedAgent) (v1.SavedAgent, error) {
+	var response v1.SavedAgent
+	if err := json.Unmarshal(agent.Configuration, &response.SavedAgentConfiguration); err != nil {
+		return response, err
 	}
 	response.ID, response.Object = agent.ID, "agent"
 	response.Metadata = agent.Metadata
 	response.CreatedAt, response.UpdatedAt = agent.CreatedAt.Unix(), agent.UpdatedAt.Unix()
-	writeJSON(w, http.StatusOK, response)
+	return response, nil
 }
 
 func (h *Handler) lookupAgent(ctx context.Context, tenant, id string) (store.SavedAgent, error) {

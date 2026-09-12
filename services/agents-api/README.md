@@ -11,7 +11,7 @@ internal primitives; pending interactions and full environment lifecycle remain 
 
 ## Reusable Agents
 
-The pinned Python client can create and retrieve configuration independently of a
+The pinned Python client can create, retrieve and list configuration independently of a
 Session: `agent = client.beta.agents.create(model="your-model", name="Example")`, followed by
 `client.beta.agents.retrieve(agent.id)`. These operations use the service's normal
 base URL, bearer key and `agents=v1` header. Resources remain private to that
@@ -21,7 +21,9 @@ environment={"type": "none"})`, then submit work through Session events or the S
 Session stream helper. Optional `agent` fields override only that Session: omitted
 fields inherit, while supplied objects/arrays replace the entire field. Source and
 Session metadata remain separate. The source resource is never read during execution.
-Other Agent operations remain unimplemented.
+Iterate `client.beta.agents.list(limit=20, order="desc")` to fetch saved resources
+across pages, or pass a returned resource ID as `after` for an explicit page.
+Agent update/delete remain unimplemented.
 See the [coverage and default gaps](../../contracts/agents-api/README.md#public-semantics)
 before using optional configuration.
 

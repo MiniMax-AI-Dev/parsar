@@ -234,6 +234,15 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   the selected harness. Omitted/null service tier currently uses `auto`; complete
   upstream default/error/retry conformance and persisted MCP/web-search tools remain
   gaps. Unknown/unsupported variants fail explicitly. No product lookup is permitted.
+- Reusable Agent listing uses the same tenant/Beta-header and response mapping as
+  create/retrieve. Page by `(created_at, id)` with a same-tenant saved-Agent cursor;
+  listing never resolves Sessions, product objects or execution capabilities.
+  Reuse shared list-query parsing. Agent requests accept positive int64 limits and
+  return at most 100 records per page with accurate continuation; other resources
+  retain their current 1..100 request rule. The local default is 20. Return the
+  list envelope with data/has_more and first/last IDs (null for empty pages).
+  Exact pinned upstream default/cap, empty-envelope and error semantics remain
+  unverified; do not present local limits or generic SDK parsing as full conformance.
 - Session `agent_id` lookup uses the authenticated tenant. Copy the saved resource
   ID and effective configuration into the immutable Session snapshot; saved metadata
   does not become Session metadata. Never look up the source Agent when reading or

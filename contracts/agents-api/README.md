@@ -45,7 +45,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 
 | Resource | Upstream operations | Current coverage |
 | --- | --- | --- |
-| Root reusable Agents | create, retrieve, update, list, delete | Partial create/retrieve; update/list/delete and Session references missing |
+| Root reusable Agents | create, retrieve, update, list, delete | Partial create/retrieve/list and Session references; update/delete missing |
 | sessions | create, retrieve, update, list, delete | Partial create/retrieve/list; metadata update implemented; delete missing |
 | sessions.events | create, stream | Text/cancel/function-result admission and live events; function-action state snapshots supported |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
@@ -80,6 +80,14 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   multi-agent settings default to six concurrent subagents. Function defer-loading
   defaults to false and programmatic tool calling to true. Saving these values
   does not itself admit a native execution. Session references are admitted separately.
+- `GET /agents` lists tenant-owned reusable resources with `after`, `limit` and
+  `order` (default `desc`). It uses creation-time/ID keysets and the same resource
+  mapping as retrieval. Positive int64 limits are accepted; pages contain up to
+  100 resources, with `has_more` and the final resource ID guiding continuation.
+  The local default is 20. The list envelope includes `object`, `data`, `has_more`,
+  `first_id` and `last_id`; empty pages use null IDs. The pinned SDK omits null
+  limits and empty cursors. Exact upstream default/cap, empty-envelope nullability
+  and error taxonomy remain unverified; SDK auto-pagination does not prove them.
 - Saved Agent model-default reasoning resolution remains missing: an omitted effort
   stays unresolved rather than being populated from a guessed model default. An
   explicit effort/summary is retained. Omitted/null service tier currently follows
@@ -134,7 +142,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Capability | Current state |
 | --- | --- |
 | Shared daemon connection layer | Implemented; existing product protocol retained |
-| Reusable Agents | Tenant-scoped public create/retrieve, metadata, explicit reasoning/service tiers, multi_agent, text/json_schema and function/tool_search/programmatic tool configuration; not execution admission |
+| Reusable Agents | Tenant-scoped public create/retrieve/list with cursor pagination, metadata, explicit reasoning/service tiers, multi_agent, text/json_schema and function/tool_search/programmatic tool configuration; not execution admission |
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
 | Authenticated Session HTTP API | Create/retrieve/list and metadata-only update; inline or referenced Agent with field replacements, model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |

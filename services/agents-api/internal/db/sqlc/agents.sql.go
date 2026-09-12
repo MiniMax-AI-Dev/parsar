@@ -65,3 +65,58 @@ func (q *Queries) GetAgent(ctx context.Context, arg GetAgentParams) (Agent, erro
 	)
 	return i, err
 }
+
+const listAgents = `-- name: ListAgents :many
+SELECT id, tenant_id, metadata, configuration, created_at, updated_at FROM agents
+WHERE tenant_id = $1
+  AND ($2::timestamptz IS NULL
+       OR (NOT $3::boolean AND (created_at, id) < ($2::timestamptz, $4::uuid))
+       OR ($3::boolean AND (created_at, id) > ($2::timestamptz, $4::uuid)))
+ORDER BY
+    CASE WHEN $3::boolean THEN created_at END ASC,
+    CASE WHEN $3::boolean THEN id END ASC,
+    CASE WHEN NOT $3::boolean THEN created_at END DESC,
+    CASE WHEN NOT $3::boolean THEN id END DESC
+LIMIT $5
+`
+
+type ListAgentsParams struct {
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	AfterCreated pgtype.Timestamptz `json:"after_created"`
+	Ascending    bool               `json:"ascending"`
+	AfterID      pgtype.UUID        `json:"after_id"`
+	PageLimit    int32              `json:"page_limit"`
+}
+
+func (q *Queries) ListAgents(ctx context.Context, arg ListAgentsParams) ([]Agent, error) {
+	rows, err := q.db.Query(ctx, listAgents,
+		arg.TenantID,
+		arg.AfterCreated,
+		arg.Ascending,
+		arg.AfterID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Agent{}
+	for rows.Next() {
+		var i Agent
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.Metadata,
+			&i.Configuration,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

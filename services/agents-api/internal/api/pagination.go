@@ -13,6 +13,10 @@ type pageOptions struct {
 }
 
 func readPage(w http.ResponseWriter, r *http.Request) (pageOptions, bool) {
+	return readPageSize(w, r, true)
+}
+
+func readPageSize(w http.ResponseWriter, r *http.Request, rejectLarger bool) (pageOptions, bool) {
 	q := r.URL.Query()
 	for key, values := range q {
 		if (key != "after" && key != "limit" && key != "order") || len(values) != 1 {
@@ -23,11 +27,17 @@ func readPage(w http.ResponseWriter, r *http.Request) (pageOptions, bool) {
 	limit, order := 20, q.Get("order")
 	if raw, ok := q["limit"]; ok {
 		var err error
-		limit, err = strconv.Atoi(raw[0])
-		if err != nil || limit < 1 || limit > 100 {
-			writeError(w, http.StatusBadRequest, "invalid_request", "limit must be between 1 and 100.")
+		var requested int64
+		requested, err = strconv.ParseInt(raw[0], 10, 64)
+		if err != nil || requested < 1 || (rejectLarger && requested > 100) {
+			message := "limit must be a positive 64-bit integer."
+			if rejectLarger {
+				message = "limit must be between 1 and 100."
+			}
+			writeError(w, http.StatusBadRequest, "invalid_request", message)
 			return pageOptions{}, false
 		}
+		limit = int(min(requested, 100))
 	}
 	if order != "" && order != "asc" && order != "desc" {
 		writeError(w, http.StatusBadRequest, "invalid_request", "order must be asc or desc.")
