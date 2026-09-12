@@ -267,9 +267,8 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   isolation guarantee, and engine state still lives on that host. Ordinary product
   requests retain their existing environment. The public worker selects an authenticated same-tenant engine host for this mode.
 - `web_search_control` advertises the Codex adapter's explicit `web_search` option
-  (`disabled`, `cached`, or `live`). Agents API currently accepts no configured
-  tools and requires this capability before dispatch; it forces search off on
-  both new and resumed Turns. Native configuration translation stays in the
+  (`disabled`, `cached`, or `live`). Agents API requires this capability before dispatch;
+  it forces search off on both new and resumed Turns. Native configuration translation stays in the
   adapter. Product requests that omit the option inherit their existing defaults.
   This is tool selection, not a network isolation guarantee.
 - Inline Agent `text.verbosity` accepts `low`, `medium` and `high`; omitted or
@@ -310,8 +309,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   or results. Cancelling/terminal Turns expose no actionable calls. A waiting Turn
   can fail or cancel before a result arrives; successful execution requires resume.
   Actions remain visible until native application is acknowledged. This timing is
-  an implementation choice, not verified upstream event sequencing. Public tool
-  configuration remains pending.
+  an implementation choice, not verified upstream event sequencing.
 - Function results can join internal message/cancel input batches. Their explicit
   Turn/call identity selects an existing call; admission never creates a Turn for
   a result. Save the complete result and its input retry record in the same Session
@@ -320,8 +318,14 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   without applying them again. The execution input cursor skips function results;
   their separate native receipts still determine application. Public result events
   validate variant-specific fields and required values before admission; retain
-  omitted versus null error/output and ordered text/image parts. Public function
-  configuration remains pending.
+  omitted versus null error/output and ordered text/image parts. Inline function
+  tools resolve into the immutable configuration with explicit
+  `defer_loading=false`. Validate required strings and parameter objects before
+  persistence; reject unsupported deferred discovery. Omitted/null/empty tool
+  lists resolve to no tools. The public worker selects or waits for a same-tenant
+  device advertising `function_tools` when the Session has functions.
+  Function results are Session input Items: emit `item.added` without an output
+  index, and never emit `item.done`, whose upstream union only allows agent output.
 - Internal function execution requires an advertised `function_tools` capability
   before claiming a Turn. Translate resolved definitions in the execution adapter,
   persist declared callbacks before exposing actions, and deliver each saved result
@@ -331,8 +335,9 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   treat transport delivery as application or automatically replay an uncertain
   result. The adapter waits for outstanding application receipts even when Done
   arrives first. Waiting Turns still accept execution observations and cancellation.
-  Public `tools` configuration remains a separate protocol slice;
-  internal execution is not proof of full public function compatibility.
+  The public function workflow is verified with the pinned SDK and a real daemon
+  and Codex process against a synthetic model endpoint. This does not verify
+  other tool types, deferred discovery or upstream service timing.
 - `message_items` advertises native assistant-message observations. Agents API
   opts in with `observe_messages` only for advertised peers; ordinary product
   requests retain their existing frame sequence. Opted-in text deltas carry their

@@ -45,7 +45,7 @@ func projectItemSource(ctx context.Context, q *sqlc.Queries, session, turn pgtyp
 		if err != nil {
 			return err
 		}
-		stored, err := q.PutSessionItem(ctx, sqlc.PutSessionItemParams{ID: id, SessionID: session, TurnID: turn, CreatedAt: created, Payload: payload, IsOutput: kind != "message"})
+		stored, err := q.PutSessionItem(ctx, sqlc.PutSessionItemParams{ID: id, SessionID: session, TurnID: turn, CreatedAt: created, Payload: payload, IsOutput: kind != "message" && item.Type != "function_call_output"})
 		if err != nil {
 			return err
 		}

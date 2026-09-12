@@ -13,6 +13,10 @@ func recordItemChange(ctx context.Context, q *sqlc.Queries, session pgtype.UUID,
 	if reflect.DeepEqual(previous, item) || ctx.Value(suppressSessionEvents{}) != nil {
 		return nil
 	}
+	// Function results are Session inputs, not AgentOutputItem variants.
+	if item.Type == "function_call_output" {
+		index.Valid = false
+	}
 	base := v1.SessionEvent{TurnID: item.TurnID}
 	if index.Valid {
 		base.OutputIndex = &index.Int32

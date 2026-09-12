@@ -123,6 +123,26 @@ definitions:
     - turn_id
     - type
     type: object
+  v1.FunctionToolInput:
+    properties:
+      defer_loading:
+        type: boolean
+      description:
+        type: string
+      name:
+        type: string
+      parameters:
+        type: object
+      type:
+        enum:
+        - function
+        type: string
+    required:
+    - description
+    - name
+    - parameters
+    - type
+    type: object
   v1.InlineAgent:
     properties:
       instructions:
@@ -133,6 +153,11 @@ definitions:
       text:
         allOf:
         - $ref: '#/definitions/v1.TextConfigInput'
+        x-nullable: true
+      tools:
+        items:
+          $ref: '#/definitions/v1.FunctionToolInput'
+        type: array
         x-nullable: true
     required:
     - model
@@ -640,9 +665,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Supports inline model/instructions, text verbosity and environment
-        type none. Execution input and other options are explicitly unsupported in
-        this slice.
+      description: Supports inline model/instructions, text verbosity, non-deferred
+        function tools and environment type none. Execution input and other options
+        are explicitly unsupported in this slice.
       parameters:
       - description: agents=v1
         in: header

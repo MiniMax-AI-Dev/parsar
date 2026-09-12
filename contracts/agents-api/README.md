@@ -27,7 +27,7 @@ Verify configuration against actual execution: response defaults must not merely
 describe values the adapter never applied.
 
 The next slices are contract conformance checks, effective configuration and the
-adapter boundary, complete function actions, then environment/file resources.
+adapter boundary, remaining function/tool variants, then environment/file resources.
 Reusable Agents, vaults and protocol subagents remain in the coverage backlog.
 Parsar cutover follows an independent client workflow; its business Team loop is
 separate. Each slice can use multiple small PRs tracked in the Feishu board.
@@ -100,15 +100,15 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Shared daemon connection layer | Implemented; existing product protocol retained |
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
-| Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon and native model support required), environment `none`, metadata and creation retry keys |
+| Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon and native model support required), non-deferred function tools, environment `none`, metadata and creation retry keys |
 | Internal Turn/input persistence | Tenant-scoped atomic message/cancel/function-result batches, steering, request-level retry identity, cancellation targets and terminal outcomes; public function-result decoding and mixed-batch admission supported |
 | Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution; public text/cancel submission with a bounded standalone worker |
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |
 | Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
 | Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
 | Public SSE | Live Session/Turn lifecycle, supported Item and text events; bounded commit-before-publish buffering and recovery through saved reads |
-| Internal function bridge | Native Codex definitions and ordered text/image/error results, persisted callbacks and application receipts, cancellation and native resume; public function configuration pending |
-| Function-call persistence and reads | Immutable scoped calls/results/receipts; Session `required_actions`, `requires_action`, Turn `waiting` and live state snapshots; internal native dispatch integrated; public function configuration pending |
+| Internal function bridge | Native Codex definitions and ordered text/image/error results, persisted callbacks and application receipts, cancellation and native resume; public non-deferred function configuration supported |
+| Function-call persistence and reads | Immutable scoped calls/results/receipts; Session `required_actions`, `requires_action`, Turn `waiting` and live state snapshots; internal native dispatch integrated; public non-deferred function configuration supported |
 | Pending actions and environment lifecycle | Pending |
 | Official-client compatibility | Strict SDK checks for Session/Turn/Items reads and native text execution/cancellation/verbosity; pagination, retries, errors, tenant isolation and recovery |
 | Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |
@@ -169,7 +169,7 @@ Legacy tool results retain their content but have `incomplete` status when the
 source did not record a native outcome. Only recognized historical user text/image
 shapes become messages; arbitrary internal input objects remain in source storage.
 Unsupported native variants, reasoning, subagent Items and Items mutation
-are not covered. Public submission currently supports text messages and cancellation.
+are not covered. Public submission supports text messages, cancellation and function results.
 
 Legacy Done frames alone do not complete assistant Items. Aggregate answer text
 is confirmed by successful Turn termination; failed Turns retain observed deltas
@@ -191,7 +191,7 @@ not allocate a local execution environment: the daemon uses upstream Codex's
 starting/resuming. A missing capability or unsupported native method fails rather
 than falling back to local execution. Private `daemon` snapshots remain distinct.
 This is an engine tool/environment boundary, not operating-system isolation.
-The standalone worker uses this mode for public text execution. The self-hosted
+The standalone worker uses this mode for public text and function execution. The self-hosted
 registry/Noise transport remains pending.
 
 The native reference is Codex `rust-v0.153.4`, commit
@@ -203,7 +203,8 @@ a daemon WebSocket URL is not that protocol.
 ### Public execution admission
 
 `POST /v1/agents/sessions/{session_id}/events` accepts `agent.session.input.message`
-with user `input_text` content and `agent.session.input.cancel`. Successful atomic
+with user `input_text` content, `agent.session.input.cancel` and
+`agent.session.input.tool_result`. Successful atomic
 admission returns 204, as consumed by the official `events.create` method. A retry
 key identifies the entire ordered request; conflict does not partially admit it.
 Messages start queued work or steer the active Turn. Individual input messages
@@ -219,7 +220,7 @@ The service takes a database advisory lease, so a second execution service canno
 start on the same database. Startup marks previously claimed Turns failed without
 replaying them and retains queued work. This does not recover missing daemon frames
 or guarantee exactly-once external side effects. Session status reflects the latest
-persisted Turn; usage reports recorded measurements; public function configuration remains unimplemented.
+persisted Turn; usage reports recorded measurements.
 
 Native verification uses `PARSAR_NATIVE_DAEMON_BIN`, `PARSAR_NATIVE_PROOF_DIR` under
 `~/.parsar/`, and `PARSAR_OFFICIAL_SDK_PYTHON` pointing to the pinned SDK environment.
@@ -238,7 +239,8 @@ recorded measurements. Costs and prices are outside this execution contract.
 stream. Open it before submitting input. Session in-progress/idle/failed and Turn
 created/in-progress/completed/failed/cancelled events carry transition snapshots.
 Supported Items emit added/done events; assistant text emits content-part and
-text-delta/done events. Inputs have no output index. Completed text replaces
+text-delta/done events. Inputs, including function results, have no output index. Function results emit
+`item.added` and remain queryable; `item.done` only carries agent output. Completed text replaces
 accumulated deltas; cancelled unfinished Items retain their partial content and
 `incomplete` status. Tool snapshots are supported; native interim command-output
 and reasoning deltas remain outside the supported surface.
@@ -260,12 +262,11 @@ non-deferred definitions and Store result admission. It verifies ordered text/im
 results, error text, application receipts, matching action/Item call IDs, cancellation
 and native Session continuity. Codex supplies the model transport's default image
 detail. This proof uses a synthetic model responder and the real daemon/Codex;
-it does not exercise a public tool-result submission endpoint. Deferred functions,
+the public workflow below exercises the same native bridge through HTTP. Deferred functions,
 other tool kinds and the native 64-definition limit remain compatibility gaps.
 
 Function-action read coverage uses persisted-call fixtures with the real service
-handler, PostgreSQL and pinned official client. It does not yet demonstrate a
-publicly configured function executing end to end. Call insertion and application
+handler, PostgreSQL and pinned official client. Call insertion and application
 receipts update Turn/Session state atomically; duplicate notifications emit no new
 state. Actions remain visible until the execution adapter acknowledges application,
 or cancellation/terminal state removes them. This acknowledgement timing and the
@@ -277,8 +278,35 @@ Session state events contain `event_id`, `type` and `session`; Turn events retai
 Public function-result admission is verified with the pinned Python client and
 raw HTTP against a dedicated PostgreSQL fixture: required fields, nullable output
 and error, ordered text/image output, variant rejection, atomic batches, scoped
-access and retries after terminal state. This is admission verification; public
-function configuration and an end-to-end configured function remain separate gaps.
+access and retries after terminal state. This admission verification complements the native public workflow below.
 The generated Swagger 2.0 document leaves the output union unconstrained because
 it cannot express string-or-content-array unions; the pinned upstream types and
 server validation define the supported alternatives.
+
+### Public function configuration
+
+Inline `agent.tools` accepts non-deferred `function` definitions with the upstream
+required name, description and JSON Schema parameter object. Missing
+`defer_loading` resolves to `false`; null and other types are rejected. Omitted,
+null and empty tool lists resolve to an empty list. The resolved tools are part of
+the immutable Session configuration and creation retry identity. This slice does
+not implement saved-Agent inheritance or deferred tool discovery. The native
+64-definition cap, unique nonblank names of at most 512 bytes, other tool kinds
+and unrestricted JSON Schema execution remain compatibility gaps. Codex also
+exposes native planning/goal/skill/discovery tools; restricting those to the
+effective public tool set is an outstanding adapter gap, not implied here.
+
+The worker selects a same-tenant host advertising `function_tools` for configured
+Sessions. Work remains queued when no compatible host is available, including
+when a previously bound host no longer advertises that capability. It does not
+silently discard the definitions or move an existing native Session.
+
+`TestNativePublicFunctionExecution` runs `tests/official_functions.py` using the
+pinned official SDK against the actual HTTP handler, worker, PostgreSQL, daemon
+and Codex. A synthetic model requests a configured function; the client reads
+`required_actions`, submits ordered text/image results through public events,
+retries the same result, receives completion, and reuses the Session. A subsequent
+Turn verifies error output, and a third verifies cancellation while waiting.
+The test checks native result receipts, retained function Items and no duplicate
+native continuation. This proves the implemented workflow, not compatibility
+with every tool variant or the upstream service's exact event timing.

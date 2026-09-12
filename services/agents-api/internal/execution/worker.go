@@ -141,9 +141,19 @@ func (w *Worker) reconcile(ctx context.Context) error {
 }
 
 func (w *Worker) bind(ctx context.Context, item store.ExecutionWork) (bool, error) {
+	session, err := w.Dispatcher.Store.GetSession(ctx, item.TenantID, item.SessionID)
+	if err != nil {
+		return false, err
+	}
+	var snapshot Snapshot
+	if err := json.Unmarshal(session.Configuration, &snapshot); err != nil {
+		return false, err
+	}
+	functions := len(snapshot.Agent.Tools) > 0
+
 	bound, err := w.Dispatcher.Store.GetSessionDevice(ctx, item.TenantID, item.SessionID)
 	if err == nil {
-		return w.ready(bound.ID), nil
+		return w.ready(bound.ID, functions), nil
 	}
 	if !errors.Is(err, store.ErrNotFound) {
 		return false, err
@@ -153,7 +163,7 @@ func (w *Worker) bind(ctx context.Context, item store.ExecutionWork) (bool, erro
 		return false, err
 	}
 	for _, device := range devices {
-		if !w.ready(device.ID) {
+		if !w.ready(device.ID, functions) {
 			continue
 		}
 		err := w.Dispatcher.Store.BindSessionDevice(ctx, item.TenantID, item.SessionID, device.ID)
@@ -169,13 +179,13 @@ func (w *Worker) bind(ctx context.Context, item store.ExecutionWork) (bool, erro
 	return false, nil
 }
 
-func (w *Worker) ready(deviceID string) bool {
+func (w *Worker) ready(deviceID string, functions bool) bool {
 	peer, err := w.Dispatcher.Registry.LookupDevice(deviceID)
 	if err != nil {
 		return false
 	}
 	info, found, known := peer.AgentKindStatus("codex")
-	return found && known && info.Available && info.Capabilities.Streaming && info.Capabilities.Steering && info.Capabilities.DurableTurns && info.Capabilities.EnvironmentNone && info.Capabilities.WebSearchControl && info.Capabilities.TextVerbosity
+	return found && known && info.Available && info.Capabilities.Streaming && info.Capabilities.Steering && info.Capabilities.DurableTurns && info.Capabilities.EnvironmentNone && info.Capabilities.WebSearchControl && info.Capabilities.TextVerbosity && (!functions || info.Capabilities.FunctionTools)
 }
 
 func (w *Worker) runClaim(ctx context.Context, item store.ExecutionWork) error {

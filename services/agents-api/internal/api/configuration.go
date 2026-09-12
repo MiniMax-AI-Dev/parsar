@@ -39,12 +39,16 @@ func resolve(input v1.CreateSessionRequest, tenant, key string) (json.RawMessage
 	if err != nil {
 		return nil, err
 	}
+	tools, err := resolveFunctions(input.Agent.Tools)
+	if err != nil {
+		return nil, err
+	}
 	// Inline execution configuration has its own stable identity for creation retries.
 	id := "agent_" + uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenant+"\x00"+key)).String()
 	return json.Marshal(configuration{Agent: v1.Agent{
 		ID: id, Model: input.Agent.Model, Instructions: input.Agent.Instructions,
 		ServiceTier: "auto", Text: text,
-		Tools: []json.RawMessage{},
+		Tools: tools,
 	}, Environment: *input.Environment})
 }
 
