@@ -112,9 +112,14 @@ check-store: check-setup
 
 check-web: check-setup typecheck-web lint-web-design
 
+.PHONY: check-claude-sdk
+check-claude-sdk: node-deps
+	pnpm --filter @parsar/claude-sdk-adapter build
+
 check-cli: check-setup node-deps
 	pnpm --filter @parsar/cli typecheck
 	pnpm --filter @parsar/opencode-plugin typecheck
+	$(MAKE) check-claude-sdk
 
 .PHONY: check-installer
 check-installer:
