@@ -31,14 +31,7 @@ func (request decodedSessionRequest) validated() (v1.CreateSessionRequest, error
 			return input, store.ErrInvalidInput
 		}
 	}
-	if request.Metadata != nil {
-		input.Metadata = make(map[string]string, len(request.Metadata))
-		for key, value := range request.Metadata {
-			if value == nil {
-				return input, store.ErrInvalidInput
-			}
-			input.Metadata[key] = *value
-		}
-	}
-	return input, nil
+	var err error
+	input.Metadata, err = stringMetadata(request.Metadata)
+	return input, err
 }

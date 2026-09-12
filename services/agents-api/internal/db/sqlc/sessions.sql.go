@@ -138,3 +138,30 @@ func (q *Queries) ListSessions(ctx context.Context, arg ListSessionsParams) ([]S
 	}
 	return items, nil
 }
+
+const updateSessionMetadata = `-- name: UpdateSessionMetadata :one
+UPDATE sessions SET metadata = $3 WHERE tenant_id = $1 AND id = $2 RETURNING id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence
+`
+
+type UpdateSessionMetadataParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	ID       pgtype.UUID `json:"id"`
+	Metadata []byte      `json:"metadata"`
+}
+
+func (q *Queries) UpdateSessionMetadata(ctx context.Context, arg UpdateSessionMetadataParams) (Session, error) {
+	row := q.db.QueryRow(ctx, updateSessionMetadata, arg.TenantID, arg.ID, arg.Metadata)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Engine,
+		&i.Metadata,
+		&i.IdempotencyKey,
+		&i.RequestHash,
+		&i.CreatedAt,
+		&i.Configuration,
+		&i.EventSequence,
+	)
+	return i, err
+}

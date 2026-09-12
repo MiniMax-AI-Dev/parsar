@@ -36,7 +36,7 @@ separate. Each slice can use multiple small PRs tracked in the Feishu board.
 
 This inventory is based on the pinned Python source, not our generated OpenAPI.
 It contains 42 distinct HTTP operations in 15 resource classes, excluding async
-duplicates, overloads and client-side helpers. Eight operations currently have
+duplicates, overloads and client-side helpers. Nine operations currently have
 handlers; that count is not a compatibility score. Even those operations implement
 only part of the upstream input, configuration and event variants.
 
@@ -46,7 +46,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | Resource | Upstream operations | Current coverage |
 | --- | --- | --- |
 | Root reusable Agents | create, retrieve, update, list, delete | Missing |
-| sessions | create, retrieve, update, list, delete | Partial create/retrieve/list; update/delete missing |
+| sessions | create, retrieve, update, list, delete | Partial create/retrieve/list; metadata update implemented; delete missing |
 | sessions.events | create, stream | Text/cancel/function-result admission and live events; function-action state snapshots supported |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
 | sessions.items | list | Partial Item variants |
@@ -81,6 +81,11 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   `stream` nor `agent_id` permits null. Metadata omission/null defaults to an empty
   map; individual values must be strings, including valid empty strings. Validate
   these distinctions before persistence rather than coercing null to Go zero values.
+- `POST /agents/sessions/{id}` updates metadata only: omission preserves it,
+  null or `{}` clears it, and an object replaces all pairs. Apply the same string
+  and character limits as creation. Preserve execution state, effective configuration
+  and the original creation retry identity. Fixed SDK/raw HTTP checks cover these
+  distinctions, tenant isolation, active Session reads and restart persistence.
 - `AgentSession` includes the effective agent/environment, Unix-second timestamps,
   `object: agent.session`, metadata, required actions, status, usage and vault IDs.
   A Session remains reusable after its current Turn completes.
@@ -104,7 +109,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Shared daemon connection layer | Implemented; existing product protocol retained |
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
-| Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |
+| Authenticated Session HTTP API | Create/retrieve/list and metadata-only update; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |
 | Internal Turn/input persistence | Tenant-scoped atomic message/cancel/function-result batches, steering, request-level retry identity, cancellation targets and terminal outcomes; public function-result decoding and mixed-batch admission supported |
 | Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution; public text/cancel submission with a bounded standalone worker |
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |

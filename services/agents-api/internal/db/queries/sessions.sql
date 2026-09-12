@@ -21,3 +21,6 @@ ORDER BY
     CASE WHEN NOT sqlc.arg(ascending)::boolean THEN created_at END DESC,
     CASE WHEN NOT sqlc.arg(ascending)::boolean THEN id END DESC
 LIMIT sqlc.arg(page_limit);
+
+-- name: UpdateSessionMetadata :one
+UPDATE sessions SET metadata = $3 WHERE tenant_id = $1 AND id = $2 RETURNING *;
