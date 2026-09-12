@@ -104,7 +104,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Shared daemon connection layer | Implemented; existing product protocol retained |
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
-| Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon and native model support required), non-deferred function tools, environment `none`, metadata and creation retry keys |
+| Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |
 | Internal Turn/input persistence | Tenant-scoped atomic message/cancel/function-result batches, steering, request-level retry identity, cancellation targets and terminal outcomes; public function-result decoding and mixed-batch admission supported |
 | Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution; public text/cancel submission with a bounded standalone worker |
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |
@@ -330,6 +330,27 @@ raises. It verifies one invocation per call, retained output/error field presenc
 native application, and termination after the matching Turn completes and Session
 returns idle. These are controlled tests with synthetic model responses. Live
 execution acceptance additionally requires a real model API; provider connectivity
-alone does not prove the Agents API/daemon/harness workflow. Live MiniMax-M3
-execution currently fails the native verbosity capability check because the
-Session defaults to `medium`; this model-support gap remains open.
+alone does not prove the Agents API/daemon/harness workflow.
+
+### Default verbosity on native models
+
+The pinned `AgentTextParam` defines `medium` as the default text amount. Omitted,
+null and explicit `medium` keep the same effective Session configuration and retry
+identity. Supported native models receive the explicit requested level. For
+unsupported or unknown models, the Codex adapter removes a `medium` override and
+uses native defaults while preserving the requested model and catalog snapshot.
+It still rejects unsupported `low`/`high` and unreadable catalogs.
+
+This follows [Codex 0.153.4 request selection](https://github.com/openai/codex/blob/rust-v0.153.4/codex-rs/core/src/client.rs#L951)
+and its [unknown-model fallback](https://github.com/openai/codex/blob/rust-v0.153.4/codex-rs/models-manager/src/model_info.rs#L134).
+Controlled native verification checks explicit levels on supported models, absent
+verbosity on an unknown model, initial/resumed Turns, and default retry equivalence.
+This does not imply support for non-default verbosity on every model.
+
+Live MiniMax-M3 verification used the pinned SDK, actual service/worker/PostgreSQL,
+daemon and Codex with MiniMax's real Responses API. Two Turns verified a successful
+function result, handler failure, retained result fields, stream termination and
+native history continuity by recalling a random value returned only by the first
+tool invocation. Omitted, null and explicit medium reused the same creation
+identity. The tool data was synthetic; model responses were live. This does not
+establish non-default verbosity, tool-set enforcement or full protocol conformance.

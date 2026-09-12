@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -38,7 +39,11 @@ func prepareModelVerbosity(ctx context.Context, binary string, plan *SessionPlan
 		return fmt.Errorf("codex: cannot read model verbosity support: %w", err)
 	}
 	if !supported {
-		return fmt.Errorf("codex: model %q does not declare text verbosity support", plan.Model)
+		if !slices.Contains(plan.ExtraConfig, [2]string{"model_verbosity", `"medium"`}) {
+			return fmt.Errorf("codex: model %q does not declare text verbosity support", plan.Model)
+		}
+		// Protocol medium means the default text amount, which needs no native override.
+		plan.ExtraConfig = slices.DeleteFunc(plan.ExtraConfig, func(kv [2]string) bool { return kv[0] == "model_verbosity" })
 	}
 	codexHome := ""
 	for _, entry := range plan.Env {
