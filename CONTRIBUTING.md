@@ -570,6 +570,18 @@ Session. Native files remain device-affine under a caller-selected managed
 runtime directory. The launch configuration supplies trusted provider environment;
 request options cannot supply environment variables or business write authority.
 
+The internal SDK function-server helper uses the maintained MCP server's public
+request handlers and standard Tool/CallToolResult types. It snapshots definitions
+and forwards JSON Schema without a JSON Schema-to-Zod conversion; supplied tools
+are always loaded. Native call identity comes from the pinned harness's
+`claudecode/toolUseId` MCP metadata, independently of request IDs, names or arrival
+order. Missing identities and undeclared tools fail before invoking the host.
+Return content/error fields unchanged over MCP and forward its per-request abort
+signal. This helper does not register tools on the text factory or expose public
+function execution. Public schema variants outside MCP's object-root contract,
+native result normalization and daemon result/application receipts need separate
+admission and execution acceptance; do not infer application from MCP delivery.
+
 This does not establish full tool/environment/text-verbosity policy, usage,
 function results, images, steering, cancellation receipts or process-loss recovery.
 Those capabilities require their own acceptance before public dispatch. Registry
