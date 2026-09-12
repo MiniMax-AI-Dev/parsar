@@ -40,7 +40,7 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if body["model"] == "custom-provider-model" {
+		if body["model"] == "custom-provider-model" && !strings.Contains(fmt.Sprint(body["input"]), "DEFAULT-VERBOSITY") {
 			t.Error("unsupported verbosity reached model execution")
 		}
 		for _, value := range body["tools"].([]any) {
@@ -58,7 +58,11 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 			}
 		}
 		textConfig, _ := body["text"].(map[string]any)
-		if textConfig["verbosity"] != expected {
+		if body["model"] == "custom-provider-model" {
+			if _, present := textConfig["verbosity"]; present {
+				t.Error("native default sent an unsupported verbosity override")
+			}
+		} else if textConfig["verbosity"] != expected {
 			t.Errorf("effective verbosity = %v, want %s", textConfig["verbosity"], expected)
 		}
 		n := requests.Add(1)

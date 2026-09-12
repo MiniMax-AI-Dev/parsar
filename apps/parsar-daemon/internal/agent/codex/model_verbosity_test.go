@@ -64,3 +64,53 @@ func TestPrepareModelVerbosity(t *testing.T) {
 		t.Fatal("accepted unreadable catalog")
 	}
 }
+
+func TestPrepareDefaultModelVerbosity(t *testing.T) {
+	if !SupportsTextVerbosity {
+		t.Skip("catalog probe requires Unix")
+	}
+	t.Setenv("PARSAR_HOME", t.TempDir())
+	binary := filepath.Join(t.TempDir(), "codex")
+	catalog := `{"models":[{"slug":"supported","support_verbosity":true,"default_verbosity":"low"},{"slug":"unsupported","support_verbosity":false}]}`
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\nprintf '%s' '"+catalog+"'\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, model := range []string{"supported", "unsupported", "unknown-provider-model"} {
+		for _, level := range []string{"low", "medium", "high"} {
+			t.Run(model+"/"+level, func(t *testing.T) {
+				plan, err := BuildSessionPlan("run", "state", "", map[string]any{"model": model, "model_verbosity": level})
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { plan.Cleanup() }()
+				err = prepareModelVerbosity(context.Background(), binary, &plan)
+				if model != "supported" && level != "medium" {
+					if err == nil {
+						t.Fatal("accepted unsupported non-default verbosity")
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				found := false
+				for _, kv := range plan.ExtraConfig {
+					if kv[0] == "model_verbosity" {
+						found = true
+						if kv[1] != `"`+level+`"` {
+							t.Fatal("configured verbosity changed", kv)
+						}
+					}
+				}
+				if found != (model == "supported") || plan.Model != model {
+					t.Fatal("native default or model identity changed", plan.ExtraConfig, plan.Model)
+				}
+				kv := plan.ExtraConfig[len(plan.ExtraConfig)-1]
+				raw, err := os.ReadFile(strings.Trim(kv[1], `"`))
+				if kv[0] != "model_catalog_json" || err != nil || string(raw) != catalog {
+					t.Fatal("native catalog snapshot changed", err)
+				}
+			})
+		}
+	}
+}

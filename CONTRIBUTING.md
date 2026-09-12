@@ -285,9 +285,13 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   through the Codex adapter for both new and resumed Turns. The adapter queries
   the native active catalog with `codex debug models`, checks model support and
   pins that catalog snapshot for execution. The probe requires Unix process-group
-  cancellation; other daemon hosts do not advertise this capability. Unknown/unsupported models or an
-  unreadable catalog fail before model execution instead of silently ignoring
-  verbosity. This is an explicit engine limitation until those models are supported.
+  cancellation; other daemon hosts do not advertise this capability. For models
+  without declared verbosity support, including the native unknown-model fallback,
+  `medium` selects native default text generation by omitting the override. The
+  pinned protocol defines `medium` as the default text amount. Supported models
+  still receive explicit `medium`, even when their catalog default differs.
+  Unsupported `low`/`high` and unreadable catalogs fail before model execution;
+  unsupported non-default levels remain an explicit implementation gap.
   Product requests that omit the native option retain their existing defaults.
   Structured output formats remain a separate protocol gap.
 - `function_tools` advertises the optional native function-call bridge. Explicit

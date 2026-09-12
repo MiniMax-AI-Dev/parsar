@@ -140,6 +140,17 @@ def main():
                 raise AssertionError("changed text configuration reused a retry key")
             except ConflictError:
                 pass
+        default_agent = {"model": "custom-provider-model"}
+        default = sessions.create(agent=default_agent, environment={"type": "none"},
+                                  extra_headers={"Idempotency-Key": "native-default"})
+        for text in (None, {"verbosity": None}, {"verbosity": "medium"}):
+            configured = sessions.create(agent=dict(default_agent, text=text), environment={"type": "none"},
+                                         extra_headers={"Idempotency-Key": "native-default"})
+            assert configured.id == default.id and configured.agent.text.verbosity == "medium"
+        for count in (1, 2):
+            sessions.events.create(default.id, events=[message("DEFAULT-VERBOSITY")])
+            wait_turn(default.id, "completed", count)
+            assert sessions.retrieve(default.id).agent.text.verbosity == "medium"
         unsupported = sessions.create(agent={"model": "custom-provider-model", "text": {"verbosity": "high"}},
                                       environment={"type": "none"})
         sessions.events.create(unsupported.id, events=[message("UNSUPPORTED-VERBOSITY")])
@@ -151,6 +162,7 @@ def main():
                                               "stream_types": types, "reconnected_events": len(second_events),
                                               "cancelled_events": [value.type for value in cancelled_events],
                                               "verbosity_new_and_resumed": ["low", "medium", "high"],
+                                              "native_default_session": default.id,
                                               "unsupported_verbosity": failed.error.model_dump()}))
     finally:
         client.close()
