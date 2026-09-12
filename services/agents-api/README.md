@@ -12,12 +12,16 @@ internal primitives; pending interactions and full environment lifecycle remain 
 ## Reusable Agents
 
 The pinned Python client can create and retrieve configuration independently of a
-Session: `agent = client.beta.agents.create(model="your-model", name="Example",
-reasoning={"effort": "medium"})`, followed by
+Session: `agent = client.beta.agents.create(model="your-model", name="Example")`, followed by
 `client.beta.agents.retrieve(agent.id)`. These operations use the service's normal
 base URL, bearer key and `agents=v1` header. Resources remain private to that
 execution tenant and survive service restart. Saving configuration does not launch
-an engine; Session references and other Agent operations are not implemented yet.
+an engine. Create a Session with `client.beta.agents.sessions.create(agent_id=agent.id,
+environment={"type": "none"})`, then submit work through Session events or the SDK's
+Session stream helper. Optional `agent` fields override only that Session: omitted
+fields inherit, while supplied objects/arrays replace the entire field. Source and
+Session metadata remain separate. The source resource is never read during execution.
+Other Agent operations remain unimplemented.
 See the [coverage and default gaps](../../contracts/agents-api/README.md#public-semantics)
 before using optional configuration.
 
@@ -128,7 +132,7 @@ the client's requested model. Public execution currently supports Codex with exp
 
 The SDK base URL is `http://127.0.0.1:8091/v1`. Supported operations are Session
 create, retrieve and list, with `OpenAI-Beta: agents=v1` (set by the official SDK).
-Creation supports inline `agent.model`, optional `agent.instructions`,
+Creation supports inline `agent.model` or a saved `agent_id`, per-Session overrides,
 `environment: {"type":"none"}`, and metadata. Metadata allows at most 16 pairs,
 64-character keys and 512-character values, including Unicode. Requests have a
 1 MiB body limit and resolved configuration retains the 512 KiB Store limit.
@@ -136,7 +140,7 @@ Creation supports inline `agent.model`, optional `agent.instructions`,
 Inline Agent IDs identify the Session's immutable execution configuration, not a
 reusable Parsar Agent. List supports `after`, `limit` (1–100) and `order` (asc/desc).
 
-Unsupported fields, saved Agent references, vaults, initial input and streaming
+Unsupported execution settings, vaults, initial input and streaming
 return explicit errors. Session update/delete and other unsupported resources remain explicit errors. `/healthz` reports process liveness only.
 
 ## Internal execution device connection

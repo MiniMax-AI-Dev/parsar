@@ -3,9 +3,10 @@ package v1
 
 import "encoding/json"
 
-// CreateSessionRequest currently supports inline agents without initial input.
+// CreateSessionRequest supports inline configuration or a saved Agent reference.
+// Initial input remains unsupported.
 type CreateSessionRequest struct {
-	Agent       *InlineAgent      `json:"agent" binding:"required"`
+	Agent       *InlineAgent      `json:"agent,omitempty"`
 	AgentID     *string           `json:"agent_id,omitempty"`
 	Environment *Environment      `json:"environment" binding:"required"`
 	Input       json.RawMessage   `json:"input,omitempty" swaggertype:"object" extensions:"x-nullable"`
@@ -18,11 +19,16 @@ type UpdateSessionRequest struct {
 	Metadata map[string]string `json:"metadata,omitempty" extensions:"x-nullable"`
 }
 
+// InlineAgent supplies a complete inline configuration or per-Session overrides.
+// With agent_id, omitted fields inherit and supplied fields replace saved values.
 type InlineAgent struct {
-	Tools        []FunctionToolInput `json:"tools,omitempty" extensions:"x-nullable"`
-	Model        string              `json:"model" binding:"required"`
-	Instructions *string             `json:"instructions,omitempty" extensions:"x-nullable"`
-	Text         *TextConfigInput    `json:"text,omitempty" extensions:"x-nullable"`
+	Model        *string              `json:"model,omitempty"`
+	Instructions *string              `json:"instructions,omitempty" extensions:"x-nullable"`
+	MultiAgent   json.RawMessage      `json:"multi_agent,omitempty" swaggertype:"object" extensions:"x-nullable"`
+	Reasoning    *Reasoning           `json:"reasoning,omitempty" extensions:"x-nullable"`
+	ServiceTier  *string              `json:"service_tier,omitempty" enums:"auto,default,flex,priority,fast" extensions:"x-nullable"`
+	Text         *SavedAgentTextInput `json:"text,omitempty" extensions:"x-nullable"`
+	Tools        []json.RawMessage    `json:"tools,omitempty" swaggertype:"array,object" extensions:"x-nullable"`
 }
 
 // Environment currently supports the upstream environment-free configuration.

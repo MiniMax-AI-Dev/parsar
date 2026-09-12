@@ -79,7 +79,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   `[]`, text to ordinary/medium, and multi-agent settings to disabled/null. Enabled
   multi-agent settings default to six concurrent subagents. Function defer-loading
   defaults to false and programmatic tool calling to true. Saving these values
-  does not admit a native execution or enable Session `agent_id` references yet.
+  does not itself admit a native execution. Session references are admitted separately.
 - Saved Agent model-default reasoning resolution remains missing: an omitted effort
   stays unresolved rather than being populated from a guessed model default. An
   explicit effort/summary is retained. Omitted/null service tier currently follows
@@ -91,7 +91,19 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 - Use `/agents/sessions` beneath the configured API base URL, bearer authentication
   and `OpenAI-Beta: agents=v1`. Do not introduce a competing `/sessions` surface.
 - Session creation takes an environment and inline agent configuration or a saved
-  agent reference. A model name is not a daemon engine name.
+  agent reference. The saved ID and effective configuration are copied into an
+  immutable Session snapshot. Omitted fields inherit; supplied objects and arrays
+  replace the entire field ([configuration guide](https://developers.openai.com/api/docs/guides/agents-api/configuration)).
+  Tools null clears the list as specified by pinned `session_create_params.py`.
+  Saved metadata never becomes Session metadata. A model name is not a daemon engine name.
+  Current admission requires disabled multi-agent, implicit reasoning, tier `auto`,
+  ordinary text and non-deferred functions. Unsupported saved settings fail before
+  Session persistence, unless replaced by supported overrides. Other native options
+  remain implementation gaps, not excluded protocol variants.
+  Fixed SDK/raw HTTP checks cover inherited/overridden configuration, tenant ownership,
+  source preservation, independent Session snapshots, retries and service restart.
+  Source mutation/deletion with creation retries remains a dependency for Agent
+  update/delete: currently the resolved snapshot is hashed after a fresh lookup.
   In the pinned `session_create_params.py`, `stream` defaults to false and neither
   `stream` nor `agent_id` permits null. Metadata omission/null defaults to an empty
   map; individual values must be strings, including valid empty strings. Validate
@@ -125,7 +137,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Reusable Agents | Tenant-scoped public create/retrieve, metadata, explicit reasoning/service tiers, multi_agent, text/json_schema and function/tool_search/programmatic tool configuration; not execution admission |
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
-| Authenticated Session HTTP API | Create/retrieve/list and metadata-only update; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |
+| Authenticated Session HTTP API | Create/retrieve/list and metadata-only update; inline or referenced Agent with field replacements, model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |
 | Internal Turn/input persistence | Tenant-scoped atomic message/cancel/function-result batches, steering, request-level retry identity, cancellation targets and terminal outcomes; public function-result decoding and mixed-batch admission supported |
 | Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution and disabled native subagent tools for the resolved false default; public text/cancel submission with a bounded standalone worker |
 | Neutral tool observation transport | Required for execution; adapters normalize tool snapshots, API projects shared observations without decoding native tool types |
@@ -170,7 +182,7 @@ on fresh and resumed Turns. Operator feature preferences cannot re-enable them.
 Controlled model-boundary tests check absence of direct/deferred subagent tools
 while the official function workflow continues to run.
 
-Explicit inline `multi_agent` input, enabled multi-agent execution and public
+Disabled `multi_agent` input is admitted. Enabled multi-agent execution and public
 Subagent resources are still unsupported. Do not infer that `Agent.tools` is the
 complete native tool registry: environment and subagent tools have separate
 configuration. The upstream behavior of internal Goal, Skills and user-input

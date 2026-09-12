@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"strings"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
@@ -16,12 +15,9 @@ type configuration struct {
 	Environment v1.Environment `json:"environment"`
 }
 
-func resolve(input v1.CreateSessionRequest, tenant, key string) (json.RawMessage, error) {
-	if input.AgentID != nil || input.Stream || len(input.VaultIDs) > 0 || (len(input.Input) > 0 && !bytes.Equal(bytes.TrimSpace(input.Input), []byte("null"))) {
-		return nil, errors.New("Saved agents, initial input, streaming and vaults are not supported by this service yet.")
-	}
-	if input.Agent == nil || strings.TrimSpace(input.Agent.Model) == "" {
-		return nil, errors.New("agent.model is required for an inline agent.")
+func resolve(input sessionRequest, tenant, key string, saved *v1.SavedAgent) (json.RawMessage, error) {
+	if input.Stream || len(input.VaultIDs) > 0 || (len(input.Input) > 0 && !bytes.Equal(bytes.TrimSpace(input.Input), []byte("null"))) {
+		return nil, errors.New("Initial input, streaming and vaults are not supported by this service yet.")
 	}
 	if input.Environment == nil || input.Environment.Type != "none" {
 		return nil, errors.New("This service currently requires environment.type=none.")
@@ -29,21 +25,17 @@ func resolve(input v1.CreateSessionRequest, tenant, key string) (json.RawMessage
 	if err := validateMetadata(input.Metadata); err != nil {
 		return nil, err
 	}
-	text, err := resolveText(input.Agent.Text)
+	agent, err := resolveSessionAgent(input, saved)
 	if err != nil {
 		return nil, err
 	}
-	tools, err := resolveFunctions(input.Agent.Tools)
-	if err != nil {
-		return nil, err
+	if saved == nil {
+		// Inline execution configuration has its own stable identity for creation retries.
+		agent.ID = "agent_" + uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenant+"\x00"+key)).String()
+	} else {
+		agent.ID = saved.ID
 	}
-	// Inline execution configuration has its own stable identity for creation retries.
-	id := "agent_" + uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenant+"\x00"+key)).String()
-	return json.Marshal(configuration{Agent: v1.Agent{
-		ID: id, Model: input.Agent.Model, Instructions: input.Agent.Instructions,
-		ServiceTier: "auto", Text: text,
-		Tools: tools,
-	}, Environment: *input.Environment})
+	return json.Marshal(configuration{Agent: agent, Environment: *input.Environment})
 }
 
 func sessionResponse(session store.Session) (v1.Session, error) {

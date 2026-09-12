@@ -20,6 +20,7 @@ import httpx2
 from jsonschema import Draft4Validator
 from official_items import verify_items
 from official_agents import verify_agents
+from official_agent_references import verify_agent_references
 from official_session_requests import verify_session_create_requests
 from official_session_metadata import verify_session_metadata, verify_active_session_metadata
 from openai import AuthenticationError, BadRequestError, ConflictError, NotFoundError, OpenAI
@@ -178,11 +179,15 @@ def main():
                     expect_error(BadRequestError, lambda: turns.list(turn_session.id, limit=101))
                     saved_items = verify_items(a, b, invalid, turn_session.id, first.id, turn_ids, expect_error)
                     request_sessions.append(verify_active_session_metadata(a, turn_session.id))
+                    referenced, reference_retry = verify_agent_references(a, b, expect_error)
+                    request_sessions.extend(referenced)
                     process.terminate()
                     process.wait(timeout=15)
                     process = start()
                     assert [a.beta.agents.retrieve(item.id) for item in saved_agents] == saved_agents
                     assert [sessions.retrieve(item.id) for item in request_sessions] == request_sessions
+                    reference_spec, reference_headers, reference_result = reference_retry
+                    assert sessions.create(**reference_spec, extra_headers=reference_headers) == reference_result
                     assert list(sessions.items.list(turn_session.id, order="asc")) == saved_items
                     assert list(turns.list(turn_session.id, order="asc")) == recovered
                     assert sessions.retrieve(first.id) == first

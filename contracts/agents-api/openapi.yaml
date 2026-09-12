@@ -128,7 +128,6 @@ definitions:
           type: string
         type: array
     required:
-    - agent
     - environment
     type: object
   v1.Environment:
@@ -167,26 +166,6 @@ definitions:
     - turn_id
     - type
     type: object
-  v1.FunctionToolInput:
-    properties:
-      defer_loading:
-        type: boolean
-      description:
-        type: string
-      name:
-        type: string
-      parameters:
-        type: object
-      type:
-        enum:
-        - function
-        type: string
-    required:
-    - description
-    - name
-    - parameters
-    - type
-    type: object
   v1.InlineAgent:
     properties:
       instructions:
@@ -194,17 +173,31 @@ definitions:
         x-nullable: true
       model:
         type: string
+      multi_agent:
+        type: object
+        x-nullable: true
+      reasoning:
+        allOf:
+        - $ref: '#/definitions/v1.Reasoning'
+        x-nullable: true
+      service_tier:
+        enum:
+        - auto
+        - default
+        - flex
+        - priority
+        - fast
+        type: string
+        x-nullable: true
       text:
         allOf:
-        - $ref: '#/definitions/v1.TextConfigInput'
+        - $ref: '#/definitions/v1.SavedAgentTextInput'
         x-nullable: true
       tools:
         items:
-          $ref: '#/definitions/v1.FunctionToolInput'
+          type: object
         type: array
         x-nullable: true
-    required:
-    - model
     type: object
   v1.InputContent:
     properties:
@@ -600,20 +593,6 @@ definitions:
     - format
     - verbosity
     type: object
-  v1.TextConfigInput:
-    properties:
-      format:
-        allOf:
-        - $ref: '#/definitions/v1.TextFormat'
-        x-nullable: true
-      verbosity:
-        enum:
-        - low
-        - medium
-        - high
-        type: string
-        x-nullable: true
-    type: object
   v1.TextFormat:
     properties:
       type:
@@ -758,7 +737,8 @@ paths:
       description: Persists configuration independently of execution. Supports model/name/instructions/metadata,
         explicit reasoning and service tiers, multi_agent, text/json_schema, function/tool_search/programmatic_tool_calling.
         Model-derived reasoning defaults, MCP/web_search and public retry conformance
-        remain incomplete. Session references and execution admission are separate.
+        remain incomplete. Session execution admits only its supported configuration
+        subset.
       parameters:
       - description: agents=v1
         in: header
@@ -902,11 +882,13 @@ paths:
     post:
       consumes:
       - application/json
-      description: Supports inline model/instructions, text verbosity, non-deferred
-        function tools and environment type none. Omitted stream defaults to false;
-        stream and agent_id cannot be null. Metadata may be null, but its values must
-        be strings. Execution input and other options are explicitly unsupported in
-        this slice.
+      description: Supports inline configuration or a tenant-owned saved agent_id
+        with per-Session field replacements. Execution supports model/instructions,
+        text verbosity, non-deferred function tools, disabled multi_agent, implicit
+        reasoning, service tier auto and environment type none. Omitted stream defaults
+        to false; stream and agent_id cannot be null. Metadata may be null, but its
+        values must be strings. Execution input and other options are explicitly unsupported
+        in this slice.
       parameters:
       - description: agents=v1
         in: header
@@ -936,6 +918,10 @@ paths:
             $ref: '#/definitions/v1.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
         "409":

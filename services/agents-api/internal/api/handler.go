@@ -90,7 +90,7 @@ func tenantID(r *http.Request) string { return r.Context().Value(tenantContextKe
 
 // createSession creates an idle execution Session without submitting a Turn.
 // @Summary Create an execution Session
-// @Description Supports inline model/instructions, text verbosity, non-deferred function tools and environment type none. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Execution input and other options are explicitly unsupported in this slice.
+// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Execution input and other options are explicitly unsupported in this slice.
 // @Tags Sessions
 // @Accept json
 // @Produce json
@@ -99,7 +99,7 @@ func tenantID(r *http.Request) string { return r.Context().Value(tenantContextKe
 // @Param Idempotency-Key header string false "Creation retry key, up to 128 bytes"
 // @Param body body v1.CreateSessionRequest true "Session configuration"
 // @Success 200 {object} v1.Session
-// @Failure 400,401,409,413,500 {object} v1.ErrorResponse
+// @Failure 400,401,404,409,413,500 {object} v1.ErrorResponse
 // @Router /agents/sessions [post]
 func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 	if len(r.URL.Query()) > 0 {
@@ -124,14 +124,27 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 	}
 	input, err := request.validated()
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "stream and agent_id cannot be null; metadata values must be strings.")
+		writeError(w, http.StatusBadRequest, "invalid_request", "Request fields have invalid types or null values.")
 		return
 	}
 	key := r.Header.Get("Idempotency-Key")
 	if key == "" {
 		key = uuid.NewString()
 	}
-	configuration, err := resolve(input, tenantID(r), key)
+	var saved *v1.SavedAgent
+	if input.AgentID != nil {
+		resource, err := h.lookupAgent(r.Context(), tenantID(r), *input.AgentID)
+		if err != nil {
+			writeStoreError(w, r, err)
+			return
+		}
+		saved = &v1.SavedAgent{ID: resource.ID}
+		if err := json.Unmarshal(resource.Configuration, &saved.SavedAgentConfiguration); err != nil {
+			writeStoreError(w, r, err)
+			return
+		}
+	}
+	configuration, err := resolve(input, tenantID(r), key, saved)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "unsupported_or_invalid_configuration", err.Error())
 		return
