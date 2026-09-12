@@ -47,6 +47,7 @@ func NewFactory(config Config) agent.Factory {
 }
 
 type bridgeEvent struct {
+	Usage      json.RawMessage             `json:"usage,omitempty"`
 	Type       string                      `json:"type"`
 	Delta      string                      `json:"delta"`
 	SessionID  string                      `json:"session_id"`
@@ -83,6 +84,8 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	var content strings.Builder
 	var result *bridgeEvent
+	var usage proto.Usage
+	var usageSession string
 	var sequence uint64
 	terminal := false
 	for scanner.Scan() {
@@ -117,8 +120,21 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 				failure = err
 				s.process.Cancel()
 			}
+		case "usage":
+			if usage.Raw != nil || event.SessionID == "" || (start.Resume != "" && event.SessionID != start.Resume) {
+				failure = fmt.Errorf("claudesdk: invalid usage identity or duplicate result")
+				s.process.Cancel()
+				break
+			}
+			usage, failure = nativeUsage(event.Usage)
+			if failure != nil {
+				s.process.Cancel()
+				break
+			}
+			usageSession = event.SessionID
+			emit(proto.TypeUsage, proto.UsagePayload{Usage: usage})
 		case "result":
-			if event.SessionID == "" || start.Resume != "" && event.SessionID != start.Resume || !s.functionsComplete() {
+			if event.SessionID == "" || start.Resume != "" && event.SessionID != start.Resume || usageSession != "" && event.SessionID != usageSession || !s.functionsComplete() {
 				failure = fmt.Errorf("claudesdk: invalid native completion or unconfirmed function result")
 				s.process.Cancel()
 			} else {
@@ -163,7 +179,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 		content.WriteString(result.Text)
 		metadata[proto.DoneMetaAgentSessionID] = result.SessionID
 	}
-	emit(proto.TypeDone, proto.DonePayload{Content: content.String(), Metadata: metadata})
+	emit(proto.TypeDone, proto.DonePayload{Content: content.String(), Usage: usage, Metadata: metadata})
 }
 
 func (s *session) Cancel(context.Context) error { s.stopFunctions(); s.process.Cancel(); return nil }
