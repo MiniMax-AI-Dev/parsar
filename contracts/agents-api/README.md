@@ -47,7 +47,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | --- | --- | --- |
 | Root reusable Agents | create, retrieve, update, list, delete | Missing |
 | sessions | create, retrieve, update, list, delete | Partial create/retrieve/list; update/delete missing |
-| sessions.events | create, stream | Partial text/cancel and live events; function-action state snapshots supported; tool-result admission pending |
+| sessions.events | create, stream | Text/cancel/function-result admission and live events; function-action state snapshots supported |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
 | sessions.items | list | Partial Item variants |
 | sessions.artifacts | retrieve, list, delete, content | Missing |
@@ -101,14 +101,14 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
 | Authenticated Session HTTP API | Create/retrieve/list; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon and native model support required), environment `none`, metadata and creation retry keys |
-| Internal Turn/input persistence | Tenant-scoped atomic message/cancel/function-result batches, steering, request-level retry identity, cancellation targets and terminal outcomes; public result decoding pending |
+| Internal Turn/input persistence | Tenant-scoped atomic message/cancel/function-result batches, steering, request-level retry identity, cancellation targets and terminal outcomes; public function-result decoding and mixed-batch admission supported |
 | Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution; public text/cancel submission with a bounded standalone worker |
 | Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |
 | Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
 | Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
 | Public SSE | Live Session/Turn lifecycle, supported Item and text events; bounded commit-before-publish buffering and recovery through saved reads |
-| Internal function bridge | Native Codex definitions and ordered text/image/error results, persisted callbacks and application receipts, cancellation and native resume; public function configuration/result admission pending |
-| Function-call persistence and reads | Immutable scoped calls/results/receipts; Session `required_actions`, `requires_action`, Turn `waiting` and live state snapshots; internal native dispatch integrated; public configuration/result admission pending |
+| Internal function bridge | Native Codex definitions and ordered text/image/error results, persisted callbacks and application receipts, cancellation and native resume; public function configuration pending |
+| Function-call persistence and reads | Immutable scoped calls/results/receipts; Session `required_actions`, `requires_action`, Turn `waiting` and live state snapshots; internal native dispatch integrated; public function configuration pending |
 | Pending actions and environment lifecycle | Pending |
 | Official-client compatibility | Strict SDK checks for Session/Turn/Items reads and native text execution/cancellation/verbosity; pagination, retries, errors, tenant isolation and recovery |
 | Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |
@@ -219,7 +219,7 @@ The service takes a database advisory lease, so a second execution service canno
 start on the same database. Startup marks previously claimed Turns failed without
 replaying them and retains queued work. This does not recover missing daemon frames
 or guarantee exactly-once external side effects. Session status reflects the latest
-persisted Turn; usage reports recorded measurements; public function configuration and result admission remain unimplemented.
+persisted Turn; usage reports recorded measurements; public function configuration remains unimplemented.
 
 Native verification uses `PARSAR_NATIVE_DAEMON_BIN`, `PARSAR_NATIVE_PROOF_DIR` under
 `~/.parsar/`, and `PARSAR_OFFICIAL_SDK_PYTHON` pointing to the pinned SDK environment.
@@ -273,3 +273,12 @@ exact sequence of repeated `requires_action` notifications are implementation
 choices: the pinned source defines their shape but not that precise ordering.
 Session state events contain `event_id`, `type` and `session`; Turn events retain
 `session_id` and `turn_id`. There is no invented Turn `waiting` event.
+
+Public function-result admission is verified with the pinned Python client and
+raw HTTP against a dedicated PostgreSQL fixture: required fields, nullable output
+and error, ordered text/image output, variant rejection, atomic batches, scoped
+access and retries after terminal state. This is admission verification; public
+function configuration and an end-to-end configured function remain separate gaps.
+The generated Swagger 2.0 document leaves the output union unconstrained because
+it cannot express string-or-content-array unions; the pinned upstream types and
+server validation define the supported alternatives.

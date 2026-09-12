@@ -31,6 +31,8 @@ func writeStoreError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "Resource not found.")
+	case errors.Is(err, store.ErrTurnConflict):
+		writeError(w, http.StatusConflict, "turn_conflict", "The Turn cannot accept this input in its current state.")
 	case errors.Is(err, store.ErrIdempotencyConflict):
 		writeError(w, http.StatusConflict, "idempotency_conflict", "This idempotency key was used with different input.")
 	case errors.Is(err, store.ErrInvalidInput):

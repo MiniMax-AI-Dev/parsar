@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -24,7 +23,7 @@ type Option func(*Handler)
 func WithExecution(s InputSubmitter) Option { return func(h *Handler) { h.inputs = s } }
 
 // @Summary Submit Session input events
-// @Description Atomically accepts text messages and cancellation. Messages steer active work or start a queued Turn. Retry keys identify the whole ordered batch. Images and tool results are not supported yet.
+// @Description Atomically accepts text messages, cancellation and function results. Messages steer active work or start a queued Turn. Retry keys identify the whole ordered batch. Function output accepts text or ordered text/image parts; message images are not supported yet.
 // @Tags Sessions
 // @Accept json
 // @Security BearerAuth
@@ -44,7 +43,9 @@ func (h *Handler) createEvents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported_parameter", "Event submission does not accept query parameters.")
 		return
 	}
-	var request v1.CreateEventsRequest
+	var request struct {
+		Events []json.RawMessage `json:"events"`
+	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024*1024))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {
@@ -52,7 +53,7 @@ func (h *Handler) createEvents(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &large) {
 			writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "Request exceeds 1 MiB.")
 		} else {
-			writeError(w, http.StatusBadRequest, "invalid_request", "Only text message and cancellation events are supported.")
+			writeError(w, http.StatusBadRequest, "invalid_request", "Invalid Session input event request.")
 		}
 		return
 	}
@@ -60,7 +61,7 @@ func (h *Handler) createEvents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "Request must contain exactly one JSON object.")
 		return
 	}
-	inputs, err := executionInputs(request)
+	inputs, err := executionInputs(request.Events)
 	if err != nil {
 		writeStoreError(w, r, err)
 		return
@@ -77,18 +78,28 @@ func (h *Handler) createEvents(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func executionInputs(request v1.CreateEventsRequest) ([]store.Input, error) {
-	if len(request.Events) == 0 || len(request.Events) > 64 {
+func executionInputs(events []json.RawMessage) ([]store.Input, error) {
+	if len(events) == 0 || len(events) > 64 {
 		return nil, store.ErrInvalidInput
 	}
-	inputs := make([]store.Input, 0, len(request.Events))
-	for _, event := range request.Events {
+	inputs := make([]store.Input, 0, len(events))
+	for _, raw := range events {
+		event, err := decodeInputEvent(raw)
+		if err != nil {
+			return nil, err
+		}
 		switch event.Type {
 		case "agent.session.input.cancel":
 			if event.Input != nil {
 				return nil, store.ErrInvalidInput
 			}
 			inputs = append(inputs, store.Input{Kind: "cancel", Payload: json.RawMessage(`{}`)})
+		case "agent.session.input.tool_result":
+			input, err := functionResultInput(event)
+			if err != nil {
+				return nil, err
+			}
+			inputs = append(inputs, input)
 		case "agent.session.input.message":
 			if len(event.Input) == 0 {
 				return nil, store.ErrInvalidInput

@@ -311,15 +311,17 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   can fail or cancel before a result arrives; successful execution requires resume.
   Actions remain visible until native application is acknowledged. This timing is
   an implementation choice, not verified upstream event sequencing. Public tool
-  configuration and result admission remain pending.
+  configuration remains pending.
 - Function results can join internal message/cancel input batches. Their explicit
   Turn/call identity selects an existing call; admission never creates a Turn for
   a result. Save the complete result and its input retry record in the same Session
   transaction. Any invalid target, conflicting result or later batch error rolls
   back the whole request. Identical saved results remain retryable after termination
   without applying them again. The execution input cursor skips function results;
-  their separate native receipts still determine application. Public event decoding
-  and function configuration remain pending.
+  their separate native receipts still determine application. Public result events
+  validate variant-specific fields and required values before admission; retain
+  omitted versus null error/output and ordered text/image parts. Public function
+  configuration remains pending.
 - Internal function execution requires an advertised `function_tools` capability
   before claiming a Turn. Translate resolved definitions in the execution adapter,
   persist declared callbacks before exposing actions, and deliver each saved result
@@ -329,7 +331,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   treat transport delivery as application or automatically replay an uncertain
   result. The adapter waits for outstanding application receipts even when Done
   arrives first. Waiting Turns still accept execution observations and cancellation.
-  Public `tools` and `tool_result` admission remain a separate protocol slice;
+  Public `tools` configuration remains a separate protocol slice;
   internal execution is not proof of full public function compatibility.
 - `message_items` advertises native assistant-message observations. Agents API
   opts in with `observe_messages` only for advertised peers; ordinary product

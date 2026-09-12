@@ -378,14 +378,26 @@ definitions:
     type: object
   v1.SessionInput:
     properties:
+      call_id:
+        type: string
+      error:
+        type: string
+        x-nullable: true
       input:
         items:
           $ref: '#/definitions/v1.InputMessage'
         type: array
+      output:
+        x-nullable: true
+      success:
+        type: boolean
+      turn_id:
+        type: string
       type:
         enum:
         - agent.session.input.message
         - agent.session.input.cancel
+        - agent.session.input.tool_result
         type: string
     required:
     - type
@@ -771,9 +783,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Atomically accepts text messages and cancellation. Messages steer
-        active work or start a queued Turn. Retry keys identify the whole ordered
-        batch. Images and tool results are not supported yet.
+      description: Atomically accepts text messages, cancellation and function results.
+        Messages steer active work or start a queued Turn. Retry keys identify the
+        whole ordered batch. Function output accepts text or ordered text/image parts;
+        message images are not supported yet.
       parameters:
       - description: agents=v1
         in: header
