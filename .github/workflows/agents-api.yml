@@ -11,6 +11,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Makefile'
+      - 'scripts/build-agents-api.sh'
       - '.github/workflows/agents-api.yml'
   pull_request:
     paths:
@@ -21,6 +22,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Makefile'
+      - 'scripts/build-agents-api.sh'
       - '.github/workflows/agents-api.yml'
 
 permissions:
@@ -57,7 +59,10 @@ jobs:
       - name: Verify dedicated execution persistence
         env:
           PARSAR_AGENTS_API_TEST_DATABASE_URL: postgres://agents_api:agents_api_test_only@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/parsar_agents_api_ci_tests?sslmode=disable
-        run: make check-agents-api
+        run: |
+          AGENTS_API_BUILD_DIR="$RUNNER_TEMP/agents-api-build" make check-agents-api
+          AGENTS_API_DATABASE_URL="$PARSAR_AGENTS_API_TEST_DATABASE_URL" "$RUNNER_TEMP/agents-api-build/agents-api-migrate"
+          "$RUNNER_TEMP/agents-api-build/agents-api-device" --help
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -69,12 +74,10 @@ jobs:
           subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'services/agents-api/tests/requirements.txt',
                           'openai @ git+https://github.com/openai/openai-python@' + pin['commit']], check=True)
           PY
-      - name: Build standalone service
-        run: go build -o "$RUNNER_TEMP/agents-api" ./services/agents-api/cmd/server
       - name: Verify official-client HTTP compatibility
         env:
           PARSAR_AGENTS_API_TEST_DATABASE_URL: postgres://agents_api:agents_api_test_only@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/parsar_agents_api_ci_tests?sslmode=disable
-          AGENTS_API_SERVER_BIN: ${{ runner.temp }}/agents-api
+          AGENTS_API_SERVER_BIN: ${{ runner.temp }}/agents-api-build/agents-api
           PARSAR_OFFICIAL_SDK_PYTHON: python
         run: |
           python services/agents-api/tests/official_client.py

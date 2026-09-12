@@ -179,6 +179,25 @@ path until an explicit client cutover.
   product callback with the original requester and workspace checks. A runtime
   credential alone must not grant business write permissions.
 
+#### Independent build artifacts
+
+`make build-agents-api` produces `agents-api`, `agents-api-migrate` and
+`agents-api-device` under `${PARSAR_HOME:-$HOME/.parsar}/build/agents-api`.
+`AGENTS_API_BUILD_DIR` may select another absolute output directory. The build
+uses only the explicit source set in `scripts/build-agents-api.sh`: the execution
+service, its Go contracts and required shared daemon/logging packages, plus the
+root Go module manifests. Product server/frontend, other applications and their
+migrations/assets are absent from the temporary build context. Keep this boundary
+explicit when introducing shared dependencies; do not copy the whole repository
+to make an accidental product dependency compile.
+
+The build uses Go directly with workspace discovery and CGO disabled, read-only
+module manifests and trimmed paths. It requires no Node, Docker or product setup.
+`make check-agents-api` runs this build before its tests, so the full `make check`
+and the dedicated CI workflow enforce the same boundary. CI exercises the built
+migration command and uses the built server for official-client HTTP checks.
+Container distribution, daemon packaging and product cutover remain separate work.
+
 #### Current implementation
 
 The constraints below describe existing code, not requirements to preserve legacy
