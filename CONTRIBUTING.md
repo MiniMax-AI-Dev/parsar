@@ -552,6 +552,13 @@ and native message translation. The Go `claudesdk.NewFactory` uses the shared
 owned process runner and emits the existing daemon delta/error/Done frames.
 The SDK owns the model loop. Its narrow stdio protocol carries a start request,
 text deltas and one result/error; native payloads stay inside the SDK package.
+With `observe_messages`, it also emits the existing neutral `output_message`
+start/completion snapshots and tags deltas with the native Messages API message
+ID, not the SDK event UUID. Text blocks in one native message share that identity.
+The SDK's per-block assistant snapshots replace draft block text; only native
+`message_stop` completes the message, without replaying its text as another delta.
+Thinking/tool-only messages produce no text Items; interrupted messages retain
+their streamed partial text. No phase is inferred from the final result.
 SDK/native child release and output draining precede daemon completion.
 
 This factory is not registered and advertises no public capability. Existing

@@ -1,5 +1,6 @@
 import { getSessionInfo, query } from "@anthropic-ai/claude-agent-sdk";
 import { spawnNative } from "./native.js";
+import { MessageObserver, type MessageEvent } from "./messages.js";
 import { isAbsolute } from "node:path";
 
 export type Start = {
@@ -9,8 +10,10 @@ export type Start = {
   system_prompt: string;
   cwd: string;
   resume?: string;
+  observe_messages?: boolean;
 };
 export type Event =
+  | MessageEvent
   | { type: "delta"; delta: string }
   | { type: "result"; session_id: string; text: string }
   | { type: "error"; code: "invalid_request" | "history_unavailable" | "execution_failed" | "cancelled" };
@@ -19,12 +22,13 @@ export function parseStart(line: string): Start {
   const value: unknown = JSON.parse(line);
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_request");
   const request = value as Record<string, unknown>;
-  const allowed = new Set(["type", "prompt", "model", "system_prompt", "cwd", "resume"]);
+  const allowed = new Set(["type", "prompt", "model", "system_prompt", "cwd", "resume", "observe_messages"]);
   if (Object.keys(request).some(key => !allowed.has(key)) || request.type !== "start" ||
       typeof request.prompt !== "string" || !request.prompt.trim() ||
       typeof request.model !== "string" || !request.model.trim() ||
       typeof request.system_prompt !== "string" ||
       typeof request.cwd !== "string" || !isAbsolute(request.cwd) ||
+      (request.observe_messages !== undefined && typeof request.observe_messages !== "boolean") ||
       (request.resume !== undefined && (typeof request.resume !== "string" || !request.resume))) {
     throw new Error("invalid_request");
   }
@@ -40,6 +44,7 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
   let result: Extract<Event, { type: "result" }> | undefined;
   let nativeID = "";
   let failed = false;
+  const messages = request.observe_messages ? new MessageObserver() : undefined;
   let stream: ReturnType<typeof query> | undefined;
   try {
     stream = query({
@@ -61,12 +66,13 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
       },
     });
     for await (const message of stream) {
+      if (messages) for (const event of messages.consume(message)) await emit(event);
       if (message.type === "system" && message.subtype === "init") {
         nativeID = message.session_id;
         if (!nativeID || (request.resume && nativeID !== request.resume) || message.tools.length || message.mcp_servers.length) {
           throw new Error("unexpected native configuration");
         }
-      } else if (message.type === "stream_event" && message.parent_tool_use_id === null &&
+      } else if (!messages && message.type === "stream_event" && message.parent_tool_use_id === null &&
                  message.event.type === "content_block_delta" && message.event.delta.type === "text_delta") {
         await emit({ type: "delta", delta: message.event.delta.text });
       } else if (message.type === "result") {

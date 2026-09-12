@@ -42,11 +42,13 @@ func NewFactory(config Config) agent.Factory {
 }
 
 type bridgeEvent struct {
-	Type      string `json:"type"`
-	Delta     string `json:"delta"`
-	SessionID string `json:"session_id"`
-	Text      string `json:"text"`
-	Code      string `json:"code"`
+	Type      string                      `json:"type"`
+	Delta     string                      `json:"delta"`
+	SessionID string                      `json:"session_id"`
+	Text      string                      `json:"text"`
+	Code      string                      `json:"code"`
+	ItemID    string                      `json:"item_id"`
+	Message   *proto.OutputMessagePayload `json:"message"`
 }
 
 func (s *session) run(ctx context.Context, runID string, start startRequest, out chan<- proto.Envelope) {
@@ -83,9 +85,24 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 		}
 		switch event.Type {
 		case "delta":
+			if start.ObserveMessages && event.ItemID == "" || !start.ObserveMessages && event.ItemID != "" {
+				failure = fmt.Errorf("claudesdk: invalid message delta identity")
+				s.process.Cancel()
+				break
+			}
 			content.WriteString(event.Delta)
 			sequence++
-			emit(proto.TypeDelta, proto.DeltaPayload{Delta: event.Delta, Sequence: sequence})
+			emit(proto.TypeDelta, proto.DeltaPayload{ItemID: event.ItemID, Delta: event.Delta, Sequence: sequence})
+		case "output_message":
+			message := event.Message
+			if !start.ObserveMessages || message == nil || message.ID == "" ||
+				(message.Status != "in_progress" && message.Status != "completed") ||
+				(message.Status == "completed") != (message.Text != nil) {
+				failure = fmt.Errorf("claudesdk: invalid message observation")
+				s.process.Cancel()
+				break
+			}
+			emit(proto.TypeOutputMessage, message)
 		case "result":
 			if event.SessionID == "" || start.Resume != "" && event.SessionID != start.Resume {
 				failure = fmt.Errorf("claudesdk: invalid native session identity")

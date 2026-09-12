@@ -81,19 +81,20 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		"ANTHROPIC_DEFAULT_SONNET_MODEL=MiniMax-M3", "ANTHROPIC_DEFAULT_OPUS_MODEL=MiniMax-M3", "ANTHROPIC_DEFAULT_HAIKU_MODEL=MiniMax-M3",
 	}}
 	type evidence struct {
-		SessionID  string `json:"session_id"`
-		NodePID    int    `json:"node_pid"`
-		NativePIDs []int  `json:"native_pids"`
-		ChildPIDs  []int  `json:"child_pids"`
-		Text       string `json:"text"`
-		Failure    string `json:"failure,omitempty"`
+		SessionID  string           `json:"session_id"`
+		NodePID    int              `json:"node_pid"`
+		NativePIDs []int            `json:"native_pids"`
+		ChildPIDs  []int            `json:"child_pids"`
+		Text       string           `json:"text"`
+		Failure    string           `json:"failure,omitempty"`
+		Events     []proto.Envelope `json:"events"`
 	}
 	run := func(prompt, resume string) evidence {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 		out := make(chan proto.Envelope, 64)
-		request := proto.PromptRequestPayload{RunID: uuid.NewString(), Prompt: prompt, AgentSessionID: resume, StrictResume: true, ReleaseOnCompletion: true, AgentOptions: map[string]any{"model": "MiniMax-M3", "system_prompt": "Answer briefly and preserve the exact verification value in the conversation. Use no tools."}}
+		request := proto.PromptRequestPayload{RunID: uuid.NewString(), Prompt: prompt, AgentSessionID: resume, StrictResume: true, ReleaseOnCompletion: true, ObserveMessages: true, AgentOptions: map[string]any{"model": "MiniMax-M3", "system_prompt": "Answer briefly and preserve the exact verification value in the conversation. Use no tools."}}
 		running, err := NewFactory(config)(ctx, request, out)
 		if err != nil {
 			t.Fatal(err)
@@ -138,6 +139,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		}()
 		done := false
 		for event := range out {
+			proof.Events = append(proof.Events, event)
 			switch event.Type {
 			case proto.TypeError:
 				var payload proto.ErrorPayload
@@ -176,10 +178,12 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 	if first.Failure != "" || first.SessionID == "" || !strings.Contains(first.Text, nonce) || len(first.NativePIDs) == 0 {
 		t.Fatalf("first execution failed: %+v; evidence root %s", first, root)
 	}
+	verifyMessageEvents(t, first.Events, first.Text)
 	second := run("Return only the exact verification value from the previous user message.", first.SessionID)
 	if second.Failure != "" || second.SessionID != first.SessionID || !strings.Contains(second.Text, nonce) || first.NodePID == second.NodePID || len(second.NativePIDs) == 0 {
 		t.Fatalf("cold resume failed: %+v; evidence root %s", second, root)
 	}
+	verifyMessageEvents(t, second.Events, second.Text)
 	for _, a := range first.NativePIDs {
 		for _, b := range second.NativePIDs {
 			if a == b {
