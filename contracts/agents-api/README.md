@@ -47,7 +47,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | --- | --- | --- |
 | Root reusable Agents | create, retrieve, update, list, delete | Missing |
 | sessions | create, retrieve, update, list, delete | Partial create/retrieve/list; update/delete missing |
-| sessions.events | create, stream | Partial text/cancel and live events; function actions pending |
+| sessions.events | create, stream | Partial text/cancel and live events; function-action state snapshots supported; tool-result admission pending |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
 | sessions.items | list | Partial Item variants |
 | sessions.artifacts | retrieve, list, delete, content | Missing |
@@ -108,7 +108,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
 | Public SSE | Live Session/Turn lifecycle, supported Item and text events; bounded commit-before-publish buffering and recovery through saved reads |
 | Internal function bridge | Native Codex definitions and ordered text/image results, Run/call-scoped receipts, retries and cancellation; public function actions still pending |
-| Internal function persistence | Immutable scoped calls, complete result objects, application receipts and recovery queries; public actions integration pending |
+| Function-call persistence and reads | Immutable scoped calls/results/receipts; Session `required_actions`, `requires_action`, Turn `waiting` and live state snapshots; public result admission and native dispatch integration pending |
 | Pending actions and environment lifecycle | Pending |
 | Official-client compatibility | Strict SDK checks for Session/Turn/Items reads and native text execution/cancellation/verbosity; pagination, retries, errors, tenant isolation and recovery |
 | Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |
@@ -254,3 +254,14 @@ oversized-event exception. A lagging reader receives a customer-safe `error` and
 disconnects rather than silently skipping output. Slow socket writes time out
 without blocking execution. Creation streaming and unsupported event variants
 are not implied by this endpoint.
+
+Function-action read coverage uses persisted-call fixtures with the real service
+handler, PostgreSQL and pinned official client. It does not yet demonstrate a
+publicly configured function executing end to end. Call insertion and application
+receipts update Turn/Session state atomically; duplicate notifications emit no new
+state. Actions remain visible until the execution adapter acknowledges application,
+or cancellation/terminal state removes them. This acknowledgement timing and the
+exact sequence of repeated `requires_action` notifications are implementation
+choices: the pinned source defines their shape but not that precise ordering.
+Session state events contain `event_id`, `type` and `session`; Turn events retain
+`session_id` and `turn_id`. There is no invented Turn `waiting` event.

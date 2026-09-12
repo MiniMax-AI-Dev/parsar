@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/db/sqlc"
 )
 
@@ -30,14 +31,15 @@ var (
 // Session is a durable execution context, separate from product conversations
 // and from live daemon connections. Engine session IDs will be bound at execution.
 type Session struct {
-	ID            string
-	TenantID      string
-	Engine        string
-	Metadata      map[string]string
-	CreatedAt     time.Time
-	Configuration json.RawMessage
-	LastTurn      *Turn
-	Usage         json.RawMessage
+	ID              string
+	TenantID        string
+	Engine          string
+	Metadata        map[string]string
+	CreatedAt       time.Time
+	Configuration   json.RawMessage
+	LastTurn        *Turn
+	Usage           json.RawMessage
+	RequiredActions []v1.FunctionCallAction
 }
 
 type CreateSessionInput struct {
@@ -188,7 +190,7 @@ func parseID(value string) (pgtype.UUID, error) {
 }
 
 func sessionFromRow(row sqlc.Session) (Session, error) {
-	session := Session{ID: uuid.UUID(row.ID.Bytes).String(), TenantID: uuid.UUID(row.TenantID.Bytes).String(), Engine: row.Engine, CreatedAt: row.CreatedAt.Time}
+	session := Session{ID: uuid.UUID(row.ID.Bytes).String(), TenantID: uuid.UUID(row.TenantID.Bytes).String(), Engine: row.Engine, CreatedAt: row.CreatedAt.Time, RequiredActions: []v1.FunctionCallAction{}}
 	configuration, err := canonicalJSONObject(row.Configuration)
 	if err != nil {
 		return Session{}, fmt.Errorf("decode session configuration: %w", err)

@@ -75,4 +75,7 @@ jobs:
         env:
           PARSAR_AGENTS_API_TEST_DATABASE_URL: postgres://agents_api:agents_api_test_only@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/parsar_agents_api_ci_tests?sslmode=disable
           AGENTS_API_SERVER_BIN: ${{ runner.temp }}/agents-api
-        run: python services/agents-api/tests/official_client.py
+          PARSAR_OFFICIAL_SDK_PYTHON: python
+        run: |
+          python services/agents-api/tests/official_client.py
+          go test ./services/agents-api/internal/store -run '^TestFunctionStateOfficialClientReadsAndLiveEvents$' -count=1

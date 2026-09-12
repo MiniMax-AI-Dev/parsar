@@ -84,15 +84,23 @@ func (s *Store) sessionActivity(ctx context.Context, session Session, err error)
 		return Session{}, err
 	}
 	id, _ := parseID(session.ID)
-	row, err := s.queries.GetLatestSessionTurn(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return session, nil
-	}
-	if err != nil {
-		return Session{}, err
-	}
-	turn := turnFromRow(row)
-	session.LastTurn = &turn
-	session.Usage, err = s.queries.SessionTokenUsage(ctx, id)
+	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		q := s.queries.WithTx(tx)
+		row, err := q.GetLatestSessionTurn(ctx, id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		turn := turnFromRow(row)
+		session.LastTurn = &turn
+		session.RequiredActions, err = functionActions(ctx, q, row)
+		if err != nil {
+			return err
+		}
+		session.Usage, err = q.SessionTokenUsage(ctx, id)
+		return err
+	})
 	return session, err
 }

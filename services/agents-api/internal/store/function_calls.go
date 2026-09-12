@@ -19,7 +19,7 @@ type FunctionCall struct {
 	Applied                      bool
 }
 
-// RecordFunctionCall makes an execution callback durable without changing public state.
+// RecordFunctionCall commits an execution callback and its required-action state together.
 func (s *Store) RecordFunctionCall(ctx context.Context, tenantID, sessionID, turnID string, call FunctionCall) error {
 	p, err := turnLookup(tenantID, sessionID, turnID)
 	if err != nil {
@@ -56,7 +56,7 @@ func (s *Store) RecordFunctionCall(ctx context.Context, tenantID, sessionID, tur
 		if count != 1 {
 			return ErrIdempotencyConflict
 		}
-		return nil
+		return recordFunctionState(ctx, q, turn)
 	})
 }
 

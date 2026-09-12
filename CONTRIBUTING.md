@@ -304,7 +304,14 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Identical retries return the saved decision; changed results conflict. Pending
   reads exclude applied calls and cancelling/terminal Turns while history remains
   readable. Persistence does not imply transparent native-process recovery.
-  Public actions, state/event projection and execution integration remain pending.
+  Recording a call moves the Turn to `waiting`; the last application receipt
+  resumes it. Session reads use one database snapshot for Turn, actions and usage.
+  Session state events retain their action snapshot, without private executor IDs
+  or results. Cancelling/terminal Turns expose no actionable calls. A waiting Turn
+  can fail or cancel before a result arrives; successful execution requires resume.
+  Actions remain visible until native application is acknowledged. This timing is
+  an implementation choice, not verified upstream event sequencing. Public tool
+  configuration, result admission and execution integration remain pending.
 - `message_items` advertises native assistant-message observations. Agents API
   opts in with `observe_messages` only for advertised peers; ordinary product
   requests retain their existing frame sequence. Opted-in text deltas carry their

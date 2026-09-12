@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,10 +18,11 @@ var ErrStreamGap = errors.New("live event buffer exceeded; recover through Sessi
 
 // SessionChange keeps transition snapshots separate from public response rendering.
 type SessionChange struct {
-	Sequence     int64           `json:"-"`
-	Event        v1.SessionEvent `json:"event"`
-	Turn         *Turn           `json:"turn,omitempty"`
-	SessionUsage json.RawMessage `json:"session_usage,omitempty"`
+	Sequence        int64                   `json:"-"`
+	Event           v1.SessionEvent         `json:"event"`
+	Turn            *Turn                   `json:"turn,omitempty"`
+	SessionUsage    json.RawMessage         `json:"session_usage,omitempty"`
+	RequiredActions []v1.FunctionCallAction `json:"required_actions,omitempty"`
 }
 
 type suppressSessionEvents struct{}
@@ -73,21 +75,7 @@ func recordTurnChange(ctx context.Context, q *sqlc.Queries, row sqlc.Turn, creat
 	if !created && !terminalStatus(row.Status) {
 		return nil
 	}
-	status := "in_progress"
-	if terminalStatus(row.Status) {
-		status = "idle"
-		if row.Status == TurnFailed {
-			status = "failed"
-		}
-	}
-	change.Event.Type = "agent.session." + status
-	change.Event.TurnID = ""
-	usage, err := q.SessionTokenUsage(ctx, row.SessionID)
-	if err != nil {
-		return err
-	}
-	change.SessionUsage = usage
-	return recordSessionChange(ctx, q, row.SessionID, change)
+	return recordSessionActivity(ctx, q, row, nil)
 }
 
 func (s *Store) SessionEventCursor(ctx context.Context, tenantID, sessionID string) (int64, error) {
@@ -135,7 +123,9 @@ func (s *Store) ListSessionEvents(ctx context.Context, tenantID, sessionID strin
 			return nil, ErrStreamGap
 		}
 		var change SessionChange
-		if err := json.Unmarshal(row.Payload, &change); err != nil {
+		decoder := json.NewDecoder(bytes.NewReader(row.Payload))
+		decoder.UseNumber()
+		if err := decoder.Decode(&change); err != nil {
 			return nil, err
 		}
 		change.Sequence = row.Sequence

@@ -62,18 +62,18 @@ type TextFormat struct {
 }
 
 type Session struct {
-	ID              string            `json:"id" binding:"required"`
-	Agent           Agent             `json:"agent" binding:"required"`
-	CreatedAt       int64             `json:"created_at" binding:"required"`
-	Environment     Environment       `json:"environment" binding:"required"`
-	Error           *string           `json:"error" extensions:"x-nullable"`
-	LastActiveAt    int64             `json:"last_active_at" binding:"required"`
-	Metadata        map[string]string `json:"metadata" binding:"required"`
-	Object          string            `json:"object" enums:"agent.session" binding:"required"`
-	RequiredActions []json.RawMessage `json:"required_actions" swaggertype:"array,object" binding:"required"`
-	Status          string            `json:"status" enums:"idle,in_progress,failed" binding:"required"`
-	Usage           *TokenUsage       `json:"usage" extensions:"x-nullable"`
-	VaultIDs        []string          `json:"vault_ids" binding:"required"`
+	ID              string               `json:"id" binding:"required"`
+	Agent           Agent                `json:"agent" binding:"required"`
+	CreatedAt       int64                `json:"created_at" binding:"required"`
+	Environment     Environment          `json:"environment" binding:"required"`
+	Error           *string              `json:"error" extensions:"x-nullable"`
+	LastActiveAt    int64                `json:"last_active_at" binding:"required"`
+	Metadata        map[string]string    `json:"metadata" binding:"required"`
+	Object          string               `json:"object" enums:"agent.session" binding:"required"`
+	RequiredActions []FunctionCallAction `json:"required_actions" binding:"required"`
+	Status          string               `json:"status" enums:"idle,in_progress,requires_action,failed" binding:"required"`
+	Usage           *TokenUsage          `json:"usage" extensions:"x-nullable"`
+	VaultIDs        []string             `json:"vault_ids" binding:"required"`
 }
 
 type SessionList struct {
