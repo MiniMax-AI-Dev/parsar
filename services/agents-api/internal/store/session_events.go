@@ -25,12 +25,7 @@ type SessionChange struct {
 	RequiredActions []v1.FunctionCallAction `json:"required_actions,omitempty"`
 }
 
-type suppressSessionEvents struct{}
-
 func recordSessionChange(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, change SessionChange) error {
-	if ctx.Value(suppressSessionEvents{}) != nil {
-		return nil
-	}
 	change.Event.EventID = uuid.NewString()
 	change.Event.SessionID = uuid.UUID(session.Bytes).String()
 	payload, err := json.Marshal(change)

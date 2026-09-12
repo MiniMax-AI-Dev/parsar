@@ -87,48 +87,6 @@ func indexEvents(ctx context.Context, q *sqlc.Queries, session, turn pgtype.UUID
 	return nil
 }
 
-// Only pre-migration Turns need replay; new writes maintain the projection atomically.
-func ensureSessionItems(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
-	ctx = context.WithValue(ctx, suppressSessionEvents{}, true)
-	for {
-		turn, err := q.UnindexedItemTurn(ctx, session)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		p := sqlc.ItemSourcesParams{SessionID: session, TurnID: turn.ID}
-		for {
-			rows, err := q.ItemSources(ctx, p)
-			if err != nil {
-				return err
-			}
-			if len(rows) == 0 {
-				break
-			}
-			for _, row := range rows {
-				if err = projectSource(ctx, q, session, turn.ID, row.Kind, row.SourceOrder, row.Payload, row.CreatedAt); err != nil {
-					return err
-				}
-				p.AfterCreated = row.CreatedAt
-				p.AfterType = row.SourceType
-				p.AfterOrder = row.SourceOrder
-			}
-		}
-		created := turn.CompletedAt
-		if !created.Valid {
-			created = turn.CreatedAt
-		}
-		if err = projectSource(ctx, q, session, turn.ID, "execution_"+turn.Status, 0, turn.Outcome, created); err != nil {
-			return err
-		}
-		if err = q.MarkItemsIndexed(ctx, sqlc.MarkItemsIndexedParams{SessionID: session, ID: turn.ID}); err != nil {
-			return err
-		}
-	}
-}
-
 func restoreFunctionItemResult(ctx context.Context, q *sqlc.Queries, session, turn pgtype.UUID, item *v1.Item) error {
 	if item.Type != "function_call_output" {
 		return nil

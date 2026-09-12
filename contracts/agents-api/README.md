@@ -112,8 +112,8 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Authenticated Session HTTP API | Create/retrieve/list and metadata-only update; inline model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |
 | Internal Turn/input persistence | Tenant-scoped atomic message/cancel/function-result batches, steering, request-level retry identity, cancellation targets and terminal outcomes; public function-result decoding and mixed-batch admission supported |
 | Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution and disabled native subagent tools for the resolved false default; public text/cancel submission with a bounded standalone worker |
-| Neutral tool observation transport | Codex opt-in capability normalizes current tool snapshots in the daemon; Agents API admission/projection has not switched to this mode |
-| Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and tool snapshots via `tool_items`; tenant-scoped paginated Store reads |
+| Neutral tool observation transport | Required for execution; adapters normalize tool snapshots, API projects shared observations without decoding native tool types |
+| Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and neutral tool snapshots via `tool_observations`; tenant-scoped paginated Store reads |
 | Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
 | Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
 | Public SSE | Live Session/Turn lifecycle, supported Item and text events; bounded commit-before-publish buffering and recovery through saved reads |
@@ -186,13 +186,12 @@ that the Turn failed. Native start/completion snapshots are available, but inter
 tool-output deltas are not yet captured. Tool output is visible to the Session's
 authenticated tenant and may include the command's or tool's own diagnostic text.
 
-The index rebuilds pre-migration history from saved observations on first access,
-in pages under the Session lock. Large historical Sessions can make that first
-access slower. Subsequent reads use the durable index. Legacy unkeyed text is a
-single aggregate: original native message boundaries cannot be reconstructed.
-Legacy tool results retain their content but have `incomplete` status when the
-source did not record a native outcome. Only recognized historical user text/image
-shapes become messages; arbitrary internal input objects remain in source storage.
+Reads use the durable index without reconstructing native journals. Existing
+indexed history is preserved. Migration 15 requires old unindexed archives to be
+prepared by release `906069e` before upgrade; see the
+[upgrade procedure](../../services/agents-api/README.md#upgrading-archived-item-history).
+The retired archive format could not recover unrecorded message boundaries or
+outcomes; those limitations remain in already indexed historical Items.
 Unsupported native variants, reasoning, subagent Items and Items mutation
 are not covered. Public submission supports text messages, cancellation and function results.
 

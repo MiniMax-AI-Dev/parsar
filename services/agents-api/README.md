@@ -206,3 +206,39 @@ Configure model access in the engine host's native configuration. API tenant key
 and daemon credentials authenticate this service, not a model provider. Never put
 provider secrets in Session metadata. This path does not enable Parsar Skill/SP
 callbacks or bypass the pending product authorization work.
+
+## Upgrading archived Item history
+
+Migration 15 retires private journal-to-Item backfilling. It preserves existing
+public Items and source journals, and refuses to apply if any Turn still has
+`items_indexed=false`. Do not set this marker manually or replay native execution.
+
+For installations with pre-Items history:
+
+1. Back up the execution database and stop new execution/submission. Drain active
+   Turns before switching versions. Product storage is independent.
+2. Run the previous service release `906069e` against the execution database with
+   its worker disabled (omit `AGENTS_API_DAEMON_WS_URL`). Using each tenant's API
+   credential, list every Session and request its Items once. The old service
+   prepares the complete index under the Session lock, even with `limit=1`.
+3. Verify `SELECT count(*) FROM turns WHERE NOT items_indexed` returns zero.
+   A failed preparation must be resolved before upgrade; legacy journals cannot
+   recover fields they never recorded. Stop the previous service.
+4. Upgrade the daemon first so it advertises `tool_observations`, then apply the
+   migrations and start the new service. No old/new service overlap is supported
+   across this migration. Devices without this capability are not dispatched.
+
+For step 2, use the pinned Python SDK and the usual private endpoint/key settings,
+repeating with each operator-configured tenant identity:
+
+```python
+from openai import OpenAI
+
+client = OpenAI()  # OPENAI_BASE_URL and OPENAI_API_KEY
+for session in client.beta.agents.sessions.list():
+    client.beta.agents.sessions.items.list(session.id, limit=1)
+```
+
+Fresh installations and already indexed history need no backfill. Recovery reads
+continue to use Session/Turn/Items; this procedure is an upgrade operation, not
+an official SSE replay mechanism.

@@ -114,67 +114,6 @@ func (q *Queries) ItemInputSource(ctx context.Context, arg ItemInputSourceParams
 	return i, err
 }
 
-const itemSources = `-- name: ItemSources :many
-SELECT kind, payload, created_at, source_order, source_type FROM (
-    SELECT kind, payload, created_at, sequence AS source_order, 0::integer AS source_type
-    FROM turn_inputs inp WHERE inp.session_id = $1 AND inp.turn_id = $2 AND kind = 'message'
-    UNION ALL
-    SELECT kind, payload, created_at, ordinal::bigint AS source_order, 1::integer AS source_type
-    FROM turn_events evt WHERE evt.session_id = $1 AND evt.turn_id = $2
-) AS sources
-WHERE ($3::timestamptz IS NULL
-    OR (created_at, source_type, source_order) > ($3::timestamptz, $4::integer, $5::bigint))
-ORDER BY created_at, source_type, source_order LIMIT 100
-`
-
-type ItemSourcesParams struct {
-	SessionID    pgtype.UUID        `json:"session_id"`
-	TurnID       pgtype.UUID        `json:"turn_id"`
-	AfterCreated pgtype.Timestamptz `json:"after_created"`
-	AfterType    int32              `json:"after_type"`
-	AfterOrder   int64              `json:"after_order"`
-}
-
-type ItemSourcesRow struct {
-	Kind        string             `json:"kind"`
-	Payload     []byte             `json:"payload"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	SourceOrder int64              `json:"source_order"`
-	SourceType  int32              `json:"source_type"`
-}
-
-func (q *Queries) ItemSources(ctx context.Context, arg ItemSourcesParams) ([]ItemSourcesRow, error) {
-	rows, err := q.db.Query(ctx, itemSources,
-		arg.SessionID,
-		arg.TurnID,
-		arg.AfterCreated,
-		arg.AfterType,
-		arg.AfterOrder,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ItemSourcesRow{}
-	for rows.Next() {
-		var i ItemSourcesRow
-		if err := rows.Scan(
-			&i.Kind,
-			&i.Payload,
-			&i.CreatedAt,
-			&i.SourceOrder,
-			&i.SourceType,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSessionItems = `-- name: ListSessionItems :many
 SELECT i.id, i.created_at,
     (CASE WHEN i.payload->>'status' = 'in_progress' AND t.status IN ('completed', 'failed', 'cancelled')
@@ -236,20 +175,6 @@ func (q *Queries) ListSessionItems(ctx context.Context, arg ListSessionItemsPara
 	return items, nil
 }
 
-const markItemsIndexed = `-- name: MarkItemsIndexed :exec
-UPDATE turns SET items_indexed = true WHERE session_id = $1 AND id = $2
-`
-
-type MarkItemsIndexedParams struct {
-	SessionID pgtype.UUID `json:"session_id"`
-	ID        pgtype.UUID `json:"id"`
-}
-
-func (q *Queries) MarkItemsIndexed(ctx context.Context, arg MarkItemsIndexedParams) error {
-	_, err := q.db.Exec(ctx, markItemsIndexed, arg.SessionID, arg.ID)
-	return err
-}
-
 const putSessionItem = `-- name: PutSessionItem :one
 INSERT INTO session_items(id, session_id, turn_id, created_at, payload, position, output_index)
 VALUES ($1, $2, $3, $4, $5,
@@ -288,30 +213,6 @@ func (q *Queries) PutSessionItem(ctx context.Context, arg PutSessionItemParams) 
 		&i.Position,
 		&i.Payload,
 		&i.OutputIndex,
-	)
-	return i, err
-}
-
-const unindexedItemTurn = `-- name: UnindexedItemTurn :one
-SELECT id, session_id, status, created_at, started_at, completed_at, cancel_requested_at, outcome, event_count, event_bytes, items_indexed, token_usage FROM turns WHERE session_id = $1 AND NOT items_indexed ORDER BY created_at, id LIMIT 1
-`
-
-func (q *Queries) UnindexedItemTurn(ctx context.Context, sessionID pgtype.UUID) (Turn, error) {
-	row := q.db.QueryRow(ctx, unindexedItemTurn, sessionID)
-	var i Turn
-	err := row.Scan(
-		&i.ID,
-		&i.SessionID,
-		&i.Status,
-		&i.CreatedAt,
-		&i.StartedAt,
-		&i.CompletedAt,
-		&i.CancelRequestedAt,
-		&i.Outcome,
-		&i.EventCount,
-		&i.EventBytes,
-		&i.ItemsIndexed,
-		&i.TokenUsage,
 	)
 	return i, err
 }

@@ -377,13 +377,8 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   completion text snapshot. A snapshot is not another delta; uncompleted messages
   remain partial when their Turn ends. Keep these observations in the journal
   before projecting public Items. This does not promise daemon event replay.
-- `tool_items` advertises native tool snapshots, enabled per request with
-  `observe_tools`. Codex attaches the original tool item to existing before/after
-  `tool_call` frames, preserving command output, structured MCP results, errors
-  and other engine fields without expanding the legacy product payload. Keep
-  snapshots opaque in the internal journal; the execution service must validate
-  and project supported variants to the pinned public Item schema. Do not expose
-  native snapshots as public Items or synthesize a result for an unfinished call.
+- Legacy `tool_items` / `observe_tools` raw snapshots remain available to old
+  daemon callers. New Agents API execution does not request or decode them.
 - `tool_observations` advertises engine-neutral tool snapshots. The opt-in
   `observe_tool_observations` takes precedence over legacy `observe_tools`:
   attach the typed `observation` to existing tool-call frames without `native_item`.
@@ -394,8 +389,9 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   content array remains distinct from missing content. These are
   execution facts, not public Items: the API owns public IDs, schema projection,
   lifecycle events and persistence. Product requests that omit the opt-in keep
-  their frame sequence and fields. Agents API has not switched to this mode yet;
-  its admission/projection and archived-journal policy are a separate change.
+  their frame sequence and fields. Agents API requires this capability before
+  claiming work and always requests neutral observations. Its Item projector
+  validates this shared contract and never decodes engine-native tool snapshots.
 - Execution observations are written to tenant-scoped `turn_events` in ordered,
   idempotent batches before they can back recovery or publication. Keep daemon
   payloads intact; this internal journal is not the public SSE protocol. Flush at
@@ -444,14 +440,12 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   original ordering cannot be reconstructed. Cursors are scoped to the authenticated Session.
   Terminal Turns expose unfinished Items as `incomplete`, preserving completed
   message/tool states independently of the Turn outcome.
-- Pre-Items Turns rebuild their index once from paged persisted inputs/events,
-  under the same Session lock before reads or writes. Unknown historical input
-  shapes stay in the source journal without becoming fabricated messages.
-  Legacy aggregate text cannot recover missing native message boundaries, and
-  legacy tool frames without a native status remain `incomplete`. Legacy Done
-  may contain diagnostics: only a successful Turn confirms aggregate answer text;
-  failed Turns retain observed message output. Never replay
-  engine execution to rebuild the index. New reads use the index, not journal replay.
+- Public history reads use the persisted index; the private pre-Items journal
+  backfill is retired. Migration 15 rejects unprepared historical Turns before
+  removing the obsolete indexing marker. Prepare them with release `906069e`
+  before upgrading, following `services/agents-api/README.md`. The migration
+  preserves indexed Item payloads, positions, output indexes and source journals;
+  never mark unprepared history indexed by hand or replay engine execution.
 - Project only the declared public Item variants; native adapter metadata is not
   a response schema. Preserve structured tool JSON without float conversion.
   Completion text replaces accumulated deltas. Keep partial output on termination;
