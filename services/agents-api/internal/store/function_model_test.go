@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -43,6 +44,7 @@ func nativeFunctionResultsModel(t *testing.T, home string, results []any) (*http
 			t.Error(err)
 			return
 		}
+		assertNativeSubagentsDisabled(t, body)
 		n := requests.Add(1)
 		raw, _ := json.MarshalIndent(body, "", "  ")
 		_ = os.WriteFile(filepath.Join(home, fmt.Sprintf("functions-model-%d.json", n)), raw, 0600)
@@ -103,4 +105,17 @@ func nativeFunctionResultsModel(t *testing.T, home string, results []any) (*http
 		send("response.completed", map[string]any{"response": map[string]any{"id": fmt.Sprintf("r_%d", n), "object": "response", "created_at": 0, "status": "completed", "model": "gpt-5.5", "output": []any{entry}}})
 	}))
 	return model, &requests
+}
+
+func assertNativeSubagentsDisabled(t *testing.T, body map[string]any) {
+	t.Helper()
+	raw, err := json.Marshal(body["tools"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"Multi-agent tools:", "spawn_agent", "send_input", "wait_agent", "resume_agent", "close_agent", "send_message_to_agent"} {
+		if strings.Contains(string(raw), forbidden) {
+			t.Errorf("disabled subagent tool remains discoverable: %s", forbidden)
+		}
+	}
 }

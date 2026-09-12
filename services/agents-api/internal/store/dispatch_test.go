@@ -68,7 +68,7 @@ func newDispatchHarness(t *testing.T) *dispatchHarness {
 		t.Fatal("device connection failed")
 	}
 	t.Cleanup(func() { h.conn.Close() })
-	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true, WebSearchControl: true, TextVerbosity: true}}}})
+	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true, WebSearchControl: true, TextVerbosity: true, SubagentControl: true}}}})
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		peer, e := h.registry.LookupDevice(h.device.ID)
@@ -336,16 +336,16 @@ func TestExecutionOutcomeAndNativeBindingCommitTogether(t *testing.T) {
 }
 
 func TestExecutionRejectsLegacyDaemonBeforeClaim(t *testing.T) {
-	for _, missing := range []string{"durable_turns", "web_search_control", "text_verbosity"} {
-		durable, search := missing != "durable_turns", missing == "text_verbosity"
+	for _, missing := range []string{"durable_turns", "web_search_control", "text_verbosity", "subagent_control"} {
+		durable, search := missing != "durable_turns", missing == "text_verbosity" || missing == "subagent_control"
 		t.Run(missing, func(t *testing.T) {
 			h := newDispatchHarness(t)
-			h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: durable, WebSearchControl: search}}}})
+			h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: durable, WebSearchControl: search, TextVerbosity: missing == "subagent_control"}}}})
 			deadline := time.Now().Add(3 * time.Second)
 			for {
 				peer, _ := h.registry.LookupDevice(h.device.ID)
 				info, _, _ := peer.AgentKindStatus("codex")
-				if info.Capabilities.DurableTurns == durable && info.Capabilities.WebSearchControl == search && !info.Capabilities.TextVerbosity {
+				if info.Capabilities.DurableTurns == durable && info.Capabilities.WebSearchControl == search && info.Capabilities.TextVerbosity == (missing == "subagent_control") && !info.Capabilities.SubagentControl {
 					break
 				}
 				if time.Now().After(deadline) {

@@ -405,7 +405,7 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 			{
 				Kind:         "codex",
 				Available:    true,
-				Capabilities: proto.AgentKindCapabilities{Steering: true, MessageItems: true, ToolItems: true, EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true},
+				Capabilities: proto.AgentKindCapabilities{Steering: true, MessageItems: true, ToolItems: true, EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true, SubagentControl: true},
 			},
 		},
 	})
@@ -431,7 +431,7 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 	if opencode.Available || opencode.Version != "missing" || !opencode.Capabilities.Streaming {
 		t.Fatalf("opencode descriptor not converted: %#v", opencode)
 	}
-	if !byKind["codex"].Capabilities.TextVerbosity || claude.Capabilities.TextVerbosity || opencode.Capabilities.TextVerbosity || !byKind["codex"].Capabilities.WebSearchControl || claude.Capabilities.WebSearchControl || opencode.Capabilities.WebSearchControl || !byKind["codex"].Capabilities.EnvironmentNone || claude.Capabilities.EnvironmentNone || opencode.Capabilities.EnvironmentNone || !byKind["codex"].Capabilities.ToolItems || claude.Capabilities.ToolItems || opencode.Capabilities.ToolItems || !byKind["codex"].Capabilities.MessageItems || !byKind["codex"].Capabilities.Steering || claude.Capabilities.Steering || opencode.Capabilities.Steering {
+	if !byKind["codex"].Capabilities.SubagentControl || claude.Capabilities.SubagentControl || opencode.Capabilities.SubagentControl || !byKind["codex"].Capabilities.TextVerbosity || claude.Capabilities.TextVerbosity || opencode.Capabilities.TextVerbosity || !byKind["codex"].Capabilities.WebSearchControl || claude.Capabilities.WebSearchControl || opencode.Capabilities.WebSearchControl || !byKind["codex"].Capabilities.EnvironmentNone || claude.Capabilities.EnvironmentNone || opencode.Capabilities.EnvironmentNone || !byKind["codex"].Capabilities.ToolItems || claude.Capabilities.ToolItems || opencode.Capabilities.ToolItems || !byKind["codex"].Capabilities.MessageItems || !byKind["codex"].Capabilities.Steering || claude.Capabilities.Steering || opencode.Capabilities.Steering {
 		t.Fatalf("steering capability not preserved: %#v", byKind)
 	}
 	codex, found, known := sess.AgentKindStatus("codex")
