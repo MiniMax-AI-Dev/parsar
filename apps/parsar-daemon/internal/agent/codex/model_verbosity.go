@@ -26,6 +26,10 @@ func prepareModelVerbosity(ctx context.Context, binary string, plan *SessionPlan
 	cmd.Dir = plan.Cwd
 	cmd.Env = append(os.Environ(), plan.Env...)
 	catalog, err := cmd.Output()
+	// The launcher can exit before its children, ending the context watcher.
+	if cmd.Process != nil {
+		_ = cmd.Cancel()
+	}
 	if err != nil {
 		return fmt.Errorf("codex: cannot verify model verbosity support: %w", err)
 	}
