@@ -67,6 +67,7 @@ type KindCapabilities struct {
 	Steering           bool `json:"steering,omitempty"`
 	MessageItems       bool `json:"message_items,omitempty"`
 	ToolItems          bool `json:"tool_items,omitempty"`
+	ToolObservations   bool `json:"tool_observations,omitempty"`
 	EnvironmentNone    bool `json:"environment_none,omitempty"`
 	WebSearchControl   bool `json:"web_search_control,omitempty"`
 	TextVerbosity      bool `json:"text_verbosity,omitempty"`

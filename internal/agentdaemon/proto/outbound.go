@@ -81,6 +81,7 @@ type PromptRequestPayload struct {
 	StrictResume                bool           `json:"strict_resume,omitempty"`
 	ObserveMessages             bool           `json:"observe_messages,omitempty"`
 	ObserveTools                bool           `json:"observe_tools,omitempty"`
+	ObserveToolObservations     bool           `json:"observe_tool_observations,omitempty"`
 	FunctionTools               []FunctionTool `json:"function_tools,omitempty"`
 	DisableExecutionEnvironment bool           `json:"disable_execution_environment,omitempty"`
 	DisableSubagents            bool           `json:"disable_subagents,omitempty"`

@@ -384,6 +384,18 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   snapshots opaque in the internal journal; the execution service must validate
   and project supported variants to the pinned public Item schema. Do not expose
   native snapshots as public Items or synthesize a result for an unfinished call.
+- `tool_observations` advertises engine-neutral tool snapshots. The opt-in
+  `observe_tool_observations` takes precedence over legacy `observe_tools`:
+  attach the typed `observation` to existing tool-call frames without `native_item`.
+  Native adapters own discriminator/status/action translation and preserve raw
+  structured values; reuse the shared function-result content type. Kinds are
+  `command`, `mcp`, `function` and `web_search`; observation status is
+  `in_progress`, `completed`, `failed` or `incomplete`. A present empty function
+  content array remains distinct from missing content. These are
+  execution facts, not public Items: the API owns public IDs, schema projection,
+  lifecycle events and persistence. Product requests that omit the opt-in keep
+  their frame sequence and fields. Agents API has not switched to this mode yet;
+  its admission/projection and archived-journal policy are a separate change.
 - Execution observations are written to tenant-scoped `turn_events` in ordered,
   idempotent batches before they can back recovery or publication. Keep daemon
   payloads intact; this internal journal is not the public SSE protocol. Flush at

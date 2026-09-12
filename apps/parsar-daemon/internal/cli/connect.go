@@ -264,6 +264,7 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 				FunctionTools:    true,
 				MessageItems:     true,
 				ToolItems:        true,
+				ToolObservations: true,
 				EnvironmentNone:  true,
 				WebSearchControl: true,
 				TextVerbosity:    codex.SupportsTextVerbosity,

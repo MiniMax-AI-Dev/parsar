@@ -94,12 +94,13 @@ type ThinkingPayload struct {
 // is back.
 type ToolCallPayload struct {
 	// NativeItem is an opt-in engine snapshot for execution-service projection, not a public Item.
-	NativeItem json.RawMessage `json:"native_item,omitempty"`
-	ID         string          `json:"id"`
-	Name       string          `json:"name"`
-	Stage      string          `json:"stage"`
-	Args       map[string]any  `json:"args,omitempty"`
-	Result     map[string]any  `json:"result,omitempty"`
+	NativeItem  json.RawMessage  `json:"native_item,omitempty"`
+	Observation *ToolObservation `json:"observation,omitempty"`
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Stage       string           `json:"stage"`
+	Args        map[string]any   `json:"args,omitempty"`
+	Result      map[string]any   `json:"result,omitempty"`
 }
 
 // PermissionRequestPayload carries an agent's request for human
@@ -256,6 +257,7 @@ type AgentKindCapabilities struct {
 	Steering           bool `json:"steering,omitempty"`
 	MessageItems       bool `json:"message_items,omitempty"`
 	ToolItems          bool `json:"tool_items,omitempty"`
+	ToolObservations   bool `json:"tool_observations,omitempty"`
 	EnvironmentNone    bool `json:"environment_none,omitempty"`
 	WebSearchControl   bool `json:"web_search_control,omitempty"`
 	TextVerbosity      bool `json:"text_verbosity,omitempty"`

@@ -56,13 +56,14 @@ func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- pro
 //  5. turn/completed emits TypeDone + closes out. Cancel can short-cut
 //     this by killing the child early.
 type Session struct {
-	functions       *functionCalls
-	observeMessages bool
-	observeTools    bool
-	runID           string
-	cfg             sessionConfig
-	out             chan<- proto.Envelope
-	rpc             *JSONRPCClient
+	functions               *functionCalls
+	observeMessages         bool
+	observeTools            bool
+	observeToolObservations bool
+	runID                   string
+	cfg                     sessionConfig
+	out                     chan<- proto.Envelope
+	rpc                     *JSONRPCClient
 
 	cancelCtx context.Context
 	cancelFn  context.CancelFunc
@@ -167,20 +168,21 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	rpc := NewJSONRPCClient(rpcCfg)
 
 	s := &Session{
-		runID:           req.RunID,
-		functions:       functions,
-		observeMessages: req.ObserveMessages,
-		observeTools:    req.ObserveTools,
-		cfg:             cfg,
-		out:             out,
-		rpc:             rpc,
-		cancelCtx:       cancelCtx,
-		cancelFn:        cancelFn,
-		waitDone:        make(chan struct{}),
-		cleanup:         plan.Cleanup,
-		bufs:            NewItemBuffers(),
-		resolvedModel:   plan.Model,
-		interactions:    newPendingCodexInteractions(),
+		runID:                   req.RunID,
+		functions:               functions,
+		observeMessages:         req.ObserveMessages,
+		observeTools:            req.ObserveTools,
+		observeToolObservations: req.ObserveToolObservations,
+		cfg:                     cfg,
+		out:                     out,
+		rpc:                     rpc,
+		cancelCtx:               cancelCtx,
+		cancelFn:                cancelFn,
+		waitDone:                make(chan struct{}),
+		cleanup:                 plan.Cleanup,
+		bufs:                    NewItemBuffers(),
+		resolvedModel:           plan.Model,
+		interactions:            newPendingCodexInteractions(),
 	}
 	s.registerHandlers()
 
