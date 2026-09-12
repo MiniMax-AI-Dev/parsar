@@ -193,7 +193,7 @@ func TestFunctionInputConcurrentBatchesSelectOneResult(t *testing.T) {
 func TestFunctionInputsRejectInvalidTargetsAndStorageObjects(t *testing.T) {
 	s, _ := testStore(t)
 	tenant, session, turn := functionInputFixture(t, s)
-	for _, raw := range []string{`{}`, `{"turn_id":"bad","call_id":"a","result":{}}`, fmt.Sprintf(`{"turn_id":%q,"call_id":"a","result":null}`, turn), fmt.Sprintf(`{"turn_id":%q,"call_id":"a","result":[]}`, turn)} {
+	for _, raw := range []string{`{}`, `{"turn_id":"bad","call_id":"a","result":{}}`, fmt.Sprintf(`{"turn_id":%q,"call_id":"a"}`, turn), fmt.Sprintf(`{"turn_id":%q,"call_id":"a","result":null}`, turn), fmt.Sprintf(`{"turn_id":%q,"call_id":"a","result":[]}`, turn)} {
 		_, err := s.SubmitInputs(t.Context(), tenant, session.ID, "invalid", []Input{{Kind: "tool_result", Payload: json.RawMessage(raw)}})
 		if !errors.Is(err, ErrInvalidInput) {
 			t.Fatal(err)

@@ -21,7 +21,7 @@ type FunctionResultInput struct {
 
 func functionInput(raw json.RawMessage) (FunctionResultInput, error) {
 	var input FunctionResultInput
-	if json.Unmarshal(raw, &input) != nil || !validFunctionIdentity(input.CallID) {
+	if json.Unmarshal(raw, &input) != nil || !validFunctionIdentity(input.CallID) || len(input.Result) == 0 {
 		return input, ErrInvalidInput
 	}
 	if _, err := uuid.Parse(input.TurnID); err != nil {
