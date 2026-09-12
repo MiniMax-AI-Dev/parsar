@@ -472,6 +472,24 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   use a safe public error. The worker does not replace product dispatch, business
   authorization, or the separate approval/environment lifecycle work.
 
+### SDK subprocess ownership
+
+The shared daemon `clirunner` offers opt-in Unix process-group ownership for
+adapters whose SDK launches a native child. Existing callers keep their current
+process policy. Explicit cancellation and parent-context cancellation share a
+TERM grace period and bounded KILL escalation. An internal reaper also cleans
+remaining group members when the direct process exits, even if a descendant
+still holds stdout open. During cancellation, surviving descendants keep the
+remaining TERM grace after the leader exits. Unsupported hosts reject this mode before launch.
+
+Owned output pipes remain readable after the leader exits. Consumers must drain
+stdout and stderr before calling `Wait`, which joins the cached process result
+and closes the readers. `Done` reports leader reaping and group cleanup signals;
+it is not a native execution receipt or proof of persisted history. SDK adapters
+must close their query, await their native child and drain observations before
+publishing completion. Process groups are lifecycle supervision, not OS isolation
+or containment of descendants that deliberately leave the group.
+
 ### Agent knowledge references
 
 - Unpublished knowledge retains only the bound version in other workspaces;
