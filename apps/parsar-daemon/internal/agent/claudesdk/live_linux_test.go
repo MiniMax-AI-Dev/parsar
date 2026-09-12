@@ -84,6 +84,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		SessionID  string `json:"session_id"`
 		NodePID    int    `json:"node_pid"`
 		NativePIDs []int  `json:"native_pids"`
+		ChildPIDs  []int  `json:"child_pids"`
 		Text       string `json:"text"`
 		Failure    string `json:"failure,omitempty"`
 	}
@@ -100,9 +101,11 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		s := running.(*session)
 		defer running.Cancel(context.Background())
 		proof := evidence{NodePID: s.process.Cmd.Process.Pid}
-		observed := make(chan []int, 1)
+		type children struct{ all, native []int }
+		observed := make(chan children, 1)
 		go func() {
 			pids := map[int]bool{}
+			native := map[int]bool{}
 			ticker := time.NewTicker(10 * time.Millisecond)
 			defer ticker.Stop()
 			for {
@@ -110,13 +113,22 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 				for _, value := range strings.Fields(string(raw)) {
 					if pid, err := strconv.Atoi(value); err == nil {
 						pids[pid] = true
+						// SDK history lookup may also spawn Git helpers; identify the execution transport.
+						args, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+						if bytes.Contains(args, []byte("\x00--input-format\x00stream-json\x00")) &&
+							bytes.Contains(args, []byte("\x00--output-format\x00stream-json\x00")) {
+							native[pid] = true
+						}
 					}
 				}
 				select {
 				case <-s.process.Done():
-					var result []int
+					var result children
 					for pid := range pids {
-						result = append(result, pid)
+						result.all = append(result.all, pid)
+					}
+					for pid := range native {
+						result.native = append(result.native, pid)
 					}
 					observed <- result
 					return
@@ -144,15 +156,16 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 				}
 			}
 		}
-		proof.NativePIDs = <-observed
+		released := <-observed
+		proof.NativePIDs, proof.ChildPIDs = released.native, released.all
 		if !done {
 			t.Fatal("no daemon completion before timeout")
 		}
-		for _, pid := range proof.NativePIDs {
+		for _, pid := range proof.ChildPIDs {
 			if value, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid)); err == nil {
 				fields := strings.Fields(string(value)[strings.LastIndex(string(value), ")")+1:])
 				if len(fields) == 0 || fields[0] != "Z" {
-					t.Fatalf("native child %d remains alive after Done", pid)
+					t.Fatalf("SDK child %d remains alive after Done", pid)
 				}
 			}
 		}
