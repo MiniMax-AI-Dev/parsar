@@ -326,6 +326,8 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   device advertising `function_tools` when the Session has functions.
   Function results are Session input Items: emit `item.added` without an output
   index, and never emit `item.done`, whose upstream union only allows agent output.
+  Project their public output/error from the saved submission, including missing
+  versus null fields; native content normalization must not change public history.
 - Internal function execution requires an advertised `function_tools` capability
   before claiming a Turn. Translate resolved definitions in the execution adapter,
   persist declared callbacks before exposing actions, and deliver each saved result

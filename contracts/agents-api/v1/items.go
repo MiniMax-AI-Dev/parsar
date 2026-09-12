@@ -55,6 +55,21 @@ func (i *Item) UnmarshalJSON(raw []byte) error {
 	if err := decoder.Decode(&value); err != nil {
 		return err
 	}
+	if value.Type == "function_call_output" {
+		var fields struct {
+			Output json.RawMessage
+			Error  json.RawMessage
+		}
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return err
+		}
+		if value.Output == nil && len(fields.Output) > 0 {
+			value.Output = fields.Output
+		}
+		if value.Error == nil && len(fields.Error) > 0 {
+			value.Error = fields.Error
+		}
+	}
 	// MCP has required nullable output/error fields.
 	if value.Type == "mcp_call" {
 		if value.Output == nil {

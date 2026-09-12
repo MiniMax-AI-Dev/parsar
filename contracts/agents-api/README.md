@@ -240,7 +240,9 @@ stream. Open it before submitting input. Session in-progress/idle/failed and Tur
 created/in-progress/completed/failed/cancelled events carry transition snapshots.
 Supported Items emit added/done events; assistant text emits content-part and
 text-delta/done events. Inputs, including function results, have no output index. Function results emit
-`item.added` and remain queryable; `item.done` only carries agent output. Completed text replaces
+`item.added` and remain queryable; `item.done` only carries agent output. Public
+function-result output/error retain the saved submission and field presence;
+native error-to-text translation does not rewrite those fields. Completed text replaces
 accumulated deltas; cancelled unfinished Items retain their partial content and
 `incomplete` status. Tool snapshots are supported; native interim command-output
 and reasoning deltas remain outside the supported surface.

@@ -41,6 +41,9 @@ func projectItemSource(ctx context.Context, q *sqlc.Queries, session, turn pgtyp
 			}
 		}
 		item := items.Merge(update, previous)
+		if err := restoreFunctionItemResult(ctx, q, session, turn, &item); err != nil {
+			return err
+		}
 		payload, err := json.Marshal(item)
 		if err != nil {
 			return err
@@ -124,4 +127,33 @@ func ensureSessionItems(ctx context.Context, q *sqlc.Queries, session pgtype.UUI
 			return err
 		}
 	}
+}
+
+func restoreFunctionItemResult(ctx context.Context, q *sqlc.Queries, session, turn pgtype.UUID, item *v1.Item) error {
+	if item.Type != "function_call_output" {
+		return nil
+	}
+	result, err := q.FunctionItemResult(ctx, sqlc.FunctionItemResultParams{SessionID: session, TurnID: turn, CallID: item.CallID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(result, &fields); err != nil {
+		return err
+	}
+	// Native results may normalize content; public Items retain the saved submission.
+	item.Output, item.Error = nil, nil
+	if value, ok := fields["output"]; ok {
+		item.Output = value
+	}
+	if value, ok := fields["error"]; ok {
+		item.Error = value
+	}
+	return nil
 }

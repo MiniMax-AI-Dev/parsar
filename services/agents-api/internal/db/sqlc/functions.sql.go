@@ -55,6 +55,24 @@ func (q *Queries) CreateFunctionCall(ctx context.Context, arg CreateFunctionCall
 	return result.RowsAffected(), nil
 }
 
+const functionItemResult = `-- name: FunctionItemResult :one
+SELECT result FROM function_calls
+WHERE session_id = $1 AND turn_id = $2 AND call_id = $3
+`
+
+type FunctionItemResultParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	TurnID    pgtype.UUID `json:"turn_id"`
+	CallID    string      `json:"call_id"`
+}
+
+func (q *Queries) FunctionItemResult(ctx context.Context, arg FunctionItemResultParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, functionItemResult, arg.SessionID, arg.TurnID, arg.CallID)
+	var result []byte
+	err := row.Scan(&result)
+	return result, err
+}
+
 const getFunctionCall = `-- name: GetFunctionCall :one
 SELECT f.session_id, f.turn_id, f.call_id, f.executor_call_id, f.name, f.arguments, f.result, f.applied, f.created_at FROM function_calls f JOIN sessions s ON s.id = f.session_id
 WHERE s.tenant_id = $1 AND f.session_id = $2 AND f.turn_id = $3 AND f.call_id = $4
