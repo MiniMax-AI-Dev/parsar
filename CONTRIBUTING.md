@@ -512,7 +512,8 @@ This does not establish full tool/environment/text-verbosity policy, usage,
 function results, images, steering, cancellation receipts or process-loss recovery.
 Those capabilities require their own acceptance before public dispatch. Registry
 adoption and release packaging are separate tasks. `make check-cli` also builds
-the SDK package, and CI selects that check for changes to the package. Live adapter
+and tests the SDK package, including native output draining; CI selects that check
+for changes to the package. Live adapter
 acceptance is opt-in and must use a real provider with private credentials.
 
 ### Agent knowledge references

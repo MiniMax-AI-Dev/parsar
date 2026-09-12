@@ -1,5 +1,5 @@
 import { getSessionInfo, query } from "@anthropic-ai/claude-agent-sdk";
-import { spawn } from "node:child_process";
+import { spawnNative } from "./native.js";
 import { isAbsolute } from "node:path";
 
 export type Start = {
@@ -53,13 +53,8 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
         tools: [], mcpServers: {}, strictMcpConfig: true, settingSources: [],
         persistSession: true, includePartialMessages: true, abortController: abort,
         canUseTool: async () => ({ behavior: "deny", message: "Tools are unavailable in this execution profile." }),
-        stderr: () => {},
         spawnClaudeCodeProcess: options => {
-          const child = spawn(options.command, options.args, {
-            cwd: options.cwd, env: options.env, signal: options.signal,
-            stdio: ["pipe", "pipe", "pipe"],
-          });
-          child.on("error", () => {});
+          const child = spawnNative(options);
           children.push(new Promise(resolve => child.once("close", code => resolve(code))));
           return child;
         },
