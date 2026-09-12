@@ -14,6 +14,10 @@ type CreateSessionRequest struct {
 	VaultIDs    []string          `json:"vault_ids,omitempty"`
 }
 
+type UpdateSessionRequest struct {
+	Metadata map[string]string `json:"metadata,omitempty" extensions:"x-nullable"`
+}
+
 type InlineAgent struct {
 	Tools        []FunctionToolInput `json:"tools,omitempty" extensions:"x-nullable"`
 	Model        string              `json:"model" binding:"required"`

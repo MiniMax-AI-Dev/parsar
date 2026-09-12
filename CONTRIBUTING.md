@@ -145,10 +145,13 @@ path until an explicit client cutover.
   Parsar uses the same public contract as any other client, with no privileged
   endpoint or direct execution-table access. An OpenAI endpoint is a possible
   client target only where the requested capabilities and credentials support it.
-- Maintain tasks, priorities and evidence in the Feishu board. Complete each
-  bounded task and its required checks/review, then mark it done after merge and
-  choose the next dependency. Agent API protocol and atomic execution work takes
-  priority over product integration, UI work and business Team orchestration.
+- Maintain tasks, priorities and evidence in the Feishu board. Register issues
+  discovered during a task without switching work or automatically selecting them
+  next. Only a direct acceptance blocker justifies a minimal in-scope fix. After
+  each bounded task passes checks/review and merges, mark it done, reread the full
+  board and choose the next task by value, dependencies, risk and effort. Agent API
+  protocol and atomic execution work takes priority over product integration, UI
+  work and business Team orchestration.
 
 - Parsar owns users, workspaces, business authorization, Agent/Team definitions,
   capabilities, product conversations, IM/sharing, approval decisions and billing.
@@ -194,6 +197,10 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Keep credentials and effective execution options out of Session metadata.
   Store resolved, non-secret Agent/environment configuration in the Session's
   immutable configuration snapshot, and include it in creation idempotency checks.
+  Session metadata updates replace only metadata under the authenticated tenant:
+  omission is a read, null/empty clears, and a nonempty object replaces all pairs.
+  Keep execution state, timestamps and the original creation request hash unchanged;
+  creation retries return the current resource without restoring its old metadata.
   Public schema validation belongs to the API; the Store validates JSON structure.
 - `make sqlc-generate` and the drift gate cover both services. Run
   `make check-agents-api` with `PARSAR_AGENTS_API_TEST_DATABASE_URL` pointing to a

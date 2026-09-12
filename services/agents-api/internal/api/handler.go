@@ -20,6 +20,7 @@ type SessionStore interface {
 	ListTurns(context.Context, string, string, string, int, bool) (store.TurnPage, error)
 	CreateSession(context.Context, string, store.CreateSessionInput) (store.Session, error)
 	GetSession(context.Context, string, string) (store.Session, error)
+	UpdateSessionMetadata(context.Context, string, string, map[string]string) (store.Session, error)
 	ListSessions(context.Context, string, string, int, bool) (store.SessionPage, error)
 }
 
@@ -48,6 +49,7 @@ func NewHandler(s SessionStore, auth *Authenticator, engine string, options ...O
 		r.Post("/agents/sessions", h.createSession)
 		r.Get("/agents/sessions", h.listSessions)
 		r.Get("/agents/sessions/{session_id}", h.getSession)
+		r.Post("/agents/sessions/{session_id}", h.updateSession)
 		r.Post("/agents/sessions/{session_id}/events", h.createEvents)
 		r.Get("/agents/sessions/{session_id}/events", h.streamEvents)
 		r.Get("/agents/sessions/{session_id}/items", h.listItems)

@@ -77,12 +77,9 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 	if input.Metadata == nil {
 		input.Metadata = map[string]string{}
 	}
-	metadata, err := json.Marshal(input.Metadata)
+	metadata, err := encodeSessionMetadata(input.Metadata)
 	if err != nil {
-		return Session{}, fmt.Errorf("%w: metadata: %v", ErrInvalidInput, err)
-	}
-	if len(metadata) > 64*1024 {
-		return Session{}, fmt.Errorf("%w: metadata exceeds 64 KiB", ErrInvalidInput)
+		return Session{}, err
 	}
 	if len(input.Configuration) > 512*1024 {
 		return Session{}, fmt.Errorf("%w: configuration exceeds 512 KiB", ErrInvalidInput)

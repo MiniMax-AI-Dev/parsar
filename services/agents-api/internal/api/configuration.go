@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"unicode/utf8"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
@@ -27,13 +26,8 @@ func resolve(input v1.CreateSessionRequest, tenant, key string) (json.RawMessage
 	if input.Environment == nil || input.Environment.Type != "none" {
 		return nil, errors.New("This service currently requires environment.type=none.")
 	}
-	if len(input.Metadata) > 16 {
-		return nil, errors.New("metadata supports at most 16 pairs.")
-	}
-	for k, value := range input.Metadata {
-		if utf8.RuneCountInString(k) > 64 || utf8.RuneCountInString(value) > 512 {
-			return nil, errors.New("metadata keys must be at most 64 characters and values at most 512 characters.")
-		}
+	if err := validateMetadata(input.Metadata); err != nil {
+		return nil, err
 	}
 	text, err := resolveText(input.Agent.Text)
 	if err != nil {

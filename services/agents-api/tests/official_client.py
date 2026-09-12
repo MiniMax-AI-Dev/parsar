@@ -20,6 +20,7 @@ import httpx2
 from jsonschema import Draft4Validator
 from official_items import verify_items
 from official_session_requests import verify_session_create_requests
+from official_session_metadata import verify_session_metadata, verify_active_session_metadata
 from openai import AuthenticationError, BadRequestError, ConflictError, NotFoundError, OpenAI
 import yaml
 
@@ -145,6 +146,7 @@ def main():
                     large = sessions.create(**spec, metadata=metadata)
                     assert sessions.retrieve(large.id).metadata == metadata
                     request_sessions = verify_session_create_requests(a, spec)
+                    request_sessions.append(verify_session_metadata(a, b, invalid, spec, expect_error))
                     turn_session = sessions.create(**spec)
                     fixture = Path(directory) / "turns.json"
                     fixture.write_text(json.dumps({"tenant": bindings[0]["tenant_id"], "session": turn_session.id}))
@@ -171,6 +173,7 @@ def main():
                     expect_error(NotFoundError, lambda: turns.list(first.id, after=turn_ids[0]))
                     expect_error(BadRequestError, lambda: turns.list(turn_session.id, limit=101))
                     saved_items = verify_items(a, b, invalid, turn_session.id, first.id, turn_ids, expect_error)
+                    request_sessions.append(verify_active_session_metadata(a, turn_session.id))
                     process.terminate()
                     process.wait(timeout=15)
                     process = start()

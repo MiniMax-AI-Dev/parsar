@@ -573,6 +573,14 @@ definitions:
     - data
     - has_more
     type: object
+  v1.UpdateSessionRequest:
+    properties:
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+        x-nullable: true
+    type: object
   v1.WebSearchAction:
     properties:
       pattern:
@@ -757,6 +765,62 @@ paths:
       security:
       - BearerAuth: []
       summary: Retrieve an execution Session
+      tags:
+      - Sessions
+    post:
+      consumes:
+      - application/json
+      description: Omit metadata to leave it unchanged, send null or {} to clear it,
+        or supply an object to replace all pairs. Up to 16 string pairs, with keys
+        at most 64 characters and values at most 512 characters. Execution configuration
+        and activity are unchanged.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: Session metadata
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v1.UpdateSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.Session'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update execution Session metadata
       tags:
       - Sessions
   /agents/sessions/{session_id}/events:
