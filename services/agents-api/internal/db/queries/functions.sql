@@ -28,3 +28,7 @@ UPDATE function_calls SET result = $4 WHERE session_id = $1 AND turn_id = $2 AND
 
 -- name: ApplyFunctionResult :exec
 UPDATE function_calls SET applied = true WHERE session_id = $1 AND turn_id = $2 AND call_id = $3;
+
+-- name: FunctionItemResult :one
+SELECT result FROM function_calls
+WHERE session_id = $1 AND turn_id = $2 AND call_id = $3;
