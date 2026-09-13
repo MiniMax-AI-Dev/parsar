@@ -13,7 +13,11 @@ import (
 
 // Retain all attempts for the active run; reject overflow rather than evicting
 // receipts and risking a duplicate native input. Durable recovery is server-owned.
-const maxSteeringInputs = 256
+const (
+	maxSteeringInputs   = 256
+	steeringCallTimeout = 10 * time.Second
+	steeringSendTimeout = 5 * time.Second
+)
 
 type steeringReceipt struct {
 	fingerprint [32]byte
@@ -63,11 +67,15 @@ func (r *Router) queueSteering(ctx context.Context, env proto.Envelope, input pr
 			ack.ErrorCode, ack.Error = "input_conflict", "This input ID was already used with different text."
 			return &ack
 		}
-		if previous.ack.ErrorCode != "not_ready" && previous.ack.ErrorCode != "busy" {
+		if state.steeringClosed || previous.ack.ErrorCode != "not_ready" && previous.ack.ErrorCode != "busy" {
 			return &previous.ack
 		}
 	} else if len(state.steering) >= maxSteeringInputs {
 		ack.ErrorCode, ack.Error = "input_limit", "The active run has reached its steering input limit."
+		return &ack
+	}
+	if state.steeringClosed {
+		ack.ErrorCode, ack.Error = "run_inactive", "The run is completing."
 		return &ack
 	}
 	if state.steering == nil {
@@ -93,17 +101,26 @@ func (r *Router) queueSteering(ctx context.Context, env proto.Envelope, input pr
 	ack.ErrorCode, ack.Error = "in_flight", "This input is awaiting an engine receipt."
 	state.steering[input.InputID] = steeringReceipt{fingerprint: fingerprint, ack: ack}
 	state.steerBusy = true
+	finished := make(chan struct{})
+	state.steeringDone = finished
 	r.shutdownWG.Add(1)
 	go func() {
 		defer r.shutdownWG.Done()
-		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer func() {
+			r.mu.Lock()
+			state.steerBusy = false
+			close(finished)
+			r.mu.Unlock()
+		}()
+		ctx, stop := r.shutdownContext(ctx)
+		defer stop()
+		callCtx, cancel := context.WithTimeout(ctx, steeringCallTimeout)
 		result := steeringResult(input.InputID, steerer.Steer(callCtx, input))
 		cancel()
 		r.mu.Lock()
 		state.steering[input.InputID] = steeringReceipt{fingerprint: fingerprint, ack: result}
-		state.steerBusy = false
 		r.mu.Unlock()
-		sendCtx, sendCancel := context.WithTimeout(ctx, 5*time.Second)
+		sendCtx, sendCancel := context.WithTimeout(ctx, steeringSendTimeout)
 		defer sendCancel()
 		if err := r.sendSteeringAck(sendCtx, env, result); err != nil {
 			r.log.WarnContext(ctx, "steering receipt delivery failed", "run_id", env.ID, "input_id", input.InputID, "err", err)
@@ -129,4 +146,39 @@ func steeringResult(inputID string, err error) proto.PromptSteerAckPayload {
 		ack.Accepted = true
 	}
 	return ack
+}
+
+// shutdownContext releases cooperating work when the router shuts down.
+func (r *Router) shutdownContext(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	go func() {
+		select {
+		case <-r.shutdownCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
+}
+
+// Close admission before taking the last worker: its lifetime includes the
+// receipt send, so a durable Done cannot close the gateway subscription first.
+func (r *Router) finishSteering(state *sessionState) error {
+	r.mu.Lock()
+	state.steeringClosed = true
+	finished := state.steeringDone
+	r.mu.Unlock()
+	if finished == nil {
+		return nil
+	}
+	timer := time.NewTimer(steeringCallTimeout + steeringSendTimeout)
+	defer timer.Stop()
+	select {
+	case <-finished:
+		return nil
+	case <-r.shutdownCh:
+		return context.Canceled
+	case <-timer.C:
+		return context.DeadlineExceeded
+	}
 }

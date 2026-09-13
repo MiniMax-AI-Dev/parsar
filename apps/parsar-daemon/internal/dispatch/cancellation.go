@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"context"
+	"errors"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
@@ -14,9 +15,10 @@ func (r *Router) releaseCompletedSession(state *sessionState) error {
 	r.mu.Lock()
 	state.retain = false
 	r.mu.Unlock()
+	receiptErr := r.finishSteering(state)
 	err := state.session.Cancel(context.Background())
 	state.ctxCancel()
-	return err
+	return errors.Join(receiptErr, err)
 }
 
 func (r *Router) handlePromptCancel(ctx context.Context, env proto.Envelope) error {
