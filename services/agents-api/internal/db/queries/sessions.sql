@@ -1,9 +1,11 @@
 -- name: CreateSession :one
-INSERT INTO sessions (id, tenant_id, engine, metadata, idempotency_key, request_hash, configuration)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO sessions (id, tenant_id, engine, metadata, idempotency_key, request_hash, configuration, creation_request_hash)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (tenant_id, idempotency_key) DO UPDATE
 SET idempotency_key = EXCLUDED.idempotency_key
-WHERE sessions.request_hash = EXCLUDED.request_hash
+WHERE CASE WHEN sessions.creation_request_hash IS NULL
+    THEN sessions.request_hash = EXCLUDED.request_hash
+    ELSE sessions.creation_request_hash = EXCLUDED.creation_request_hash END
 RETURNING *;
 
 -- name: GetSession :one
@@ -24,3 +26,7 @@ LIMIT sqlc.arg(page_limit);
 
 -- name: UpdateSessionMetadata :one
 UPDATE sessions SET metadata = $3 WHERE tenant_id = $1 AND id = $2 RETURNING *;
+
+-- name: FindSessionCreation :one
+SELECT * FROM sessions
+WHERE tenant_id = $1 AND idempotency_key = $2 AND creation_request_hash IS NOT NULL;

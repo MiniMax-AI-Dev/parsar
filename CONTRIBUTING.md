@@ -262,15 +262,26 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Session admission. Reject unsupported effective options instead of dropping them;
   an explicit supported replacement may make a saved configuration executable.
   Inline Sessions use the same admission path and keep their existing retry identity.
-  The current resource has no public update/delete operation. Before adding either,
-  resolve creation retries across source mutation/deletion: the current request hash
-  includes the resolved snapshot and creation performs a fresh Agent lookup. Do not
-  claim mutation-independent retries or invent a general revision framework.
+  New saved-reference Sessions record a separate caller-intent hash: source ID,
+  supplied overrides (including field presence), environment/vaults, original metadata
+  and normalized initial input. Exclude response streaming and resolved source values.
+  Compare that same-tenant retry identity before looking up the source. A matching
+  retry returns the existing Session without input admission or source revalidation;
+  ordinary reads include current activity. Stream retries use the row's committed
+  event cursor and emit no created event. Recheck after source resolution failure
+  for a concurrently committed creator; do not hold a lock across resolution.
+  The unique creation upsert remains authoritative when concurrent resolutions differ.
+  Inline requests keep their existing resolved/default equivalences. Historical rows
+  without caller identity retain the old resolved-hash behavior; original overrides
+  cannot be reconstructed, so no backfill or automatic upgrade is permitted. Source
+  mutation-independent retries apply only to recorded identities. Public Agent
+  update/delete and exact hosted retry/error semantics remain separate work.
 - Tenant scope must come from authenticated service identity before calling the
   execution Store. Product workspace/user references in metadata grant no access.
   Keep credentials and effective execution options out of Session metadata.
   Store resolved, non-secret Agent/environment configuration in the Session's
-  immutable configuration snapshot, and include it in creation idempotency checks.
+  immutable configuration snapshot. Inline and historical creation identities include
+  the resolved configuration; new saved references use the separate caller intent.
   Session metadata updates replace only metadata under the authenticated tenant:
   omission is a read, null/empty clears, and a nonempty object replaces all pairs.
   Keep execution state, timestamps and the original creation request hash unchanged;

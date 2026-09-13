@@ -43,11 +43,12 @@ type Session struct {
 }
 
 type CreateSessionInput struct {
-	Engine         string
-	Metadata       map[string]string
-	IdempotencyKey string
-	Configuration  json.RawMessage
-	InitialInputs  []Input
+	CreationRequest json.RawMessage
+	Engine          string
+	Metadata        map[string]string
+	IdempotencyKey  string
+	Configuration   json.RawMessage
+	InitialInputs   []Input
 }
 
 type SessionPage struct {
@@ -118,11 +119,15 @@ func (s *Store) createSession(ctx context.Context, tenantID string, input Create
 	if err != nil {
 		return SessionCreation{}, fmt.Errorf("%w: input: %v", ErrInvalidInput, err)
 	}
+	creationHash, err := creationRequestHash(input.CreationRequest)
+	if err != nil {
+		return SessionCreation{}, err
+	}
 	hash := sha256.Sum256(canonical)
 	params := sqlc.CreateSessionParams{
 		ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, TenantID: tenant, Engine: input.Engine,
 		Metadata: metadata, IdempotencyKey: input.IdempotencyKey, RequestHash: hex.EncodeToString(hash[:]),
-		Configuration: configuration,
+		Configuration: configuration, CreationRequestHash: creationHash,
 	}
 	var row sqlc.Session
 	if len(batch) == 0 {

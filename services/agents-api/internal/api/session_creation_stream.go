@@ -37,6 +37,10 @@ func (h *Handler) createSessionStream(w http.ResponseWriter, r *http.Request, in
 		writeStoreError(w, r, err)
 		return
 	}
+	h.respondSessionCreationStream(w, r, events, result)
+}
+
+func (h *Handler) respondSessionCreationStream(w http.ResponseWriter, r *http.Request, events eventStore, result store.SessionCreation) {
 	response, err := sessionResponse(result.Session)
 	if err != nil {
 		writeStoreError(w, r, err)

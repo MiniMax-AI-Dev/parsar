@@ -971,9 +971,11 @@ paths:
         values must be strings. Initial input accepts a string or user-message array
         containing text and atomically starts a Turn; omitted or null input creates
         an idle Session. With stream=true, returns live Session events starting at
-        creation; disconnect does not cancel execution. Creation retries observe future
-        events without replay; retry with stream=false to retrieve the Session. Non-text
-        initial input remains unsupported.
+        creation; disconnect does not cancel execution. New saved-Agent creation retries
+        retain caller identity independently of later Agent changes; existing records
+        without that identity retain their previous retry rules. Creation retries
+        observe future events without replay; retry with stream=false to retrieve
+        the Session. Non-text initial input remains unsupported.
       parameters:
       - description: agents=v1
         in: header

@@ -12,22 +12,25 @@ import (
 )
 
 const createSession = `-- name: CreateSession :one
-INSERT INTO sessions (id, tenant_id, engine, metadata, idempotency_key, request_hash, configuration)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO sessions (id, tenant_id, engine, metadata, idempotency_key, request_hash, configuration, creation_request_hash)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (tenant_id, idempotency_key) DO UPDATE
 SET idempotency_key = EXCLUDED.idempotency_key
-WHERE sessions.request_hash = EXCLUDED.request_hash
-RETURNING id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence
+WHERE CASE WHEN sessions.creation_request_hash IS NULL
+    THEN sessions.request_hash = EXCLUDED.request_hash
+    ELSE sessions.creation_request_hash = EXCLUDED.creation_request_hash END
+RETURNING id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence, creation_request_hash
 `
 
 type CreateSessionParams struct {
-	ID             pgtype.UUID `json:"id"`
-	TenantID       pgtype.UUID `json:"tenant_id"`
-	Engine         string      `json:"engine"`
-	Metadata       []byte      `json:"metadata"`
-	IdempotencyKey string      `json:"idempotency_key"`
-	RequestHash    string      `json:"request_hash"`
-	Configuration  []byte      `json:"configuration"`
+	ID                  pgtype.UUID `json:"id"`
+	TenantID            pgtype.UUID `json:"tenant_id"`
+	Engine              string      `json:"engine"`
+	Metadata            []byte      `json:"metadata"`
+	IdempotencyKey      string      `json:"idempotency_key"`
+	RequestHash         string      `json:"request_hash"`
+	Configuration       []byte      `json:"configuration"`
+	CreationRequestHash pgtype.Text `json:"creation_request_hash"`
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
@@ -39,6 +42,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		arg.IdempotencyKey,
 		arg.RequestHash,
 		arg.Configuration,
+		arg.CreationRequestHash,
 	)
 	var i Session
 	err := row.Scan(
@@ -51,12 +55,41 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.CreatedAt,
 		&i.Configuration,
 		&i.EventSequence,
+		&i.CreationRequestHash,
+	)
+	return i, err
+}
+
+const findSessionCreation = `-- name: FindSessionCreation :one
+SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence, creation_request_hash FROM sessions
+WHERE tenant_id = $1 AND idempotency_key = $2 AND creation_request_hash IS NOT NULL
+`
+
+type FindSessionCreationParams struct {
+	TenantID       pgtype.UUID `json:"tenant_id"`
+	IdempotencyKey string      `json:"idempotency_key"`
+}
+
+func (q *Queries) FindSessionCreation(ctx context.Context, arg FindSessionCreationParams) (Session, error) {
+	row := q.db.QueryRow(ctx, findSessionCreation, arg.TenantID, arg.IdempotencyKey)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Engine,
+		&i.Metadata,
+		&i.IdempotencyKey,
+		&i.RequestHash,
+		&i.CreatedAt,
+		&i.Configuration,
+		&i.EventSequence,
+		&i.CreationRequestHash,
 	)
 	return i, err
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence FROM sessions WHERE tenant_id = $1 AND id = $2
+SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence, creation_request_hash FROM sessions WHERE tenant_id = $1 AND id = $2
 `
 
 type GetSessionParams struct {
@@ -77,12 +110,13 @@ func (q *Queries) GetSession(ctx context.Context, arg GetSessionParams) (Session
 		&i.CreatedAt,
 		&i.Configuration,
 		&i.EventSequence,
+		&i.CreationRequestHash,
 	)
 	return i, err
 }
 
 const listSessions = `-- name: ListSessions :many
-SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence FROM sessions
+SELECT id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence, creation_request_hash FROM sessions
 WHERE tenant_id = $1
   AND ($2::timestamptz IS NULL
        OR (NOT $3::boolean AND (created_at, id) < ($2::timestamptz, $4::uuid))
@@ -128,6 +162,7 @@ func (q *Queries) ListSessions(ctx context.Context, arg ListSessionsParams) ([]S
 			&i.CreatedAt,
 			&i.Configuration,
 			&i.EventSequence,
+			&i.CreationRequestHash,
 		); err != nil {
 			return nil, err
 		}
@@ -140,7 +175,7 @@ func (q *Queries) ListSessions(ctx context.Context, arg ListSessionsParams) ([]S
 }
 
 const updateSessionMetadata = `-- name: UpdateSessionMetadata :one
-UPDATE sessions SET metadata = $3 WHERE tenant_id = $1 AND id = $2 RETURNING id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence
+UPDATE sessions SET metadata = $3 WHERE tenant_id = $1 AND id = $2 RETURNING id, tenant_id, engine, metadata, idempotency_key, request_hash, created_at, configuration, event_sequence, creation_request_hash
 `
 
 type UpdateSessionMetadataParams struct {
@@ -162,6 +197,7 @@ func (q *Queries) UpdateSessionMetadata(ctx context.Context, arg UpdateSessionMe
 		&i.CreatedAt,
 		&i.Configuration,
 		&i.EventSequence,
+		&i.CreationRequestHash,
 	)
 	return i, err
 }

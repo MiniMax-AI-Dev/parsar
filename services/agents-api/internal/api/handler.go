@@ -20,6 +20,7 @@ type ResourceStore interface {
 	GetTurn(context.Context, string, string, string) (store.Turn, error)
 	ListTurns(context.Context, string, string, string, int, bool) (store.TurnPage, error)
 	CreateSession(context.Context, string, store.CreateSessionInput) (store.Session, error)
+	FindSessionCreation(context.Context, string, string, json.RawMessage) (store.SessionCreation, error)
 	GetSession(context.Context, string, string) (store.Session, error)
 	UpdateSessionMetadata(context.Context, string, string, map[string]string) (store.Session, error)
 	ListSessions(context.Context, string, string, int, bool) (store.SessionPage, error)
@@ -91,7 +92,7 @@ func tenantID(r *http.Request) string { return r.Context().Value(tenantContextKe
 
 // createSession optionally admits initial text in the same transaction as the Session.
 // @Summary Create an execution Session
-// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text and atomically starts a Turn; omitted or null input creates an idle Session. With stream=true, returns live Session events starting at creation; disconnect does not cancel execution. Creation retries observe future events without replay; retry with stream=false to retrieve the Session. Non-text initial input remains unsupported.
+// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text and atomically starts a Turn; omitted or null input creates an idle Session. With stream=true, returns live Session events starting at creation; disconnect does not cancel execution. New saved-Agent creation retries retain caller identity independently of later Agent changes; existing records without that identity retain their previous retry rules. Creation retries observe future events without replay; retry with stream=false to retrieve the Session. Non-text initial input remains unsupported.
 // @Tags Sessions
 // @Accept json
 // @Produce json,text/event-stream
@@ -132,10 +133,26 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 	if key == "" {
 		key = uuid.NewString()
 	}
+	initialInputs, err := initialSessionInputs(input.Input)
+	if err != nil {
+		writeStoreError(w, r, err)
+		return
+	}
+	creationRequest, err := sessionCreationRequest(input, initialInputs)
+	if err != nil {
+		writeStoreError(w, r, err)
+		return
+	}
+	if h.recoverSessionCreation(w, r, key, creationRequest, input.Stream) {
+		return
+	}
 	var saved *v1.SavedAgent
 	if input.AgentID != nil {
 		resource, err := h.lookupAgent(r.Context(), tenantID(r), *input.AgentID)
 		if err != nil {
+			if h.recoverSessionCreation(w, r, key, creationRequest, input.Stream) {
+				return
+			}
 			writeStoreError(w, r, err)
 			return
 		}
@@ -147,16 +164,14 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 	}
 	configuration, err := resolve(input, tenantID(r), key, saved)
 	if err != nil {
+		if h.recoverSessionCreation(w, r, key, creationRequest, input.Stream) {
+			return
+		}
 		writeError(w, http.StatusBadRequest, "unsupported_or_invalid_configuration", err.Error())
 		return
 	}
-	initialInputs, err := initialSessionInputs(input.Input)
-	if err != nil {
-		writeStoreError(w, r, err)
-		return
-	}
 	createInput := store.CreateSessionInput{
-		Engine: h.engine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs,
+		Engine: h.engine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs, CreationRequest: creationRequest,
 	}
 	if input.Stream {
 		h.createSessionStream(w, r, createInput)

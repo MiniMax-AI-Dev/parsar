@@ -22,6 +22,10 @@ type recordingStore struct {
 	input  store.CreateSessionInput
 }
 
+func (s *recordingStore) FindSessionCreation(context.Context, string, string, json.RawMessage) (store.SessionCreation, error) {
+	return store.SessionCreation{}, store.ErrNotFound
+}
+
 func (s *recordingStore) CreateSession(_ context.Context, tenant string, input store.CreateSessionInput) (store.Session, error) {
 	s.tenant, s.input = tenant, input
 	return store.Session{ID: uuid.NewString(), TenantID: tenant, Metadata: input.Metadata, Configuration: input.Configuration, CreatedAt: time.Unix(1700000000, 0)}, nil
