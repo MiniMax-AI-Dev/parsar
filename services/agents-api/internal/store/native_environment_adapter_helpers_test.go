@@ -63,6 +63,9 @@ while :; do date +%s > "$1.heartbeat"; sleep 1; done
 
 func startDaemonRemoteExecutor(t *testing.T, ctx context.Context, root, local, remote, binary, image, registryURL, environment, token string) string {
 	t.Helper()
+	if launcher := os.Getenv("PARSAR_EXECUTOR_LAUNCHER"); launcher != "" {
+		return startDaemonLauncherExecutor(t, ctx, root, local, remote, binary, image, registryURL, environment, token, launcher)
+	}
 	container := "parsar-daemon-environment-" + uuid.NewString()
 	t.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -250,8 +253,14 @@ func assertDaemonRemoteSecrets(t *testing.T, root, stateKey, provider, executor,
 		if err != nil {
 			return err
 		}
-		if bytes.Contains(data, []byte(harness)) || bytes.Contains(data, []byte(executor)) {
-			t.Errorf("Environment credential persisted in %s", path)
+		if bytes.Contains(data, []byte(harness)) {
+			t.Errorf("harness credential persisted in %s", path)
+		}
+		if bytes.Contains(data, []byte(executor)) {
+			info, e := entry.Info()
+			if os.Getenv("PARSAR_EXECUTOR_LAUNCHER") == "" || path != filepath.Join(root, "executor", "credential.json") || e != nil || info.Mode().Perm() != 0600 {
+				t.Errorf("executor credential outside its private provisioned file: %s", path)
+			}
 		}
 		if bytes.Contains(data, []byte(device)) && path != profile {
 			t.Errorf("device credential outside its profile: %s", path)

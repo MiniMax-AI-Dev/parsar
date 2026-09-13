@@ -263,6 +263,16 @@ harnesses are rejected without eviction. Public Environment admission and typed
 daemon dispatch integration remain separate work. Native transport annotations are excluded from the
 pinned public SDK OpenAPI output; their routes are documented in the service guide.
 
+The optional [Codex executor launcher](packages/codex-executor/README.md) is a
+separate Cargo package. Pin its native git revisions, transport patches, toolchain
+and lock; use the upstream executor/auth/runtime APIs without changing stock CLI
+credential protection. It reads only an explicit exact-Environment credential file
+and uses the matching installed native binary/resources for hidden filesystem and
+sandbox helper modes. Keep its state below `~/.parsar/`; do not load ambient
+OpenAI login credentials. HTTPS certificate/hostname verification remains enabled.
+The separately named command does not establish stock-command compatibility or
+enable public Environment admission. Linux x86_64 is its initial deployment target.
+
 Native app-server placement is a prerequisite to typed dispatch. The pinned Codex
 app-server accepts registry configuration at startup; use explicit native Environment
 selections for the first thread and every Turn. Resume does not restore selections
@@ -1968,7 +1978,10 @@ protocol/gateway packages), `make check-store` for migration/store
 integration tests, `make check-web` for web typecheck plus design lint, and
 `make check-cli` for CLI/plugin typechecks, and `make check-installer` for
 Docker-free installer lifecycle checks, plus `make check-agents-api` for the
-execution service. Keep the subtargets aligned with
+execution service. `make check-agents-executor` owns the optional native launcher's
+locked unit tests, formatting and Clippy; `make build-agents-executor` independently
+builds its release artifact. Native/model fixtures remain explicit acceptance checks.
+Keep the subtargets aligned with
 the full gate whenever the required checks change. Daemon-only changes must
 trigger the same Go checks in CI as server changes.
 

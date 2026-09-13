@@ -180,6 +180,7 @@ func TestNativeDaemonRemoteEnvironment(t *testing.T) {
 		t.Fatal("connection credential reached stored configuration")
 	}
 	proof["status"] = "daemon_adapter_verified_public_integration_pending"
+	proof["separate_executor_launcher"] = os.Getenv("PARSAR_EXECUTOR_LAUNCHER") != ""
 	proof["native_thread_id"] = req.AgentSessionID
 	proof["harness_token_only_from_typed_prompt"] = true
 	t.Log("real-provider daemon remote execution evidence", root)

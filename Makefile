@@ -89,7 +89,7 @@ dev: dev-db
 
 # The full gate runs independent API tests once, after their isolated build.
 check: GO_TEST_EXCLUDE = $(if $(strip $(GO_TEST_RUN) $(GO_TEST_ARGS)),,github.com/MiniMax-AI-Dev/parsar/services/agents-api/% github.com/MiniMax-AI-Dev/parsar/packages/agents-client/%)
-check: check-go check-store check-web check-cli check-hygiene check-installer check-agents-api
+check: check-go check-store check-web check-cli check-hygiene check-installer check-agents-api check-agents-executor
 	@printf 'Parsar harness checks passed.\n'
 
 check-setup:
@@ -367,3 +367,10 @@ check-agents-api-container: docker-build-agents-api
 	AGENTS_API_IMAGE="$${AGENTS_API_IMAGE:-agents-api:dev}" \
 	AGENTS_API_SERVER_BIN="$(CURDIR)/services/agents-api/tests/container_server.py" \
 	$${PARSAR_OFFICIAL_SDK_PYTHON:-python3} services/agents-api/tests/official_client.py
+
+.PHONY: build-agents-executor check-agents-executor
+build-agents-executor:
+	./scripts/build-agents-executor.sh
+
+check-agents-executor:
+	./scripts/check-agents-executor.sh

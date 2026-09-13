@@ -88,3 +88,33 @@ shell policy checks inheritance, not arbitrary same-user process visibility.
 `remote-adapter-proof.json` describes this bounded daemon acceptance; public input
 admission, durable lifecycle, credentials, files/templates and API projection still
 need their own implementation and real acceptance.
+
+## Separate executor launcher
+
+Build `agents-api-codex-executor` with `make build-agents-executor`, and compile
+the current `relay_probe.rs` against the pinned upstream libraries as described
+in the [service guide](../../README.md#native-executor-transport-prerequisite).
+Then supply the ordinary PostgreSQL/native/image prerequisites above plus:
+
+```sh
+export PARSAR_EXECUTOR_LAUNCHER="$HOME/.parsar/build/agents-executor/agents-api-codex-executor"
+export PARSAR_NATIVE_RELAY_PROBE='<absolute matching relay probe executable>'
+go test ./services/agents-api/internal/store   -run '^TestNativeExecutorLauncherTLSAndHelpers$' -count=1 -v -timeout=6m
+```
+
+This fixture uses controlled Docker DNS and a test CA with actual HTTPS/WSS.
+It rejects an untrusted CA and wrong hostname before registry HTTP handling,
+then verifies native commands, a 128 KiB file, connection recovery, fresh reads,
+native filesystem/argv0 helper modes, read-only enforcement and graceful launcher
+exit. It mounts the full native installation with its resources. Docker's outer
+seccomp/AppArmor restrictions are relaxed solely so the native sandbox can run
+inside the test container; this is not a production isolation recipe or public
+DNS/certificate deployment. Model calls are zero.
+
+With `PARSAR_EXECUTOR_LAUNCHER` set, `TestNativeDaemonRemoteEnvironment` uses the
+same new launcher and full native installation instead of stock CLI registration.
+Its provider calls remain actual MiniMax. The provisioned executor JSON is the
+only permitted persistence of that executor credential; harness credentials stay
+transient. This second fixture uses loopback HTTP and separately verifies the
+authenticated daemon, cold history/files and cancellation. Neither fixture enables
+public `self_hosted` admission or proves complete Environment compatibility.
