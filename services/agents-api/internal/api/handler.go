@@ -9,6 +9,7 @@ import (
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/execution"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -94,7 +95,7 @@ func tenantID(r *http.Request) string { return r.Context().Value(tenantContextKe
 
 // createSession optionally admits initial text in the same transaction as the Session.
 // @Summary Create an execution Session
-// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text and atomically starts a Turn; omitted or null input creates an idle Session. With stream=true, returns live Session events starting at creation; disconnect does not cancel execution. New saved-Agent creation retries retain caller identity independently of later Agent changes; existing records without that identity retain their previous retry rules. Creation retries observe future events without replay; retry with stream=false to retrieve the Session. Non-text initial input remains unsupported.
+// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none, subject to the configured engine. Claude SDK currently requires medium verbosity and object-root function schemas. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text and atomically starts a Turn; omitted or null input creates an idle Session. With stream=true, returns live Session events starting at creation; disconnect does not cancel execution. New saved-Agent creation retries retain caller identity independently of later Agent changes; existing records without that identity retain their previous retry rules. Creation retries observe future events without replay; retry with stream=false to retrieve the Session. Non-text initial input remains unsupported.
 // @Tags Sessions
 // @Accept json
 // @Produce json,text/event-stream
@@ -165,6 +166,9 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	configuration, err := resolve(input, tenantID(r), key, saved)
+	if err == nil {
+		err = execution.ValidateSessionConfiguration(h.engine, configuration)
+	}
 	if err != nil {
 		if h.recoverSessionCreation(w, r, key, creationRequest, input.Stream) {
 			return

@@ -41,6 +41,9 @@ func (w *Worker) SubmitInputs(ctx context.Context, tenant, session, key string, 
 	if !canAdmitInputs(value.Engine, value.Configuration) {
 		return nil, store.ErrInvalidInput
 	}
+	if err := validateEngineInputs(value.Engine, inputs); err != nil {
+		return nil, err
+	}
 	return w.admission.SubmitInputs(ctx, tenant, session, key, inputs)
 }
 
@@ -58,11 +61,6 @@ func (w *Worker) CreateSessionStream(ctx context.Context, tenant string, input s
 		return store.SessionCreation{}, store.ErrInvalidInput
 	}
 	return w.admission.CreateSessionStream(ctx, tenant, input)
-}
-
-func canAdmitInputs(engine string, configuration json.RawMessage) bool {
-	var snapshot Snapshot
-	return engine == "codex" && json.Unmarshal(configuration, &snapshot) == nil && snapshot.Environment != nil && snapshot.Environment.Type == "none" && snapshot.Daemon == nil
 }
 
 // Run retains queued work across restarts, but never replays an uncertain claim.
@@ -172,11 +170,10 @@ func (w *Worker) bind(ctx context.Context, item store.ExecutionWork) (bool, erro
 	if err := json.Unmarshal(session.Configuration, &snapshot); err != nil {
 		return false, err
 	}
-	functions := len(snapshot.Agent.Tools) > 0
 
 	bound, err := w.dispatcher.Store.GetSessionDevice(ctx, item.TenantID, item.SessionID)
 	if err == nil {
-		return w.ready(bound.ID, functions), nil
+		return w.ready(bound.ID, session.Engine, snapshot), nil
 	}
 	if !errors.Is(err, store.ErrNotFound) {
 		return false, err
@@ -186,7 +183,7 @@ func (w *Worker) bind(ctx context.Context, item store.ExecutionWork) (bool, erro
 		return false, err
 	}
 	for _, device := range devices {
-		if !w.ready(device.ID, functions) {
+		if !w.ready(device.ID, session.Engine, snapshot) {
 			continue
 		}
 		err := w.dispatcher.Store.BindSessionDevice(ctx, item.TenantID, item.SessionID, device.ID)
@@ -202,13 +199,13 @@ func (w *Worker) bind(ctx context.Context, item store.ExecutionWork) (bool, erro
 	return false, nil
 }
 
-func (w *Worker) ready(deviceID string, functions bool) bool {
+func (w *Worker) ready(deviceID, engine string, snapshot Snapshot) bool {
 	peer, err := w.dispatcher.Registry.LookupDevice(deviceID)
 	if err != nil {
 		return false
 	}
-	info, found, known := peer.AgentKindStatus("codex")
-	return found && known && info.Available && info.Capabilities.Streaming && info.Capabilities.Steering && info.Capabilities.DurableTurns && info.Capabilities.DurableInputReceipts && info.Capabilities.ToolObservations && info.Capabilities.EnvironmentNone && info.Capabilities.ExecutionControls && info.Capabilities.WebSearchControl && info.Capabilities.TextVerbosity && info.Capabilities.SubagentControl && (!functions || info.Capabilities.FunctionTools)
+	_, err = engineCapabilities(peer, engine, snapshot)
+	return err == nil
 }
 
 func (w *Worker) runClaim(ctx context.Context, item store.ExecutionWork) error {

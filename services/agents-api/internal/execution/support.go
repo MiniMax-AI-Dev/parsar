@@ -1,0 +1,125 @@
+package execution
+
+import (
+	"encoding/json"
+	"errors"
+	"strings"
+
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
+)
+
+// ValidateSessionConfiguration applies additional engine restrictions after public
+// configuration resolution, including idle creation. Other persistence-only engine
+// names retain their existing behavior; this does not admit execution for them.
+func ValidateSessionConfiguration(engine string, configuration json.RawMessage) error {
+	if engine != "claude_sdk" {
+		return nil
+	}
+	var snapshot Snapshot
+	if json.Unmarshal(configuration, &snapshot) != nil {
+		return store.ErrInvalidInput
+	}
+	return validateClaudeConfiguration(snapshot)
+}
+
+func validateClaudeConfiguration(snapshot Snapshot) error {
+	agent := snapshot.Agent
+	if snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil || strings.TrimSpace(agent.Model) == "" {
+		return store.ErrInvalidInput
+	}
+	if agent.Text.Verbosity != "" && agent.Text.Verbosity != "medium" {
+		return errors.New("The configured engine currently supports medium text verbosity only.")
+	}
+	if agent.MultiAgent.Enabled || agent.MultiAgent.MaxConcurrentSubagents != nil || agent.Reasoning.Effort != nil || agent.Reasoning.Summary != nil || (agent.ServiceTier != "" && agent.ServiceTier != "auto") || (agent.Text.Format.Type != "" && agent.Text.Format.Type != "text") {
+		return store.ErrInvalidInput
+	}
+	tools, err := functionTools(agent.Tools)
+	if err != nil {
+		return err
+	}
+	for _, tool := range tools {
+		var schema struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(tool.Parameters, &schema) != nil || schema.Type != "object" {
+			return errors.New("The configured engine currently requires function schemas with root type object.")
+		}
+	}
+	return nil
+}
+
+func canAdmitInputs(engine string, configuration json.RawMessage) bool {
+	var snapshot Snapshot
+	return (engine == "codex" || engine == "claude_sdk") && json.Unmarshal(configuration, &snapshot) == nil && snapshot.Environment != nil && snapshot.Environment.Type == "none" && snapshot.Daemon == nil && (engine != "claude_sdk" || validateClaudeConfiguration(snapshot) == nil)
+}
+
+func validateEngineInputs(engine string, inputs []store.Input) error {
+	if engine != "claude_sdk" {
+		return nil
+	}
+	for _, input := range inputs {
+		if input.Kind != "tool_result" {
+			continue
+		}
+		var value store.FunctionResultInput
+		if json.Unmarshal(input.Payload, &value) != nil {
+			return store.ErrInvalidInput
+		}
+		result, err := functionResult(store.FunctionCall{CallID: value.CallID, Result: value.Result})
+		if err != nil {
+			return store.ErrInvalidInput
+		}
+		for _, part := range result.Content {
+			if part.Type != "input_text" {
+				return store.ErrInvalidInput
+			}
+		}
+	}
+	return nil
+}
+
+// engineCapabilities is shared by device selection and the final preclaim check.
+// Capability bits describe the adapter; supported values still depend on its profile.
+func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot) (device.KindCapabilities, error) {
+	fail := func(message string) (device.KindCapabilities, error) {
+		return device.KindCapabilities{}, errors.New(message)
+	}
+	switch engine {
+	case "codex":
+	case "claude_sdk":
+		if err := validateClaudeConfiguration(snapshot); err != nil {
+			return device.KindCapabilities{}, err
+		}
+	default:
+		return fail("execution engine is not supported")
+	}
+	info, found, known := peer.AgentKindStatus(engine)
+	caps := info.Capabilities
+	if !known || !found || !info.Available || !caps.Streaming || !caps.Steering || !caps.DurableTurns || !caps.DurableInputReceipts {
+		return fail("device must advertise streaming, steering and durable turns for this engine")
+	}
+	if !caps.ExecutionControls {
+		return fail("device must advertise execution_controls")
+	}
+	if engine == "codex" && !caps.WebSearchControl {
+		return fail("device must advertise web_search_control")
+	}
+	if engine == "codex" && !caps.TextVerbosity {
+		return fail("device must advertise text_verbosity")
+	}
+	if !caps.ToolObservations {
+		return fail("device must advertise tool_observations")
+	}
+	if !snapshot.Agent.MultiAgent.Enabled && !caps.SubagentControl {
+		return fail("device must advertise subagent_control")
+	}
+	if len(snapshot.Agent.Tools) > 0 && !caps.FunctionTools {
+		return fail("device must advertise function_tools")
+	}
+	if snapshot.Environment != nil && snapshot.Environment.Type == "none" && !caps.EnvironmentNone {
+		return fail("device must advertise environment_none")
+	}
+	return caps, nil
+}

@@ -1130,16 +1130,18 @@ paths:
       description: Supports inline configuration or a tenant-owned saved agent_id
         with per-Session field replacements. Execution supports model/instructions,
         text verbosity, non-deferred function tools, disabled multi_agent, implicit
-        reasoning, service tier auto and environment type none. Omitted stream defaults
-        to false; stream and agent_id cannot be null. Metadata may be null, but its
-        values must be strings. Initial input accepts a string or user-message array
-        containing text and atomically starts a Turn; omitted or null input creates
-        an idle Session. With stream=true, returns live Session events starting at
-        creation; disconnect does not cancel execution. New saved-Agent creation retries
-        retain caller identity independently of later Agent changes; existing records
-        without that identity retain their previous retry rules. Creation retries
-        observe future events without replay; retry with stream=false to retrieve
-        the Session. Non-text initial input remains unsupported.
+        reasoning, service tier auto and environment type none, subject to the configured
+        engine. Claude SDK currently requires medium verbosity and object-root function
+        schemas. Omitted stream defaults to false; stream and agent_id cannot be null.
+        Metadata may be null, but its values must be strings. Initial input accepts
+        a string or user-message array containing text and atomically starts a Turn;
+        omitted or null input creates an idle Session. With stream=true, returns live
+        Session events starting at creation; disconnect does not cancel execution.
+        New saved-Agent creation retries retain caller identity independently of later
+        Agent changes; existing records without that identity retain their previous
+        retry rules. Creation retries observe future events without replay; retry
+        with stream=false to retrieve the Session. Non-text initial input remains
+        unsupported.
       parameters:
       - description: agents=v1
         in: header
@@ -1347,8 +1349,9 @@ paths:
       - application/json
       description: Atomically accepts text messages, cancellation and function results.
         Messages steer active work or start a queued Turn. Retry keys identify the
-        whole ordered batch. Function output accepts text or ordered text/image parts;
-        message images are not supported yet.
+        whole ordered batch. Function output accepts text or ordered text/image parts
+        subject to engine support; Claude SDK currently accepts text results only.
+        Message images are not supported yet.
       parameters:
       - description: agents=v1
         in: header
