@@ -45,9 +45,13 @@ func TestSteeringReceiptsAndLifecycle(t *testing.T) {
 				input.Text = strings.Repeat("x", 512*1024)
 			}
 			receiptCtx, receiptCancel := context.WithTimeout(ctx, time.Second)
-			if mode == "timeout" || mode == "blocked-write" {
+			if mode == "timeout" {
 				receiptCancel()
 				receiptCtx, receiptCancel = context.WithTimeout(ctx, 30*time.Millisecond)
+			}
+			if mode == "blocked-write" {
+				receiptCancel()
+				receiptCtx, receiptCancel = context.WithCancel(ctx)
 			}
 			defer receiptCancel()
 			reply := make(chan error, 1)
@@ -66,6 +70,24 @@ func TestSteeringReceiptsAndLifecycle(t *testing.T) {
 					reply <- s.Steer(receiptCtx, input)
 				}
 			}()
+			if mode == "blocked-write" {
+				// Serialization can exceed a short deadline under race instrumentation.
+				// Cancel only after admission so this exercises transport cancellation.
+				for {
+					s.steering.mu.Lock()
+					admitted := s.steering.pending != nil
+					s.steering.mu.Unlock()
+					if admitted {
+						receiptCancel()
+						break
+					}
+					select {
+					case <-ctx.Done():
+						t.Fatal("input was not admitted before test deadline")
+					case <-time.After(time.Millisecond):
+					}
+				}
+			}
 			if mode == "cancel" {
 				time.Sleep(30 * time.Millisecond)
 				_ = s.Cancel(context.Background())

@@ -49,7 +49,7 @@ func (s *session) SteerWithReceipt(ctx context.Context, input proto.PromptSteerP
 		return fmt.Errorf("%w: input exceeds bridge limit", agent.ErrSteeringRejected)
 	}
 	s.steering.mu.Lock()
-	if s.steering.closed {
+	if s.steering.closed || s.process.Context().Err() != nil {
 		s.steering.mu.Unlock()
 		return agent.ErrSteeringInactive
 	}
@@ -145,4 +145,10 @@ func (s *session) matchesInputSession(id string) bool {
 	s.steering.mu.Lock()
 	defer s.steering.mu.Unlock()
 	return s.steering.sessionID == "" || s.steering.sessionID == id
+}
+
+func (s *session) inputSessionID() string {
+	s.steering.mu.Lock()
+	defer s.steering.mu.Unlock()
+	return s.steering.sessionID
 }

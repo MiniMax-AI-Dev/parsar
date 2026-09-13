@@ -119,6 +119,10 @@ func runSDKHelper() {
 	}
 	encode := func(event bridgeEvent) { _ = json.NewEncoder(os.Stdout).Encode(event) }
 	mode := os.Getenv("SDK_HELPER_MODE")
+	if strings.HasPrefix(mode, "cancellation-") {
+		runCancellationHelper(request, mode, encode)
+		return
+	}
 	if strings.HasPrefix(mode, "steering-") {
 		runSteeringHelper(request, mode, scanner, encode)
 		return
