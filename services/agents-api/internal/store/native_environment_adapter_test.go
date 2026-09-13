@@ -20,6 +20,14 @@ import (
 )
 
 func TestNativeDaemonRemoteEnvironment(t *testing.T) {
+	testNativeDaemonRemoteEnvironment(t, false)
+}
+
+func TestNativeDaemonPreparedRemoteEnvironment(t *testing.T) {
+	testNativeDaemonRemoteEnvironment(t, true)
+}
+
+func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 	binary, image := os.Getenv("PARSAR_CODEX_BINARY"), os.Getenv("PARSAR_PLACEMENT_EXECUTOR_IMAGE")
 	keyFile := os.Getenv("PARSAR_PLACEMENT_MODEL_KEY_FILE")
 	if binary == "" || !strings.HasPrefix(image, "sha256:") || keyFile == "" {
@@ -43,6 +51,13 @@ func TestNativeDaemonRemoteEnvironment(t *testing.T) {
 	info, found, known := peer.AgentKindStatus("codex")
 	if !known || !found || !info.Available || !info.Capabilities.RemoteEnvironment {
 		t.Fatal("real heartbeat omitted remote capability")
+	}
+	prompt := daemonRemotePrompt
+	if prepared {
+		if !info.Capabilities.Preparation {
+			t.Fatal("real heartbeat omitted preparation capability")
+		}
+		prompt = daemonPreparedRemotePrompt
 	}
 	// These credentials do not exist when the authenticated daemon starts.
 	executorToken, harnessToken := uuid.NewString(), uuid.NewString()
@@ -94,6 +109,7 @@ func TestNativeDaemonRemoteEnvironment(t *testing.T) {
 		AgentOptions:      map[string]any{"model": "MiniMax-M3", "web_search": "disabled", "system_prompt": "Follow the user instructions and use the native shell for requested commands.", "codex_provider": map[string]any{"name": "MiniMax validation", "base_url": "https://api.minimax.cn/v1", "bearer_token": key, "wire_api": "responses"}},
 		RemoteEnvironment: &proto.RemoteEnvironment{ID: environment.ID, WorkspaceDirectory: workspace, ConnectionURL: server.URL, ConnectionToken: harnessToken}}
 	proof := map[string]any{"scope": "authenticated daemon adapter; public Environment admission and dispatcher remain pending", "native_version": string(version), "environment_id": environment.ID, "remote_workspace": workspace, "events": []proto.Envelope{}}
+	proof["prepared_execution"] = prepared
 	defer persistDaemonRemoteProof(t, root, proof, []string{key, executorToken, harnessToken, h.credential})
 	bad := req
 	bad.AgentStateKey += "-rejected"
@@ -101,11 +117,12 @@ func TestNativeDaemonRemoteEnvironment(t *testing.T) {
 	badBinding.ConnectionToken = "invalid-test-token"
 	bad.RemoteEnvironment = &badBinding
 	bad.Prompt = "This must fail before a model Turn."
-	_, rejected, _ := daemonRemotePrompt(t, ctx, peer, bad, nil)
-	if !daemonRemoteHasError(rejected) {
+	_, rejected, _ := prompt(t, ctx, peer, bad, nil)
+	if !daemonRemoteHasError(rejected) && !(prepared && daemonRemotePreparationFailed(rejected)) {
 		t.Fatal("invalid transient authorization accepted")
 	}
 	proof["invalid_authorization_rejected"] = true
+	proof["invalid_authorization_events"] = rejected
 	for index, phase := range []string{"first", "resumed"} {
 		observation.mu.Lock()
 		before := observation.executors
@@ -116,7 +133,7 @@ func TestNativeDaemonRemoteEnvironment(t *testing.T) {
 		} else {
 			req.Prompt += " Recall the memory value from the first Turn and read retained.txt."
 		}
-		done, events, _ := daemonRemotePrompt(t, ctx, peer, req, nil)
+		done, events, _ := prompt(t, ctx, peer, req, nil)
 		proof[phase] = map[string]any{"done": done, "events": events}
 		if daemonRemoteHasError(events) || !strings.Contains(done.Content, memory) || !strings.Contains(done.Content, instruction) || strings.Contains(done.Content, "WRONG_LOCAL_INSTRUCTIONS") {
 			t.Fatal("remote instructions or cold native memory not observed; inspect private proof")
@@ -147,7 +164,7 @@ func TestNativeDaemonRemoteEnvironment(t *testing.T) {
 	}
 	req.Prompt = "Run the exact command `./long.sh cancel` using the native shell. It deliberately runs until cancelled. Keep waiting or polling; do not finish this Turn or produce a final answer while it is running."
 	cancelAt := time.Time{}
-	_, events, ack := daemonRemotePrompt(t, ctx, peer, req, func() bool {
+	_, events, ack := prompt(t, ctx, peer, req, func() bool {
 		_, e := os.Stat(filepath.Join(local, "cancel.heartbeat"))
 		if e == nil && cancelAt.IsZero() {
 			cancelAt = time.Now()

@@ -73,12 +73,14 @@ var ErrUnsupportedKind = errors.New("agent: unsupported agent_kind")
 type Registry struct {
 	mu        sync.RWMutex
 	factories map[string]Factory
+	preparers map[string]PreparationFactory
 	kinds     map[string]proto.SupportedAgentKind
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
 		factories: make(map[string]Factory),
+		preparers: make(map[string]PreparationFactory),
 		kinds:     make(map[string]proto.SupportedAgentKind),
 	}
 }
@@ -103,6 +105,8 @@ func (r *Registry) RegisterKind(info proto.SupportedAgentKind, f Factory) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.factories[kind] = f
+	delete(r.preparers, kind)
+	info.Capabilities.Preparation = false
 	r.kinds[kind] = info
 }
 

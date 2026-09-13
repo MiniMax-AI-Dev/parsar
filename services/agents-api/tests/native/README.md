@@ -74,6 +74,13 @@ go test ./services/agents-api/internal/store \
   -run '^TestNativeDaemonRemoteEnvironment$' -count=1 -v -timeout=12m
 ```
 
+With the same prerequisites, run `TestNativeDaemonPreparedRemoteEnvironment` to
+exercise private prepare/ready/start through the registered daemon. Its separate
+preparation subscription creates no Run, then the actual Run starts using the
+returned handle. This repeats real remote command/file, cold-history and
+cancellation acceptance; it does not enable public Environment admission. Controlled
+subprocess/router tests establish deferred-start ownership independently.
+
 The fixture explicitly sets daemon `PARSAR_CODEX_BIN` to `PARSAR_CODEX_BINARY`.
 It checks invalid transient authorization, remote instructions/cwd/output/exit/files,
 release and same-thread cold continuation, then sends `prompt_cancel` during an

@@ -342,7 +342,36 @@ the child and cleans temporary plan resources; deferred preparation Close is ine
 after transfer. The owner context spans the whole harness lifetime, while startup
 operation deadlines remain separate. Owner cancellation/RPC exit release pending
 resources; executor loss is checked at Start, not continuously monitored. This
-adapter seam adds no daemon wire operation, public admission or new scheduler.
+adapter seam does not provide public admission or a new scheduler.
+
+The private daemon preparation controls reuse execution configuration but reject
+input, RunID, Conversation, attachments and product authoring. The initial profile
+requires a remote environment, stable state key, strict resume and completion
+release. Its separate capability is registered through an execution-only factory
+and preserved through the product registry wrapper and heartbeat mapping. Native
+details remain inside the adapter; this private profile does not narrow upstream.
+
+Preparation request IDs correlate only control responses. The daemon returns a
+fresh opaque handle before slow work; Start supplies that handle and the actual
+RunID/prompt. Handles belong to one daemon connection. Gateway preparation
+subscriptions do not register Runs. Per-handle revisions order asynchronous status
+snapshots; reject responses describe control errors without inventing run events.
+At most four native preparations may be preparing, ready, starting or closing.
+Ownership expires five minutes after acceptance, and retries do not extend it.
+At most 64 request records are retained; retired request IDs may allocate a fresh
+handle, while old handles cannot consume replacements. This is not durable
+exactly-once preparation or cross-connection recovery.
+
+Preparation and Start execute outside the receive loop and router lock, with
+tracked lifetime work. Start reserves the real RunID with its owner cancellation
+before native work; cancellation in that phase cancels the owner even before a
+Session is published. A late result cannot resurrect released ownership. Shutdown
+captures cancellation/session references under the lock. Successful transfer stops
+the preparation deadline and uses the ordinary run pump and completion release;
+later preparation Release cannot cancel that Run. Released/expired status makes
+the handle unusable; asynchronous native cleanup still counts toward capacity and
+does not promise immediate OS quiescence. Worker admission/start integration and
+public Environment lifecycle remain separate required work.
 
 This daemon slice keeps existing best-effort cancellation and harness cleanup.
 Native detached-session cleanup may stop remote commands after a delay; an applied

@@ -32,12 +32,16 @@ func (r *Router) handlePromptCancel(ctx context.Context, env proto.Envelope) err
 		state.retain = false
 	}
 	var cancelSession func(context.Context) error
+	preparationStart := state != nil && state.preparationStart
 	if state != nil && state.session != nil {
 		cancelSession = state.session.Cancel
 	}
 	r.mu.Unlock()
 	ack := proto.InteractionDecisionAckPayload{DeliveryID: request.DeliveryID, ErrorCode: "run_inactive"}
-	if state != nil && cancelSession == nil {
+	if preparationStart && cancelSession == nil {
+		state.ctxCancel()
+		ack.Applied, ack.ErrorCode = true, ""
+	} else if state != nil && cancelSession == nil {
 		ack.ErrorCode = "not_ready"
 	} else if cancelSession != nil {
 		if err := cancelSession(ctx); err != nil {

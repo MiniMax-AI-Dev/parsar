@@ -105,6 +105,10 @@ func awaitDaemonRemoteCondition(t *testing.T, ctx context.Context, timeout time.
 }
 
 func daemonRemotePrompt(t *testing.T, ctx context.Context, peer *gateway.Session, req proto.PromptRequestPayload, cancelWhen func() bool) (proto.DonePayload, []proto.Envelope, *proto.InteractionDecisionAckPayload) {
+	return daemonRemotePromptWithStart(t, ctx, peer, req, cancelWhen, nil)
+}
+
+func daemonRemotePromptWithStart(t *testing.T, ctx context.Context, peer *gateway.Session, req proto.PromptRequestPayload, cancelWhen func() bool, start func(string) error) (proto.DonePayload, []proto.Envelope, *proto.InteractionDecisionAckPayload) {
 	t.Helper()
 	run := uuid.NewString()
 	req.RunID = run
@@ -113,12 +117,18 @@ func daemonRemotePrompt(t *testing.T, ctx context.Context, peer *gateway.Session
 		t.Fatal(err)
 	}
 	defer peer.Unsubscribe(run)
-	envelope, err := proto.NewEnvelope(proto.TypePromptRequest, run, req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = peer.Send(ctx, envelope); err != nil {
-		t.Fatal(err)
+	if start != nil {
+		if err = start(run); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		envelope, err := proto.NewEnvelope(proto.TypePromptRequest, run, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = peer.Send(ctx, envelope); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var events []proto.Envelope
 	var done proto.DonePayload

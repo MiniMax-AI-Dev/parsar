@@ -80,11 +80,12 @@ func (p *Prepared) start(ctx context.Context, runID, prompt string, out chan<- p
 	return s, nil
 }
 
-// Close releases an unused preparation. After successful Start it is inert; use
+// Close waits for unused teardown and plan cleanup, including another caller's
+// ongoing Close. After successful Start it is inert; use
 // the returned Session's cancellation path to release the transferred resource.
 func (p *Prepared) Close() error {
 	p.mu.Lock()
-	if p.started || p.closed {
+	if p.started {
 		p.mu.Unlock()
 		return nil
 	}

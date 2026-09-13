@@ -260,6 +260,7 @@ type AgentKindCapabilities struct {
 	ToolObservations   bool `json:"tool_observations,omitempty"`
 	EnvironmentNone    bool `json:"environment_none,omitempty"`
 	RemoteEnvironment  bool `json:"remote_environment,omitempty"`
+	Preparation        bool `json:"preparation,omitempty"`
 	WebSearchControl   bool `json:"web_search_control,omitempty"`
 	// ExecutionControls supports typed search and verbosity controls.
 	ExecutionControls    bool `json:"execution_controls,omitempty"`

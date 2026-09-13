@@ -100,8 +100,10 @@ type Session struct {
 
 	// Subscribers keyed by runID. The read loop only sends on these
 	// channels; Unsubscribe is the only place that closes them.
-	subsMu sync.Mutex
-	subs   map[string]*Subscription
+	subsMu        sync.Mutex
+	subs          map[string]*Subscription
+	preparationMu sync.Mutex
+	preparations  map[string]*preparationSubscription
 
 	ackMu      sync.Mutex
 	ackWaiters map[string]chan proto.InteractionDecisionAckPayload
@@ -146,6 +148,7 @@ func NewSessionWithOwner(conn WSConn, deviceID, workspaceID, daemonVersion strin
 		owner:         owner,
 		lastSeenAt:    now,
 		subs:          map[string]*Subscription{},
+		preparations:  map[string]*preparationSubscription{},
 		ackWaiters:    map[string]chan proto.InteractionDecisionAckPayload{},
 		sendCh:        make(chan proto.Envelope, 64),
 		closed:        make(chan struct{}),
@@ -249,6 +252,7 @@ func (s *Session) Close(reason string) {
 			s.reg.DetachRun(runID)
 		}
 		s.reg.Deregister(s)
+		s.closePreparations()
 		s.markOfflineOnClose()
 		s.releaseOwnerLease()
 	})
@@ -537,6 +541,7 @@ func deviceKindsFromHeartbeat(p proto.HeartbeatPayload) []device.SupportedAgentK
 				ToolObservations:     info.Capabilities.ToolObservations,
 				EnvironmentNone:      info.Capabilities.EnvironmentNone,
 				RemoteEnvironment:    info.Capabilities.RemoteEnvironment,
+				Preparation:          info.Capabilities.Preparation,
 				WebSearchControl:     info.Capabilities.WebSearchControl,
 				TextVerbosity:        info.Capabilities.TextVerbosity,
 				ExecutionControls:    info.Capabilities.ExecutionControls,
@@ -551,6 +556,9 @@ func deviceKindsFromHeartbeat(p proto.HeartbeatPayload) []device.SupportedAgentK
 
 func (s *Session) dispatch(env proto.Envelope) {
 	switch env.Type {
+	case proto.TypePreparationStatus:
+		s.dispatchPreparation(env)
+		return
 	case proto.TypeHeartbeat:
 		s.handleHeartbeat(env)
 		return
