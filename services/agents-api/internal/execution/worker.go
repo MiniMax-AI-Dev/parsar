@@ -33,6 +33,9 @@ func StartWorker(ctx context.Context, dispatcher *Dispatcher) (*Worker, error) {
 	return worker, nil
 }
 
+// CheckOwnership checks the same database lease used for execution writes.
+func (w *Worker) CheckOwnership(ctx context.Context) error { return w.lease.Ping(ctx) }
+
 func (w *Worker) SubmitInputs(ctx context.Context, tenant, session, key string, inputs []store.Input) ([]store.InputReceipt, error) {
 	value, err := w.admission.GetSession(ctx, tenant, session)
 	if err != nil {

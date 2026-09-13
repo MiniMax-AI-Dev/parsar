@@ -286,6 +286,7 @@ openapi:
 	$(SWAG) init \
 	    -g cmd/server/main.go \
 	    --dir ./services/agents-api,./contracts/agents-api/v1 \
+	    --exclude ./services/agents-api/internal/executor \
 	    --output contracts/agents-api/gen \
 	    --outputTypes yaml \
 	    --parseInternal

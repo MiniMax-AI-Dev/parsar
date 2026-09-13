@@ -3,8 +3,9 @@
 This assessment covers the fixed [Python SDK contract](upstream.json). It is an
 implementation plan, not an announcement of Environment support. Public execution
 currently admits `environment.type=none` on the verified Codex and Claude SDK
-profiles. No public Environment, template, file or executor registry route is
-implemented. See [current coverage](README.md#public-semantics).
+profiles. No public Environment, template or file resource is implemented. An opt-in native
+executor registration/presence adapter exists; harness authorization/relay and
+public Environment execution remain unimplemented. See [current coverage](README.md#public-semantics).
 
 The internal Store now owns a durable Environment association for newly created
 `self_hosted` and `openai_hosted` snapshots, atomically with Session creation.
@@ -14,6 +15,18 @@ retaining the underlying record. This is a persistence primitive, with no public
 admission, lifecycle transitions, readiness gating or native/provider integration.
 Missing/`none` configurations and historical internal snapshots gain no backfill.
 
+
+The native Codex registry uses exact-Environment executor digest bindings, the
+existing execution owner and tenant-scoped Store reads. Registration and current
+socket identity are process-local; the returned WebSocket capability expires for
+new connections after five minutes. Restart invalidates registrations, causing the
+native executor to register again. Replaced socket callbacks cannot clear a newer
+connection. These observations do not change durable `pending` state or emit public
+Environment readiness. Deleting the owning Session rejects new requests and closes
+existing sockets on the next ownership heartbeat. A previous holder of a still-valid
+executor credential can register again; permanent exclusion requires revocation.
+The adapter currently rejects application data until harness grants and relay are
+implemented. See the [operator prerequisite](../../services/agents-api/README.md#native-executor-registration-prerequisite).
 
 ## Contract inventory
 
@@ -160,8 +173,8 @@ aligned to its manifests; third-party versions, sources, checksums and dependenc
 edges stayed unchanged. Native execution and encryption sources were unchanged.
 
 The probe supports reusing the native Codex client/executor libraries for this
-adapter. The service still needs its own durable Environment ownership and scoped
-registry/relay authorization. The test relay is not a production service; other
+adapter. Durable ownership and bounded executor registration/presence now exist; scoped
+harness authorization and the relay remain required. The test relay is not a production service; other
 harnesses retain their own native placement and execution protocols.
 
 ## Dependency-ordered implementation

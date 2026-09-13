@@ -72,6 +72,7 @@ func run() error {
 	}
 	executionStore := store.New(pool)
 	var workerDone chan error
+	var worker *execution.Worker
 	var options []api.Option
 	var daemonHandler http.Handler
 	if wsURL := os.Getenv("AGENTS_API_DAEMON_WS_URL"); wsURL != "" {
@@ -82,7 +83,7 @@ func run() error {
 		}
 		daemonHandler = registryHandler
 		defer runtime.CloseConnections(registry)
-		worker, err := execution.StartWorker(ctx, &execution.Dispatcher{Store: executionStore, Registry: registry})
+		worker, err = execution.StartWorker(ctx, &execution.Dispatcher{Store: executionStore, Registry: registry})
 		if err != nil {
 			return err
 		}
@@ -96,13 +97,25 @@ func run() error {
 		}()
 		options = append(options, api.WithExecution(worker))
 	}
+	executor, err := executorRegistry(executionStore, worker, keys)
+	if err != nil {
+		return err
+	}
+	if executor != nil {
+		defer executor.Close()
+	}
 	handler, err := api.NewHandler(executionStore, auth, engine, options...)
 	if err != nil {
 		return err
 	}
-	if daemonHandler != nil {
+	if daemonHandler != nil || executor != nil {
 		mux := http.NewServeMux()
-		mux.Handle("/api/v1/agent-daemon/", daemonHandler)
+		if daemonHandler != nil {
+			mux.Handle("/api/v1/agent-daemon/", daemonHandler)
+		}
+		if executor != nil {
+			mux.Handle("/cloud/environment/", executor.Handler())
+		}
 		mux.Handle("/", handler)
 		handler = mux
 	}
