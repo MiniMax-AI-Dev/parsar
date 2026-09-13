@@ -43,6 +43,14 @@ func TestLiveClaudeSDKCancelResume(t *testing.T) {
 		"ANTHROPIC_API_KEY=", "CLAUDE_CODE_OAUTH_TOKEN=", "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1",
 		"ANTHROPIC_DEFAULT_SONNET_MODEL=MiniMax-M3", "ANTHROPIC_DEFAULT_OPUS_MODEL=MiniMax-M3", "ANTHROPIC_DEFAULT_HAIKU_MODEL=MiniMax-M3",
 	}}
+	readiness, err := CheckRuntime(context.Background(), config)
+	if err != nil {
+		t.Fatal("real runtime readiness failed", err)
+	}
+	readinessJSON, _ := json.MarshalIndent(readiness, "", "  ")
+	if err := os.WriteFile(filepath.Join(root, "readiness.json"), readinessJSON, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	type evidence struct {
 		NodePID    int               `json:"node_pid"`
 		NativePIDs []int             `json:"native_pids"`
