@@ -715,6 +715,48 @@ definitions:
     - data
     - has_more
     type: object
+  v1.UpdateAgentRequest:
+    properties:
+      instructions:
+        type: string
+        x-nullable: true
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+        x-nullable: true
+      model:
+        type: string
+      multi_agent:
+        type: object
+        x-nullable: true
+      name:
+        maxLength: 128
+        type: string
+        x-nullable: true
+      reasoning:
+        allOf:
+        - $ref: '#/definitions/v1.Reasoning'
+        x-nullable: true
+      service_tier:
+        enum:
+        - auto
+        - default
+        - flex
+        - priority
+        - fast
+        type: string
+        x-nullable: true
+      text:
+        allOf:
+        - $ref: '#/definitions/v1.SavedAgentTextInput'
+        x-nullable: true
+      tools:
+        items:
+          type: object
+        type: array
+        x-nullable: true
+    type: object
   v1.UpdateSessionRequest:
     properties:
       metadata:
@@ -901,6 +943,63 @@ paths:
       security:
       - BearerAuth: []
       summary: Retrieve a reusable Agent
+      tags:
+      - Agents
+    post:
+      consumes:
+      - application/json
+      description: Preserves omitted fields and replaces supplied fields using shared
+        saved-configuration validation. Null name/instructions clear; null or empty
+        metadata clears all pairs. Existing Session snapshots are unchanged. Nested
+        replacement/null defaults, model-derived reasoning and exact hosted error/no-op
+        timestamp behavior remain incompletely verified.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Agent ID
+        in: path
+        name: agent_id
+        required: true
+        type: string
+      - description: Supplied reusable Agent fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v1.UpdateAgentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SavedAgent'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a reusable Agent
       tags:
       - Agents
   /agents/sessions:

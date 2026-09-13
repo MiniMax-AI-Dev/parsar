@@ -120,3 +120,58 @@ func (q *Queries) ListAgents(ctx context.Context, arg ListAgentsParams) ([]Agent
 	}
 	return items, nil
 }
+
+const lockAgent = `-- name: LockAgent :one
+SELECT id, tenant_id, metadata, configuration, created_at, updated_at FROM agents WHERE tenant_id = $1 AND id = $2 FOR UPDATE
+`
+
+type LockAgentParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) LockAgent(ctx context.Context, arg LockAgentParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, lockAgent, arg.TenantID, arg.ID)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Metadata,
+		&i.Configuration,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateAgent = `-- name: UpdateAgent :one
+UPDATE agents SET configuration = $3, metadata = $4, updated_at = clock_timestamp()
+WHERE tenant_id = $1 AND id = $2
+RETURNING id, tenant_id, metadata, configuration, created_at, updated_at
+`
+
+type UpdateAgentParams struct {
+	TenantID      pgtype.UUID `json:"tenant_id"`
+	ID            pgtype.UUID `json:"id"`
+	Configuration []byte      `json:"configuration"`
+	Metadata      []byte      `json:"metadata"`
+}
+
+func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, updateAgent,
+		arg.TenantID,
+		arg.ID,
+		arg.Configuration,
+		arg.Metadata,
+	)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Metadata,
+		&i.Configuration,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
