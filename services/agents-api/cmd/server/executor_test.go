@@ -37,9 +37,10 @@ func TestExecutorRegistryIsExplicitAndUsesDistinctKeys(t *testing.T) {
 		t.Fatal("registry enabled without execution owner")
 	}
 	worker := &execution.Worker{}
-	if _, err := executorRegistry(s, worker, []api.APIKey{{TokenSHA256: key.TokenSHA256, TenantID: key.TenantID}}); err == nil {
-		t.Fatal("caller key also granted executor access")
+	if _, err := executorRegistry(s, worker, nil); err == nil {
+		t.Fatal("retired executor key file silently accepted")
 	}
+	t.Setenv("AGENTS_API_EXECUTOR_KEYS_FILE", "")
 	r, err := executorRegistry(s, worker, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -68,15 +69,9 @@ func TestHarnessRegistryConfigurationSeparatesAllPurposes(t *testing.T) {
 		}
 		return file
 	}
-	t.Setenv("AGENTS_API_EXECUTOR_KEYS_FILE", write("executor.json", key))
 	t.Setenv("AGENTS_API_EXECUTOR_URL", "https://executor.example")
 	t.Setenv("AGENTS_API_HARNESS_KEYS_FILE", write("harness.json", key))
 	s, worker := store.New(nil), &execution.Worker{}
-	if _, err := executorRegistry(s, worker, nil); err == nil {
-		t.Fatal("harness reuses executor credential")
-	}
-	key.TokenSHA256 = device.HashCredential(uuid.NewString())
-	t.Setenv("AGENTS_API_HARNESS_KEYS_FILE", write("harness.json", key))
 	if _, err := executorRegistry(s, worker, []api.APIKey{{TokenSHA256: key.TokenSHA256, TenantID: key.TenantID}}); err == nil {
 		t.Fatal("harness reuses caller credential")
 	}

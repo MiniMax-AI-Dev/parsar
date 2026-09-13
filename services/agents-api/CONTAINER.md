@@ -96,3 +96,10 @@ This reuses the existing SDK/raw-HTTP/Go-client suite against read-only containe
 including authentication, tenant isolation and restart persistence. Its host
 network is a test convenience. Real daemon/model acceptance is additional evidence;
 synthetic or HTTP-only checks do not prove native execution or full compatibility.
+
+The image also includes `/usr/local/bin/agents-api-environment-key` for operator
+issuance, rotation and revocation of exact-Environment executor credentials. Run it
+with only the execution database configuration and the arguments in the
+[native transport guide](README.md#native-executor-transport-prerequisite). Redirect
+its secret stdout to a mode-0600 file under `~/.parsar/`; do not bake credentials
+into the image or pass the broader caller key to an executor.

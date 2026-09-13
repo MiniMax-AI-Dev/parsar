@@ -40,7 +40,7 @@ func (r *Registry) connectExecutor(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusUnauthorized)
 		return
 	}
-	if !r.check(w, req, reg.key) {
+	if !r.check(w, req, reg.key) || !r.checkCurrentExecutor(w, req, reg.key) {
 		return
 	}
 	r.mu.Lock()
@@ -123,7 +123,7 @@ func (r *Registry) heartbeat(environment string, reg *registration, c *connectio
 			return
 		case <-ticker.C:
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-			err := r.authorized(ctx, reg.key)
+			err := r.executorAuthorized(ctx, reg.key)
 			cancel()
 			r.mu.Lock()
 			current := !r.closed && r.registrations[environment] == reg && (reg.socket == c || (reg.socket != nil && reg.socket.peer == c))

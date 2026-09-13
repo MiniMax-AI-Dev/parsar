@@ -94,9 +94,8 @@ func (r *Registry) connect(w http.ResponseWriter, req *http.Request) {
 // @Router /cloud/environment/{environment}/validate [post]
 func (r *Registry) validate(w http.ResponseWriter, req *http.Request) {
 	environment := req.PathValue("environment")
-	key, ok := credential(req, environment, r.keys)
+	key, ok := r.executorCredential(w, req, environment)
 	if !ok {
-		writeError(w, http.StatusUnauthorized)
 		return
 	}
 	if !r.check(w, req, key) {
@@ -114,7 +113,7 @@ func (r *Registry) validate(w http.ResponseWriter, req *http.Request) {
 	valid := false
 	r.mu.Lock()
 	reg := r.registrations[environment]
-	if !r.closed && reg != nil && reg.id == body.ExecutorRegistrationID && reg.socket != nil {
+	if !r.closed && reg != nil && reg.id == body.ExecutorRegistrationID && reg.key.TokenSHA256 == key.TokenSHA256 && reg.socket != nil {
 		for _, grant := range reg.grants {
 			if grant.executor == reg.socket && grant.harness != nil && grant.harness == reg.socket.peer && !grant.validated && time.Now().Before(grant.expires) && grant.publicKey == body.HarnessPublicKey && subtle.ConstantTimeCompare(authorization[:], grant.authorization[:]) == 1 {
 				grant.validated = true
@@ -150,7 +149,7 @@ func (r *Registry) connectHarness(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusUnauthorized)
 		return
 	}
-	if !r.check(w, req, grant.key) {
+	if !r.check(w, req, grant.key) || !r.checkCurrentExecutor(w, req, reg.key) {
 		return
 	}
 	r.mu.Lock()

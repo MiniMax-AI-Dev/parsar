@@ -17,6 +17,7 @@ import (
 
 type EnvironmentStore interface {
 	GetEnvironment(context.Context, string, string) (store.Environment, error)
+	AuthenticateEnvironmentExecutor(context.Context, string, string) (string, error)
 }
 
 // ScopedKey binds a purpose-specific native transport credential to one Environment.
@@ -30,17 +31,16 @@ type Config struct {
 	Store          EnvironmentStore
 	CheckOwnership func(context.Context) error
 	PublicURL      string
-	Keys           []ScopedKey
 	HarnessKeys    []ScopedKey
 }
 
-func validateConfig(c Config) (string, map[[32]byte]ScopedKey, error) {
-	if c.Store == nil || c.CheckOwnership == nil || len(c.Keys) == 0 {
-		return "", nil, errors.New("executor registry requires Store, execution ownership and scoped keys")
+func validateConfig(c Config) (string, error) {
+	if c.Store == nil || c.CheckOwnership == nil {
+		return "", errors.New("executor registry requires Store and execution ownership")
 	}
 	u, err := url.Parse(c.PublicURL)
 	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-		return "", nil, errors.New("executor URL must be an absolute origin without credentials")
+		return "", errors.New("executor URL must be an absolute origin without credentials")
 	}
 	switch u.Scheme {
 	case "https":
@@ -48,14 +48,13 @@ func validateConfig(c Config) (string, map[[32]byte]ScopedKey, error) {
 	case "http":
 		ip := net.ParseIP(u.Hostname())
 		if u.Hostname() != "localhost" && (ip == nil || !ip.IsLoopback()) {
-			return "", nil, errors.New("executor HTTP is allowed only on loopback")
+			return "", errors.New("executor HTTP is allowed only on loopback")
 		}
 		u.Scheme = "ws"
 	default:
-		return "", nil, errors.New("executor URL must use HTTPS or loopback HTTP")
+		return "", errors.New("executor URL must use HTTPS or loopback HTTP")
 	}
-	keys, err := scopedKeys(c.Keys)
-	return strings.TrimRight(u.String(), "/"), keys, err
+	return strings.TrimRight(u.String(), "/"), nil
 }
 
 func scopedKeys(bindings []ScopedKey) (map[[32]byte]ScopedKey, error) {

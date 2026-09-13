@@ -240,9 +240,7 @@ func TestHarnessPairRejectsTextOversizeAndBackpressure(t *testing.T) {
 	}
 }
 
-func TestHarnessConfigCannotReuseExecutorPurpose(t *testing.T) {
-	f := newFixture(t)
-	if _, err := New(Config{Store: f.source, CheckOwnership: f.source.owner, PublicURL: f.server.URL, Keys: f.keys, HarnessKeys: f.keys}); err == nil {
-		t.Fatal("credential purpose collision accepted")
-	}
+func TestHarnessCredentialCannotRegisterExecutor(t *testing.T) {
+	f, tokens := relayFixture(t)
+	f.register(t, f.keys[0].EnvironmentID, tokens[0], nativeRequest(), 401)
 }

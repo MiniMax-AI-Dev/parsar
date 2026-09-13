@@ -132,8 +132,12 @@ func TestNativeHarnessRelayPostgreSQLAndProcessRecovery(t *testing.T) {
 	scope := func(token, owner, id string) codex.ScopedKey {
 		return codex.ScopedKey{TokenSHA256: device.HashCredential(token), TenantID: owner, EnvironmentID: id}
 	}
+	executorToken, err = s.IssueEnvironmentExecutorCredential(t.Context(), tenant, environment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String(), Keys: []codex.ScopedKey{scope(executorToken, tenant, environment.ID)}, HarnessKeys: []codex.ScopedKey{scope(harnessToken, tenant, environment.ID)}})
+	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String(), HarnessKeys: []codex.ScopedKey{scope(harnessToken, tenant, environment.ID)}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -42,8 +42,12 @@ func TestHarnessGrantsCheckPostgreSQLTenantOwnership(t *testing.T) {
 	key := func(token, tenant, environment string) codex.ScopedKey {
 		return codex.ScopedKey{TokenSHA256: device.HashCredential(token), TenantID: tenant, EnvironmentID: environment}
 	}
+	executorToken, err = s.IssueEnvironmentExecutorCredential(t.Context(), tenants[0], environments[0])
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String(), Keys: []codex.ScopedKey{key(executorToken, tenants[0], environments[0])}, HarnessKeys: []codex.ScopedKey{key(tokens[0], tenants[0], environments[0]), key(tokens[1], tenants[1], environments[1]), key(tokens[2], tenants[1], environments[0])}})
+	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String(), HarnessKeys: []codex.ScopedKey{key(tokens[0], tenants[0], environments[0]), key(tokens[1], tenants[1], environments[1]), key(tokens[2], tenants[1], environments[0])}})
 	if err != nil {
 		t.Fatal(err)
 	}

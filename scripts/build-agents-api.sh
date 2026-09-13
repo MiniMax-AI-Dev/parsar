@@ -27,7 +27,7 @@ tar -C "$repo_root" -cf - \
 (
   cd "$build_context"
   export GOWORK=off CGO_ENABLED=0
-  for command in server migrate device; do
+  for command in server migrate device environment-key; do
     artifact="agents-api-$command"
     if [[ "$command" == server ]]; then artifact=agents-api; fi
     go build -mod=readonly -trimpath -buildvcs=false \
@@ -37,7 +37,7 @@ tar -C "$repo_root" -cf - \
 
 # Publish only after every command builds successfully.
 mkdir -p "$output_dir"
-for artifact in agents-api agents-api-migrate agents-api-device; do
+for artifact in agents-api agents-api-migrate agents-api-device agents-api-environment-key; do
   mv -f "$build_context/bin/$artifact" "$output_dir/$artifact"
 done
 printf 'Standalone Agents API binaries: %s\n' "$output_dir"

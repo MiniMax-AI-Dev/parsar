@@ -18,13 +18,13 @@ func executorRegistry(s *store.Store, worker *execution.Worker, callerKeys []api
 	if file == "" && url == "" && harnessFile == "" {
 		return nil, nil
 	}
-	if file == "" || url == "" || worker == nil {
-		return nil, errors.New("executor registry requires keys, URL and the daemon execution worker")
+	if file != "" {
+		return nil, errors.New("AGENTS_API_EXECUTOR_KEYS_FILE is retired; issue durable credentials with agents-api-environment-key and remove the old setting")
 	}
-	keys, err := readNativeKeys(file)
-	if err != nil {
-		return nil, err
+	if url == "" || worker == nil {
+		return nil, errors.New("executor registry requires URL and the daemon execution worker")
 	}
+	var err error
 	var harnessKeys []codex.ScopedKey
 	if harnessFile != "" {
 		harnessKeys, err = readNativeKeys(harnessFile)
@@ -32,16 +32,14 @@ func executorRegistry(s *store.Store, worker *execution.Worker, callerKeys []api
 			return nil, err
 		}
 	}
-	for _, purpose := range [][]codex.ScopedKey{keys, harnessKeys} {
-		for _, transport := range purpose {
-			for _, caller := range callerKeys {
-				if strings.EqualFold(transport.TokenSHA256, caller.TokenSHA256) {
-					return nil, errors.New("native transport keys must be distinct from caller keys")
-				}
+	for _, transport := range harnessKeys {
+		for _, caller := range callerKeys {
+			if strings.EqualFold(transport.TokenSHA256, caller.TokenSHA256) {
+				return nil, errors.New("native transport keys must be distinct from caller keys")
 			}
 		}
 	}
-	return codex.New(codex.Config{Store: s, CheckOwnership: worker.CheckOwnership, PublicURL: url, Keys: keys, HarnessKeys: harnessKeys})
+	return codex.New(codex.Config{Store: s, CheckOwnership: worker.CheckOwnership, PublicURL: url, HarnessKeys: harnessKeys})
 }
 
 func readNativeKeys(file string) ([]codex.ScopedKey, error) {

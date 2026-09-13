@@ -21,8 +21,8 @@ type Registry struct {
 	source         EnvironmentStore
 	checkOwnership func(context.Context) error
 	publicWS       string
-	keys           map[[32]byte]ScopedKey
 	harnessKeys    map[[32]byte]ScopedKey
+	registrationMu sync.Mutex
 	mu             sync.Mutex
 	closed         bool
 	registrations  map[string]*registration
@@ -39,7 +39,7 @@ type registration struct {
 }
 
 func New(c Config) (*Registry, error) {
-	url, keys, err := validateConfig(c)
+	url, err := validateConfig(c)
 	if err != nil {
 		return nil, err
 	}
@@ -47,12 +47,8 @@ func New(c Config) (*Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	for digest := range harnessKeys {
-		if _, exists := keys[digest]; exists {
-			return nil, errors.New("harness and executor keys must be distinct")
-		}
-	}
-	return &Registry{harnessKeys: harnessKeys, source: c.Store, checkOwnership: c.CheckOwnership, publicWS: url, keys: keys, registrations: make(map[string]*registration)}, nil
+
+	return &Registry{harnessKeys: harnessKeys, source: c.Store, checkOwnership: c.CheckOwnership, publicWS: url, registrations: make(map[string]*registration)}, nil
 }
 
 func (r *Registry) Handler() http.Handler {
@@ -103,9 +99,8 @@ func (r *Registry) check(w http.ResponseWriter, req *http.Request, key ScopedKey
 // @Router /cloud/environment/{environment}/register [post]
 func (r *Registry) register(w http.ResponseWriter, req *http.Request) {
 	environment := req.PathValue("environment")
-	key, ok := credential(req, environment, r.keys)
+	key, ok := r.executorCredential(w, req, environment)
 	if !ok {
-		writeError(w, http.StatusUnauthorized)
 		return
 	}
 	if !r.check(w, req, key) {
@@ -125,9 +120,16 @@ func (r *Registry) register(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	next := &registration{id: uuid.NewString(), key: key, publicKey: body.ExecutorPublicKey, ticket: sha256.Sum256([]byte(ticket)), expires: time.Now().Add(ticketLifetime), grants: make(map[[32]byte]*harnessGrant)}
+	// Order credential observation and replacement without blocking relay heartbeats on a database read.
+	r.registrationMu.Lock()
+	if !r.checkCurrentExecutor(w, req, key) {
+		r.registrationMu.Unlock()
+		return
+	}
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
+		r.registrationMu.Unlock()
 		writeError(w, http.StatusServiceUnavailable)
 		return
 	}
@@ -137,6 +139,7 @@ func (r *Registry) register(w http.ResponseWriter, req *http.Request) {
 		r.closeConnectionLocked(previous, previous.socket)
 	}
 	r.mu.Unlock()
+	r.registrationMu.Unlock()
 	writeJSON(w, http.StatusOK, RegistrationResponse{EnvironmentID: environment, ExecutorRegistrationID: next.id, SecurityProfile: securityProfile, URL: r.publicWS + "/cloud/environment/" + environment + "/executor/" + next.id + "?ticket=" + ticket})
 }
 
