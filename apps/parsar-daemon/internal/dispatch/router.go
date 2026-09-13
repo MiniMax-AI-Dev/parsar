@@ -66,6 +66,7 @@ type sessionState struct {
 	stateKey            string
 	session             agent.Session
 	out                 chan proto.Envelope
+	ctx                 context.Context
 	ctxCancel           context.CancelFunc
 	pendingIDs          map[string]struct{}
 	pendingAsks         map[string]struct{}
@@ -307,6 +308,7 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 		runID:               runID,
 		stateKey:            stateKey,
 		out:                 out,
+		ctx:                 sessionCtx,
 		ctxCancel:           sessionCancel,
 		pendingIDs:          make(map[string]struct{}),
 		pendingAsks:         make(map[string]struct{}),

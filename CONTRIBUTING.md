@@ -342,9 +342,16 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Done. Cached input identities and conflicts remain readable while completing;
   queue/write success is not consumption. The receipt worker stays busy through
   its send, and router shutdown cancels its native and transport waits.
-  The existing ten-second native-call and five-second receipt-send limits remain;
-  the completion barrier is bounded by their sum. Longer native consumption and
-  the API's thirty-second input deadline remain separate implementation gaps. Existing product
+  `durable_input_receipts` is required before execution binding/claiming. The
+  per-input `durable_receipt` opt-in requires release-on-completion and a phased
+  adapter. Its ten-second transport timer stops only after a complete native write;
+  a separate `written` acknowledgement stops the API's thirty-second delivery timer.
+  Neither that phase nor legacy `in_flight` advances the input cursor. Await final
+  native acceptance/consumption under the Run lifetime without automatic redelivery.
+  Receipt sends retain a separate five-second shutdown-aware context, and Done
+  retains a fifteen-second final settlement bound. Once cancellation is sent, its
+  receipt owns the terminal outcome even if an input becomes unknown first.
+  Calls without the opt-in retain their existing response deadlines. Existing product
   requests retain their default idle-process policy. Native history still requires
   the device's persisted engine files; IDs alone cannot restore deleted history.
   Cancellation receipts carry the stopped engine's continuity snapshot when no

@@ -71,12 +71,13 @@ type KindCapabilities struct {
 	EnvironmentNone  bool `json:"environment_none,omitempty"`
 	WebSearchControl bool `json:"web_search_control,omitempty"`
 	// ExecutionControls supports typed search and verbosity controls.
-	ExecutionControls  bool `json:"execution_controls,omitempty"`
-	TextVerbosity      bool `json:"text_verbosity,omitempty"`
-	SubagentControl    bool `json:"subagent_control,omitempty"`
-	FunctionTools      bool `json:"function_tools,omitempty"`
-	DurableTurns       bool `json:"durable_turns,omitempty"`
-	WorkspaceAuthoring bool `json:"workspace_authoring,omitempty"`
+	ExecutionControls    bool `json:"execution_controls,omitempty"`
+	TextVerbosity        bool `json:"text_verbosity,omitempty"`
+	SubagentControl      bool `json:"subagent_control,omitempty"`
+	FunctionTools        bool `json:"function_tools,omitempty"`
+	DurableInputReceipts bool `json:"durable_input_receipts,omitempty"`
+	DurableTurns         bool `json:"durable_turns,omitempty"`
+	WorkspaceAuthoring   bool `json:"workspace_authoring,omitempty"`
 }
 
 // SupportedAgentKind is the sanitized runtime.config view

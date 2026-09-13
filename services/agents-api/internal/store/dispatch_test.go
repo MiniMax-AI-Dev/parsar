@@ -68,7 +68,7 @@ func newDispatchHarness(t *testing.T) *dispatchHarness {
 		t.Fatal("device connection failed")
 	}
 	t.Cleanup(func() { h.conn.Close() })
-	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: true, SubagentControl: true, ToolObservations: true}}}})
+	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true, DurableInputReceipts: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: true, SubagentControl: true, ToolObservations: true}}}})
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		peer, e := h.registry.LookupDevice(h.device.ID)
@@ -336,15 +336,15 @@ func TestExecutionOutcomeAndNativeBindingCommitTogether(t *testing.T) {
 }
 
 func TestExecutionRejectsLegacyDaemonBeforeClaim(t *testing.T) {
-	for _, missing := range []string{"execution_controls", "durable_turns", "web_search_control", "text_verbosity", "subagent_control", "tool_observations"} {
+	for _, missing := range []string{"execution_controls", "durable_input_receipts", "durable_turns", "web_search_control", "text_verbosity", "subagent_control", "tool_observations"} {
 		t.Run(missing, func(t *testing.T) {
 			h := newDispatchHarness(t)
-			h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: missing != "durable_turns", WebSearchControl: missing != "web_search_control", TextVerbosity: missing != "text_verbosity", ExecutionControls: missing != "execution_controls", SubagentControl: missing != "subagent_control", ToolObservations: missing != "tool_observations"}}}})
+			h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: missing != "durable_turns", DurableInputReceipts: missing != "durable_input_receipts", WebSearchControl: missing != "web_search_control", TextVerbosity: missing != "text_verbosity", ExecutionControls: missing != "execution_controls", SubagentControl: missing != "subagent_control", ToolObservations: missing != "tool_observations"}}}})
 			deadline := time.Now().Add(3 * time.Second)
 			for {
 				peer, _ := h.registry.LookupDevice(h.device.ID)
 				info, _, _ := peer.AgentKindStatus("codex")
-				if info.Capabilities.ExecutionControls == (missing != "execution_controls") && info.Capabilities.DurableTurns == (missing != "durable_turns") && info.Capabilities.WebSearchControl == (missing != "web_search_control") && info.Capabilities.TextVerbosity == (missing != "text_verbosity") && info.Capabilities.SubagentControl == (missing != "subagent_control") && info.Capabilities.ToolObservations == (missing != "tool_observations") {
+				if info.Capabilities.DurableInputReceipts == (missing != "durable_input_receipts") && info.Capabilities.ExecutionControls == (missing != "execution_controls") && info.Capabilities.DurableTurns == (missing != "durable_turns") && info.Capabilities.WebSearchControl == (missing != "web_search_control") && info.Capabilities.TextVerbosity == (missing != "text_verbosity") && info.Capabilities.SubagentControl == (missing != "subagent_control") && info.Capabilities.ToolObservations == (missing != "tool_observations") {
 					break
 				}
 				if time.Now().After(deadline) {

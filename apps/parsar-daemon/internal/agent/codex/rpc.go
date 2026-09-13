@@ -271,64 +271,6 @@ func (c *JSONRPCClient) Done() <-chan struct{} {
 	return c.doneCh
 }
 
-// Request sends a JSON-RPC call and blocks until the response arrives,
-// the deadline fires, or the child exits. Returns the raw result JSON
-// so the caller can pick its decode shape.
-func (c *JSONRPCClient) Request(ctx context.Context, method string, params any) (json.RawMessage, error) {
-	return c.request(ctx, method, params, c.writeFrame)
-}
-
-func (c *JSONRPCClient) request(ctx context.Context, method string, params any, write func(any) error) (json.RawMessage, error) {
-	if !c.Alive() {
-		return nil, errors.New("codex rpc: client not alive")
-	}
-	id, err := newRequestID()
-	if err != nil {
-		return nil, fmt.Errorf("codex rpc: id: %w", err)
-	}
-	pending := &pendingRequest{
-		method: method,
-		resp:   make(chan rpcResponse, 1),
-	}
-	c.pendingMu.Lock()
-	c.pending[id] = pending
-	c.pendingMu.Unlock()
-
-	frame := JsonRpcRequest{JsonRpc: JsonRpcVersion, ID: id, Method: method, Params: params}
-	if err := write(frame); err != nil {
-		c.pendingMu.Lock()
-		delete(c.pending, id)
-		c.pendingMu.Unlock()
-		return nil, fmt.Errorf("codex rpc: write %s: %w", method, err)
-	}
-
-	c.pendingMu.Lock()
-	timer := time.NewTimer(c.cfg.RequestTimeout)
-	if c.pending[id] == pending {
-		pending.timer = timer
-	} else {
-		// A response or client shutdown already removed this request.
-		timer.Stop()
-	}
-	c.pendingMu.Unlock()
-	defer timer.Stop()
-
-	select {
-	case r := <-pending.resp:
-		return r.result, r.err
-	case <-timer.C:
-		c.pendingMu.Lock()
-		delete(c.pending, id)
-		c.pendingMu.Unlock()
-		return nil, fmt.Errorf("codex rpc: %s timed out after %s", method, c.cfg.RequestTimeout)
-	case <-ctx.Done():
-		c.pendingMu.Lock()
-		delete(c.pending, id)
-		c.pendingMu.Unlock()
-		return nil, ctx.Err()
-	}
-}
-
 // Notify is fire-and-forget: no id, no reply.
 func (c *JSONRPCClient) Notify(method string, params any) error {
 	if !c.Alive() {

@@ -19,11 +19,14 @@ import (
 )
 
 func TestSteeringReceiptsAndLifecycle(t *testing.T) {
-	for _, mode := range []string{"success", "timeout", "wrong-receipt", "duplicate-usage", "cancel", "blocked-write"} {
+	for _, mode := range []string{"success", "phased", "timeout", "wrong-receipt", "duplicate-usage", "cancel", "blocked-write"} {
 		t.Run(mode, func(t *testing.T) {
 			root := t.TempDir()
 			t.Setenv("PARSAR_HOME", root)
 			config := Config{Node: os.Args[0], Entrypoint: filepath.Join(root, "worker"), StateDir: filepath.Join(root, "state"), Env: []string{"GO_CLAUDE_SDK_HELPER=1", "SDK_HELPER_MODE=steering-" + mode, "GORACE=atexit_sleep_ms=0"}}
+			if mode == "phased" {
+				config.Env[1] = "SDK_HELPER_MODE=steering-timeout"
+			}
 			request := proto.PromptRequestPayload{RunID: "run", Prompt: "hello", AgentSessionID: "native", AgentOptions: map[string]any{"model": "fake-model", "system_prompt": "instructions"}}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -48,13 +51,27 @@ func TestSteeringReceiptsAndLifecycle(t *testing.T) {
 			}
 			defer receiptCancel()
 			reply := make(chan error, 1)
-			go func() { reply <- s.Steer(receiptCtx, input) }()
+			go func() {
+				if mode == "phased" {
+					callCtx, cancel := context.WithCancel(ctx)
+					defer cancel()
+					timer := time.AfterFunc(30*time.Millisecond, cancel)
+					defer timer.Stop()
+					reply <- s.SteerWithReceipt(callCtx, input, func() {
+						if !timer.Stop() {
+							t.Error("write phase exceeded deadline")
+						}
+					})
+				} else {
+					reply <- s.Steer(receiptCtx, input)
+				}
+			}()
 			if mode == "cancel" {
 				time.Sleep(30 * time.Millisecond)
 				_ = s.Cancel(context.Background())
 			}
 			receipt := <-reply
-			if mode == "success" || mode == "duplicate-usage" {
+			if mode == "success" || mode == "phased" || mode == "duplicate-usage" {
 				if receipt != nil {
 					t.Fatal(receipt)
 				}
@@ -86,7 +103,7 @@ func TestSteeringReceiptsAndLifecycle(t *testing.T) {
 					}
 				}
 			}
-			wantSuccess := mode == "success" || mode == "timeout"
+			wantSuccess := mode == "success" || mode == "phased" || mode == "timeout"
 			if failed == wantSuccess {
 				t.Fatalf("unexpected terminal failure=%v", failed)
 			}

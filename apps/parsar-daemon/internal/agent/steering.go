@@ -12,6 +12,11 @@ type Steerer interface {
 	Steer(context.Context, proto.PromptSteerPayload) error
 }
 
+// DurableSteerer reports one complete write synchronously, then waits for the native receipt.
+type DurableSteerer interface {
+	SteerWithReceipt(context.Context, proto.PromptSteerPayload, func()) error
+}
+
 // ErrSteeringNotReady means no input was sent because the turn is starting.
 var ErrSteeringNotReady = errors.New("agent: turn is not ready for input")
 
