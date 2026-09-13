@@ -76,6 +76,8 @@ type sessionState struct {
 	releaseOnCompletion bool
 	steering            map[string]steeringReceipt
 	steerBusy           bool
+	steeringClosed      bool
+	steeringDone        chan struct{}
 }
 
 // Config is the constructor input. Registry and Sender are required;

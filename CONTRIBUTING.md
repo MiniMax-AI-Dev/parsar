@@ -336,7 +336,15 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   strict resume, and optional cancellation receipts
   and `release_on_completion` support. Reject unadvertised peers before claiming;
   failed strict resumes must not fall back to a new native thread. Release the native writer before forwarding
-  completion, so the next Turn can resume its durable native ID. Existing product
+  completion, so the next Turn can resume its durable native ID. For
+  release_on_completion Runs, close new steering admission and finish all
+  existing steering receipt sends before releasing the executor and forwarding
+  Done. Cached input identities and conflicts remain readable while completing;
+  queue/write success is not consumption. The receipt worker stays busy through
+  its send, and router shutdown cancels its native and transport waits.
+  The existing ten-second native-call and five-second receipt-send limits remain;
+  the completion barrier is bounded by their sum. Longer native consumption and
+  the API's thirty-second input deadline remain separate implementation gaps. Existing product
   requests retain their default idle-process policy. Native history still requires
   the device's persisted engine files; IDs alone cannot restore deleted history.
   Cancellation receipts carry the stopped engine's continuity snapshot when no

@@ -22,3 +22,10 @@ func (r *Router) PendingAsksLenForTest(runID string) int {
 	}
 	return len(s.pendingAsks)
 }
+
+func (r *Router) SteeringClosedForTest(runID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	state := r.sessions[runID]
+	return state != nil && state.steeringClosed
+}
