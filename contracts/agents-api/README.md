@@ -21,22 +21,23 @@ nor compatibility with the old private implementation is a goal.
 
 Concentrate native configuration, structured input/output and Item translation
 in an execution adapter. The application core owns execution state and persistence;
-engine-specific shapes stay at the adapter boundary. Reuse the native Codex
-app-server and exec-server protocols before adding another orchestration layer.
+engine-specific shapes stay at the adapter boundary. Codex uses its native
+app-server; Claude uses the maintained Agent SDK. Reuse native protocols and SDKs
+for further harnesses rather than adding another model/tool loop.
 Verify configuration against actual execution: response defaults must not merely
 describe values the adapter never applied.
 
-The next slices are contract conformance checks, effective configuration and the
-adapter boundary, remaining function/tool variants, then environment/file resources.
-Reusable Agents, vaults and protocol subagents remain in the coverage backlog.
-Parsar cutover follows an independent client workflow; its business Team loop is
-separate. Each slice can use multiple small PRs tracked in the Feishu board.
+Remaining work includes Session deletion/content variants, broader configuration
+and tools, execution recovery, environments/files, Vaults and protocol Subagents.
+Reusable Agent routes and two public execution profiles are available within the
+limits below. Select each bounded task from the complete Feishu board by value,
+dependencies, risk and effort. Parsar cutover and its business Team loop are separate.
 
 ## Upstream resource inventory
 
 This inventory is based on the pinned Python source, not our generated OpenAPI.
 It contains 42 distinct HTTP operations in 15 resource classes, excluding async
-duplicates, overloads and client-side helpers. Eleven operations currently have
+duplicates, overloads and client-side helpers. Fourteen operations currently have
 handlers; that count is not a compatibility score. Even those operations implement
 only part of the upstream input, configuration and event variants.
 
@@ -46,7 +47,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | Resource | Upstream operations | Current coverage |
 | --- | --- | --- |
 | Root reusable Agents | create, retrieve, update, list, delete | Partial create/retrieve/update/list/delete and Session references; configuration/error gaps remain |
-| sessions | create, retrieve, update, list, delete | Partial create/retrieve/list; metadata update implemented; delete missing |
+| sessions | create, retrieve, update, list, delete | Create (ordinary/live), retrieve, list with root-Agent filter, metadata-only update; delete missing |
 | sessions.events | create, stream | Text/cancel/function-result admission and live events; function-action state snapshots supported |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
 | sessions.items | list | Partial Item variants |
@@ -123,8 +124,11 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   remain implementation gaps, not excluded protocol variants.
   Fixed SDK/raw HTTP checks cover inherited/overridden configuration, tenant ownership,
   source preservation, independent Session snapshots, retries and service restart.
-  Source mutation/deletion with creation retries remains a dependency for Agent
-  update/delete: currently the resolved snapshot is hashed after a fresh lookup.
+  New saved-reference Sessions record caller intent before source lookup. Matching
+  creation retries recover their accepted snapshot even after source update/deletion;
+  changed overrides conflict. Historical rows without that identity retain the old
+  resolved-hash behavior; their original intent cannot be backfilled. These local
+  retry rules are not verified hosted semantics.
   In the pinned `session_create_params.py`, `stream` defaults to false and neither
   `stream` nor `agent_id` permits null. Metadata omission/null defaults to an empty
   map; individual values must be strings, including valid empty strings. Validate
@@ -134,6 +138,12 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   and character limits as creation. Preserve execution state, effective configuration
   and the original creation retry identity. Fixed SDK/raw HTTP checks cover these
   distinctions, tenant isolation, active Session reads and restart persistence.
+- `GET /agents/sessions` accepts `after`, `limit` (1..100, default 20), `order`
+  (default `desc`) and optional `agent_id`. The filter matches the immutable root
+  Agent ID, including inline IDs and Sessions whose saved source was changed or
+  deleted. Filter before pagination within the authenticated tenant; no source
+  lookup is required. Omission lists all Agents. Empty filters, same-tenant cursors
+  outside the filter and exact hosted errors/defaults remain unverified.
 - `AgentSession` includes the effective agent/environment, Unix-second timestamps,
   `object: agent.session`, metadata, required actions, status, usage and vault IDs.
   A Session remains reusable after its current Turn completes.
@@ -154,25 +164,33 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 
 | Capability | Current state |
 | --- | --- |
-| Shared daemon connection layer | Implemented; existing product protocol retained |
-| Reusable Agents | Tenant-scoped public create/retrieve/update/list/delete with cursor pagination, metadata, explicit reasoning/service tiers, multi_agent, text/json_schema and function/tool_search/programmatic tool configuration; not execution admission |
-| Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
-| Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
-| Authenticated Session HTTP API | Create/retrieve/list and metadata-only update; inline or referenced Agent with field replacements, model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |
-| Internal Turn/input persistence | Tenant-scoped atomic message/cancel/function-result batches, steering, request-level retry identity, cancellation targets and terminal outcomes; public function-result decoding and mixed-batch admission supported |
-| Internal Turn execution | Bound daemon dispatch, strict native resume, receipt-based steering/cancellation; explicit Codex no-environment execution and disabled native subagent tools for the resolved false default; public text/cancel submission with a bounded standalone worker |
-| Neutral tool observation transport | Required for execution; adapters normalize tool snapshots, API projects shared observations without decoding native tool types |
-| Internal execution observations | Ordered durable text/tool/usage journal and terminal outcome; partial cancellation output retained; optional native message IDs/phase/completion via `message_items` and neutral tool snapshots via `tool_observations`; tenant-scoped paginated Store reads |
-| Public Turn recovery | Retrieve/list persisted states with scoped pagination; see limitations below |
-| Public Items recovery | Indexed message/command/MCP/function/web-search reads, scoped pagination and restart recovery; limitations below |
-| Public SSE | Live Session/Turn lifecycle, supported Item and text events; bounded commit-before-publish buffering and recovery through saved reads |
-| Internal function bridge | Native Codex definitions and ordered text/image/error results, persisted callbacks and application receipts, cancellation and native resume; public non-deferred function configuration supported |
-| Function-call persistence and reads | Immutable scoped calls/results/receipts; Session `required_actions`, `requires_action`, Turn `waiting` and live state snapshots; internal native dispatch integrated; public non-deferred function configuration supported |
-| Pending actions and environment lifecycle | Pending |
-| Official-client compatibility | Strict SDK checks for Session/Turn/Items reads and native text execution/cancellation/verbosity; pagination, retries, errors, tenant isolation and recovery |
-| Go product client | Official `openai-go` v3.61.0 with a thin service configuration; real HTTP integration tests |
-| Product cutover | Pending |
-| Team orchestration | Deferred; Parsar-owned |
+| Independent deployment | Isolated API/migrator/device binaries and Linux amd64 container; own PostgreSQL database/account/migrations and tenant-key authentication; daemon/harness installed separately |
+| Saved Agents and Sessions | Saved Agent routes, immutable inline/referenced Session configuration, metadata updates, root-Agent filtering and scoped cursor pagination |
+| Public execution | Initial or later text, active input, function success/error and cancellation through a registered same-tenant Codex or Claude SDK host; profile limits below |
+| Pending function actions | Persisted calls/results/application receipts, `required_actions`, Session `requires_action`, Turn `waiting`, and live state snapshots; other interactions remain incomplete |
+| Public recovery and SSE | Persisted Turn/Items queries and partial Usage; live lifecycle/Item/text events, creation streaming and the official one-Turn tool-handler helper |
+| Execution ownership | Immutable Session engine/device, durable input receipts and database writer fencing; uncertain claimed work fails on restart, without blind replay |
+| Clients | Fixed Python SDK 3.13.0 and official Go SDK v3.61.0; raw HTTP and real provider acceptance supplement controlled tests |
+| Release and product | Registry publication, managed provisioning and Parsar cutover remain open; business Team orchestration is deferred |
+
+### Public engine profiles
+
+`AGENTS_API_ENGINE` chooses the engine for new Sessions; existing Sessions keep
+that immutable choice. The public request supplies a model, not a harness selector.
+Both profiles currently require `environment:none`, disabled `multi_agent`, implicit
+reasoning, service tier `auto`, ordinary text and non-deferred functions.
+
+| Profile | Current limits |
+| --- | --- |
+| `codex` (default) | Native app-server execution, disabled environment/search/subagent tools; low/medium/high verbosity requires the supported Unix adapter and native model policy below; ordered text/image function results |
+| `claude_sdk` (operator opt-in) | Registered packaged SDK runtime; medium verbosity, object-root function schemas and text-only function results; built-in tools and undeclared MCP discovery disabled |
+
+The SDK profile rejects unsupported configuration before Session creation and
+non-text function results before any batch write. Host selection and the final
+preclaim check require the selected engine's capabilities. A missing compatible
+host leaves work queued; an existing Session never silently changes engine/device.
+Product `claude_code` is a separate integration. Persisting other engine names
+for idle Sessions does not establish public execution support.
 
 The Store's internal DTO is not the upstream response model. The API layer must
 validate and resolve the upstream schema before persistence, and report only
@@ -188,11 +206,10 @@ errors, not successful placeholder resources. Add any provider or engine-specifi
 extension separately from upstream fields and document it here when implemented.
 
 `openapi.yaml` is our generated supported surface; it is not the full upstream
-specification. The shared Go wire types are in `v1`. Session update/delete, saved
-Agent references/filtering, structured output, other agent options, vaults, non-text initial input
-and execution/provider resources are not supported by this slice. Reject them
-explicitly. `AGENTS_API_ENGINE` selects the service's engine independently of the
-requested model; it does not add a competing field to the upstream request.
+specification. The shared Go wire types are in `v1`. Session deletion, non-text
+message input, structured output execution, broader options/tools, Vaults,
+Subagents and environment/provider resources remain incomplete. Reject unsupported
+requests explicitly; persisted saved configuration is not execution admission.
 
 ### Native subagent control
 
@@ -251,21 +268,21 @@ instead of treating adapter diagnostics as assistant output.
 Pagination orders by first-observation timestamp, then the Item's immutable
 Session position and public ID. New Items retain observation order even when
 timestamps match. The index also stores a zero-based output index per Turn for
-future streaming; inputs do not consume it. Updates and retries do not move Items
+streaming; inputs do not consume it. Updates and retries do not move Items
 or change output indexes. Existing indexed history retains its pre-upgrade
 deterministic order rather than guessing an unavailable original source order.
 
 ### No-environment execution
 
-The internal dispatcher can execute a public `environment.type=none` snapshot
-on an authenticated, bound engine host advertising `environment_none`. It does
-not allocate a local execution environment: the daemon uses upstream Codex's
-`CODEX_EXEC_SERVER_URL=none` and verifies the native environment state before
-starting/resuming. A missing capability or unsupported native method fails rather
-than falling back to local execution. Private `daemon` snapshots remain distinct.
-This is an engine tool/environment boundary, not operating-system isolation.
-The standalone worker uses this mode for public text and function execution. The self-hosted
-registry/Noise transport remains pending.
+The dispatcher executes public `environment.type=none` on an authenticated,
+bound host advertising `environment_none`. Codex uses `CODEX_EXEC_SERVER_URL=none`
+and verifies native environment state before starting/resuming. Claude SDK uses
+its restrictive profile with no built-in tools and only declared function callbacks.
+A missing capability or unsupported native method fails rather than silently
+allocating a local execution environment. Native state still lives on the host;
+function callbacks may access their own resources. This is not filesystem isolation.
+Private `daemon` snapshots and the pending public self-hosted registry/Noise
+transport are distinct from this mode.
 
 The native reference is Codex `rust-v0.153.4`, commit
 `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`, especially
@@ -289,11 +306,12 @@ once, and runs at most four Turns concurrently. Queued cancellation needs no liv
 engine. Active cancellation waits for a native receipt; terminal completion can
 win that race. Query Turn/Items to recover results after a stream interruption.
 
-The service takes a database advisory lease, so a second execution service cannot
-start on the same database. Startup marks previously claimed Turns failed without
-replaying them and retains queued work. This does not recover missing daemon frames
-or guarantee exactly-once external side effects. Session status reflects the latest
-persisted Turn; usage reports recorded measurements.
+The worker takes a database advisory lease; a second worker cannot start on the
+same database. All execution writes use that lease connection and stop after loss
+of ownership. Startup marks previously claimed Turns failed without replaying them
+and retains queued work. Database fencing does not stop already queued native
+commands, recover missing daemon frames or guarantee exactly-once external effects.
+Session status reflects the latest persisted Turn; usage reports recorded measurements.
 
 Native verification uses `PARSAR_NATIVE_DAEMON_BIN`, `PARSAR_NATIVE_PROOF_DIR` under
 `~/.parsar/`, and `PARSAR_OFFICIAL_SDK_PYTHON` pointing to the pinned SDK environment.
@@ -363,12 +381,12 @@ Inline `agent.tools` accepts non-deferred `function` definitions with the upstre
 required name, description and JSON Schema parameter object. Missing
 `defer_loading` resolves to `false`; null and other types are rejected. Omitted,
 null and empty tool lists resolve to an empty list. The resolved tools are part of
-the immutable Session configuration and creation retry identity. This slice does
-not implement saved-Agent inheritance or deferred tool discovery. The native
-64-definition cap, unique nonblank names of at most 512 bytes, other tool kinds
-and unrestricted JSON Schema execution remain compatibility gaps. Codex also
-exposes native planning/goal/skill/discovery tools; restricting those to the
-effective public tool set is an outstanding adapter gap, not implied here.
+the immutable Session configuration and creation retry identity. Saved-Agent
+inheritance uses the same resolved tools. Deferred discovery, other tool kinds,
+the native 64-definition cap and unique nonblank names of at most 512 bytes remain
+compatibility gaps. Claude SDK additionally requires object-root schemas and
+text-only results. Codex internal Goal/Skills/user-input/discovery semantics need
+upstream evidence; their presence alone does not prove a tool-set mismatch.
 
 The worker selects a same-tenant host advertising `function_tools` for configured
 Sessions. Work remains queued when no compatible host is available, including
@@ -461,3 +479,25 @@ real PostgreSQL: idle/initial text and saved Agents, first snapshots and ordered
 Items, retries across response modes, later Turns, disconnect recovery, isolation
 and errors before stream headers. Store tests cover concurrent upsert ownership,
 pre-admission cursors and observers draining after execution has completed.
+
+## Acceptance evidence and remaining scope
+
+These accepted changes have distinct evidence levels. The associated PR records
+include validation and limitations; later acceptance does not upgrade an earlier
+controlled fixture into a real-provider test.
+
+| Area | Evidence |
+| --- | --- |
+| Codex function stream/default text | [#544](https://github.com/MiniMax-AI-Dev/parsar/pull/544), [#545](https://github.com/MiniMax-AI-Dev/parsar/pull/545): fixed SDK/raw HTTP, actual PostgreSQL/daemon/native harness; #545 adds real MiniMax success/error and native history continuity |
+| Independent build/container | [#552](https://github.com/MiniMax-AI-Dev/parsar/pull/552), [#563](https://github.com/MiniMax-AI-Dev/parsar/pull/563): isolated binaries/container, official Python/Go clients and real MiniMax execution across API restart |
+| Session creation and source identity | [#564](https://github.com/MiniMax-AI-Dev/parsar/pull/564), [#567](https://github.com/MiniMax-AI-Dev/parsar/pull/567), [#572](https://github.com/MiniMax-AI-Dev/parsar/pull/572): atomic initial text, creation streaming and mutation-independent saved-reference retries |
+| Saved resource lifecycle and Session filtering | [#573](https://github.com/MiniMax-AI-Dev/parsar/pull/573), [#574](https://github.com/MiniMax-AI-Dev/parsar/pull/574), [#581](https://github.com/MiniMax-AI-Dev/parsar/pull/581): official client/raw HTTP, PostgreSQL, tenant isolation and source mutation/deletion; #581 also filters completed real MiniMax Sessions |
+| Claude SDK public execution | [#580](https://github.com/MiniMax-AI-Dev/parsar/pull/580): built API/registered daemon/packaged SDK with real MiniMax text, function success/error, active input, SSE/Items, pending-call cancellation and daemon cold continuation with retained native identity/history |
+
+Principal workflows above are accepted within their profiles. Missing resources,
+broader configuration/content, complete Usage provenance, unapplied result
+visibility, exact hosted errors/event timing and crash-window reconciliation remain
+open. Claude SDK raw usage is retained internally; public usage stays null without
+a complete token breakdown. Neither successful cold continuation nor database
+writer fencing proves recovery of interrupted native side effects. Full protocol
+compatibility, other harnesses/platforms and Parsar cutover are not established.

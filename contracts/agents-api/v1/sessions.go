@@ -4,7 +4,7 @@ package v1
 import "encoding/json"
 
 // CreateSessionRequest supports inline configuration or a saved Agent reference.
-// Initial text input is accepted when streaming is disabled.
+// Initial text input is accepted with ordinary or streaming responses.
 type CreateSessionRequest struct {
 	Agent       *InlineAgent `json:"agent,omitempty"`
 	AgentID     *string      `json:"agent_id,omitempty"`
