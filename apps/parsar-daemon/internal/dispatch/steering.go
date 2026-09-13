@@ -112,7 +112,7 @@ func (r *Router) queueSteering(ctx context.Context, env proto.Envelope, input pr
 			close(finished)
 			r.mu.Unlock()
 		}()
-		ctx, stop := r.steeringContext(ctx)
+		ctx, stop := r.shutdownContext(ctx)
 		defer stop()
 		callCtx, cancel := context.WithTimeout(ctx, steeringCallTimeout)
 		result := steeringResult(input.InputID, steerer.Steer(callCtx, input))
@@ -148,8 +148,8 @@ func steeringResult(inputID string, err error) proto.PromptSteerAckPayload {
 	return ack
 }
 
-// steeringContext releases both native and transport waits on router shutdown.
-func (r *Router) steeringContext(parent context.Context) (context.Context, context.CancelFunc) {
+// shutdownContext releases cooperating work when the router shuts down.
+func (r *Router) shutdownContext(parent context.Context) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(parent)
 	go func() {
 		select {

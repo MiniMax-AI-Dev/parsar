@@ -625,7 +625,9 @@ func (r *Router) pump(s *sessionState) {
 			r.indexPermissionFrame(s, env)
 			if env.Type == proto.TypeDone && s.releaseOnCompletion {
 				if err := r.releaseCompletedSession(s); err != nil {
-					r.emitTerminalError(pumpCtx, s.runID, "failed to release completed executor")
+					sendCtx, stop := r.shutdownContext(pumpCtx)
+					r.emitTerminalError(sendCtx, s.runID, "failed to release completed executor")
+					stop()
 					continue
 				}
 			}
