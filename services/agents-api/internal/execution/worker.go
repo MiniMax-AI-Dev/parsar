@@ -35,11 +35,23 @@ func (w *Worker) SubmitInputs(ctx context.Context, tenant, session, key string, 
 	if err != nil {
 		return nil, err
 	}
-	var snapshot Snapshot
-	if value.Engine != "codex" || json.Unmarshal(value.Configuration, &snapshot) != nil || snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil {
+	if !canAdmitInputs(value.Engine, value.Configuration) {
 		return nil, store.ErrInvalidInput
 	}
 	return w.Dispatcher.Store.SubmitInputs(ctx, tenant, session, key, inputs)
+}
+
+// CreateSession validates execution support before atomically admitting initial work.
+func (w *Worker) CreateSession(ctx context.Context, tenant string, input store.CreateSessionInput) (store.Session, error) {
+	if !canAdmitInputs(input.Engine, input.Configuration) {
+		return store.Session{}, store.ErrInvalidInput
+	}
+	return w.Dispatcher.Store.CreateSession(ctx, tenant, input)
+}
+
+func canAdmitInputs(engine string, configuration json.RawMessage) bool {
+	var snapshot Snapshot
+	return engine == "codex" && json.Unmarshal(configuration, &snapshot) == nil && snapshot.Environment != nil && snapshot.Environment.Type == "none" && snapshot.Daemon == nil
 }
 
 // Run retains queued work across restarts, but never replays an uncertain claim.

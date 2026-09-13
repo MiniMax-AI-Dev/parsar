@@ -541,7 +541,12 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   and cancellation batches through the pinned official client. Preserve individual
   input messages in the Item index while deriving text for native dispatch. Batch
   idempotency and cancellation targets remain durable; unsupported variants fail
-  before admission. Initial input during Session creation remains unsupported.
+  before admission. Non-streaming Session creation accepts initial text as a string
+  or user-message array through the same parser and admission path. Commit the
+  Session, initial input, first Turn and Item/event projections in one transaction.
+  A creation retry returns the existing Session without re-admitting initial work,
+  including after terminal or later Turns. Omitted/null input retains idle creation.
+  Streaming creation and non-text initial messages remain protocol gaps.
 - Enabling `AGENTS_API_DAEMON_WS_URL` also starts a bounded execution worker. Select
   only connected, capable devices owned by the authenticated tenant; bind once and
   preserve native continuity. Metadata cannot select a device. Offline work stays

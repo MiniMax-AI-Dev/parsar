@@ -12,6 +12,7 @@ import (
 )
 
 type inputRecorder struct {
+	ResourceStore
 	tenant, session, key string
 	inputs               []store.Input
 	err                  error

@@ -14,6 +14,7 @@ import (
 )
 
 type InputSubmitter interface {
+	CreateSession(context.Context, string, store.CreateSessionInput) (store.Session, error)
 	SubmitInputs(context.Context, string, string, string, []store.Input) ([]store.InputReceipt, error)
 }
 

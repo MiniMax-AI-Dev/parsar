@@ -89,9 +89,9 @@ func (h *Handler) authenticate(next http.Handler) http.Handler {
 
 func tenantID(r *http.Request) string { return r.Context().Value(tenantContextKey{}).(string) }
 
-// createSession creates an idle execution Session without submitting a Turn.
+// createSession optionally admits initial text in the same transaction as the Session.
 // @Summary Create an execution Session
-// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Execution input and other options are explicitly unsupported in this slice.
+// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text and atomically starts a Turn; omitted or null input creates an idle Session. Streaming creation and non-text initial input remain unsupported.
 // @Tags Sessions
 // @Accept json
 // @Produce json
@@ -100,7 +100,7 @@ func tenantID(r *http.Request) string { return r.Context().Value(tenantContextKe
 // @Param Idempotency-Key header string false "Creation retry key, up to 128 bytes"
 // @Param body body v1.CreateSessionRequest true "Session configuration"
 // @Success 200 {object} v1.Session
-// @Failure 400,401,404,409,413,500 {object} v1.ErrorResponse
+// @Failure 400,401,404,409,413,500,503 {object} v1.ErrorResponse
 // @Router /agents/sessions [post]
 func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 	if len(r.URL.Query()) > 0 {
@@ -150,8 +150,21 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported_or_invalid_configuration", err.Error())
 		return
 	}
-	session, err := h.store.CreateSession(r.Context(), tenantID(r), store.CreateSessionInput{
-		Engine: h.engine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration,
+	initialInputs, err := initialSessionInputs(input.Input)
+	if err != nil {
+		writeStoreError(w, r, err)
+		return
+	}
+	create := h.store.CreateSession
+	if len(initialInputs) > 0 {
+		if h.inputs == nil {
+			writeError(w, http.StatusServiceUnavailable, "execution_unavailable", "Execution input is not enabled on this service.")
+			return
+		}
+		create = h.inputs.CreateSession
+	}
+	session, err := create(r.Context(), tenantID(r), store.CreateSessionInput{
+		Engine: h.engine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs,
 	})
 	if err != nil {
 		writeStoreError(w, r, err)

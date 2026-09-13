@@ -47,6 +47,7 @@ type CreateSessionInput struct {
 	Metadata       map[string]string
 	IdempotencyKey string
 	Configuration  json.RawMessage
+	InitialInputs  []Input
 }
 
 type SessionPage struct {
@@ -88,6 +89,14 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 	if err != nil {
 		return Session{}, err
 	}
+	var batch []Input
+	var encodedInput json.RawMessage
+	if len(input.InitialInputs) > 0 {
+		batch, encodedInput, err = validateInitialInputs(input.InitialInputs)
+		if err != nil {
+			return Session{}, err
+		}
+	}
 	hashConfiguration := configuration
 	// Empty configuration retains the idempotency hashes from the first schema.
 	if string(configuration) == "{}" {
@@ -98,16 +107,23 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 		Engine        string
 		Metadata      map[string]string
 		Configuration json.RawMessage `json:",omitempty"`
-	}{input.Engine, input.Metadata, hashConfiguration})
+		InitialInputs json.RawMessage `json:",omitempty"`
+	}{input.Engine, input.Metadata, hashConfiguration, encodedInput})
 	if err != nil {
 		return Session{}, fmt.Errorf("%w: input: %v", ErrInvalidInput, err)
 	}
 	hash := sha256.Sum256(canonical)
-	row, err := s.queries.CreateSession(ctx, sqlc.CreateSessionParams{
+	params := sqlc.CreateSessionParams{
 		ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, TenantID: tenant, Engine: input.Engine,
 		Metadata: metadata, IdempotencyKey: input.IdempotencyKey, RequestHash: hex.EncodeToString(hash[:]),
 		Configuration: configuration,
-	})
+	}
+	var row sqlc.Session
+	if len(batch) == 0 {
+		row, err = s.queries.CreateSession(ctx, params)
+	} else {
+		row, err = s.createSessionWithInputs(ctx, tenantID, params, batch)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Session{}, ErrIdempotencyConflict
 	}
