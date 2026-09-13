@@ -234,11 +234,19 @@ lock, and return terminal storage outcomes without rolling their transaction bac
 
 This is a message-only Store foundation, not public Environment admission or a new
 public concurrency limit. Automatic initial-input integration, public pending/failed
-Session projections, mixed inputs, connection readiness and Worker scheduling remain
+Session projections, mixed inputs and native readiness before admission remain
 pending. Promotion's caller must retain the prepared native connection and use the
 current execution writer; never hold a database lock during external preparation.
-The future Worker must expire pending input even without available devices or
-execution slots. No failed Turn may stand in for a pre-Turn connection failure.
+The Worker expires at most 32 due reservations on each existing tick, after
+checking ownership and before checking devices or execution slots. The sweep
+requires the leased Store and uses its connection with the existing transaction
+timeout; it never falls back to a pooled writer. A partial deadline index and
+Session row locks with SKIP LOCKED let unrelated work proceed around contention.
+The candidate cutoff is statement time; settlement rechecks the database clock
+after acquiring the Session lock. This bounds mutations and transaction time, not
+the number of examined locked rows. Restart resumes expiry on normal ticks without
+a separate scheduler or backlog-draining loop. No failed Turn may stand in for a
+pre-Turn connection failure.
 
 
 The opt-in native Codex executor registry lives in

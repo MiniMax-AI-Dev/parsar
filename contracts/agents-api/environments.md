@@ -262,9 +262,13 @@ cancellation and Session deletion retain an outcome without admitting late work.
 This primitive does not connect an executor, publish environment actions or change
 public admission. Its message-only scope and single pending reservation are internal
 limits, not claims about the final public protocol. Initial creation, mixed inputs,
-public Session activity and the existing Worker's readiness/expiry integration remain
-required. See the [contributor boundary](../../CONTRIBUTING.md) for the prepared
-connection and transaction rules.
+public Session activity and the existing Worker's readiness integration remain
+required. The Worker settles due reservations in bounded batches even without
+devices or available execution slots, skipping contended Session locks and retaining
+its current execution ownership. Restart does not reset stored deadlines. This
+private expiry creates no public failure event or Turn. See the
+[contributor boundary](../../CONTRIBUTING.md) for the prepared connection, expiry
+and transaction rules.
 
 ## Dependency-ordered implementation
 
