@@ -103,6 +103,11 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 	}
 	register(otherEnvironment.ID, token, 401)
 	register(environment.ID, wrongTenantToken, 401)
+	for _, alias := range []string{strings.ToUpper(environment.ID), "{" + environment.ID + "}", "urn:uuid:" + environment.ID, strings.ReplaceAll(environment.ID, "-", "")} {
+		if alias != environment.ID {
+			register(alias, token, 401)
+		}
+	}
 	valid := register(environment.ID, token, 200)
 	socket, response, err := websocket.DefaultDialer.DialContext(ctx, valid.URL, nil)
 	if err != nil {

@@ -10,9 +10,16 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
+	"github.com/google/uuid"
 )
 
 func (r *Registry) executorCredential(w http.ResponseWriter, req *http.Request, environment string) (ScopedKey, bool) {
+	// Registration maps and durable ownership must use the same exact identity.
+	id, err := uuid.Parse(environment)
+	if err != nil || id.String() != environment {
+		writeError(w, http.StatusUnauthorized)
+		return ScopedKey{}, false
+	}
 	parts := strings.Fields(req.Header.Get("Authorization"))
 	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
 		writeError(w, http.StatusUnauthorized)
