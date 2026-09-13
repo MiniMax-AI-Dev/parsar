@@ -78,7 +78,7 @@ func (s *Store) TransitionTurn(ctx context.Context, tenantID, sessionID, turnID 
 		return Turn{}, fmt.Errorf("%w: outcome requires a terminal status", ErrInvalidInput)
 	}
 	var row sqlc.Turn
-	err = s.withSession(ctx, tenantID, sessionID, func(q *sqlc.Queries, _ pgtype.UUID) error {
+	err = s.withSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, _ pgtype.UUID) error {
 		if _, err := q.GetTurn(ctx, params); errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		} else if err != nil {

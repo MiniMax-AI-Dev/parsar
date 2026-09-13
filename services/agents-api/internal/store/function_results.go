@@ -19,14 +19,14 @@ func (s *Store) SubmitFunctionResult(ctx context.Context, tenantID, sessionID, t
 	if err != nil {
 		return err
 	}
-	return s.withFunctionCall(ctx, tenantID, sessionID, turnID, callID, func(q *sqlc.Queries, turn sqlc.Turn, call sqlc.FunctionCall) error {
+	return s.withFunctionCall(ctx, tenantID, sessionID, turnID, callID, func(ctx context.Context, q *sqlc.Queries, turn sqlc.Turn, call sqlc.FunctionCall) error {
 		return storeFunctionResult(ctx, q, turn, call.CallID, result)
 	})
 }
 
 // ConfirmFunctionResult records native application, not external tool success.
 func (s *Store) ConfirmFunctionResult(ctx context.Context, tenantID, sessionID, turnID, callID string) error {
-	return s.withFunctionCall(ctx, tenantID, sessionID, turnID, callID, func(q *sqlc.Queries, turn sqlc.Turn, call sqlc.FunctionCall) error {
+	return s.withFunctionCall(ctx, tenantID, sessionID, turnID, callID, func(ctx context.Context, q *sqlc.Queries, turn sqlc.Turn, call sqlc.FunctionCall) error {
 		if call.Applied {
 			return nil
 		}
@@ -40,7 +40,7 @@ func (s *Store) ConfirmFunctionResult(ctx context.Context, tenantID, sessionID, 
 	})
 }
 
-func (s *Store) withFunctionCall(ctx context.Context, tenantID, sessionID, turnID, callID string, fn func(*sqlc.Queries, sqlc.Turn, sqlc.FunctionCall) error) error {
+func (s *Store) withFunctionCall(ctx context.Context, tenantID, sessionID, turnID, callID string, fn func(context.Context, *sqlc.Queries, sqlc.Turn, sqlc.FunctionCall) error) error {
 	p, err := turnLookup(tenantID, sessionID, turnID)
 	if err != nil {
 		return err
@@ -48,7 +48,7 @@ func (s *Store) withFunctionCall(ctx context.Context, tenantID, sessionID, turnI
 	if !validFunctionIdentity(callID) {
 		return ErrInvalidInput
 	}
-	return s.withSession(ctx, tenantID, sessionID, func(q *sqlc.Queries, session pgtype.UUID) error {
+	return s.withSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
 		turn, err := q.GetTurn(ctx, p)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
@@ -63,7 +63,7 @@ func (s *Store) withFunctionCall(ctx context.Context, tenantID, sessionID, turnI
 		if err != nil {
 			return err
 		}
-		return fn(q, turn, call)
+		return fn(ctx, q, turn, call)
 	})
 }
 

@@ -56,8 +56,9 @@ type SessionPage struct {
 }
 
 type Store struct {
-	queries *sqlc.Queries
-	pool    *pgxpool.Pool
+	queries        *sqlc.Queries
+	pool           *pgxpool.Pool
+	executionLease *ExecutionLease
 }
 
 func New(pool *pgxpool.Pool) *Store { return &Store{queries: sqlc.New(pool), pool: pool} }

@@ -64,7 +64,7 @@ func (s *Store) SubmitInputs(ctx context.Context, tenantID, sessionID, key strin
 		return nil, err
 	}
 	receipts := make([]InputReceipt, 0, len(batch))
-	err = s.withSession(ctx, tenantID, sessionID, func(q *sqlc.Queries, session pgtype.UUID) error {
+	err = s.withSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
 		previous, err := q.FindInputBatch(ctx, sqlc.FindInputBatchParams{SessionID: session, IdempotencyKey: key, Batch: encoded})
 		if err != nil {
 			return err

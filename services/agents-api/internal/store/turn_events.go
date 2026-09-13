@@ -54,7 +54,7 @@ func (s *Store) AppendTurnEvents(ctx context.Context, tenantID, sessionID, turnI
 	if err != nil {
 		return err
 	}
-	return s.withSession(ctx, tenantID, sessionID, func(q *sqlc.Queries, _ pgtype.UUID) error {
+	return s.withSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, _ pgtype.UUID) error {
 		turn, err := q.GetTurn(ctx, p)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound

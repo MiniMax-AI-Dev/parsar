@@ -13,7 +13,8 @@ import (
 
 // Worker owns queued work; the database lease excludes a second execution service.
 type Worker struct {
-	Dispatcher *Dispatcher
+	dispatcher *Dispatcher
+	admission  *store.Store
 	lease      *store.ExecutionLease
 }
 
@@ -22,7 +23,9 @@ func StartWorker(ctx context.Context, dispatcher *Dispatcher) (*Worker, error) {
 	if err != nil {
 		return nil, err
 	}
-	worker := &Worker{Dispatcher: dispatcher, lease: lease}
+	owned := *dispatcher
+	owned.Store = lease.Store()
+	worker := &Worker{dispatcher: &owned, admission: dispatcher.Store, lease: lease}
 	if err := worker.reconcile(ctx); err != nil {
 		_ = lease.Close(context.Background())
 		return nil, err
@@ -31,14 +34,14 @@ func StartWorker(ctx context.Context, dispatcher *Dispatcher) (*Worker, error) {
 }
 
 func (w *Worker) SubmitInputs(ctx context.Context, tenant, session, key string, inputs []store.Input) ([]store.InputReceipt, error) {
-	value, err := w.Dispatcher.Store.GetSession(ctx, tenant, session)
+	value, err := w.admission.GetSession(ctx, tenant, session)
 	if err != nil {
 		return nil, err
 	}
 	if !canAdmitInputs(value.Engine, value.Configuration) {
 		return nil, store.ErrInvalidInput
 	}
-	return w.Dispatcher.Store.SubmitInputs(ctx, tenant, session, key, inputs)
+	return w.admission.SubmitInputs(ctx, tenant, session, key, inputs)
 }
 
 // CreateSession validates execution support before atomically admitting initial work.
@@ -46,7 +49,7 @@ func (w *Worker) CreateSession(ctx context.Context, tenant string, input store.C
 	if !canAdmitInputs(input.Engine, input.Configuration) {
 		return store.Session{}, store.ErrInvalidInput
 	}
-	return w.Dispatcher.Store.CreateSession(ctx, tenant, input)
+	return w.admission.CreateSession(ctx, tenant, input)
 }
 
 // CreateSessionStream applies the same execution admission before creating a stream.
@@ -54,7 +57,7 @@ func (w *Worker) CreateSessionStream(ctx context.Context, tenant string, input s
 	if !canAdmitInputs(input.Engine, input.Configuration) {
 		return store.SessionCreation{}, store.ErrInvalidInput
 	}
-	return w.Dispatcher.Store.CreateSessionStream(ctx, tenant, input)
+	return w.admission.CreateSessionStream(ctx, tenant, input)
 }
 
 func canAdmitInputs(engine string, configuration json.RawMessage) bool {
@@ -101,11 +104,11 @@ func (w *Worker) Run(ctx context.Context) error {
 			if len(active) == 4 {
 				continue
 			}
-			devices := w.Dispatcher.Registry.Devices()
+			devices := w.dispatcher.Registry.Devices()
 			if len(devices) == 0 {
 				continue
 			}
-			work, err := w.Dispatcher.Store.ListExecutionWork(ctx, cursor, []string{store.TurnQueued}, devices)
+			work, err := w.dispatcher.Store.ListExecutionWork(ctx, cursor, []string{store.TurnQueued}, devices)
 			if err != nil {
 				return err
 			}
@@ -143,7 +146,7 @@ func (w *Worker) Run(ctx context.Context) error {
 func (w *Worker) reconcile(ctx context.Context) error {
 	cursor := ""
 	for {
-		work, err := w.Dispatcher.Store.ListExecutionWork(ctx, cursor, []string{store.TurnInProgress, store.TurnWaiting}, nil)
+		work, err := w.dispatcher.Store.ListExecutionWork(ctx, cursor, []string{store.TurnInProgress, store.TurnWaiting}, nil)
 		if err != nil {
 			return err
 		}
@@ -151,7 +154,7 @@ func (w *Worker) reconcile(ctx context.Context) error {
 			return nil
 		}
 		for _, item := range work {
-			_, err := w.Dispatcher.Store.TransitionTurn(ctx, item.TenantID, item.SessionID, item.TurnID, store.TurnTransition{ExpectedStatus: item.Status, Status: store.TurnFailed, Outcome: json.RawMessage(`{"error_code":"execution_interrupted"}`)})
+			_, err := w.dispatcher.Store.TransitionTurn(ctx, item.TenantID, item.SessionID, item.TurnID, store.TurnTransition{ExpectedStatus: item.Status, Status: store.TurnFailed, Outcome: json.RawMessage(`{"error_code":"execution_interrupted"}`)})
 			if err != nil && !errors.Is(err, store.ErrTurnConflict) {
 				return err
 			}
@@ -161,7 +164,7 @@ func (w *Worker) reconcile(ctx context.Context) error {
 }
 
 func (w *Worker) bind(ctx context.Context, item store.ExecutionWork) (bool, error) {
-	session, err := w.Dispatcher.Store.GetSession(ctx, item.TenantID, item.SessionID)
+	session, err := w.dispatcher.Store.GetSession(ctx, item.TenantID, item.SessionID)
 	if err != nil {
 		return false, err
 	}
@@ -171,14 +174,14 @@ func (w *Worker) bind(ctx context.Context, item store.ExecutionWork) (bool, erro
 	}
 	functions := len(snapshot.Agent.Tools) > 0
 
-	bound, err := w.Dispatcher.Store.GetSessionDevice(ctx, item.TenantID, item.SessionID)
+	bound, err := w.dispatcher.Store.GetSessionDevice(ctx, item.TenantID, item.SessionID)
 	if err == nil {
 		return w.ready(bound.ID, functions), nil
 	}
 	if !errors.Is(err, store.ErrNotFound) {
 		return false, err
 	}
-	devices, err := w.Dispatcher.Store.ListExecutionDevices(ctx, item.TenantID)
+	devices, err := w.dispatcher.Store.ListExecutionDevices(ctx, item.TenantID)
 	if err != nil {
 		return false, err
 	}
@@ -186,9 +189,9 @@ func (w *Worker) bind(ctx context.Context, item store.ExecutionWork) (bool, erro
 		if !w.ready(device.ID, functions) {
 			continue
 		}
-		err := w.Dispatcher.Store.BindSessionDevice(ctx, item.TenantID, item.SessionID, device.ID)
+		err := w.dispatcher.Store.BindSessionDevice(ctx, item.TenantID, item.SessionID, device.ID)
 		if errors.Is(err, store.ErrDeviceBindingConflict) {
-			_, err = w.Dispatcher.Store.TransitionTurn(ctx, item.TenantID, item.SessionID, item.TurnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnFailed, Outcome: json.RawMessage(`{"error_code":"execution_device_unavailable"}`)})
+			_, err = w.dispatcher.Store.TransitionTurn(ctx, item.TenantID, item.SessionID, item.TurnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnFailed, Outcome: json.RawMessage(`{"error_code":"execution_device_unavailable"}`)})
 			if errors.Is(err, store.ErrTurnConflict) {
 				err = nil
 			}
@@ -200,7 +203,7 @@ func (w *Worker) bind(ctx context.Context, item store.ExecutionWork) (bool, erro
 }
 
 func (w *Worker) ready(deviceID string, functions bool) bool {
-	peer, err := w.Dispatcher.Registry.LookupDevice(deviceID)
+	peer, err := w.dispatcher.Registry.LookupDevice(deviceID)
 	if err != nil {
 		return false
 	}
@@ -209,21 +212,21 @@ func (w *Worker) ready(deviceID string, functions bool) bool {
 }
 
 func (w *Worker) runClaim(ctx context.Context, item store.ExecutionWork) error {
-	_, err := w.Dispatcher.Run(ctx, item.TenantID, item.SessionID, item.TurnID)
+	_, err := w.dispatcher.Run(ctx, item.TenantID, item.SessionID, item.TurnID)
 	if err == nil || errors.Is(err, store.ErrTurnConflict) {
 		return nil
 	}
 	log.Ctx(ctx).Error("agents-api dispatch did not complete", "turn_id", item.TurnID)
 	finish, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	turn, err := w.Dispatcher.Store.GetTurn(finish, item.TenantID, item.SessionID, item.TurnID)
+	turn, err := w.dispatcher.Store.GetTurn(finish, item.TenantID, item.SessionID, item.TurnID)
 	if err != nil {
 		return err
 	}
 	if turn.Status == store.TurnCompleted || turn.Status == store.TurnFailed || turn.Status == store.TurnCancelled {
 		return nil
 	}
-	_, err = w.Dispatcher.Store.TransitionTurn(finish, item.TenantID, item.SessionID, item.TurnID, store.TurnTransition{ExpectedStatus: turn.Status, Status: store.TurnFailed, Outcome: json.RawMessage(`{"error_code":"execution_unavailable"}`)})
+	_, err = w.dispatcher.Store.TransitionTurn(finish, item.TenantID, item.SessionID, item.TurnID, store.TurnTransition{ExpectedStatus: turn.Status, Status: store.TurnFailed, Outcome: json.RawMessage(`{"error_code":"execution_unavailable"}`)})
 	if errors.Is(err, store.ErrTurnConflict) {
 		return nil
 	}

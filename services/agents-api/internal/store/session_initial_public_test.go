@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"context"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -25,7 +26,17 @@ func TestInitialSessionInputOfficialClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Exercise real worker admission with dispatch paused for deterministic reads.
-	worker := &execution.Worker{Dispatcher: &execution.Dispatcher{Store: s}}
+	worker, err := execution.StartWorker(t.Context(), &execution.Dispatcher{Store: s})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		stopped, cancel := context.WithCancel(context.Background())
+		cancel()
+		if err := worker.Run(stopped); err != context.Canceled {
+			t.Error(err)
+		}
+	})
 	handler, err := api.NewHandler(s, auth, "codex", api.WithExecution(worker))
 	if err != nil {
 		t.Fatal(err)

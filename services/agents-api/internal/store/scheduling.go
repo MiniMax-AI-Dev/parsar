@@ -8,32 +8,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ExecutionWork struct{ TenantID, SessionID, TurnID, Status string }
-
-type ExecutionLease struct{ conn *pgxpool.Conn }
-
-// AcquireExecutionLease enforces the gateway's single-service ownership per database.
-func (s *Store) AcquireExecutionLease(ctx context.Context) (*ExecutionLease, error) {
-	conn, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return nil, err
-	}
-	acquired, err := sqlc.New(conn).TryExecutionLease(ctx)
-	if err != nil || !acquired {
-		_ = conn.Hijack().Close(context.Background())
-		if err != nil {
-			return nil, err
-		}
-		return nil, errors.New("another execution service owns this database")
-	}
-	return &ExecutionLease{conn: conn}, nil
-}
-
-func (l *ExecutionLease) Ping(ctx context.Context) error  { return l.conn.Ping(ctx) }
-func (l *ExecutionLease) Close(ctx context.Context) error { return l.conn.Hijack().Close(ctx) }
 
 func (s *Store) ListExecutionWork(ctx context.Context, after string, statuses []string, connectedDevices []string) ([]ExecutionWork, error) {
 	id := pgtype.UUID{Valid: true}

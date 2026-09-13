@@ -83,7 +83,7 @@ func (s *Store) BindSessionDevice(ctx context.Context, tenantID, sessionID, devi
 	if err != nil {
 		return err
 	}
-	return s.withSession(ctx, tenantID, sessionID, func(q *sqlc.Queries, session pgtype.UUID) error {
+	return s.withSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
 		if _, err := q.GetDevice(ctx, params); errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		} else if err != nil {
