@@ -67,34 +67,39 @@ func ValidEngine(engine string) bool { return enginePattern.MatchString(engine) 
 // CreateSession uses a caller-scoped key to make retries safe, including
 // concurrent submissions. Different input with the same key is a conflict.
 func (s *Store) CreateSession(ctx context.Context, tenantID string, input CreateSessionInput) (Session, error) {
+	result, err := s.createSession(ctx, tenantID, input)
+	return s.sessionActivity(ctx, result.Session, err)
+}
+
+func (s *Store) createSession(ctx context.Context, tenantID string, input CreateSessionInput) (SessionCreation, error) {
 	tenant, err := parseID(tenantID)
 	if err != nil {
-		return Session{}, err
+		return SessionCreation{}, err
 	}
 	input.Engine = strings.TrimSpace(input.Engine)
 	if !ValidEngine(input.Engine) || strings.TrimSpace(input.IdempotencyKey) == "" || len(input.IdempotencyKey) > 128 {
-		return Session{}, fmt.Errorf("%w: engine and idempotency key are required", ErrInvalidInput)
+		return SessionCreation{}, fmt.Errorf("%w: engine and idempotency key are required", ErrInvalidInput)
 	}
 	if input.Metadata == nil {
 		input.Metadata = map[string]string{}
 	}
 	metadata, err := encodeMetadata(input.Metadata)
 	if err != nil {
-		return Session{}, err
+		return SessionCreation{}, err
 	}
 	if len(input.Configuration) > 512*1024 {
-		return Session{}, fmt.Errorf("%w: configuration exceeds 512 KiB", ErrInvalidInput)
+		return SessionCreation{}, fmt.Errorf("%w: configuration exceeds 512 KiB", ErrInvalidInput)
 	}
 	configuration, err := canonicalJSONObject(input.Configuration)
 	if err != nil {
-		return Session{}, err
+		return SessionCreation{}, err
 	}
 	var batch []Input
 	var encodedInput json.RawMessage
 	if len(input.InitialInputs) > 0 {
 		batch, encodedInput, err = validateInitialInputs(input.InitialInputs)
 		if err != nil {
-			return Session{}, err
+			return SessionCreation{}, err
 		}
 	}
 	hashConfiguration := configuration
@@ -110,7 +115,7 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 		InitialInputs json.RawMessage `json:",omitempty"`
 	}{input.Engine, input.Metadata, hashConfiguration, encodedInput})
 	if err != nil {
-		return Session{}, fmt.Errorf("%w: input: %v", ErrInvalidInput, err)
+		return SessionCreation{}, fmt.Errorf("%w: input: %v", ErrInvalidInput, err)
 	}
 	hash := sha256.Sum256(canonical)
 	params := sqlc.CreateSessionParams{
@@ -125,13 +130,13 @@ func (s *Store) CreateSession(ctx context.Context, tenantID string, input Create
 		row, err = s.createSessionWithInputs(ctx, tenantID, params, batch)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Session{}, ErrIdempotencyConflict
+		return SessionCreation{}, ErrIdempotencyConflict
 	}
 	if err != nil {
-		return Session{}, fmt.Errorf("create session: %w", err)
+		return SessionCreation{}, fmt.Errorf("create session: %w", err)
 	}
-	session, decodeErr := sessionFromRow(row)
-	return s.sessionActivity(ctx, session, decodeErr)
+	session, err := sessionFromRow(row)
+	return SessionCreation{Session: session, Created: row.ID == params.ID, Cursor: row.EventSequence}, err
 }
 
 // GetSession always scopes lookup to the authenticated caller's tenant.

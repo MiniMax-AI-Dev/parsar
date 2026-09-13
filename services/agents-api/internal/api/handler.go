@@ -91,10 +91,10 @@ func tenantID(r *http.Request) string { return r.Context().Value(tenantContextKe
 
 // createSession optionally admits initial text in the same transaction as the Session.
 // @Summary Create an execution Session
-// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text and atomically starts a Turn; omitted or null input creates an idle Session. Streaming creation and non-text initial input remain unsupported.
+// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text and atomically starts a Turn; omitted or null input creates an idle Session. With stream=true, returns live Session events starting at creation; disconnect does not cancel execution. Creation retries observe future events without replay; retry with stream=false to retrieve the Session. Non-text initial input remains unsupported.
 // @Tags Sessions
 // @Accept json
-// @Produce json
+// @Produce json,text/event-stream
 // @Security BearerAuth
 // @Param OpenAI-Beta header string true "agents=v1"
 // @Param Idempotency-Key header string false "Creation retry key, up to 128 bytes"
@@ -155,6 +155,13 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, r, err)
 		return
 	}
+	createInput := store.CreateSessionInput{
+		Engine: h.engine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs,
+	}
+	if input.Stream {
+		h.createSessionStream(w, r, createInput)
+		return
+	}
 	create := h.store.CreateSession
 	if len(initialInputs) > 0 {
 		if h.inputs == nil {
@@ -163,9 +170,7 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		}
 		create = h.inputs.CreateSession
 	}
-	session, err := create(r.Context(), tenantID(r), store.CreateSessionInput{
-		Engine: h.engine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs,
-	})
+	session, err := create(r.Context(), tenantID(r), createInput)
 	if err != nil {
 		writeStoreError(w, r, err)
 		return

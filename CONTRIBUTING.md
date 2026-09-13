@@ -504,6 +504,18 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   no database connection. Client disconnect releases the handler; comments keep
   idle connections alive. SSE does not close merely because one Turn finishes.
 
+- Session creation with `stream=true` reuses atomic input admission and the live
+  event loop. The upsert returns its cursor under the Session lock, before initial
+  inputs; never replace it with a post-commit cursor lookup. A new response emits
+  one request-local `agent.session.created` with the pre-input resource snapshot,
+  then committed changes from that cursor. The local creation retry key excludes
+  response mode: retries observe only later events and admit no work again. Retry
+  the same request/key with `stream=false` to recover a lost Session ID. GET event
+  streams retain their current live-only start. Disconnect never cancels admitted
+  work. Exact upstream created-snapshot timing, POST stream lifetime and creation
+  retry response semantics remain unverified; the separate SDK one-Turn helper
+  does not define this endpoint. Do not present local retry behavior as replay.
+
 - Public Turn retrieve/list project persisted execution state and the immutable
   Session Agent identity. Scope both resources and pagination cursors to the
   authenticated tenant and Session, ordering by creation time then ID. Do not

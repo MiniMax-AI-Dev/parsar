@@ -15,8 +15,8 @@ type configuration struct {
 }
 
 func resolve(input sessionRequest, tenant, key string, saved *v1.SavedAgent) (json.RawMessage, error) {
-	if input.Stream || len(input.VaultIDs) > 0 {
-		return nil, errors.New("Streaming creation and vaults are not supported by this service yet.")
+	if len(input.VaultIDs) > 0 {
+		return nil, errors.New("Vaults are not supported by this service yet.")
 	}
 	if input.Environment == nil || input.Environment.Type != "none" {
 		return nil, errors.New("This service currently requires environment.type=none.")

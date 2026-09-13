@@ -970,7 +970,10 @@ paths:
         to false; stream and agent_id cannot be null. Metadata may be null, but its
         values must be strings. Initial input accepts a string or user-message array
         containing text and atomically starts a Turn; omitted or null input creates
-        an idle Session. Streaming creation and non-text initial input remain unsupported.
+        an idle Session. With stream=true, returns live Session events starting at
+        creation; disconnect does not cancel execution. Creation retries observe future
+        events without replay; retry with stream=false to retrieve the Session. Non-text
+        initial input remains unsupported.
       parameters:
       - description: agents=v1
         in: header
@@ -989,6 +992,7 @@ paths:
           $ref: '#/definitions/v1.CreateSessionRequest'
       produces:
       - application/json
+      - text/event-stream
       responses:
         "200":
           description: OK

@@ -54,6 +54,11 @@ func (h *Handler) streamEvents(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, r, err)
 		return
 	}
+	h.serveSessionEvents(w, r, events, session, cursor, nil)
+}
+
+func (h *Handler) serveSessionEvents(w http.ResponseWriter, r *http.Request, events eventStore, session store.Session, cursor int64, initial *v1.SessionEvent) {
+	id, tenant := session.ID, tenantID(r)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -69,6 +74,19 @@ func (h *Handler) streamEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := write([]byte(": connected\n\n")); err != nil {
 		return
+	}
+	emit := func(event v1.SessionEvent) error {
+		payload, err := json.Marshal(event)
+		if err != nil {
+			writeStreamFailure(write, id)
+			return err
+		}
+		return write([]byte(fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, payload)))
+	}
+	if initial != nil {
+		if err := emit(*initial); err != nil {
+			return
+		}
 	}
 	poll := time.NewTicker(100 * time.Millisecond)
 	defer poll.Stop()
@@ -86,12 +104,7 @@ func (h *Handler) streamEvents(w http.ResponseWriter, r *http.Request) {
 				writeStreamFailure(write, id)
 				return
 			}
-			payload, err := json.Marshal(event)
-			if err != nil {
-				writeStreamFailure(write, id)
-				return
-			}
-			if err := write([]byte(fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, payload))); err != nil {
+			if err := emit(event); err != nil {
 				return
 			}
 			cursor = change.Sequence
