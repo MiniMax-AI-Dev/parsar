@@ -299,6 +299,8 @@ The native reference is Codex `rust-v0.153.4`, commit
 `codex-rs/exec-server/src/environment_provider.rs`. The self-hosted registry
 requires executor registration, harness authorization and encrypted relay;
 a daemon WebSocket URL is not that protocol.
+The [Environment assessment](environments.md) records all environment/template/file
+operations, ownership, native authentication gaps and the implementation sequence.
 
 ### Public execution admission
 

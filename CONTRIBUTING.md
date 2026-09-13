@@ -179,6 +179,32 @@ path until an explicit client cutover.
   product callback with the original requester and workspace checks. A runtime
   credential alone must not grant business write permissions.
 
+#### Environment ownership and placement
+
+Environment identity, tenant/Session association, configuration and lifecycle belong
+in Agents API, independently of provider compute, authenticated device identity,
+daemon sockets and native harness Sessions. Create an Environment association in
+the same transaction as its Session and creation identity when this resource is
+implemented. Keep mutable connection/registration state out of immutable
+configuration; replacement ownership must fence stale observations.
+
+Process placement and native transport are adapter responsibilities. A harness may
+run beside its workspace or use a separate executor; neither arrangement changes
+public ownership or permits a second model/tool loop. Codex registry/Noise support
+is a specific interoperability path, not the universal internal protocol for all
+engines. Public `remote_url` must support the documented executor connection flow;
+a private daemon URL or an additional undocumented installation is not equivalent.
+Keep local harness cwd separate from an executor-only workspace path.
+
+Use distinct authorization for callers, devices and environment connections. A
+co-located harness must not expose broader application credentials or other tenants'
+secrets to generated code. Directory bindings and process identities do not provide
+filesystem isolation. Preserve or demonstrably restore native history across
+compute replacement; never silently move a bound Session or replay unknown work.
+Self-hosted compute/files remain caller-owned, with explicit cleanup separate from
+Session deletion. The full Environment implementation remains pending; follow the
+[pinned contract and acceptance sequence](contracts/agents-api/environments.md).
+
 #### Independent build artifacts
 
 `make build-agents-api` produces `agents-api`, `agents-api-migrate` and
