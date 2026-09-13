@@ -194,6 +194,43 @@ arbitrary interrupted-work replay, native crash restoration, TLS deployment and
 the stock CLI's production-domain restriction remain open. Other harnesses retain
 their own native placement and execution protocols.
 
+## Native app-server placement prerequisite
+
+The opt-in [real-provider fixture](../../services/agents-api/tests/native/README.md)
+adds stock app-server execution to the accepted PostgreSQL registry/relay. It keeps
+local harness history separate from a container-only executor workspace, exercises
+real MiniMax shell/file use, and resumes the same native thread after a fresh
+app-server. This is native placement evidence, not public API/daemon acceptance.
+
+The pinned app-server loads registry configuration from its three
+`CODEX_EXEC_SERVER_NOISE_*` startup variables. Its native Environment selector is
+`remote`; that selector differs from the service Environment UUID used for registry
+authorization. Supply executor-native cwd/roots in `thread/start.environments` and
+`turn/start.environments`, while the app-server process stays in its local cwd.
+Native resume does not restore these selections from history. Do not assume a
+completed Turn proves remote readiness or tool execution.
+
+Native `turn/interrupt` intentionally preserves unified_exec background processes.
+The [upstream test](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/core/tests/suite/unified_exec.rs#L2856)
+asserts that behavior. To terminate a particular owned process, reuse experimental
+`thread/backgroundTerminals/list` and `thread/backgroundTerminals/terminate`.
+Correlate both item/process IDs with the original Turn's native events: listing
+has no Turn ID, and termination can affect earlier Turns' retained processes.
+Its acknowledgement does not wait for OS exit; observe the process and side effects
+before claiming quiescence. Harness connection loss has a separate native detached
+Session retention/cleanup window. These facts constrain the future cancellation
+mapping; they do not independently establish hosted Agents API cancel semantics.
+The current daemon's interrupt payload also needs the pinned native `turnId`.
+
+The native shell-policy default retains credential-like variables. The fixture
+uses `inherit=core` and `ignore_default_excludes=false`; it separately characterizes
+default-policy exposure without printing values. The Noise harness bearer is
+non-inheritable, but that rule does not cover every executor launch credential.
+No environment-variable policy isolates same-user process memory, `/proc` or files.
+Scoped credentials, placement trust and long-Turn reconnect lifetime remain explicit
+dispatch prerequisites. Public admission stays disabled until those boundaries,
+readiness, lifecycle and real API/daemon execution are accepted together.
+
 ## Dependency-ordered implementation
 
 1. **Executor interoperability.** Demonstrate the documented unmodified executor
