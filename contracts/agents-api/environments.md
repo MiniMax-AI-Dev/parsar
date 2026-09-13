@@ -126,10 +126,34 @@ observed command output and exit 7, and received a termination acknowledgement.
 The remote registration preflight now confirms third-party-domain rejection and a
 loopback POST containing native security-profile/public-key fields and the supplied
 synthetic bearer. The probe deliberately returns 503 before relay allocation.
-Neither probe proves registration success, Noise interoperability, process
-quiescence or public Environment execution. No model call is involved in either
-protocol probe. Evidence is retained outside the repository under
+Those preflights did not establish registration success, Noise interoperability or
+process termination. Their evidence remains under
 `~/.parsar/remediation/20260913/environment-contract/` on `zju_a100_2`.
+
+A subsequent loopback probe uses the unmodified Codex 0.153.4 executor command,
+the matching native `EnvironmentManager`, upstream registry message types and the
+upstream opaque relay test helper. It verifies registration/connect/validation,
+native remote file write/read, separate stdout/stderr with exit 7, and termination
+of a running sleep process through a closed native result with exit 137. A fresh
+connection reads the retained file and repeats execution. The relay carries native
+encrypted frames; file contents are absent from captured frames. Invalid harness
+key authorization, an executor credential used for harness connection and an
+unknown Environment ID are rejected.
+
+This is synthetic-credential protocol verification with zero model calls. It does
+not test a valid foreign tenant, production WebSocket authorization/TLS, isolated
+filesystems, interrupted-command replay or public API/daemon execution. It leaves
+the stock CLI's third-party-domain restriction unresolved. Evidence and runnable
+fixture sources are retained under
+`~/.parsar/remediation/20260913/environment-executor-interoperability/` on
+`zju_a100_2`. The upstream release lock needed only local workspace version labels
+aligned to its manifests; third-party versions, sources, checksums and dependency
+edges stayed unchanged. Native execution and encryption sources were unchanged.
+
+The probe supports reusing the native Codex client/executor libraries for this
+adapter. The service still needs its own durable Environment ownership and scoped
+registry/relay authorization. The test relay is not a production service; other
+harnesses retain their own native placement and execution protocols.
 
 ## Dependency-ordered implementation
 
