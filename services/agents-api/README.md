@@ -334,3 +334,50 @@ for session in client.beta.agents.sessions.list():
 Fresh installations and already indexed history need no backfill. Recovery reads
 continue to use Session/Turn/Items; this procedure is an upgrade operation, not
 an official SSE replay mechanism.
+
+## Native executor registration prerequisite
+
+The disabled-by-default Codex adapter supports executor registration and an
+authenticated presence socket. It does not yet accept a harness connection or
+forward commands. Public Session creation still admits `environment.type=none`
+only; this prerequisite is for internally created Environment fixtures until the
+public admission/readiness workflow is implemented.
+
+To enable it alongside the existing daemon worker, set
+`AGENTS_API_EXECUTOR_URL` to the externally reachable HTTPS origin and
+`AGENTS_API_EXECUTOR_KEYS_FILE` to a private JSON file under `~/.parsar/`:
+
+```json
+[
+  {
+    "token_sha256": "<SHA256_OF_DISTINCT_EXECUTOR_TOKEN>",
+    "tenant_id": "<EXECUTION_TENANT_UUID>",
+    "environment_id": "<EXISTING_ENVIRONMENT_UUID>"
+  }
+]
+```
+
+Each key grants registration for exactly that Environment. Keep it distinct from
+caller and daemon credentials; caller-key reuse fails startup. Key changes take
+effect on service restart, which closes sockets and invalidates connection tickets.
+Removing a key is necessary to exclude its previous holder permanently. The
+adapter reads execution ownership only, with no product user/workspace tables.
+
+The native transport implements `POST /cloud/environment/{id}/register` and the
+returned executor WebSocket URL, outside `/v1/agents`. URLs contain a short-lived
+connection capability; redact query strings in any external access logs. HTTP is
+allowed only on loopback for development. Production TLS termination remains an
+operator responsibility and requires deployment validation.
+
+A connected socket is an internal observation, not public Environment readiness.
+The adapter checks its execution lease and visible Environment on requests and
+five-second heartbeats; deleted ownership, shutdown or lost ownership closes
+connections. Re-registering replaces an old socket without allowing its late close
+to clear the replacement. A live credential can register again after replacement.
+No command replay or native process termination is promised.
+
+The pinned Codex 0.153.4 CLI accepts registry API-key authentication on loopback but
+protects OpenAI credentials from third-party production domains. A separately
+scoped upstream-library launcher remains required investigation; this prerequisite
+does not establish the documented stock command on an arbitrary production domain.
+See [Environment contracts and remaining work](../../contracts/agents-api/environments.md).

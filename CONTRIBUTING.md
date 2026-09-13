@@ -220,6 +220,26 @@ Registration fencing, readiness before input/Turn admission, native/provider
 integration and real-model Environment acceptance remain separate required work.
 
 
+The opt-in native Codex executor registry lives in
+`services/agents-api/internal/executor/codex`, outside public API handlers and the
+daemon device gateway. It reuses the worker's execution lease and Store ownership
+reads. Operator-provisioned executor digests are bound to one tenant/Environment
+and must differ from caller/device credentials. Registry request authentication
+and WebSocket URL capabilities have separate purposes; never log either secret.
+Current API keys identify tenants only, not upstream user/service-account identities.
+
+Registration IDs, five-minute connection capabilities and socket generations are
+process-local. Re-registration replaces the current socket; late close callbacks
+cannot clear its successor. Restart invalidates old URLs and requires registration
+again. An executor retaining a valid credential may register again: permanently
+excluding it requires key revocation/rotation. Ownership is rechecked on requests
+and live socket heartbeats; failed execution ownership closes the registry. This
+is bounded connection observation, not a guarantee of native process quiescence.
+Durable Environment state remains `pending`; no public readiness/event transition
+is inferred from a socket. Harness authorization/relay and public Environment
+admission remain separate work. Native transport annotations are excluded from the
+pinned public SDK OpenAPI output; their routes are documented in the service guide.
+
 #### Independent build artifacts
 
 `make build-agents-api` produces `agents-api`, `agents-api-migrate` and
