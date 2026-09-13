@@ -221,26 +221,6 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	return s, nil
 }
 
-func (s *Session) Cancel(_ context.Context) error {
-	s.cancelled.Store(true)
-	s.stopSteering()
-	s.cancelOnce.Do(func() {
-		s.stopCodexInteractionTimers()
-		// Best-effort turn/interrupt — codex will translate this into
-		// a graceful turn termination. If the RPC is already dead the
-		// kill path below cleans up.
-		tid := s.currentThreadID()
-		if tid != "" {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
-			_, _ = s.rpc.Request(ctx, "turn/interrupt", TurnInterruptParams{ThreadID: tid})
-		}
-		s.cancelFn()
-		_ = s.rpc.Close()
-	})
-	return nil
-}
-
 // SubmitPermission completes the deferred Codex app-server request that
 // produced the Parsar permission envelope.
 func (s *Session) SubmitPermission(_ context.Context, permID string, decision proto.PermissionDecisionPayload) error {

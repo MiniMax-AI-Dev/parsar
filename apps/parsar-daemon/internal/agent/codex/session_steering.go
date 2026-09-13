@@ -103,11 +103,14 @@ func (s *Session) startSteering(raw json.RawMessage) {
 	}
 }
 
-func (s *Session) stopSteering() {
+// stopSteering atomically retains the cancellation target and stops new input.
+func (s *Session) stopSteering() (turnID string, active bool) {
 	s.steering.mu.Lock()
 	defer s.steering.mu.Unlock()
+	turnID, active = s.steering.id, !s.steering.stopped
 	s.steering.stopped = true
 	if s.steering.cancel != nil {
 		s.steering.cancel()
 	}
+	return turnID, active
 }
