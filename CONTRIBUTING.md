@@ -253,6 +253,17 @@ harnesses are rejected without eviction. Public Environment admission and typed
 daemon dispatch integration remain separate work. Native transport annotations are excluded from the
 pinned public SDK OpenAPI output; their routes are documented in the service guide.
 
+Native app-server placement is a prerequisite to typed dispatch. The pinned Codex
+app-server accepts registry configuration at startup; use explicit native Environment
+selections for the first thread and every Turn. Resume does not restore selections
+from history. Keep its process cwd and persistent `CODEX_HOME` local, separately
+from the executor cwd. Readiness and observed tool/file results are required:
+a completed native Turn alone does not establish successful remote execution.
+Apply an intentional native shell environment policy; upstream defaults do not
+filter all credential variables. Filtering is not process or filesystem isolation.
+The opt-in [placement probe](services/agents-api/tests/native/README.md) documents
+its real-provider prerequisites and limits. It does not enable public admission.
+
 #### Independent build artifacts
 
 `make build-agents-api` produces `agents-api`, `agents-api-migrate` and
