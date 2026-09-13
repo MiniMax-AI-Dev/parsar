@@ -73,6 +73,9 @@ type PromptRequestPayload struct {
 	// ExecutionControls are authoritative engine-neutral settings, translated by the adapter.
 	ExecutionControls *ExecutionControls `json:"execution_controls,omitempty"`
 
+	// RemoteEnvironment selects independently placed execution through the native adapter.
+	RemoteEnvironment *RemoteEnvironment `json:"remote_environment,omitempty"`
+
 	// AgentSessionID is the upstream engine session id to resume.
 	AgentSessionID string `json:"agent_session_id,omitempty"`
 

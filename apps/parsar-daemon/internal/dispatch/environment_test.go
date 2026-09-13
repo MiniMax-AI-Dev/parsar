@@ -42,3 +42,31 @@ func TestNoEnvironmentUsesAvailableCapability(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoteEnvironmentRequiresAvailableCapability(t *testing.T) {
+	for _, mode := range []string{"unsupported", "unavailable", "none conflict", "supported"} {
+		t.Run(mode, func(t *testing.T) {
+			h := newHarness(t)
+			defer h.router.Shutdown(context.Background())
+			called := false
+			h.reg.RegisterKind(proto.SupportedAgentKind{Kind: "codex", Available: mode != "unavailable",
+				Capabilities: proto.AgentKindCapabilities{RemoteEnvironment: mode != "unsupported"}},
+				func(_ context.Context, req proto.PromptRequestPayload, _ chan<- proto.Envelope) (agent.Session, error) {
+					called = true
+					if req.RemoteEnvironment == nil || req.RemoteEnvironment.ID != "environment-test" {
+						t.Error("remote descriptor lost before factory")
+					}
+					return nil, errors.New("controlled factory stop")
+				})
+			req := proto.PromptRequestPayload{AgentKind: "codex", RemoteEnvironment: &proto.RemoteEnvironment{ID: "environment-test"}, DisableExecutionEnvironment: mode == "none conflict"}
+			_ = h.router.Handle(t.Context(), mustEnv(t, proto.TypePromptRequest, "remote", req))
+			if called != (mode == "supported") {
+				t.Fatalf("unexpected factory call for %s", mode)
+			}
+			frames := h.sender.snapshot()
+			if len(frames) != 2 || frames[0].Type != proto.TypeError || frames[1].Type != proto.TypeDone {
+				t.Fatal("missing terminal error frames")
+			}
+		})
+	}
+}

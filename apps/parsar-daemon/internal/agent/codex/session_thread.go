@@ -5,6 +5,7 @@ import "encoding/json"
 func (s *Session) startThread(plan SessionPlan) error {
 	params := ThreadStartParams{
 		Cwd:                   plan.Cwd,
+		Environments:          plan.Environments,
 		Model:                 plan.Model,
 		ModelProvider:         plan.ModelProvider,
 		ApprovalPolicy:        plan.ApprovalPolicy,

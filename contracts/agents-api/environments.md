@@ -220,7 +220,9 @@ Its acknowledgement does not wait for OS exit; observe the process and side effe
 before claiming quiescence. Harness connection loss has a separate native detached
 Session retention/cleanup window. These facts constrain the future cancellation
 mapping; they do not independently establish hosted Agents API cancel semantics.
-The current daemon's interrupt payload also needs the pinned native `turnId`.
+The daemon now supplies the observed native `turnId` (or the explicit empty startup
+form) in its interrupt payload. Its applied receipt does not prove final output
+settlement or process exit.
 
 The native shell-policy default retains credential-like variables. The fixture
 uses `inherit=core` and `ignore_default_excludes=false`; it separately characterizes
@@ -230,6 +232,23 @@ No environment-variable policy isolates same-user process memory, `/proc` or fil
 Scoped credentials, placement trust and long-Turn reconnect lifetime remain explicit
 dispatch prerequisites. Public admission stays disabled until those boundaries,
 readiness, lifecycle and real API/daemon execution are accepted together.
+
+## Private daemon adapter
+
+The registered-daemon fixture extends placement through the authenticated gateway,
+capability heartbeat and typed remote descriptor. The adapter consumes transient
+connection credentials, verifies native readiness and selects the executor on first
+and cold-resumed Turns. Local harness history remains separate from remote files.
+See [the contributor boundary](../../CONTRIBUTING.md) and
+[the real-provider fixture](../../services/agents-api/tests/native/README.md) for
+supported native version, rejected combinations and acceptance commands.
+
+Cancellation still uses the existing best-effort interrupt and harness release.
+The fixture measures remote PID exit and stopped side effects independently;
+native detached cleanup may delay that exit. This slice does not implement public
+`environment_connection`, admission/readiness-before-claim, credential renewal or
+resource lifecycle. Public `self_hosted` remains disabled until those dependencies
+are accepted together.
 
 ## Dependency-ordered implementation
 

@@ -60,16 +60,17 @@ type HeartbeatStatus struct {
 // KindCapabilities mirrors the daemon heartbeat capability
 // shape after gateway-level normalization. Persistence stays separate from wire protocol structs.
 type KindCapabilities struct {
-	Streaming        bool `json:"streaming,omitempty"`
-	Permissions      bool `json:"permissions,omitempty"`
-	Usage            bool `json:"usage,omitempty"`
-	Resume           bool `json:"resume,omitempty"`
-	Steering         bool `json:"steering,omitempty"`
-	MessageItems     bool `json:"message_items,omitempty"`
-	ToolItems        bool `json:"tool_items,omitempty"`
-	ToolObservations bool `json:"tool_observations,omitempty"`
-	EnvironmentNone  bool `json:"environment_none,omitempty"`
-	WebSearchControl bool `json:"web_search_control,omitempty"`
+	Streaming         bool `json:"streaming,omitempty"`
+	Permissions       bool `json:"permissions,omitempty"`
+	Usage             bool `json:"usage,omitempty"`
+	Resume            bool `json:"resume,omitempty"`
+	Steering          bool `json:"steering,omitempty"`
+	MessageItems      bool `json:"message_items,omitempty"`
+	ToolItems         bool `json:"tool_items,omitempty"`
+	ToolObservations  bool `json:"tool_observations,omitempty"`
+	EnvironmentNone   bool `json:"environment_none,omitempty"`
+	RemoteEnvironment bool `json:"remote_environment,omitempty"`
+	WebSearchControl  bool `json:"web_search_control,omitempty"`
 	// ExecutionControls supports typed search and verbosity controls.
 	ExecutionControls    bool `json:"execution_controls,omitempty"`
 	TextVerbosity        bool `json:"text_verbosity,omitempty"`
