@@ -286,3 +286,15 @@ expiration, native cleanup and unsupported engine placements remain explicit
 validation gaps. Preserve those gaps in the board and reassess its complete
 priorities after each accepted slice. No placeholder resource, permissive SDK
 parse or synthetic execution test establishes this roadmap as implemented.
+
+### Durable executor credential prerequisite
+
+The native registry now authenticates exact-Environment executor credentials from
+the execution database. Operator issuance returns a random secret once; explicit
+rotation/revocation replaces or invalidates its digest without restarting the
+registry. Owning Session deletion also removes authority. Existing sockets are
+checked on heartbeats; disconnection does not establish process quiescence.
+Harness keys and five-minute connection grants retain separate lifetimes. See the
+[operator transition](../../services/agents-api/README.md#native-executor-transport-prerequisite).
+This does not implement public caller/user/service-account identity equivalence,
+public `self_hosted` admission or the stock command on arbitrary production domains.

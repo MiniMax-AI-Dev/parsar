@@ -18,7 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/executor/codex"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/google/uuid"
@@ -52,15 +51,19 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys := []codex.ScopedKey{
-		{TokenSHA256: device.HashCredential(token), TenantID: tenant, EnvironmentID: environment.ID},
-		{TokenSHA256: device.HashCredential(wrongTenantToken), TenantID: foreign, EnvironmentID: environment.ID},
+	token, err = s.IssueEnvironmentExecutorCredential(ctx, tenant, environment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongTenantToken, err = s.IssueEnvironmentExecutorCredential(ctx, foreign, otherEnvironment.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
 	server := httptest.NewUnstartedServer(nil)
 	address := server.Listener.Addr().String()
 	var attempts atomic.Int64
 	start := func(server *httptest.Server) *codex.Registry {
-		r, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + address, Keys: keys})
+		r, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + address})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -99,7 +102,7 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 		return result
 	}
 	register(otherEnvironment.ID, token, 401)
-	register(environment.ID, wrongTenantToken, 404)
+	register(environment.ID, wrongTenantToken, 401)
 	valid := register(environment.ID, token, 200)
 	socket, response, err := websocket.DefaultDialer.DialContext(ctx, valid.URL, nil)
 	if err != nil {
@@ -178,14 +181,63 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 		if attempts.Load() <= before {
 			t.Fatal("native executor did not re-register after registry restart")
 		}
-		t.Log("unmodified Codex0.153.4 registered, connected and re-registered after loss of process-local tickets")
+		previous := token
+		token, err = s.RotateEnvironmentExecutorCredential(ctx, tenant, environment.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		connected(false)
+		register(environment.ID, previous, 401)
+		before = attempts.Load()
+		until := time.Now().Add(15 * time.Second)
+		for attempts.Load() == before && time.Now().Before(until) {
+			time.Sleep(20 * time.Millisecond)
+		}
+		if attempts.Load() == before {
+			t.Fatal("native executor did not retry its retired credential")
+		}
+		connected(false)
+		t.Log("unmodified Codex0.153.4 registered, reconnected after registry restart, and lost registration authority after rotation")
 	} else {
 		t.Log("native CLI verification not requested; real PostgreSQL/socket checks remain active")
 	}
+	stale := register(environment.ID, token, 200)
+	rotated, err := s.RotateEnvironmentExecutorCredential(ctx, tenant, environment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	register(environment.ID, token, 401)
+	rejected, resp, e := websocket.DefaultDialer.DialContext(ctx, stale.URL, nil)
+	if rejected != nil {
+		rejected.Close()
+	}
+	if resp != nil {
+		resp.Body.Close()
+	}
+	if e == nil || resp == nil || resp.StatusCode != 401 {
+		t.Fatal("retired credential's ticket accepted")
+	}
+	token = rotated
+	current := register(environment.ID, token, 200)
+	socket, response, err = websocket.DefaultDialer.DialContext(ctx, current.URL, nil)
+	if err != nil {
+		t.Fatal("rotated key could not connect")
+	}
+	defer socket.Close()
+	if err := s.RevokeEnvironmentExecutorCredential(ctx, tenant, environment.ID); err != nil {
+		t.Fatal(err)
+	}
+	register(environment.ID, token, 401)
+	_ = socket.SetReadDeadline(time.Now().Add(10 * time.Second))
+	if _, _, err := socket.ReadMessage(); err == nil {
+		t.Fatal("revoked socket survived")
+	}
+	connected(false)
+	register(otherEnvironment.ID, wrongTenantToken, 200)
 	if err := s.DeleteSession(ctx, tenant, session.ID); err != nil {
 		t.Fatal(err)
 	}
-	register(environment.ID, token, 404)
+	register(environment.ID, token, 401)
 	_, response, err = websocket.DefaultDialer.DialContext(ctx, valid.URL, nil)
 	if err == nil {
 		t.Fatal("deleted Environment accepted old connection")

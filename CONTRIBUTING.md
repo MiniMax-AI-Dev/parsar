@@ -223,8 +223,14 @@ integration and real-model Environment acceptance remain separate required work.
 The opt-in native Codex executor registry lives in
 `services/agents-api/internal/executor/codex`, outside public API handlers and the
 daemon device gateway. It reuses the worker's execution lease and Store ownership
-reads. Operator-provisioned executor digests are bound to one tenant/Environment
-and must differ from caller/device credentials. Registry request authentication
+reads. The operator issues one random executor credential per Environment; only
+its digest and revocation state live in the execution database. Ordinary issuance
+refuses an existing record; explicit rotation replaces it, including revoked
+credentials. Tenant ownership is derived from Environment → Session and provisioning
+shares the Session deletion lock. No raw-token import or read-back is provided.
+Executor credentials have no connection-ticket expiry: they remain valid until
+rotation, revocation or Session deletion. Keep caller/device/harness credentials
+independent; never reuse the executor secret for another purpose. Registry request authentication
 and WebSocket URL capabilities have separate purposes; never log either secret.
 Current API keys identify tenants only, not upstream user/service-account identities.
 
@@ -232,8 +238,12 @@ Registration IDs, five-minute connection capabilities and socket generations are
 process-local. Re-registration replaces the current socket; late close callbacks
 cannot clear its successor. Restart invalidates old URLs and requires registration
 again. An executor retaining a valid credential may register again: permanently
-excluding it requires key revocation/rotation. Ownership is rechecked on requests
-and live socket heartbeats; failed execution ownership closes the registry. This
+excluding it requires key revocation/rotation. The current executor digest is rechecked for registration, validation, socket
+attachment and live socket heartbeats; rotation/revocation applies without restart.
+Registration replacement orders credential observations so an older request cannot
+overwrite a newer credential's registration. Heartbeats run every five seconds
+with a four-second authorization budget; closing sockets is an observation bound,
+not immediate revocation of remote side effects. Ownership is also rechecked; failed execution ownership closes the registry. This
 is bounded connection observation, not a guarantee of native process quiescence.
 Durable Environment state remains `pending`; no public readiness/event transition
 is inferred from a socket. The harness registry grants a distinct, exact-Environment credential access to
@@ -288,13 +298,13 @@ receipt is not immediate process quiescence or complete final output/Usage. The
 opt-in registered-daemon test independently observes PID exit and stopped heartbeats
 while the daemon, registry and executor stay alive. Targeted process termination,
 cross-Turn background preservation, public `self_hosted` admission, dispatcher
-readiness-before-claim, credential issuance/renewal and public lifecycle remain
+readiness-before-claim, public credential identity/renewal and public lifecycle remain
 separate work. Do not expose the public mode merely because the adapter probe passes.
 
 #### Independent build artifacts
 
-`make build-agents-api` produces `agents-api`, `agents-api-migrate` and
-`agents-api-device` under `${PARSAR_HOME:-$HOME/.parsar}/build/agents-api`.
+`make build-agents-api` produces `agents-api`, `agents-api-migrate`,
+`agents-api-device` and `agents-api-environment-key` under `${PARSAR_HOME:-$HOME/.parsar}/build/agents-api`.
 `AGENTS_API_BUILD_DIR` may select another absolute output directory. The build
 uses only the explicit source set in `scripts/build-agents-api.sh`: the execution
 service, its Go contracts and required shared daemon/logging packages, plus the
@@ -309,7 +319,7 @@ module manifests and trimmed paths. It requires no Node, Docker or product setup
 and the dedicated CI workflow enforce the same boundary. CI exercises the built
 migration command and uses the built server for official-client HTTP checks.
 `make docker-build-agents-api` reuses that build for Linux amd64 and sends only
-its three executables and `services/agents-api/Dockerfile` to Docker. The pinned
+its four executables and `services/agents-api/Dockerfile` to Docker. The pinned
 Distroless runtime runs without root, a shell, product assets or an embedded
 harness. Keep runtime credentials outside the image and migrations explicit.
 `make check-agents-api-container` runs the existing official-client suite against

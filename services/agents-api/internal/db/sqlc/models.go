@@ -34,6 +34,13 @@ type Environment struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type EnvironmentExecutorCredential struct {
+	EnvironmentID pgtype.UUID        `json:"environment_id"`
+	TokenSha256   string             `json:"token_sha256"`
+	IssuedAt      pgtype.Timestamptz `json:"issued_at"`
+	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
+}
+
 type FunctionCall struct {
 	SessionID      pgtype.UUID        `json:"session_id"`
 	TurnID         pgtype.UUID        `json:"turn_id"`

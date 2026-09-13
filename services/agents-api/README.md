@@ -55,6 +55,7 @@ The default output is `${PARSAR_HOME:-$HOME/.parsar}/build/agents-api`:
 - `agents-api`: HTTP service and execution worker.
 - `agents-api-migrate`: this service's embedded database migrations.
 - `agents-api-device`: operator device provisioning and revocation.
+- `agents-api-environment-key`: exact-Environment executor credential issuance, rotation and revocation.
 
 Use these executables in place of the corresponding `go run` commands below.
 The build needs Go and access to its pinned module dependencies; it does not need
@@ -343,27 +344,63 @@ only; this prerequisite is for internally created Environment fixtures until the
 public admission/readiness workflow is implemented.
 
 To enable it alongside the existing daemon worker, set
-`AGENTS_API_EXECUTOR_URL` to the externally reachable HTTPS origin and
-`AGENTS_API_EXECUTOR_KEYS_FILE` to a private JSON file under `~/.parsar/`:
+`AGENTS_API_EXECUTOR_URL` to the externally reachable HTTPS origin. Apply the
+execution migrations first, then use operator database authority to issue a key
+for an existing tenant-owned Environment:
+
+```bash
+umask 077
+agents-api-environment-key --tenant "$TENANT_ID" --environment "$ENVIRONMENT_ID" \
+  > "$HOME/.parsar/executor-key.json"
+```
+
+`AGENTS_API_DATABASE_URL` must point to the execution database. The JSON output
+contains `environment_id` and `executor_token`; stdout is its only delivery.
+Configure the executor's private `CODEX_API_KEY` with that token. The CLI never
+imports a chosen token or reads one back. Lost output requires explicit rotation;
+ordinary issuance fails when a credential already exists, including a revoked one.
+Use `--rotate` with the same identifiers to replace it and deliver a new secret,
+or `--revoke` to invalidate it without emitting a secret. Restart/reconfigure
+executors with the rotated key: the pinned native auth provider does not refresh
+its startup token. Credentials remain valid until rotation/revocation or deletion
+of the owning Session; the five-minute URL-grant lifetime does not apply to them.
+
+The database stores only the current digest, issue time and revocation marker.
+Tenant identity is derived from Environment/Session ownership, with no product
+user/workspace tables or daemon-device authority. A service restart preserves the
+credential but discards registrations and URL grants, requiring re-registration.
+Rotation/revocation takes effect without service restart: requests and upgrades
+check the current digest; existing pairs close on authorization heartbeats (every
+five seconds, with a four-second check budget). This is bounded connection
+observation, not a promise that native processes have stopped.
+
+**Transition from static executor keys:** stop the old registry, apply migration
+21, issue new credentials, update executor configuration, remove
+`AGENTS_API_EXECUTOR_KEYS_FILE`, and restart the service. That setting now fails
+startup with an operator instruction; there is no static/durable fallback or raw
+key import. Do not overlap old and new registries. Retire the previous executor
+secret and its file. Rollback of migration 21 discards these credentials; it is not
+a way to recover old secrets or grants.
+
+To enable harness connections, set `AGENTS_API_HARNESS_KEYS_FILE` to a private JSON
+file under `~/.parsar/` with separately generated tokens:
 
 ```json
 [
   {
-    "token_sha256": "<SHA256_OF_DISTINCT_EXECUTOR_TOKEN>",
+    "token_sha256": "<SHA256_OF_DISTINCT_HARNESS_TOKEN>",
     "tenant_id": "<EXECUTION_TENANT_UUID>",
     "environment_id": "<EXISTING_ENVIRONMENT_UUID>"
   }
 ]
 ```
 
-Each key grants registration for exactly that Environment. To enable harness
-connections, set `AGENTS_API_HARNESS_KEYS_FILE` to a second private JSON file with
-the same binding fields and distinct tokens. Without it, only executor presence is
-available. Executor and harness keys must differ from caller and daemon credentials;
-caller/executor/harness digest collisions fail startup. Key changes take
-effect on service restart, which closes sockets and invalidates connection tickets.
-Removing a key is necessary to exclude its previous holder permanently. The
-adapter reads execution ownership only, with no product user/workspace tables.
+Harness keys retain their existing static configuration and require a service
+restart for changes. Harness/caller digest collisions fail startup. Keep all
+caller, device, executor and harness secrets independently generated and scoped;
+never copy an issued executor key into another authority's configuration. Without
+harness keys, only executor presence is available. Operator key management is a
+private infrastructure prerequisite, not an upstream user/service-account key API.
 
 Native routes live outside `/v1/agents`: `POST /cloud/environment/{id}/register`
 uses the executor credential; `/connect` uses the harness credential and `/validate`

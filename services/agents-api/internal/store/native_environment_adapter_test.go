@@ -67,8 +67,12 @@ func TestNativeDaemonRemoteEnvironment(t *testing.T) {
 	scope := func(token string) codex.ScopedKey {
 		return codex.ScopedKey{TokenSHA256: device.HashCredential(token), TenantID: h.tenant, EnvironmentID: environment.ID}
 	}
+	executorToken, err = h.s.IssueEnvironmentExecutorCredential(t.Context(), h.tenant, environment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := codex.New(codex.Config{Store: h.s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String(), Keys: []codex.ScopedKey{scope(executorToken)}, HarnessKeys: []codex.ScopedKey{scope(harnessToken)}})
+	registry, err := codex.New(codex.Config{Store: h.s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String(), HarnessKeys: []codex.ScopedKey{scope(harnessToken)}})
 	if err != nil {
 		t.Fatal(err)
 	}

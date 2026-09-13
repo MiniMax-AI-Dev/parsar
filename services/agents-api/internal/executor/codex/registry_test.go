@@ -23,6 +23,7 @@ import (
 type environmentFixture struct {
 	mu     sync.Mutex
 	values map[string]string
+	keys   map[string]string
 	lost   bool
 }
 
@@ -37,6 +38,18 @@ func (s *environmentFixture) GetEnvironment(ctx context.Context, tenant, id stri
 	}
 	return store.Environment{ID: id, TenantID: tenant}, nil
 }
+func (s *environmentFixture) AuthenticateEnvironmentExecutor(ctx context.Context, id, digest string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.values[id] == "" || s.keys[id] != digest {
+		return "", store.ErrNotFound
+	}
+	return s.values[id], nil
+}
+
 func (s *environmentFixture) owner(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -67,7 +80,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
-	source := &environmentFixture{values: map[string]string{}}
+	source := &environmentFixture{values: map[string]string{}, keys: map[string]string{}}
 	keys, tokens := []ScopedKey{}, []string{}
 	for range 2 {
 		token := uuid.NewString()
@@ -75,9 +88,10 @@ func newFixture(t *testing.T) fixture {
 		keys = append(keys, k)
 		tokens = append(tokens, token)
 		source.values[k.EnvironmentID] = k.TenantID
+		source.keys[k.EnvironmentID] = k.TokenSHA256
 	}
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := New(Config{Store: source, CheckOwnership: source.owner, PublicURL: "http://" + server.Listener.Addr().String(), Keys: keys})
+	registry, err := New(Config{Store: source, CheckOwnership: source.owner, PublicURL: "http://" + server.Listener.Addr().String()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +234,7 @@ func TestOwnershipLossAndDeletionClosePresence(t *testing.T) {
 			if _, _, err := c.ReadMessage(); err == nil {
 				t.Fatal("unauthorized socket survived")
 			}
-			expected := 404
+			expected := 401
 			if loss == "lease" {
 				expected = 503
 			}
@@ -248,7 +262,7 @@ func TestExecutorPresenceHasNoCommandRelay(t *testing.T) {
 
 func TestExecutorConfigRejectsUnsafeOrAmbiguousBindings(t *testing.T) {
 	f := newFixture(t)
-	base := Config{Store: f.source, CheckOwnership: f.source.owner, PublicURL: f.server.URL, Keys: f.keys}
+	base := Config{Store: f.source, CheckOwnership: f.source.owner, PublicURL: f.server.URL}
 	for _, url := range []string{"http://executor.example", "https://user:secret@example", "https://example/path", "https://example?token=x", "ws://localhost"} {
 		c := base
 		c.PublicURL = url
@@ -257,12 +271,12 @@ func TestExecutorConfigRejectsUnsafeOrAmbiguousBindings(t *testing.T) {
 		}
 	}
 	c := base
-	c.Keys = append(c.Keys, c.Keys[0])
+	c.HarnessKeys = append(append([]ScopedKey{}, f.keys...), f.keys[0])
 	if _, err := New(c); err == nil {
 		t.Fatal("duplicate scope accepted")
 	}
 	c = base
-	c.Keys = []ScopedKey{{TokenSHA256: strings.Repeat("g", 64), TenantID: uuid.NewString(), EnvironmentID: uuid.NewString()}}
+	c.HarnessKeys = []ScopedKey{{TokenSHA256: strings.Repeat("g", 64), TenantID: uuid.NewString(), EnvironmentID: uuid.NewString()}}
 	if _, err := New(c); err == nil {
 		t.Fatal("invalid digest accepted")
 	}
