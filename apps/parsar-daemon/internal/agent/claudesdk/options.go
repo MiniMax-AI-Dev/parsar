@@ -37,8 +37,13 @@ func prepare(config Config, req proto.PromptRequestPayload) (startRequest, []str
 	if req.RunID == "" || strings.TrimSpace(req.Prompt) == "" {
 		return fail("run id and prompt are required")
 	}
-	if req.ExecutionControls != nil || len(req.Attachments) > 0 || req.WorkspaceAuthoring || req.ObserveTools {
+	if len(req.Attachments) > 0 || req.WorkspaceAuthoring || req.ObserveTools {
 		return fail("requested capability is not available in the private SDK adapter")
+	}
+	// Search is disabled by the fixed native tool profile. Medium selects the
+	// SDK's default text generation; it has no native verbosity-level option.
+	if controls := req.ExecutionControls; controls != nil && (controls.WebSearch != "disabled" || controls.TextVerbosity != "medium") {
+		return fail("execution controls require disabled web search and medium text verbosity")
 	}
 	// The fixed SDK profile already excludes all built-in tools and subagents.
 	// Both restriction flags are supported; omitting them does not widen the profile.
