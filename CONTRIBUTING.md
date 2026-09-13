@@ -780,7 +780,8 @@ and is not bundled; the bundle is independent of product sources, services and d
 It does not add Node or SDK assets to the Agents API binaries/image.
 
 The build validates source manifests with the repository-pinned pnpm frozen
-install, then uses modern `pnpm deploy` with command-scoped workspace injection
+install and compiles into fresh managed staging, never exporting incremental
+checkout output. It then uses modern `pnpm deploy` with command-scoped workspace injection
 and its dedicated frozen lock. The adapter has no workspace dependencies; keep
 that boundary explicit. Do not enable injection globally or replace this with a
 custom dependency copier. Export only compiled `dist` and production dependencies;
