@@ -10,7 +10,7 @@ import (
 const maxHarnessGrants = 32
 
 type harnessGrant struct {
-	key           ScopedKey
+	credential    *harnessCredential
 	publicKey     PublicKey
 	authorization [32]byte
 	expires       time.Time
@@ -19,7 +19,7 @@ type harnessGrant struct {
 	validated     bool
 }
 
-// @Summary Authorize a harness key without disrupting an existing connection
+// @Summary Authorize an execution-owned harness key without disrupting an existing connection
 // @Tags Native executor registry
 // @Accept json
 // @Produce json
@@ -30,12 +30,12 @@ type harnessGrant struct {
 // @Router /cloud/environment/{environment}/connect [post]
 func (r *Registry) connect(w http.ResponseWriter, req *http.Request) {
 	environment := req.PathValue("environment")
-	key, ok := credential(req, environment, r.harnessKeys)
+	credential, ok := r.harnessCredential(req, environment)
 	if !ok {
 		writeError(w, http.StatusUnauthorized)
 		return
 	}
-	if !r.check(w, req, key) {
+	if !r.check(w, req, credential.key) {
 		return
 	}
 	var body ConnectRequest
@@ -57,6 +57,11 @@ func (r *Registry) connect(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	r.mu.Lock()
+	if !r.harnessCredentialActiveLocked(credential) {
+		r.mu.Unlock()
+		writeError(w, http.StatusUnauthorized)
+		return
+	}
 	reg := r.registrations[environment]
 	if r.closed || reg == nil || reg.socket == nil {
 		r.mu.Unlock()
@@ -74,7 +79,7 @@ func (r *Registry) connect(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusTooManyRequests)
 		return
 	}
-	reg.grants[sha256.Sum256([]byte(ticket))] = &harnessGrant{key: key, publicKey: body.HarnessPublicKey, authorization: sha256.Sum256([]byte(authorization)), expires: now.Add(ticketLifetime), executor: reg.socket}
+	reg.grants[sha256.Sum256([]byte(ticket))] = &harnessGrant{credential: credential, publicKey: body.HarnessPublicKey, authorization: sha256.Sum256([]byte(authorization)), expires: now.Add(ticketLifetime), executor: reg.socket}
 	response := ConnectResponse{
 		RegistrationResponse: RegistrationResponse{EnvironmentID: environment, ExecutorRegistrationID: reg.id, SecurityProfile: securityProfile, URL: r.publicWS + "/cloud/environment/" + environment + "/harness/" + reg.id + "?ticket=" + ticket},
 		ExecutorPublicKey:    reg.publicKey, HarnessKeyAuthorization: authorization,
@@ -115,7 +120,7 @@ func (r *Registry) validate(w http.ResponseWriter, req *http.Request) {
 	reg := r.registrations[environment]
 	if !r.closed && reg != nil && reg.id == body.ExecutorRegistrationID && reg.key.TokenSHA256 == key.TokenSHA256 && reg.socket != nil {
 		for _, grant := range reg.grants {
-			if grant.executor == reg.socket && grant.harness != nil && grant.harness == reg.socket.peer && !grant.validated && time.Now().Before(grant.expires) && grant.publicKey == body.HarnessPublicKey && subtle.ConstantTimeCompare(authorization[:], grant.authorization[:]) == 1 {
+			if r.harnessCredentialActiveLocked(grant.credential) && grant.executor == reg.socket && grant.harness != nil && grant.harness == reg.socket.peer && !grant.validated && time.Now().Before(grant.expires) && grant.publicKey == body.HarnessPublicKey && subtle.ConstantTimeCompare(authorization[:], grant.authorization[:]) == 1 {
 				grant.validated = true
 				valid = true
 				break
@@ -149,7 +154,7 @@ func (r *Registry) connectHarness(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusUnauthorized)
 		return
 	}
-	if !r.check(w, req, grant.key) || !r.checkCurrentExecutor(w, req, reg.key) {
+	if !r.check(w, req, grant.credential.key) || !r.checkCurrentExecutor(w, req, reg.key) {
 		return
 	}
 	r.mu.Lock()
@@ -176,5 +181,5 @@ func (r *Registry) connectHarness(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Registry) harnessAttachable(reg *registration, grant *harnessGrant, id string) bool {
-	return !r.closed && reg != nil && reg.id == id && grant != nil && grant.executor == reg.socket && grant.harness == nil && time.Now().Before(grant.expires)
+	return !r.closed && reg != nil && reg.id == id && grant != nil && r.harnessCredentialActiveLocked(grant.credential) && grant.executor == reg.socket && grant.harness == nil && time.Now().Before(grant.expires)
 }

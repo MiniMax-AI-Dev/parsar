@@ -25,7 +25,11 @@ connection. These observations do not change durable `pending` state or emit pub
 Environment readiness. Deleting the owning Session rejects new requests and closes
 existing sockets on the next ownership heartbeat. A previous holder of a still-valid
 executor credential can register again; permanent exclusion requires revocation.
-Distinct harness credentials now obtain short-lived, key-bound connection grants.
+Execution owners now obtain transient harness credentials through the internal
+registry after exact tenant/Environment and execution-lease authorization. Their
+owner context spans preparation and the transferred Run; release/cancellation
+invalidates the credential and its own grants/pair. Static harness keys are retired.
+These credentials obtain short-lived, key-bound connection grants.
 The relay pairs one harness with the current executor socket and forwards native
 binary frames unchanged. Either peer loss closes both physical connections and
 invalidates grants; no queued frames or commands move to a successor. Refresh does

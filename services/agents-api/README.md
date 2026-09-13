@@ -384,25 +384,20 @@ key import. Do not overlap old and new registries. Retire the previous executor
 secret and its file. Rollback of migration 21 discards these credentials; it is not
 a way to recover old secrets or grants.
 
-To enable harness connections, set `AGENTS_API_HARNESS_KEYS_FILE` to a private JSON
-file under `~/.parsar/` with separately generated tokens:
+Harness credentials are issued internally for an execution owner after checking
+the current execution lease and exact tenant/Environment ownership. The registry
+holds only bounded process-local digests. The owner retains its credential through
+preparation and the transferred Run, then releases it; cancellation and service
+shutdown also revoke access and close that credential's pair. Connection tickets
+still expire after five minutes, independently of the active owner's lifetime.
+See the [canonical ownership rules](../../CONTRIBUTING.md#environment-ownership-and-placement).
 
-```json
-[
-  {
-    "token_sha256": "<SHA256_OF_DISTINCT_HARNESS_TOKEN>",
-    "tenant_id": "<EXECUTION_TENANT_UUID>",
-    "environment_id": "<EXISTING_ENVIRONMENT_UUID>"
-  }
-]
-```
-
-Harness keys retain their existing static configuration and require a service
-restart for changes. Harness/caller digest collisions fail startup. Keep all
-caller, device, executor and harness secrets independently generated and scoped;
-never copy an issued executor key into another authority's configuration. Without
-harness keys, only executor presence is available. Operator key management is a
-private infrastructure prerequisite, not an upstream user/service-account key API.
+**Transition from static harness keys:** stop the old registry, remove
+`AGENTS_API_HARNESS_KEYS_FILE`, retire its secrets/files and restart. That setting
+now fails startup rather than retaining a static fallback. Existing private native
+fixtures use internal issuance; Worker wiring and public Environment admission
+remain pending. There is no public harness-key endpoint or user/service-account
+identity equivalence. Caller, device, executor and harness credentials stay separate.
 
 Native routes live outside `/v1/agents`: `POST /cloud/environment/{id}/register`
 uses the executor credential; `/connect` uses the harness credential and `/validate`
