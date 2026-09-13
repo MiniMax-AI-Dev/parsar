@@ -102,6 +102,9 @@ func (w *Worker) Run(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			if _, err := w.dispatcher.Store.ExpireEnvironmentInputs(ctx); err != nil {
+				return err
+			}
 			if len(active) == 4 {
 				continue
 			}
