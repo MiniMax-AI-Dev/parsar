@@ -260,8 +260,7 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 		r.emitTerminalError(callerCtx, runID, err.Error())
 		return err
 	}
-	if req.DisableExecutionEnvironment && !r.availableCapabilities(req.AgentKind).EnvironmentNone {
-		err := errors.New("engine does not support execution environment none")
+	if err := validateExecutionEnvironment(req, r.availableCapabilities(req.AgentKind)); err != nil {
 		r.emitTerminalError(callerCtx, runID, err.Error())
 		return err
 	}

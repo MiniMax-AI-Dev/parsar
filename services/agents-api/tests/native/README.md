@@ -3,8 +3,9 @@
 These fixtures exercise pinned native execution against the actual Agents API
 registry/relay and a dedicated execution PostgreSQL database. They are opt-in;
 ordinary CI skips native binaries and paid model calls when prerequisites are absent.
-They do not admit public `self_hosted`, dispatch through the daemon, or establish
-complete Agents API compatibility. Use the protocol coverage ledger for those gaps.
+They do not admit public `self_hosted` or establish complete Agents API
+compatibility. The registered-daemon probe below exercises the private adapter
+boundary; public Environment dispatch remains separate. Use the protocol coverage ledger for those gaps.
 
 `relay_probe.rs` is compiled as an example of the pinned `codex-exec-server` crate.
 `TestNativeHarnessRelayPostgreSQLAndProcessRecovery` runs it against the Go registry.
@@ -55,3 +56,35 @@ TLS/domain authentication and full API/daemon lifecycle need separate acceptance
 A successful probe reports `characterized_with_blockers`: its native behavior
 assertions passed, while public dispatch/cancellation integration remains unimplemented.
 It is not a passing claim for the complete Environment feature.
+
+## Registered daemon adapter
+
+`TestNativeDaemonRemoteEnvironment` sends the typed remote descriptor through a
+real authenticated daemon/gateway, using the same registry and executor. It creates
+harness credentials after daemon startup, so preloaded transport environment cannot
+satisfy the test. The fixed native version must advertise the capability through
+its actual heartbeat. Supply the placement prerequisites above plus:
+
+```sh
+export PARSAR_NATIVE_DAEMON_BIN='<absolute daemon built from this checkout>'
+export PARSAR_NATIVE_PROOF_DIR="$HOME/.parsar/daemon-environment-proof"
+mkdir -p "$PARSAR_NATIVE_PROOF_DIR"
+chmod 700 "$PARSAR_NATIVE_PROOF_DIR"
+go test ./services/agents-api/internal/store \
+  -run '^TestNativeDaemonRemoteEnvironment$' -count=1 -v -timeout=12m
+```
+
+The fixture explicitly sets daemon `PARSAR_CODEX_BIN` to `PARSAR_CODEX_BINARY`.
+It checks invalid transient authorization, remote instructions/cwd/output/exit/files,
+release and same-thread cold continuation, then sends `prompt_cancel` during an
+actual remote command. PID exit and stopped heartbeats are observed independently
+while the daemon, registry and executor remain running; the measured cleanup delay
+is recorded, with no immediate-quiescence claim. Provider usage is real MiniMax-M3.
+
+The Environment token must be absent from persisted files and responses. The device
+credential remains in its profile; the existing provider adapter may store its key
+in private harness `config.toml`. Neither is mounted into the executor. The explicit
+shell policy checks inheritance, not arbitrary same-user process visibility.
+`remote-adapter-proof.json` describes this bounded daemon acceptance; public input
+admission, durable lifecycle, credentials, files/templates and API projection still
+need their own implementation and real acceptance.

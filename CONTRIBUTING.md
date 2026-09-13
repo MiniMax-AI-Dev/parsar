@@ -264,6 +264,33 @@ filter all credential variables. Filtering is not process or filesystem isolatio
 The opt-in [placement probe](services/agents-api/tests/native/README.md) documents
 its real-provider prerequisites and limits. It does not enable public admission.
 
+The private daemon `remote_environment` descriptor carries Environment identity,
+executor workspace and transient native connection URL/token. `WorkDir` and
+`CODEX_HOME` remain harness-local. The selected adapter owns the connection
+protocol; Codex Noise configuration and native Environment selectors never enter
+the API core. Do not persist the connection token in configuration, events or
+completion metadata. Existing private provider configuration and device profiles
+have separate credential ownership.
+
+The initial Codex adapter advertises this mode only for the verified 0.153.4
+protocol, propagating the capability through the real heartbeat/gateway. It checks
+native remote readiness and absence of local fallback before starting a thread.
+Supply a stable state key, strict resume and completion release: each prompt owns
+one harness, and a bound Environment permits one harness connection. Send the
+native selection on first thread creation and every Turn; cold resume does not
+restore it. Reject conflicting native transport settings, unsupported engines or
+versions, non-POSIX executor paths, and local managed Skills/MCP/plugins/authoring
+or attachments. Apply explicit core shell inheritance and credential exclusions.
+
+This daemon slice keeps existing best-effort cancellation and harness cleanup.
+Native detached-session cleanup may stop remote commands after a delay; an applied
+receipt is not immediate process quiescence or complete final output/Usage. The
+opt-in registered-daemon test independently observes PID exit and stopped heartbeats
+while the daemon, registry and executor stay alive. Targeted process termination,
+cross-Turn background preservation, public `self_hosted` admission, dispatcher
+readiness-before-claim, credential issuance/renewal and public lifecycle remain
+separate work. Do not expose the public mode merely because the adapter probe passes.
+
 #### Independent build artifacts
 
 `make build-agents-api` produces `agents-api`, `agents-api-migrate` and

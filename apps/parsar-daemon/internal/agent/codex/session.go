@@ -120,34 +120,14 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	if err != nil {
 		return nil, err
 	}
+	if err := validateRemoteEnvironmentRequest(req); err != nil {
+		return nil, err
+	}
 	req.AgentStateKey = effectiveAgentStateKey(req)
 
 	req.AgentOptions = executionOptions(req)
-	plan, err := BuildSessionPlan(req.RunID, req.AgentStateKey, req.WorkDir, req.AgentOptions)
+	plan, skillRoot, err := prepareSessionPlan(parent, req, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("codex: build session plan: %w", err)
-	}
-
-	if req.DisableSubagents {
-		disableSubagents(&plan)
-	}
-
-	if stringOpt(req.AgentOptions, "model_verbosity") != "" {
-		if err := prepareModelVerbosity(parent, cfg.codexBinary, &plan); err != nil {
-			plan.Cleanup()
-			return nil, err
-		}
-	}
-
-	if req.DisableExecutionEnvironment {
-		plan.Env = append(plan.Env, "CODEX_EXEC_SERVER_URL=none")
-	}
-	skillRoot := ""
-	if !req.DisableExecutionEnvironment {
-		skillRoot, err = prepareManagedSkills(parent, cfg.logger, req)
-	}
-	if err != nil {
-		plan.Cleanup()
 		return nil, err
 	}
 
@@ -198,6 +178,14 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	}
 	if req.DisableExecutionEnvironment {
 		if err := verifyNoExecutionEnvironment(cancelCtx, rpc); err != nil {
+			cancelFn()
+			_ = rpc.Close()
+			plan.Cleanup()
+			return nil, err
+		}
+	}
+	if req.RemoteEnvironment != nil {
+		if err := verifyRemoteEnvironment(cancelCtx, rpc); err != nil {
 			cancelFn()
 			_ = rpc.Close()
 			plan.Cleanup()
@@ -258,8 +246,9 @@ func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 		return
 	}
 	turnParams := TurnStartParams{
-		ThreadID: s.currentThreadID(),
-		Input:    input,
+		ThreadID:     s.currentThreadID(),
+		Input:        input,
+		Environments: plan.Environments,
 	}
 	if plan.CollaborationMode != "" {
 		model := strings.TrimSpace(s.resolvedModel)

@@ -536,6 +536,7 @@ func deviceKindsFromHeartbeat(p proto.HeartbeatPayload) []device.SupportedAgentK
 				ToolItems:            info.Capabilities.ToolItems,
 				ToolObservations:     info.Capabilities.ToolObservations,
 				EnvironmentNone:      info.Capabilities.EnvironmentNone,
+				RemoteEnvironment:    info.Capabilities.RemoteEnvironment,
 				WebSearchControl:     info.Capabilities.WebSearchControl,
 				TextVerbosity:        info.Capabilities.TextVerbosity,
 				ExecutionControls:    info.Capabilities.ExecutionControls,

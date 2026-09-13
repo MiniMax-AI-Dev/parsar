@@ -156,10 +156,11 @@ type SandboxPolicy struct {
 // ---------------------------------------------------------------------------
 
 type ThreadStartParams struct {
-	Cwd            string         `json:"cwd"`
-	Model          string         `json:"model,omitempty"`
-	ModelProvider  string         `json:"modelProvider,omitempty"`
-	ApprovalPolicy AskForApproval `json:"approvalPolicy"`
+	Environments   []EnvironmentSelection `json:"environments,omitempty"`
+	Cwd            string                 `json:"cwd"`
+	Model          string                 `json:"model,omitempty"`
+	ModelProvider  string                 `json:"modelProvider,omitempty"`
+	ApprovalPolicy AskForApproval         `json:"approvalPolicy"`
 	// Sandbox is the v0.141+ field name; previously called sandboxPolicy
 	// and took a tagged-enum object. Wire format now is a kebab-case
 	// string: "read-only" / "workspace-write" / "danger-full-access".
@@ -225,9 +226,10 @@ type UserInput struct {
 }
 
 type TurnStartParams struct {
-	ThreadID          string             `json:"threadId"`
-	Input             []UserInput        `json:"input"`
-	CollaborationMode *CollaborationMode `json:"collaborationMode,omitempty"`
+	Environments      []EnvironmentSelection `json:"environments,omitempty"`
+	ThreadID          string                 `json:"threadId"`
+	Input             []UserInput            `json:"input"`
+	CollaborationMode *CollaborationMode     `json:"collaborationMode,omitempty"`
 }
 
 type CollaborationModeKind string

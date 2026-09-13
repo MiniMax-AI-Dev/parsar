@@ -19,6 +19,9 @@ type SessionPlan struct {
 	// the spawned app-server). Empty when the caller provided no work_dir.
 	Cwd string
 
+	// Environments select native execution independently of the process cwd.
+	Environments []EnvironmentSelection
+
 	// Env is the full environment slice (KEY=value) to layer onto
 	// os.Environ() before spawning. Includes CODEX_HOME, plus any
 	// caller-provided OPENAI_API_KEY / CODEX_API_KEY / proxy vars.

@@ -1,0 +1,43 @@
+package codex
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
+)
+
+func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg sessionConfig) (SessionPlan, string, error) {
+	plan, err := BuildSessionPlan(req.RunID, req.AgentStateKey, req.WorkDir, req.AgentOptions)
+	if err != nil {
+		return SessionPlan{}, "", fmt.Errorf("codex: build session plan: %w", err)
+	}
+
+	if req.DisableSubagents {
+		disableSubagents(&plan)
+	}
+
+	if stringOpt(req.AgentOptions, "model_verbosity") != "" {
+		if err := prepareModelVerbosity(ctx, cfg.codexBinary, &plan); err != nil {
+			plan.Cleanup()
+			return SessionPlan{}, "", err
+		}
+	}
+
+	if req.DisableExecutionEnvironment {
+		plan.Env = append(plan.Env, "CODEX_EXEC_SERVER_URL=none")
+	}
+	skillRoot := ""
+	if !req.DisableExecutionEnvironment && req.RemoteEnvironment == nil {
+		skillRoot, err = prepareManagedSkills(ctx, cfg.logger, req)
+	}
+	if err != nil {
+		plan.Cleanup()
+		return SessionPlan{}, "", err
+	}
+
+	if req.RemoteEnvironment != nil {
+		configureRemoteEnvironment(&plan, *req.RemoteEnvironment)
+	}
+	return plan, skillRoot, nil
+}

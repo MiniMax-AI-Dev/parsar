@@ -12,6 +12,11 @@ import (
 
 func nativeDispatchHarness(t *testing.T) (*dispatchHarness, context.Context, string) {
 	t.Helper()
+	return nativeDispatchHarnessWithTimeout(t, 120*time.Second)
+}
+
+func nativeDispatchHarnessWithTimeout(t *testing.T, timeout time.Duration) (*dispatchHarness, context.Context, string) {
+	t.Helper()
 	binary, root := os.Getenv("PARSAR_NATIVE_DAEMON_BIN"), os.Getenv("PARSAR_NATIVE_PROOF_DIR")
 	if binary == "" || root == "" {
 		t.Skip("explicit native daemon binary and evidence directory required")
@@ -19,7 +24,7 @@ func nativeDispatchHarness(t *testing.T) (*dispatchHarness, context.Context, str
 	h := newDispatchHarness(t)
 	oldPeer, _ := h.registry.LookupDevice(h.device.ID)
 	h.conn.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	t.Cleanup(cancel)
 	home, err := os.MkdirTemp(root, "execution-native-")
 	if err != nil {
