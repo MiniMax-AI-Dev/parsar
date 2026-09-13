@@ -335,11 +335,10 @@ Fresh installations and already indexed history need no backfill. Recovery reads
 continue to use Session/Turn/Items; this procedure is an upgrade operation, not
 an official SSE replay mechanism.
 
-## Native executor registration prerequisite
+## Native executor transport prerequisite
 
-The disabled-by-default Codex adapter supports executor registration and an
-authenticated presence socket. It does not yet accept a harness connection or
-forward commands. Public Session creation still admits `environment.type=none`
+The disabled-by-default Codex adapter supports executor registration, harness key
+authorization and an opaque native Noise relay. Public Session creation still admits `environment.type=none`
 only; this prerequisite is for internally created Environment fixtures until the
 public admission/readiness workflow is implemented.
 
@@ -357,15 +356,21 @@ To enable it alongside the existing daemon worker, set
 ]
 ```
 
-Each key grants registration for exactly that Environment. Keep it distinct from
-caller and daemon credentials; caller-key reuse fails startup. Key changes take
+Each key grants registration for exactly that Environment. To enable harness
+connections, set `AGENTS_API_HARNESS_KEYS_FILE` to a second private JSON file with
+the same binding fields and distinct tokens. Without it, only executor presence is
+available. Executor and harness keys must differ from caller and daemon credentials;
+caller/executor/harness digest collisions fail startup. Key changes take
 effect on service restart, which closes sockets and invalidates connection tickets.
 Removing a key is necessary to exclude its previous holder permanently. The
 adapter reads execution ownership only, with no product user/workspace tables.
 
-The native transport implements `POST /cloud/environment/{id}/register` and the
-returned executor WebSocket URL, outside `/v1/agents`. URLs contain a short-lived
-connection capability; redact query strings in any external access logs. HTTP is
+Native routes live outside `/v1/agents`: `POST /cloud/environment/{id}/register`
+uses the executor credential; `/connect` uses the harness credential and `/validate`
+uses the executor credential. The returned WebSocket URLs carry separate connection
+capabilities. Keep URLs and `harness_key_authorization` private; redact query
+strings in external access logs. This native adapter does not expand the pinned
+public SDK OpenAPI surface. HTTP is
 allowed only on loopback for development. Production TLS termination remains an
 operator responsibility and requires deployment validation.
 
@@ -375,6 +380,34 @@ five-second heartbeats; deleted ownership, shutdown or lost ownership closes
 connections. Re-registering replaces an old socket without allowing its late close
 to clear the replacement. A live credential can register again after replacement.
 No command replay or native process termination is promised.
+
+Each Environment currently accepts one independent harness connection. Multiple
+native commands, processes and file operations share it. A second attachment
+receives 409 without evicting the incumbent; `/connect` refresh remains
+non-disruptive. Five-minute, one-use harness grants bind both keys and sockets to
+the current registration. At most 32 grants are retained per registration;
+expired unused grants are pruned, and exhaustion returns 429. Expiration prevents
+new attachment/validation without terminating an established pair.
+
+The relay forwards binary frames unchanged, bounded to the native 256 KiB limit.
+A stalled write closes the pair after five seconds, without an application queue.
+Either peer disconnecting closes both physical sockets and invalidates outstanding
+harness grants. Native recovery may resume a retained Session/process; the service
+does not restart commands. Multiplexing independent harnesses, durable native
+backup, deployment TLS and arbitrary interrupted-work recovery remain unverified.
+
+The [native probe](tests/native/relay_probe.rs) exercises commands, a 128 KiB file,
+refresh, one retained process across a controlled outage, and fresh file retention.
+Build it as the `parsar_relay_probe` example in the pinned Codex Rust workspace
+(`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`), with its matching lock/dependencies.
+The release source's workspace version labels may need alignment to its manifests;
+do not change third-party dependencies. Keep build/runtime files under `~/.parsar/`.
+Run `TestNativeHarnessRelayPostgreSQLAndProcessRecovery` with the dedicated execution
+test DB, `PARSAR_CODEX_BINARY` (0.153.4), `PARSAR_NATIVE_RELAY_PROBE` (that example)
+and `PARSAR_EXECUTOR_PROOF_DIR` (private output directory). Without those native
+prerequisites that test skips; the regular authorization/relay/Store checks still
+run. This transport proof makes zero model calls; public model execution through
+Environment remains a separate required acceptance workflow.
 
 The pinned Codex 0.153.4 CLI accepts registry API-key authentication on loopback but
 protects OpenAI credentials from third-party production domains. A separately

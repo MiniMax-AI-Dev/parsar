@@ -52,7 +52,7 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys := []codex.ExecutorKey{
+	keys := []codex.ScopedKey{
 		{TokenSHA256: device.HashCredential(token), TenantID: tenant, EnvironmentID: environment.ID},
 		{TokenSHA256: device.HashCredential(wrongTenantToken), TenantID: foreign, EnvironmentID: environment.ID},
 	}

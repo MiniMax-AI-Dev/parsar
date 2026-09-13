@@ -4,8 +4,8 @@ This assessment covers the fixed [Python SDK contract](upstream.json). It is an
 implementation plan, not an announcement of Environment support. Public execution
 currently admits `environment.type=none` on the verified Codex and Claude SDK
 profiles. No public Environment, template or file resource is implemented. An opt-in native
-executor registration/presence adapter exists; harness authorization/relay and
-public Environment execution remain unimplemented. See [current coverage](README.md#public-semantics).
+executor/harness authorization and native encrypted relay adapter exists; public
+Environment execution remains unimplemented. See [current coverage](README.md#public-semantics).
 
 The internal Store now owns a durable Environment association for newly created
 `self_hosted` and `openai_hosted` snapshots, atomically with Session creation.
@@ -25,8 +25,11 @@ connection. These observations do not change durable `pending` state or emit pub
 Environment readiness. Deleting the owning Session rejects new requests and closes
 existing sockets on the next ownership heartbeat. A previous holder of a still-valid
 executor credential can register again; permanent exclusion requires revocation.
-The adapter currently rejects application data until harness grants and relay are
-implemented. See the [operator prerequisite](../../services/agents-api/README.md#native-executor-registration-prerequisite).
+Distinct harness credentials now obtain short-lived, key-bound connection grants.
+The relay pairs one harness with the current executor socket and forwards native
+binary frames unchanged. Either peer loss closes both physical connections and
+invalidates grants; no queued frames or commands move to a successor. Refresh does
+not disturb a healthy pair. See the [operator prerequisite](../../services/agents-api/README.md#native-executor-transport-prerequisite).
 
 ## Contract inventory
 
@@ -173,9 +176,23 @@ aligned to its manifests; third-party versions, sources, checksums and dependenc
 edges stayed unchanged. Native execution and encryption sources were unchanged.
 
 The probe supports reusing the native Codex client/executor libraries for this
-adapter. Durable ownership and bounded executor registration/presence now exist; scoped
-harness authorization and the relay remain required. The test relay is not a production service; other
-harnesses retain their own native placement and execution protocols.
+adapter. The service adapter now combines durable ownership reads, bounded
+registration, scoped harness grants and opaque paired forwarding. A separate
+real-PostgreSQL/native test uses the unmodified executor and matching
+`EnvironmentManager` against the actual Go adapter. It verifies simultaneous
+commands and a 128 KiB file, stdout/stderr/exit, termination, non-disruptive same-key
+refresh, and recovery of the same process handle after one controlled transport
+outage. A single command-start marker proves that this acknowledged-start case did
+not repeat its command. A fresh harness reads the retained file. Store tests reject
+valid foreign-tenant bindings and deleted Session ownership. Evidence is retained
+under `~/.parsar/remediation/20260913/native-harness-relay/` on `zju_a100_2`.
+
+This remains a transport prerequisite with synthetic credentials and zero model
+calls, not public Environment admission, daemon dispatch or real-model Environment
+acceptance. Only one independent harness connection per Environment is supported;
+arbitrary interrupted-work replay, native crash restoration, TLS deployment and
+the stock CLI's production-domain restriction remain open. Other harnesses retain
+their own native placement and execution protocols.
 
 ## Dependency-ordered implementation
 

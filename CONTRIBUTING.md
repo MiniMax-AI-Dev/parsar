@@ -236,8 +236,21 @@ excluding it requires key revocation/rotation. Ownership is rechecked on request
 and live socket heartbeats; failed execution ownership closes the registry. This
 is bounded connection observation, not a guarantee of native process quiescence.
 Durable Environment state remains `pending`; no public readiness/event transition
-is inferred from a socket. Harness authorization/relay and public Environment
-admission remain separate work. Native transport annotations are excluded from the
+is inferred from a socket. The harness registry grants a distinct, exact-Environment credential access to
+native `/connect`; the executor alone calls `/validate`. Each connection URL and
+one-use key authorization are separate five-minute capabilities bound to the
+current registration, executor socket and complete harness public key. Grants are
+bounded; refresh may issue unused grants without disturbing an active pair.
+
+One independent harness connection pairs with each executor connection. Native
+binary messages pass unchanged, up to the pinned 256 KiB limit, with one data
+writer and one in-flight message per direction. Write deadlines bound stalled
+peers. Either peer disconnecting closes both physical sockets and invalidates the
+pair's grants; this lets native Session/process recovery run in the executor.
+Never forward queued ciphertext to a replacement or invent transport replay.
+Concurrent native commands and files share one connection; additional independent
+harnesses are rejected without eviction. Public Environment admission and typed
+daemon dispatch integration remain separate work. Native transport annotations are excluded from the
 pinned public SDK OpenAPI output; their routes are documented in the service guide.
 
 #### Independent build artifacts
