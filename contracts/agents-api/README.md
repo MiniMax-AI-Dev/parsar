@@ -27,7 +27,7 @@ for further harnesses rather than adding another model/tool loop.
 Verify configuration against actual execution: response defaults must not merely
 describe values the adapter never applied.
 
-Remaining work includes Session deletion/content variants, broader configuration
+Remaining work includes physical Session cleanup/content variants, broader configuration
 and tools, execution recovery, environments/files, Vaults and protocol Subagents.
 Reusable Agent routes and two public execution profiles are available within the
 limits below. Select each bounded task from the complete Feishu board by value,
@@ -37,7 +37,7 @@ dependencies, risk and effort. Parsar cutover and its business Team loop are sep
 
 This inventory is based on the pinned Python source, not our generated OpenAPI.
 It contains 42 distinct HTTP operations in 15 resource classes, excluding async
-duplicates, overloads and client-side helpers. Fourteen operations currently have
+duplicates, overloads and client-side helpers. Fifteen operations currently have
 handlers; that count is not a compatibility score. Even those operations implement
 only part of the upstream input, configuration and event variants.
 
@@ -47,7 +47,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | Resource | Upstream operations | Current coverage |
 | --- | --- | --- |
 | Root reusable Agents | create, retrieve, update, list, delete | Partial create/retrieve/update/list/delete and Session references; configuration/error gaps remain |
-| sessions | create, retrieve, update, list, delete | Create (ordinary/live), retrieve, list with root-Agent filter, metadata-only update; delete missing |
+| sessions | create, retrieve, update, list, delete | Create (ordinary/live), retrieve, list with root-Agent filter, metadata-only update, public deletion; physical cleanup and exact hosted semantics remain open |
 | sessions.events | create, stream | Text/cancel/function-result admission and live events; function-action state snapshots supported |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
 | sessions.items | list | Partial Item variants |
@@ -89,6 +89,16 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   Nested fields currently replace whole values and null uses the saved defaults;
   hosted nested/null behavior, no-op timestamp policy and exact errors remain
   unverified. This operation shares the existing saved-configuration coverage gaps.
+- `DELETE /agents/sessions/{session_id}` returns the canonical `id`,
+  `object=agent.session.deleted` and `deleted=true` after durable public removal.
+  Session/Turn/Items reads, live streams, metadata updates and new input exclude
+  the resource. Queued work is cancelled; active work receives the existing
+  asynchronous cancellation request while internal finalization remains available.
+  Existing streams close on observing removal without an invented deletion event.
+  Creation keys remain reserved (local 409); missing/repeated deletion locally
+  returns 404. Physical SQL/native history cleanup, immediate native quiescence
+  and exact hosted error/retry/overlapping-stream semantics remain unverified or
+  unimplemented. Shared devices, saved Agents and other Sessions are independent.
 - `DELETE /agents/{agent_id}` removes the tenant-owned saved configuration and
   returns `id`, `object=agent.deleted`, and `deleted=true`. Existing Sessions and
   history are retained; recorded creation retries recover their frozen snapshot,
@@ -206,7 +216,7 @@ errors, not successful placeholder resources. Add any provider or engine-specifi
 extension separately from upstream fields and document it here when implemented.
 
 `openapi.yaml` is our generated supported surface; it is not the full upstream
-specification. The shared Go wire types are in `v1`. Session deletion, non-text
+specification. The shared Go wire types are in `v1`. Physical Session cleanup, non-text
 message input, structured output execution, broader options/tools, Vaults,
 Subagents and environment/provider resources remain incomplete. Reject unsupported
 requests explicitly; persisted saved configuration is not execution admission.

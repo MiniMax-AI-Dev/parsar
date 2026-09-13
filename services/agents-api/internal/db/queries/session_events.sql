@@ -7,7 +7,7 @@ INSERT INTO session_events(session_id, sequence, payload)
 SELECT id, event_sequence, $2 FROM next;
 
 -- name: SessionEventCursor :one
-SELECT event_sequence FROM sessions WHERE tenant_id = $1 AND id = $2;
+SELECT event_sequence FROM sessions WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL;
 
 -- name: ListSessionEvents :many
 SELECT sequence, payload FROM (
@@ -15,7 +15,7 @@ SELECT sequence, payload FROM (
         row_number() OVER (ORDER BY e.sequence) AS n,
         sum(e.payload_bytes) OVER (ORDER BY e.sequence) AS bytes
     FROM session_events e JOIN sessions s ON s.id = e.session_id
-    WHERE s.tenant_id = $1 AND e.session_id = $2 AND e.sequence > $3
+    WHERE s.tenant_id = $1 AND s.deleted_at IS NULL AND e.session_id = $2 AND e.sequence > $3
 ) AS pending WHERE n = 1 OR bytes <= 1048576
 ORDER BY sequence LIMIT 32;
 

@@ -23,6 +23,7 @@ type ResourceStore interface {
 	CreateSession(context.Context, string, store.CreateSessionInput) (store.Session, error)
 	FindSessionCreation(context.Context, string, string, json.RawMessage) (store.SessionCreation, error)
 	GetSession(context.Context, string, string) (store.Session, error)
+	DeleteSession(context.Context, string, string) error
 	UpdateSessionMetadata(context.Context, string, string, map[string]string) (store.Session, error)
 	ListSessions(context.Context, string, string, int, bool, *string) (store.SessionPage, error)
 }
@@ -58,6 +59,7 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 		r.Get("/agents/sessions", h.listSessions)
 		r.Get("/agents/sessions/{session_id}", h.getSession)
 		r.Post("/agents/sessions/{session_id}", h.updateSession)
+		r.Delete("/agents/sessions/{session_id}", h.deleteSession)
 		r.Post("/agents/sessions/{session_id}/events", h.createEvents)
 		r.Get("/agents/sessions/{session_id}/events", h.streamEvents)
 		r.Get("/agents/sessions/{session_id}/items", h.listItems)

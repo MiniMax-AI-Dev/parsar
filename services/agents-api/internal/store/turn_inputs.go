@@ -64,7 +64,7 @@ func (s *Store) SubmitInputs(ctx context.Context, tenantID, sessionID, key strin
 		return nil, err
 	}
 	receipts := make([]InputReceipt, 0, len(batch))
-	err = s.withSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
+	err = s.withPublicSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
 		previous, err := q.FindInputBatch(ctx, sqlc.FindInputBatchParams{SessionID: session, IdempotencyKey: key, Batch: encoded})
 		if err != nil {
 			return err
@@ -147,25 +147,8 @@ func admitInput(ctx context.Context, q *sqlc.Queries, tenantID string, session p
 		return InputReceipt{}, err
 	}
 	if input.Kind == "cancel" && turn.ID.Valid {
-		if err := q.RequestTurnCancel(ctx, sqlc.RequestTurnCancelParams{ID: turn.ID, SessionID: session}); err != nil {
+		if err := requestTurnCancel(ctx, q, session, turn); err != nil {
 			return InputReceipt{}, err
-		}
-		if turn.Status == TurnQueued {
-			cancelled, err := q.SessionEventTurn(ctx, sqlc.SessionEventTurnParams{SessionID: session, ID: turn.ID})
-			if err != nil {
-				return InputReceipt{}, err
-			}
-			if err := recordTurnChange(ctx, q, cancelled, false); err != nil {
-				return InputReceipt{}, err
-			}
-		} else if turn.Status == TurnWaiting && !turn.CancelRequestedAt.Valid {
-			cancelling, err := q.SessionEventTurn(ctx, sqlc.SessionEventTurnParams{SessionID: session, ID: turn.ID})
-			if err != nil {
-				return InputReceipt{}, err
-			}
-			if err := recordSessionActivity(ctx, q, cancelling, nil); err != nil {
-				return InputReceipt{}, err
-			}
 		}
 	}
 	if err := indexInput(ctx, q, session, sequence); err != nil {

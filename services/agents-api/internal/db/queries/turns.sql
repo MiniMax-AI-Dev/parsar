@@ -1,5 +1,5 @@
 -- name: LockSession :one
-SELECT id FROM sessions WHERE tenant_id = $1 AND id = $2 FOR UPDATE;
+SELECT id, deleted_at FROM sessions WHERE tenant_id = $1 AND id = $2 FOR UPDATE;
 
 -- name: GetActiveTurn :one
 SELECT * FROM turns WHERE session_id = $1 AND status IN ('queued', 'in_progress', 'waiting');

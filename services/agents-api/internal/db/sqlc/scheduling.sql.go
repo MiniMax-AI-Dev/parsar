@@ -69,6 +69,7 @@ const listExecutionWork = `-- name: ListExecutionWork :many
 SELECT t.id, t.session_id, s.tenant_id, t.status
 FROM turns t JOIN sessions s ON s.id = t.session_id
 WHERE t.status = ANY($1::text[]) AND t.id > $2::uuid
+AND (s.deleted_at IS NULL OR t.status <> 'queued')
 AND (NOT $3::boolean OR EXISTS (
     SELECT 1 FROM devices d WHERE d.tenant_id = s.tenant_id AND d.revoked_at IS NULL
         AND d.id = ANY($4::uuid[])

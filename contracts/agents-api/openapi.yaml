@@ -540,6 +540,21 @@ definitions:
     - status
     - vault_ids
     type: object
+  v1.SessionDeleted:
+    properties:
+      deleted:
+        type: boolean
+      id:
+        type: string
+      object:
+        enum:
+        - agent.session.deleted
+        type: string
+    required:
+    - deleted
+    - id
+    - object
+    type: object
   v1.SessionEvent:
     properties:
       content_index:
@@ -1206,6 +1221,55 @@ paths:
       tags:
       - Sessions
   /agents/sessions/{session_id}:
+    delete:
+      description: Removes the Session and its history from the public API. Active
+        work receives a cancellation request; confirmation does not guarantee native
+        execution has stopped. Internal records and native history are retained pending
+        separate physical cleanup. Missing/repeated deletion locally returns 404;
+        exact hosted errors and overlapping stream timing remain unverified.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SessionDeleted'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete an execution Session
+      tags:
+      - Sessions
     get:
       parameters:
       - description: agents=v1

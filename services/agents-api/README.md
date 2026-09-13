@@ -145,7 +145,16 @@ Requests have a 1 MiB body limit. Session lists support `after`, `limit` (1..100
 are 20 and descending order; exact hosted limits/error semantics remain unverified.
 Metadata updates preserve omission, clear on null/empty and replace supplied pairs.
 
-Session deletion, non-text message input, Vaults, Subagents and environment/file
+Delete with `client.beta.agents.sessions.delete(session.id)`. Confirmation means
+public removal: Session/history reads and new input become unavailable. Active
+work receives a cancellation request; existing streams close on observing removal.
+Already claimed work may still complete. Creation keys stay reserved; deletion
+never affects other Sessions, saved Agents or their shared device. Internal records
+and native history are retained for execution settlement; physical cleanup remains
+unimplemented. Local repeated deletion returns 404 and creation-key reuse returns
+409; exact hosted errors and overlapping stream timing are unverified.
+
+Non-text message input, Vaults, Subagents and environment/file
 resources remain unsupported. Saving optional Agent configuration does not make
 it executable. Unsupported requests fail explicitly. `/healthz` reports liveness only.
 

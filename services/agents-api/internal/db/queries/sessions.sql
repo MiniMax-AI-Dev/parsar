@@ -3,17 +3,17 @@ INSERT INTO sessions (id, tenant_id, engine, metadata, idempotency_key, request_
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (tenant_id, idempotency_key) DO UPDATE
 SET idempotency_key = EXCLUDED.idempotency_key
-WHERE CASE WHEN sessions.creation_request_hash IS NULL
+WHERE sessions.deleted_at IS NULL AND CASE WHEN sessions.creation_request_hash IS NULL
     THEN sessions.request_hash = EXCLUDED.request_hash
     ELSE sessions.creation_request_hash = EXCLUDED.creation_request_hash END
 RETURNING *;
 
 -- name: GetSession :one
-SELECT * FROM sessions WHERE tenant_id = $1 AND id = $2;
+SELECT * FROM sessions WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL;
 
 -- name: ListSessions :many
 SELECT * FROM sessions
-WHERE tenant_id = sqlc.arg(tenant_id)
+WHERE tenant_id = sqlc.arg(tenant_id) AND deleted_at IS NULL
   AND (sqlc.narg(agent_id)::text IS NULL OR configuration #>> '{agent,id}' = sqlc.narg(agent_id)::text)
   AND (sqlc.narg(after_created)::timestamptz IS NULL
        OR (NOT sqlc.arg(ascending)::boolean AND (created_at, id) < (sqlc.narg(after_created)::timestamptz, sqlc.arg(after_id)::uuid))
@@ -26,8 +26,11 @@ ORDER BY
 LIMIT sqlc.arg(page_limit);
 
 -- name: UpdateSessionMetadata :one
-UPDATE sessions SET metadata = $3 WHERE tenant_id = $1 AND id = $2 RETURNING *;
+UPDATE sessions SET metadata = $3 WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL RETURNING *;
 
 -- name: FindSessionCreation :one
 SELECT * FROM sessions
 WHERE tenant_id = $1 AND idempotency_key = $2 AND creation_request_hash IS NOT NULL;
+
+-- name: MarkSessionDeleted :exec
+UPDATE sessions SET deleted_at = clock_timestamp() WHERE id = $1 AND deleted_at IS NULL;
