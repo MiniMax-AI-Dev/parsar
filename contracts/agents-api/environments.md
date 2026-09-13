@@ -246,10 +246,13 @@ supported native version, rejected combinations and acceptance commands.
 The Codex adapter now separates preparation from prompt start using the same native
 RPC resource. It retains initialized environment access without starting a thread
 or model work, then transfers its fixed configuration and ownership once to the
-normal Session. The existing Factory uses that path. Daemon preparation messages
-and Worker admission/start integration remain pending; this adapter primitive does
-not expose public readiness. See the contributor guide for context and cleanup
-ownership.
+normal Session. The existing Factory uses that path. Private daemon controls now
+retain it through asynchronous preparation and one start, using a connection-owned
+handle, bounded lifetime/capacity and separate gateway response correlation.
+Preparation creates no Run subscription; only Start supplies the actual RunID.
+Worker admission/start integration remains pending, and this private primitive
+does not expose public readiness. See the contributor guide for ownership, retry,
+revision and cleanup rules.
 
 Cancellation still uses the existing best-effort interrupt and harness release.
 The fixture measures remote PID exit and stopped side effects independently;

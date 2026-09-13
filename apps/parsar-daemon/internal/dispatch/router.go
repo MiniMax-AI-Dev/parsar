@@ -37,16 +37,19 @@ type Router struct {
 	sender   Sender
 	log      *slog.Logger
 
-	mu          sync.Mutex
-	sessions    map[string]*sessionState // RunID → state
-	idle        map[string]map[*sessionState]struct{}
-	permIndex   map[string]string // permID  → RunID
-	askIndex    map[string]string // askID   → RunID
-	applied     map[string]appliedInteractionDecision
-	shutdownCh  chan struct{}  // closed by Shutdown
-	shutdownWG  sync.WaitGroup // waits for all pump goroutines
-	idleTimeout time.Duration
-	closed      bool
+	mu                  sync.Mutex
+	sessions            map[string]*sessionState // RunID → state
+	idle                map[string]map[*sessionState]struct{}
+	permIndex           map[string]string // permID  → RunID
+	askIndex            map[string]string // askID   → RunID
+	applied             map[string]appliedInteractionDecision
+	shutdownCh          chan struct{}  // closed by Shutdown
+	shutdownWG          sync.WaitGroup // waits for all pump goroutines
+	idleTimeout         time.Duration
+	closed              bool
+	preparations        map[string]*preparationState
+	preparationRequests map[string]*preparationState
+	preparationTimeout  time.Duration
 }
 
 type appliedInteractionDecision struct {
@@ -79,15 +82,17 @@ type sessionState struct {
 	steerBusy           bool
 	steeringClosed      bool
 	steeringDone        chan struct{}
+	preparationStart    bool
 }
 
 // Config is the constructor input. Registry and Sender are required;
 // Log is optional (defaults to slog.Default()).
 type Config struct {
-	Registry    *agent.Registry
-	Sender      Sender
-	Log         *slog.Logger
-	IdleTimeout time.Duration
+	Registry           *agent.Registry
+	Sender             Sender
+	Log                *slog.Logger
+	IdleTimeout        time.Duration
+	PreparationTimeout time.Duration
 }
 
 const defaultIdleTimeout = time.Hour
@@ -109,17 +114,24 @@ func New(cfg Config) (*Router, error) {
 	if idleTimeout <= 0 {
 		idleTimeout = defaultIdleTimeout
 	}
+	preparationTimeout := cfg.PreparationTimeout
+	if preparationTimeout <= 0 || preparationTimeout > 5*time.Minute {
+		preparationTimeout = 5 * time.Minute
+	}
 	return &Router{
-		registry:    cfg.Registry,
-		sender:      cfg.Sender,
-		log:         log,
-		sessions:    make(map[string]*sessionState),
-		idle:        make(map[string]map[*sessionState]struct{}),
-		permIndex:   make(map[string]string),
-		askIndex:    make(map[string]string),
-		applied:     make(map[string]appliedInteractionDecision),
-		shutdownCh:  make(chan struct{}),
-		idleTimeout: idleTimeout,
+		registry:            cfg.Registry,
+		sender:              cfg.Sender,
+		log:                 log,
+		sessions:            make(map[string]*sessionState),
+		idle:                make(map[string]map[*sessionState]struct{}),
+		permIndex:           make(map[string]string),
+		askIndex:            make(map[string]string),
+		applied:             make(map[string]appliedInteractionDecision),
+		shutdownCh:          make(chan struct{}),
+		idleTimeout:         idleTimeout,
+		preparations:        make(map[string]*preparationState),
+		preparationRequests: make(map[string]*preparationState),
+		preparationTimeout:  preparationTimeout,
 	}, nil
 }
 
@@ -140,6 +152,12 @@ func (r *Router) Handle(ctx context.Context, env proto.Envelope) error {
 	ctx = adoptEnvelopeTrace(ctx, env)
 
 	switch env.Type {
+	case proto.TypeExecutionPrepare:
+		return r.handleExecutionPrepare(ctx, env)
+	case proto.TypeExecutionStart:
+		return r.handleExecutionStart(ctx, env)
+	case proto.TypeExecutionRelease:
+		return r.handleExecutionRelease(ctx, env)
 	case proto.TypePromptRequest:
 		return r.handlePromptRequest(ctx, env)
 	case proto.TypePromptCancel:
@@ -175,51 +193,6 @@ func adoptEnvelopeTrace(ctx context.Context, env proto.Envelope) context.Context
 	return ctx
 }
 
-// Shutdown cancels every active session and waits for pumps to drain.
-// Idempotent. Cancels ctx AND calls Session.Cancel — agents that
-// don't watch ctx (e.g. subprocess wrappers that need SIGTERM via
-// Cancel) leave their out channel open otherwise and the pump's
-// drain blocks forever.
-func (r *Router) Shutdown(ctx context.Context) error {
-	r.mu.Lock()
-	if r.closed {
-		r.mu.Unlock()
-		return nil
-	}
-	r.closed = true
-	close(r.shutdownCh)
-	victims := make([]*sessionState, 0, len(r.sessions))
-	for _, s := range r.sessions {
-		s.retain = false
-		victims = append(victims, s)
-	}
-	for _, states := range r.idle {
-		for s := range states {
-			s.retain = false
-			if s.idleTimer != nil {
-				s.idleTimer.Stop()
-			}
-			victims = append(victims, s)
-		}
-	}
-	r.idle = make(map[string]map[*sessionState]struct{})
-	r.mu.Unlock()
-
-	cancelSessions(ctx, victims, r.log)
-
-	done := make(chan struct{})
-	go func() {
-		r.shutdownWG.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 // ActiveRuns returns the in-flight run count. Wired into the heartbeat
 // payload supplier.
 func (r *Router) ActiveRuns() int {
@@ -233,113 +206,6 @@ var ErrRouterClosed = errors.New("dispatch: router closed")
 // ---------------------------------------------------------------------
 // per-type handlers
 // ---------------------------------------------------------------------
-
-func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelope) error {
-	r.log.InfoContext(callerCtx, "handlePromptRequest: decoding payload", "env_id", env.ID, "env_type", env.Type)
-	var req proto.PromptRequestPayload
-	if err := env.DecodePayload(&req); err != nil {
-		r.log.ErrorContext(callerCtx, "handlePromptRequest: decode failed", "env_id", env.ID, "err", err)
-		return fmt.Errorf("dispatch: decode prompt_request: %w", err)
-	}
-	// Envelope.ID is the run id; payload mirrors it but envelope wins.
-	runID := env.ID
-	if runID == "" {
-		runID = req.RunID
-	}
-	if runID == "" {
-		r.log.ErrorContext(callerCtx, "handlePromptRequest: missing run id")
-		return errors.New("dispatch: prompt_request missing run id (Envelope.ID and Payload.RunID both empty)")
-	}
-	req.RunID = runID
-	if req.AgentKind == "" {
-		r.log.ErrorContext(callerCtx, "handlePromptRequest: missing agent_kind", "run_id", runID)
-		return errors.New("dispatch: prompt_request missing agent_kind")
-	}
-	if len(req.FunctionTools) > 0 && !r.availableCapabilities(req.AgentKind).FunctionTools {
-		err := errors.New("engine does not support function tools")
-		r.emitTerminalError(callerCtx, runID, err.Error())
-		return err
-	}
-	if err := validateExecutionEnvironment(req, r.availableCapabilities(req.AgentKind)); err != nil {
-		r.emitTerminalError(callerCtx, runID, err.Error())
-		return err
-	}
-	r.log.InfoContext(callerCtx, "handlePromptRequest: decoded",
-		"run_id", runID, "agent_kind", req.AgentKind,
-		"work_dir", req.WorkDir, "prompt_len", len(req.Prompt),
-		"has_agent_options", req.AgentOptions != nil,
-		"agent_session_id", req.AgentSessionID,
-		"agent_state_key", req.AgentStateKey)
-
-	factory, err := r.registry.Resolve(req.AgentKind)
-	if err != nil {
-		r.log.ErrorContext(callerCtx, "handlePromptRequest: registry.Resolve failed", "run_id", runID, "agent_kind", req.AgentKind, "err", err)
-		// Synthesize error+done so the server-side stream closes
-		// cleanly instead of waiting for a done that never comes.
-		r.emitTerminalError(callerCtx, runID, fmt.Sprintf("unsupported agent_kind %q on this daemon", req.AgentKind))
-		return err
-	}
-	r.log.InfoContext(callerCtx, "handlePromptRequest: factory resolved", "run_id", runID, "agent_kind", req.AgentKind)
-
-	// Lock-protect duplicate-run check + insert so two prompt_requests
-	// with the same RunID can't both start sessions.
-	r.mu.Lock()
-	if r.closed {
-		r.mu.Unlock()
-		r.log.ErrorContext(callerCtx, "handlePromptRequest: router closed", "run_id", runID)
-		return ErrRouterClosed
-	}
-	if _, dup := r.sessions[runID]; dup {
-		r.mu.Unlock()
-		r.log.WarnContext(callerCtx, "ignoring duplicate prompt_request", "run_id", runID)
-		return nil
-	}
-	stateKey := sessionStateKey(req)
-	r.touchIdleLocked(stateKey)
-	sessionCtx, sessionCancel := context.WithCancel(context.Background())
-	// Re-attach the inbound trace so every log under this run shows
-	// the same trace_id as the prompt_request that started it.
-	if carrier, ok := obslog.TraceFromContext(callerCtx); ok {
-		sessionCtx = obslog.WithTrace(sessionCtx, carrier)
-	}
-	out := make(chan proto.Envelope, 64)
-	state := &sessionState{
-		runID:               runID,
-		stateKey:            stateKey,
-		out:                 out,
-		ctx:                 sessionCtx,
-		ctxCancel:           sessionCancel,
-		pendingIDs:          make(map[string]struct{}),
-		pendingAsks:         make(map[string]struct{}),
-		traceparent:         env.Trace,
-		retain:              stateKey != "",
-		releaseOnCompletion: req.ReleaseOnCompletion,
-	}
-	r.sessions[runID] = state
-	r.mu.Unlock()
-
-	r.log.InfoContext(callerCtx, "handlePromptRequest: calling factory", "run_id", runID)
-	sess, err := factory(sessionCtx, req, out)
-	if err != nil {
-		r.log.ErrorContext(callerCtx, "handlePromptRequest: factory call failed", "run_id", runID, "agent_kind", req.AgentKind, "err", err)
-		// Roll back the registration, cancel ctx, surface error+done
-		// so the server doesn't hang on a phantom run.
-		r.mu.Lock()
-		delete(r.sessions, runID)
-		r.mu.Unlock()
-		sessionCancel()
-		r.emitTerminalError(callerCtx, runID, fmt.Sprintf("agent factory failed: %v", err))
-		return fmt.Errorf("dispatch: factory %q: %w", req.AgentKind, err)
-	}
-	r.log.InfoContext(callerCtx, "handlePromptRequest: session created, starting pump", "run_id", runID)
-	r.mu.Lock()
-	state.session = sess
-	r.mu.Unlock()
-
-	r.shutdownWG.Add(1)
-	go r.pump(state)
-	return nil
-}
 
 func (r *Router) handlePermissionDecision(ctx context.Context, env proto.Envelope) error {
 	if env.ID == "" {
@@ -549,49 +415,6 @@ func (r *Router) dropAsk(s *sessionState, askID string) {
 	delete(r.askIndex, askID)
 	delete(s.pendingAsks, askID)
 	r.mu.Unlock()
-}
-
-func (r *Router) handleDeviceShutdown(ctx context.Context, env proto.Envelope) error {
-	var payload proto.DeviceShutdownPayload
-	_ = env.DecodePayload(&payload) // body optional
-	r.log.InfoContext(ctx, "device_shutdown received, cancelling runs", "reason", payload.Reason, "active_runs", r.ActiveRuns())
-	// Snapshot under lock, cancel outside so a slow Session.Cancel
-	// can't stall other Handle calls.
-	r.mu.Lock()
-	victims := make([]*sessionState, 0, len(r.sessions))
-	for _, s := range r.sessions {
-		s.retain = false
-		victims = append(victims, s)
-	}
-	for _, states := range r.idle {
-		for s := range states {
-			s.retain = false
-			if s.idleTimer != nil {
-				s.idleTimer.Stop()
-			}
-			victims = append(victims, s)
-		}
-	}
-	r.idle = make(map[string]map[*sessionState]struct{})
-	r.mu.Unlock()
-	cancelSessions(ctx, victims, r.log)
-	return nil
-}
-
-// cancelSessions cancels ctx AND invokes Session.Cancel so agents that
-// don't watch ctx (subprocess wrappers relying on SIGTERM via Cancel)
-// actually start their shutdown — otherwise the pump's drain blocks
-// forever waiting for an out channel nobody closes.
-func cancelSessions(ctx context.Context, sessions []*sessionState, log *slog.Logger) {
-	for _, s := range sessions {
-		s.ctxCancel()
-		if s.session == nil {
-			continue
-		}
-		if err := s.session.Cancel(ctx); err != nil {
-			log.Warn("session.Cancel failed", "run_id", s.runID, "err", err)
-		}
-	}
 }
 
 // ---------------------------------------------------------------------

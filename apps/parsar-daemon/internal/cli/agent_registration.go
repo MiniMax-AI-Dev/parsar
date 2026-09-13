@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/claudecode"
@@ -15,6 +16,15 @@ func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery, s
 	registerProductAgentKind(registry, agentCLIs.ClaudeCode, withSkillUploadServer(withCapabilityDownloads(claudecode.Factory, serverURL), serverURL))
 	registerProductAgentKind(registry, agentCLIs.OpenCode, withSkillUploadServer(withCapabilityDownloads(opencodeagent.Factory, serverURL), serverURL))
 	registerProductAgentKind(registry, agentCLIs.Codex, withSkillUploadServer(withCapabilityDownloads(codex.Factory, serverURL), serverURL))
+	if agentCLIs.Codex.Available && agentCLIs.Codex.Capabilities.RemoteEnvironment {
+		registry.RegisterPreparation("codex", func(ctx context.Context, req proto.PromptRequestPayload) (agent.Prepared, error) {
+			prepared, err := codex.Prepare(ctx, req)
+			if err != nil {
+				return nil, err
+			}
+			return prepared, nil
+		})
+	}
 	registerProductAgentKind(registry, agentCLIs.Pi, withSkillUploadServer(withCapabilityDownloads(pi.Factory, serverURL), serverURL))
 	registerProductAgentKind(registry, agentCLIs.MCode, withSkillUploadServer(withCapabilityDownloads(mcode.Factory, serverURL), serverURL))
 	registerClaudeSDK(registry, agentCLIs.ClaudeSDK)
