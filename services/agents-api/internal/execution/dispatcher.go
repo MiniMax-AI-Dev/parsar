@@ -55,7 +55,7 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 		return store.Turn{}, err
 	}
 	info, found, known := peer.AgentKindStatus(session.Engine)
-	if !known || !found || !info.Available || !info.Capabilities.Streaming || !info.Capabilities.Steering || !info.Capabilities.DurableTurns {
+	if !known || !found || !info.Available || !info.Capabilities.Streaming || !info.Capabilities.Steering || !info.Capabilities.DurableTurns || !info.Capabilities.DurableInputReceipts {
 		return store.Turn{}, errors.New("device must advertise streaming, steering and durable turns for this engine")
 	}
 	if !info.Capabilities.ExecutionControls {

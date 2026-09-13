@@ -16,6 +16,7 @@ type pendingInput struct {
 	text     string
 	started  time.Time
 	waiting  bool
+	written  bool
 }
 
 type cancellationResult struct {
@@ -176,12 +177,16 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 				case ack.Accepted:
 					result.AppliedThrough = pending.sequence
 					pending = nil
-				case ack.ErrorCode == "not_ready" || ack.ErrorCode == "busy":
+				case ack.Written && !ack.Accepted && ack.ErrorCode == "":
+					pending.written, pending.waiting = true, true
+				case (ack.ErrorCode == "not_ready" || ack.ErrorCode == "busy") && !pending.written:
 					pending.waiting = false
 				case ack.ErrorCode == "in_flight":
 				default:
-					result.ErrorCode, result.Error = "input_"+ack.ErrorCode, ack.Error
-					return
+					if cancelReply == nil {
+						result.ErrorCode, result.Error = "input_"+ack.ErrorCode, ack.Error
+						return
+					}
 				}
 			case proto.TypePermissionRequest, proto.TypePromptForUserChoice, proto.TypeAuthoringRequest:
 				result.ErrorCode = "interaction_not_supported"
@@ -240,12 +245,12 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 				}
 				pending = &pendingInput{sequence: inputs[0].Sequence, text: text, started: time.Now()}
 			}
-			if time.Since(pending.started) > 30*time.Second {
+			if !pending.written && time.Since(pending.started) > 30*time.Second {
 				result.ErrorCode = "input_outcome_unknown"
 				return
 			}
-			if !pending.waiting {
-				if send(ctx, peer, proto.TypePromptSteer, request.RunID, proto.PromptSteerPayload{InputID: strconv.FormatInt(pending.sequence, 10), Text: pending.text}) != nil {
+			if !pending.waiting && !pending.written {
+				if send(ctx, peer, proto.TypePromptSteer, request.RunID, proto.PromptSteerPayload{InputID: strconv.FormatInt(pending.sequence, 10), Text: pending.text, DurableReceipt: true}) != nil {
 					result.ErrorCode = "input_outcome_unknown"
 					return
 				}

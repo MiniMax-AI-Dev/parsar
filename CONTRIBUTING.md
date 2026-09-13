@@ -342,9 +342,16 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Done. Cached input identities and conflicts remain readable while completing;
   queue/write success is not consumption. The receipt worker stays busy through
   its send, and router shutdown cancels its native and transport waits.
-  The existing ten-second native-call and five-second receipt-send limits remain;
-  the completion barrier is bounded by their sum. Longer native consumption and
-  the API's thirty-second input deadline remain separate implementation gaps. Existing product
+  `durable_input_receipts` is required before execution binding/claiming. The
+  per-input `durable_receipt` opt-in requires release-on-completion and a phased
+  adapter. Its ten-second transport timer stops only after a complete native write;
+  a separate `written` acknowledgement stops the API's thirty-second delivery timer.
+  Neither that phase nor legacy `in_flight` advances the input cursor. Await final
+  native acceptance/consumption under the Run lifetime without automatic redelivery.
+  Receipt sends retain a separate five-second shutdown-aware context, and Done
+  retains a fifteen-second final settlement bound. Once cancellation is sent, its
+  receipt owns the terminal outcome even if an input becomes unknown first.
+  Calls without the opt-in retain their existing response deadlines. Existing product
   requests retain their default idle-process policy. Native history still requires
   the device's persisted engine files; IDs alone cannot restore deleted history.
   Cancellation receipts carry the stopped engine's continuity snapshot when no
@@ -709,9 +716,10 @@ one daemon Done. Cancellation resolves pending receipts as unknown and ends the
 owned execution. A receipt timeout after a full write preserves the process and
 pending identity without redelivery; a blocked write is cancelled and released.
 The private adapter permits one input awaiting consumption and at most 63 extra
-inputs per Run, preserving the native 64-UUID receipt bound. Larger input capacity
-and receipt latency beyond the router's current ten-second deadline remain public
-admission/recovery work. Do not advertise this private profile before that acceptance.
+inputs per Run, preserving the native 64-UUID receipt bound. Durable receipt opt-in
+separates bounded writes from native consumption waits; calls without it retain
+the router's ten-second deadline. Larger input capacity and public admission/recovery
+remain separate work. Do not advertise this private profile before that acceptance.
 
 This does not establish environment provisioning, full tool/text-verbosity policy, public usage,
 image results, public cancellation receipts or process-loss recovery.

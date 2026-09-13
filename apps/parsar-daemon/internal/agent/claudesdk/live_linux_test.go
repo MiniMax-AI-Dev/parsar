@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -61,6 +62,8 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		} `json:"tools"`
 	}
 	var requests []providerRequest
+	var delayNext atomic.Bool
+	var delayedRequests atomic.Int32
 	forwarder := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/messages") {
 			body, err := io.ReadAll(req.Body)
@@ -75,6 +78,14 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 			mu.Lock()
 			requests = append(requests, value)
 			mu.Unlock()
+		}
+		if req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/messages") && delayNext.Swap(false) {
+			delayedRequests.Add(1)
+			select {
+			case <-time.After(31 * time.Second):
+			case <-req.Context().Done():
+				return
+			}
 		}
 		proxy.ServeHTTP(w, req)
 	}))
@@ -103,6 +114,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 	type evidence struct {
 		ExecutionControls    *proto.ExecutionControls `json:"execution_controls"`
 		SteeringText         string                   `json:"steering_text,omitempty"`
+		SteeringWritten      bool                     `json:"steering_written,omitempty"`
 		SteeringConfirmed    bool                     `json:"steering_confirmed,omitempty"`
 		SteeringMilliseconds int64                    `json:"steering_milliseconds,omitempty"`
 		SessionID            string                   `json:"session_id"`
@@ -144,6 +156,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		type steeringResult struct {
 			err     error
 			elapsed int64
+			written bool
 		}
 		steeringReply := make(chan steeringResult, 1)
 		var steeringAt time.Time
@@ -152,9 +165,17 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 				return
 			}
 			steeringAt = time.Now()
+			if success != nil {
+				delayNext.Store(true)
+			}
 			go func() {
-				err := s.Steer(ctx, proto.PromptSteerPayload{InputID: uuid.NewString(), Text: proof.SteeringText})
-				steeringReply <- steeringResult{err: err, elapsed: time.Since(steeringAt).Milliseconds()}
+				callCtx, cancel := context.WithCancel(ctx)
+				defer cancel()
+				timer := time.AfterFunc(10*time.Second, cancel)
+				defer timer.Stop()
+				written := false
+				err := s.SteerWithReceipt(callCtx, proto.PromptSteerPayload{InputID: uuid.NewString(), Text: proof.SteeringText}, func() { written = timer.Stop() })
+				steeringReply <- steeringResult{err: err, elapsed: time.Since(steeringAt).Milliseconds(), written: written}
 			}()
 		}
 		type children struct{ all, native []int }
@@ -261,6 +282,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 				proof.SteeringConfirmed = true
 			}
 			proof.SteeringMilliseconds = receipt.elapsed
+			proof.SteeringWritten = receipt.written
 		}
 		released := <-observed
 		proof.NativePIDs, proof.ChildPIDs = released.native, released.all
@@ -337,7 +359,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 	}
 	steeringNonce := "live-steering-" + uuid.NewString()
 	steered := run("Write twelve short numbered observations about trees. Use no tools.", "", nil, "Remember this additional verification value and return it verbatim: "+steeringNonce)
-	if steered.Failure != "" || !steered.SteeringConfirmed || !strings.Contains(steered.Text, steeringNonce) {
+	if steered.Failure != "" || !steered.SteeringConfirmed || !steered.SteeringWritten || !strings.Contains(steered.Text, steeringNonce) {
 		t.Fatalf("live steering failed: %+v", steered)
 	}
 	steeredResume := run("Return only the exact live-steering verification value from the previous conversation.", steered.SessionID, nil)
@@ -345,7 +367,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		t.Fatalf("steered cold continuation failed: %+v", steeredResume)
 	}
 	functionSteered := run("Call lookup once with id 42 as a string. Report both returned parts verbatim.", "", &accepted, "Also remember and report this value: "+steeringNonce)
-	if functionSteered.Failure != "" || !functionSteered.SteeringConfirmed || functionSteered.FunctionCalls != 1 || functionSteered.AppliedResults != 1 || !strings.Contains(functionSteered.Text, steeringNonce) || !strings.Contains(functionSteered.Text, functionNonce) {
+	if functionSteered.Failure != "" || !functionSteered.SteeringConfirmed || !functionSteered.SteeringWritten || functionSteered.SteeringMilliseconds < 31000 || delayedRequests.Load() != 1 || functionSteered.FunctionCalls != 1 || functionSteered.AppliedResults != 1 || !strings.Contains(functionSteered.Text, steeringNonce) || !strings.Contains(functionSteered.Text, functionNonce) {
 		t.Fatalf("live function steering failed: %+v", functionSteered)
 	}
 	for _, completed := range []evidence{first, second, functionFirst, functionSecond, steered, steeredResume, functionSteered} {
@@ -369,7 +391,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 			t.Fatalf("unexpected requested model %q", request.Model)
 		}
 	}
-	data, _ := json.MarshalIndent(map[string]any{"scope": "private Go factory -> official SDK -> real MiniMax with default typed execution controls, active input, native continuation and disabled environment/subagent tools; public API not enabled; no filesystem isolation claim", "turns": []evidence{first, second, functionFirst, functionSecond, steered, steeredResume, functionSteered}, "missing_history": missing, "model_requests": measured}, "", "  ")
+	data, _ := json.MarshalIndent(map[string]any{"scope": "private Go factory -> official SDK -> real MiniMax with default typed execution controls, active input, native continuation and disabled environment/subagent tools; public API not enabled; no filesystem isolation claim", "turns": []evidence{first, second, functionFirst, functionSecond, steered, steeredResume, functionSteered}, "missing_history": missing, "model_requests": measured, "controlled_provider_delay_seconds": 31, "delayed_requests": delayedRequests.Load()}, "", "  ")
 	if err := os.WriteFile(filepath.Join(root, "proof.json"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
