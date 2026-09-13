@@ -24,7 +24,7 @@ type Option func(*Handler)
 func WithExecution(s InputSubmitter) Option { return func(h *Handler) { h.inputs = s } }
 
 // @Summary Submit Session input events
-// @Description Atomically accepts text messages, cancellation and function results. Messages steer active work or start a queued Turn. Retry keys identify the whole ordered batch. Function output accepts text or ordered text/image parts; message images are not supported yet.
+// @Description Atomically accepts text messages, cancellation and function results. Messages steer active work or start a queued Turn. Retry keys identify the whole ordered batch. Function output accepts text or ordered text/image parts subject to engine support; Claude SDK currently accepts text results only. Message images are not supported yet.
 // @Tags Sessions
 // @Accept json
 // @Security BearerAuth

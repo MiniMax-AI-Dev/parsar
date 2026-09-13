@@ -335,7 +335,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   SHA-256 API key bindings from `AGENTS_API_KEYS_FILE`. Tenant identity comes only
   from that binding; metadata and product session cookies grant no access. The
   operator-selected `AGENTS_API_ENGINE` is separate from the requested model.
-  Public execution currently supports Codex text inputs with environment `none`;
+  Public execution currently supports Codex and Claude SDK text inputs with environment `none`;
   reject unsupported input/environment/agent options explicitly.
 - `packages/agents-client/v1` configures the pinned official `openai-go` Session
   service. Use SDK request/response types, pagination and errors directly rather
@@ -392,17 +392,17 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Its private `daemon` configuration is neither `environment:none` nor the official
   self-hosted executor protocol. Public self-hosted environments, pending interactions and provider allocation
   remain separate slices. Unexpected interaction requests fail explicitly until supported.
-- `environment_none` advertises the Codex adapter's explicit environment-disable
+- `environment_none` advertises an adapter's explicit environment-disable
   path. Execution snapshots with public `environment.type=none` require that
   capability and set `disable_execution_environment` on the internal prompt.
-  The daemon forces `CODEX_EXEC_SERVER_URL=none` after caller environment options
+  For Codex, the daemon forces `CODEX_EXEC_SERVER_URL=none` after caller environment options
   and confirms native `local` and `remote` environments are unknown before starting
   or resuming a thread. Unsupported binaries fail closed. The bound device hosts
   the engine process; it is not a user execution environment. This is not an OS
   isolation guarantee, and engine state still lives on that host. Ordinary product
   requests retain their existing environment. The public worker selects an authenticated same-tenant engine host for this mode.
 - `execution_controls` advertises the typed search/verbosity block on the daemon
-  prompt. Agents API requires it in addition to the individual native capabilities
+  prompt. Agents API requires it in addition to the selected engine's required capabilities
   before binding/claiming work. Older peers with only option-based capabilities
   must not receive controls they would ignore. The API sends resolved search and
   text verbosity values; native option names belong to adapters. Codex translates
@@ -413,13 +413,13 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   engine support. Future native adapters must verify the same semantics before
   advertising the capability.
 - `web_search_control` advertises the Codex adapter's explicit `web_search` option
-  (`disabled`, `cached`, or `live`). Agents API requires this capability before dispatch;
+  (`disabled`, `cached`, or `live`). Agents API requires this capability before Codex dispatch;
   the typed execution controls force search off on new and resumed Turns. Native configuration translation stays in the
   adapter. Product requests that omit the option inherit their existing defaults.
   This is tool selection, not a network isolation guarantee.
 - Inline Agent `text.verbosity` accepts `low`, `medium` and `high`; omitted or
   null values resolve to `medium` in the immutable configuration snapshot. The
-  dispatcher requires `text_verbosity` support and sends the effective value in
+  Codex dispatcher requires `text_verbosity` support and sends the effective value in
   typed execution controls through the Codex adapter for both new and resumed Turns. The adapter queries
   the native active catalog with `codex debug models`, checks model support and
   pins that catalog snapshot for execution. The probe requires Unix process-group
@@ -687,7 +687,22 @@ Turns/input receipts, text observations, function tools, raw usage and restricti
 execution controls. It does not advertise permissions, product authoring, legacy
 raw tool Items, general web-search control or text-verbosity levels. Router admission
 for `environment:none` uses the available engine capability, not an engine name.
-Public API engine admission and fixed-client end-to-end acceptance remain separate.
+The independent API selects new Session engines through `AGENTS_API_ENGINE`
+(`codex` by default, or `claude_sdk`); existing Sessions keep their stored engine.
+This is operator configuration, not a public harness-selector field. API admission,
+device selection and the final preclaim check share the execution service's narrow
+engine policy without importing native adapters. Both engines require the common
+durable execution capabilities. Codex retains its general search/verbosity checks;
+Claude uses its restrictive profile without claiming those general capabilities.
+Idle and initial-input Session creation qualify the resolved configuration before
+persistence; saved Agent resources remain independent of engine restrictions.
+Claude additionally requires medium verbosity and explicit object-root function
+schemas. Function-result batches normalize through the existing shared parser and
+reject non-text content before any batch write, preserving pending calls and retry
+identity. These are implementation limits, not changes to the upstream contract.
+Do not bypass them by dropping fields, changing model identity or fabricating usage.
+The server owns no provider credential: operators configure the daemon's native SDK
+provider environment. Product `claude_code` and product execution are unchanged.
 The bounded profile accepts only
 text, explicit model/system instructions, managed state, exact native resume and
 declared functions with ordered text results. It rejects unsupported request

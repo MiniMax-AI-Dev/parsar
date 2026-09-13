@@ -54,42 +54,21 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if err != nil {
 		return store.Turn{}, err
 	}
-	info, found, known := peer.AgentKindStatus(session.Engine)
-	if !known || !found || !info.Available || !info.Capabilities.Streaming || !info.Capabilities.Steering || !info.Capabilities.DurableTurns || !info.Capabilities.DurableInputReceipts {
-		return store.Turn{}, errors.New("device must advertise streaming, steering and durable turns for this engine")
-	}
-	if !info.Capabilities.ExecutionControls {
-		return store.Turn{}, errors.New("device must advertise execution_controls")
-	}
-	if !info.Capabilities.WebSearchControl {
-		return store.Turn{}, errors.New("device must advertise web_search_control")
-	}
-	if !info.Capabilities.TextVerbosity {
-		return store.Turn{}, errors.New("device must advertise text_verbosity")
-	}
-	if !info.Capabilities.ToolObservations {
-		return store.Turn{}, errors.New("device must advertise tool_observations")
-	}
 	var snapshot Snapshot
 	if json.Unmarshal(session.Configuration, &snapshot) != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
 		return store.Turn{}, store.ErrInvalidInput
 	}
-	if !snapshot.Agent.MultiAgent.Enabled && !info.Capabilities.SubagentControl {
-		return store.Turn{}, errors.New("device must advertise subagent_control")
+	caps, err := engineCapabilities(peer, session.Engine, snapshot)
+	if err != nil {
+		return store.Turn{}, err
 	}
 	functions, err := functionTools(snapshot.Agent.Tools)
 	if err != nil {
 		return store.Turn{}, err
 	}
-	if len(functions) > 0 && !info.Capabilities.FunctionTools {
-		return store.Turn{}, errors.New("device must advertise function_tools")
-	}
 	workDir, noEnvironment, err := resolveExecutionEnvironment(snapshot)
 	if err != nil {
 		return store.Turn{}, err
-	}
-	if noEnvironment && (session.Engine != "codex" || !info.Capabilities.EnvironmentNone) {
-		return store.Turn{}, errors.New("device must advertise environment_none for Codex")
 	}
 	text, through, err := d.initialInput(ctx, tenantID, sessionID, turnID)
 	if err != nil {
@@ -116,7 +95,7 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if _, err := d.Store.TransitionTurn(ctx, tenantID, sessionID, turnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress}); err != nil {
 		return store.Turn{}, err
 	}
-	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, FunctionTools: functions, AgentOptions: options, ExecutionControls: controls, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: info.Capabilities.MessageItems, ObserveToolObservations: true, DisableExecutionEnvironment: noEnvironment, DisableSubagents: !snapshot.Agent.MultiAgent.Enabled}
+	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, FunctionTools: functions, AgentOptions: options, ExecutionControls: controls, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: caps.MessageItems, ObserveToolObservations: true, DisableExecutionEnvironment: noEnvironment, DisableSubagents: !snapshot.Agent.MultiAgent.Enabled}
 	result, status := d.deliver(ctx, tenantID, sessionID, peer, req, through)
 	if result.Done.Usage.Model == "" {
 		result.Done.Usage.Model = snapshot.Agent.Model
