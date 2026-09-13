@@ -114,9 +114,14 @@ check-store: check-setup
 
 check-web: check-setup typecheck-web lint-web-design
 
+.PHONY: build-claude-sdk-runtime
+build-claude-sdk-runtime:
+	./scripts/build-claude-sdk-runtime.sh
+
 .PHONY: check-claude-sdk
 check-claude-sdk: node-deps
 	pnpm --filter @parsar/claude-sdk-adapter test
+	$(MAKE) build-claude-sdk-runtime
 
 check-cli: check-setup node-deps
 	pnpm --filter @parsar/cli typecheck
