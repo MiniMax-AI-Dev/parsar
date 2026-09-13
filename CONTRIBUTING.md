@@ -664,8 +664,31 @@ Thinking/tool-only messages produce no text Items; interrupted messages retain
 their streamed partial text. No phase is inferred from the final result.
 SDK/native child release and output draining precede daemon completion.
 
-This factory is not registered and advertises no public capability. Existing
-product Claude execution remains unchanged. The bounded profile accepts only
+Daemon `connect` optionally registers this factory as `claude_sdk` when the
+operator sets `PARSAR_CLAUDE_SDK_ENTRYPOINT` to the absolute packaged `dist/main.js`.
+`PARSAR_CLAUDE_SDK_NODE` selects Node (default: `node` on PATH). Discovery resolves
+Node once and checks that exact configuration before pairing; the SDK's bounded
+runtime check is independent of legacy CLI version probes. A ready SDK alone is
+sufficient to start the daemon. No configuration means no SDK probe or descriptor;
+failed readiness reports an unavailable descriptor with a rejecting factory.
+Runtime checks establish local readiness, not provider authentication.
+
+SDK state lives under `paths.ProfileDir(profile)/runtime/claude-sdk`, independently
+of the replaceable runtime bundle. Both the entrypoint and managed state root must
+be absolute. Background re-execution inherits operator configuration; it does not
+persist provider credentials in pairing profiles. Product `claude_code` remains
+unchanged. Product registration explicitly opts existing engines into
+`WorkspaceAuthoring`; the authoring registry wraps only that opt-in. SDK registration
+bypasses product capability-download, skill-upload and workspace-authoring wrappers.
+It does not accept caller-supplied environment variables or business write authority.
+
+The SDK descriptor advertises the validated daemon subset, including durable
+Turns/input receipts, text observations, function tools, raw usage and restrictive
+execution controls. It does not advertise permissions, product authoring, legacy
+raw tool Items, general web-search control or text-verbosity levels. Router admission
+for `environment:none` uses the available engine capability, not an engine name.
+Public API engine admission and fixed-client end-to-end acceptance remain separate.
+The bounded profile accepts only
 text, explicit model/system instructions, managed state, exact native resume and
 declared functions with ordered text results. It rejects unsupported request
 options and disables built-in tools and undeclared MCP discovery.
@@ -689,6 +712,8 @@ Use the SDK's history lookup before explicit resume; never fall back to a new
 Session. Native files remain device-affine under a caller-selected managed
 runtime directory. The launch configuration supplies trusted provider environment;
 request options cannot supply environment variables or business write authority.
+Omitted, null and empty `system_prompt` map to empty SDK instructions only at this
+adapter boundary; null model values and unsupported options remain rejected.
 
 The internal SDK function-server helper uses the maintained MCP server's public
 request handlers and standard Tool/CallToolResult types. It snapshots definitions
@@ -758,7 +783,7 @@ The private adapter permits one input awaiting consumption and at most 63 extra
 inputs per Run, preserving the native 64-UUID receipt bound. Durable receipt opt-in
 separates bounded writes from native consumption waits; calls without it retain
 the router's ten-second deadline. Larger input capacity and public admission/recovery
-remain separate work. Do not advertise this private profile before that acceptance.
+remain separate work. Daemon registration does not establish public acceptance.
 
 This does not establish environment provisioning, full tool/text-verbosity policy, public usage,
 image results, public cancellation receipts or process-loss recovery.

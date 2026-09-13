@@ -10,15 +10,6 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
-func (r *Router) supportsFunctionTools(kind string) bool {
-	for _, info := range r.registry.SupportedAgentKinds() {
-		if info.Kind == kind {
-			return info.Available && info.Capabilities.FunctionTools
-		}
-	}
-	return false
-}
-
 func (r *Router) handleFunctionResult(ctx context.Context, env proto.Envelope) error {
 	var result proto.FunctionResultPayload
 	if err := env.DecodePayload(&result); err != nil {
