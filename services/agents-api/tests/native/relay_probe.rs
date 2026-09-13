@@ -5,9 +5,15 @@ use std::time::Duration;
 use anyhow::{Context, Result, ensure};
 use codex_exec_server::{
     EnvironmentConnectionState, EnvironmentManager, EnvironmentObservedStatus, ExecOutputStream,
-    ExecParams, ExecProcess, ProcessId, ReadFileOptions, WriteFileOptions,
+    ExecParams, ExecProcess, FileSystemSandboxContext, ProcessId, ReadFileOptions,
+    WriteFileOptions,
 };
 use codex_http_client::{HttpClientFactory, OutboundProxyPolicy};
+use codex_protocol::models::PermissionProfile;
+use codex_protocol::permissions::{
+    FileSystemAccessMode, FileSystemPath, FileSystemSandboxEntry, FileSystemSandboxPolicy,
+    FileSystemSpecialPath, NetworkSandboxPolicy,
+};
 use codex_utils_path_uri::PathUri;
 use tokio::time::timeout;
 
@@ -42,6 +48,61 @@ async fn run() -> Result<()> {
     let marker = PathUri::from_host_native_path(&marker_path)?;
     let contents: Vec<u8> = (0..128 * 1024).map(|index| (index % 251) as u8).collect();
     let fs = environment.get_filesystem();
+    if phase == "helpers" {
+        let read_only = FileSystemSandboxPolicy::restricted(vec![FileSystemSandboxEntry::new(
+            FileSystemPath::Special {
+                value: FileSystemSpecialPath::Root,
+            },
+            FileSystemAccessMode::Read,
+        )]);
+        let sandbox = FileSystemSandboxContext::from_permission_profile_with_cwd(
+            PermissionProfile::from_runtime_permissions(
+                &read_only,
+                NetworkSandboxPolicy::Restricted,
+            ),
+            cwd.clone(),
+        );
+        ensure!(
+            fs.read_file(&file, ReadFileOptions::default(), Some(&sandbox))
+                .await?
+                == contents,
+            "sandboxed native file read mismatch"
+        );
+        ensure!(
+            fs.write_file(
+                &file,
+                b"must-not-write".to_vec(),
+                WriteFileOptions::default(),
+                Some(&sandbox)
+            )
+            .await
+            .is_err(),
+            "read-only native helper permitted a write"
+        );
+        let mut command = params("native-helpers", &cwd, vec![
+            "/bin/sh".into(), "-c".into(),
+            "printf '%s' \"$0\"; if printf forbidden > sandbox-denied; then exit 42; fi; exit 7".into(),
+        ]);
+        command.arg0 = Some("launcher-argv0".into());
+        command.sandbox = Some(sandbox);
+        let process = environment.get_exec_backend().start(command).await?;
+        let (stdout, _, exit) = read_closed(process.process.as_ref()).await?;
+        ensure!(
+            stdout == b"launcher-argv0" && exit == Some(7),
+            "sandboxed argv0 helper mismatch"
+        );
+        ensure!(
+            fs.read_file(&file, ReadFileOptions::default(), None)
+                .await?
+                == contents,
+            "denied write changed file"
+        );
+        std::fs::write(
+            root.join("helpers.json"),
+            r#"{"native_fs_helper":true,"native_argv0_helper":true,"read_only_enforced":true}"#,
+        )?;
+        return Ok(());
+    }
     if phase == "fresh" {
         ensure!(
             fs.read_file(&file, ReadFileOptions::default(), None)

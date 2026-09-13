@@ -138,8 +138,8 @@ The pinned native reference is Codex `rust-v0.153.4`, commit
   by this binary. Resolve a supported upstream path explicitly; do not disable its
   credential protection or present local development routing as deployable support.
   The public `RemoteEnvironmentConfig::new` accepts a native `SharedAuthProvider`:
-  a separate launcher can embed upstream execution with service-scoped credentials.
-  This is a library integration candidate, not a custom-auth flag for the stock CLI
+  the [separate launcher](../../packages/codex-executor/README.md) embeds upstream
+  execution with an explicit service-scoped credential file. This is a library integration, not a custom-auth flag for the stock CLI
   or proof that its documented command works on a third-party production domain.
 - The [native Environment manager](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/exec-server/src/environment.rs)
   already consumes a registry configuration. Its private settings remain inside the

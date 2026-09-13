@@ -1,0 +1,51 @@
+name: agents-executor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/codex-executor/**'
+      - 'scripts/*agents-executor.sh'
+      - '.github/workflows/agents-executor.yml'
+      - 'Makefile'
+  pull_request:
+    paths:
+      - 'packages/codex-executor/**'
+      - 'scripts/*agents-executor.sh'
+      - '.github/workflows/agents-executor.yml'
+      - 'Makefile'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agents-executor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      CARGO_HOME: /home/runner/.parsar/cache/executor-cargo
+      CARGO_TARGET_DIR: /home/runner/.parsar/cache/executor-target
+      CARGO_BUILD_JOBS: 4
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.parsar/cache/executor-cargo
+            ~/.parsar/cache/executor-target
+          key: agents-executor-${{ runner.os }}-1.95.0-${{ hashFiles('packages/codex-executor/Cargo.lock') }}
+      - name: Check native launcher and independent release build
+        run: |
+          make check-agents-executor
+          make build-agents-executor
+          ~/.parsar/build/agents-executor/agents-api-codex-executor --version
+          ~/.parsar/build/agents-executor/agents-api-codex-executor --help

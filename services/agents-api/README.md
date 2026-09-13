@@ -356,7 +356,9 @@ agents-api-environment-key --tenant "$TENANT_ID" --environment "$ENVIRONMENT_ID"
 
 `AGENTS_API_DATABASE_URL` must point to the execution database. The JSON output
 contains `environment_id` and `executor_token`; stdout is its only delivery.
-Configure the executor's private `CODEX_API_KEY` with that token. The CLI never
+The [separate native launcher](../../packages/codex-executor/README.md) consumes
+that private JSON file directly. Stock loopback development instead supplies its
+`executor_token` as the executor's private `CODEX_API_KEY`. The CLI never
 imports a chosen token or reads one back. Lost output requires explicit rotation;
 ordinary issuance fails when a credential already exists, including a revoked one.
 Use `--rotate` with the same identifiers to replace it and deliver a new secret,
@@ -447,7 +449,8 @@ run. This transport proof makes zero model calls; public model execution through
 Environment remains a separate required acceptance workflow.
 
 The pinned Codex 0.153.4 CLI accepts registry API-key authentication on loopback but
-protects OpenAI credentials from third-party production domains. A separately
-scoped upstream-library launcher remains required investigation; this prerequisite
-does not establish the documented stock command on an arbitrary production domain.
+protects OpenAI credentials from third-party production domains. The separately
+named [upstream-library launcher](../../packages/codex-executor/README.md) provides
+an explicit service-credential path. It keeps the stock guard intact and does not
+establish the documented stock command on an arbitrary production domain.
 See [Environment contracts and remaining work](../../contracts/agents-api/environments.md).
