@@ -249,6 +249,7 @@ type CollaborationModeSettings struct {
 
 type TurnInterruptParams struct {
 	ThreadID string `json:"threadId"`
+	TurnID   string `json:"turnId"`
 }
 
 type TurnUsage struct {

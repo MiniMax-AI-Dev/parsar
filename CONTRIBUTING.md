@@ -1249,6 +1249,11 @@ or filesystem isolation. Automatic installation remains separate.
 - Codex app-server usage totals are cumulative per thread. Treat restored usage
   before `turn/started` as the baseline and persist only the current turn's
   delta; repeated snapshots must not increase recorded usage.
+- Codex cancellation sends both native thread and Turn IDs. Capture the observed
+  Turn identity while stopping steering; before `turn/started`, send the native
+  explicit-empty startup Turn ID. Do not interrupt an already observed terminal
+  Turn. Keep cancellation best-effort with the existing response deadline and
+  process cleanup; an applied daemon receipt does not prove remote process exit.
 - Omitted Codex mode means `default`, matching the Agent UI. Send the current
   instructions through that turn mode; cold resume alone may retain old instructions.
 - OpenCode JSON CLI tool parts arrive after execution. Translate each terminal
