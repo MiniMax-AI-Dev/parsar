@@ -586,8 +586,8 @@ or containment of descendants that deliberately leave the group.
 and native message translation. The Go `claudesdk.NewFactory` uses the shared
 owned process runner and emits the existing daemon delta/error/Done frames.
 The SDK owns the model loop. Its narrow stdio protocol carries a start request,
-text deltas, function calls/results/receipts, a usage snapshot and one terminal
-result/error; native translation stays inside the adapter.
+text deltas, function calls/results/receipts, active text input/receipts, usage
+snapshots and one terminal result/error; native translation stays inside the adapter.
 With `observe_messages`, it also emits the existing neutral `output_message`
 start/completion snapshots and tags deltas with the native Messages API message
 ID, not the SDK event UUID. Text blocks in one native message share that identity.
@@ -643,19 +643,43 @@ existing router owns receipt retry/conflict handling. This does not establish
 crash recovery or exactly-once effects. Public schemas outside MCP's object-root
 contract and image result mapping remain admission/execution gaps.
 
-The SDK result supplies one native usage snapshot, including reported failures,
-under `Usage.Raw.claude_sdk_result`. Retain main-loop `usage`, query-pipeline
-`modelUsage`, `total_cost_usd` and result subtype/error provenance. Reuse the same
-snapshot in Usage and Done; consumers must not add them. Each factory invocation
-owns one SDK query, including cold resume, so no prior query counters are carried
-forward. Missing native results do not imply zero consumption. SDK estimates stay
+Each SDK result supplies one native usage snapshot, including reported failures.
+`Usage.Raw.claude_sdk_result` holds the latest; queries with multiple native results
+also retain all snapshots in order under `claude_sdk_results`. Main-loop `usage`
+is per native turn, while query-pipeline `modelUsage` and estimated `total_cost_usd`
+are cumulative within the query. Retain subtype/error provenance and earlier
+snapshots even when a later failure reports zero counters. Reuse the latest full
+snapshot set in Usage and Done; never sum cumulative measurements. Each factory
+invocation owns one SDK query, including cold resume, so no prior query counters
+are carried forward. Missing native results do not imply zero consumption. SDK estimates stay
 in raw evidence, outside the billed cost field; do not select an arbitrary model
 or invent missing public token breakdowns. The API does not parse native counters.
 Precise public usage projection, unreported costs and crash/partial accounting
 remain gaps; the native snapshot alone is not complete protocol Usage compatibility.
 
+Active text uses the SDK's `AsyncIterable<SDKUserMessage>` input, with a fresh
+native UUID mapped to each daemon input ID. A native query may fold text into its
+current native turn or queue another; one daemon Run can therefore contain several
+native turns. Never promise Codex's same-native-turn semantics. Writes, queued
+notifications and user-message echoes do not confirm consumption. Only matching
+root assistant/partial/result `user_message_uuids` (or the singular fallback)
+confirm applied input. Typed mid-turn folds may appear only on the native result.
+Preserve that receipt even when the result reports failure. Check pending functions
+after the query drains: the SDK may dispatch later-turn callbacks before the
+earlier result handler finishes.
+Keep the iterator open until every submitted input has a consuming result, even
+when an earlier result reports an empty native queue. Close admission before
+releasing final receipt waiters; drain and release the SDK/native processes before
+one daemon Done. Cancellation resolves pending receipts as unknown and ends the
+owned execution. A receipt timeout after a full write preserves the process and
+pending identity without redelivery; a blocked write is cancelled and released.
+The private adapter permits one input awaiting consumption and at most 63 extra
+inputs per Run, preserving the native 64-UUID receipt bound. Larger input capacity
+and receipt latency beyond the router's current ten-second deadline remain public
+admission/recovery work. Do not advertise this private profile before that acceptance.
+
 This does not establish environment provisioning, full tool/text-verbosity policy, public usage,
-image results, steering, public cancellation receipts or process-loss recovery.
+image results, public cancellation receipts or process-loss recovery.
 Those capabilities require their own acceptance before public dispatch. Registry
 adoption and release packaging are separate tasks. `make check-cli` also builds
 and tests the SDK package, including native output draining; CI selects that check

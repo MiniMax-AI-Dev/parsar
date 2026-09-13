@@ -101,19 +101,22 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		t.Fatal(err)
 	}
 	type evidence struct {
-		SessionID        string            `json:"session_id"`
-		NodePID          int               `json:"node_pid"`
-		NativePIDs       []int             `json:"native_pids"`
-		ChildPIDs        []int             `json:"child_pids"`
-		Text             string            `json:"text"`
-		Failure          string            `json:"failure,omitempty"`
-		Events           []proto.Envelope  `json:"events"`
-		FunctionCalls    int               `json:"function_calls"`
-		AppliedResults   int               `json:"applied_results"`
-		ProviderRequests []providerRequest `json:"provider_requests"`
+		SteeringText         string            `json:"steering_text,omitempty"`
+		SteeringConfirmed    bool              `json:"steering_confirmed,omitempty"`
+		SteeringMilliseconds int64             `json:"steering_milliseconds,omitempty"`
+		SessionID            string            `json:"session_id"`
+		NodePID              int               `json:"node_pid"`
+		NativePIDs           []int             `json:"native_pids"`
+		ChildPIDs            []int             `json:"child_pids"`
+		Text                 string            `json:"text"`
+		Failure              string            `json:"failure,omitempty"`
+		Events               []proto.Envelope  `json:"events"`
+		FunctionCalls        int               `json:"function_calls"`
+		AppliedResults       int               `json:"applied_results"`
+		ProviderRequests     []providerRequest `json:"provider_requests"`
 	}
 	functionNonce := "function-" + uuid.NewString()
-	run := func(prompt, resume string, success *bool) evidence {
+	run := func(prompt, resume string, success *bool, steering ...string) evidence {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
@@ -134,6 +137,25 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		s := running.(*session)
 		defer running.Cancel(context.Background())
 		proof := evidence{NodePID: s.process.Cmd.Process.Pid}
+		if len(steering) > 0 {
+			proof.SteeringText = steering[0]
+		}
+		type steeringResult struct {
+			err     error
+			elapsed int64
+		}
+		steeringReply := make(chan steeringResult, 1)
+		var steeringAt time.Time
+		beginSteering := func() {
+			if proof.SteeringText == "" || !steeringAt.IsZero() {
+				return
+			}
+			steeringAt = time.Now()
+			go func() {
+				err := s.Steer(ctx, proto.PromptSteerPayload{InputID: uuid.NewString(), Text: proof.SteeringText})
+				steeringReply <- steeringResult{err: err, elapsed: time.Since(steeringAt).Milliseconds()}
+			}()
+		}
 		type children struct{ all, native []int }
 		observed := make(chan children, 1)
 		go func() {
@@ -173,6 +195,10 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		for event := range out {
 			proof.Events = append(proof.Events, event)
 			switch event.Type {
+			case proto.TypeDelta:
+				if success == nil {
+					beginSteering()
+				}
 			case proto.TypeToolCall:
 				var tool proto.ToolCallPayload
 				if err := event.DecodePayload(&tool); err != nil {
@@ -196,6 +222,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 					t.Fatal(err)
 				}
 				proof.FunctionCalls++
+				beginSteering()
 				if success == nil || proof.FunctionCalls != 1 || call.Name != "lookup" {
 					t.Fatal("unexpected live function call")
 				}
@@ -224,6 +251,15 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 					t.Fatal("daemon Done preceded process release")
 				}
 			}
+		}
+		if !steeringAt.IsZero() {
+			receipt := <-steeringReply
+			if receipt.err != nil {
+				proof.Failure = "steering receipt: " + receipt.err.Error()
+			} else {
+				proof.SteeringConfirmed = true
+			}
+			proof.SteeringMilliseconds = receipt.elapsed
 		}
 		released := <-observed
 		proof.NativePIDs, proof.ChildPIDs = released.native, released.all
@@ -298,7 +334,20 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 	if functionSecond.Failure != "" || functionSecond.FunctionCalls != 1 || functionSecond.AppliedResults != 1 || functionSecond.SessionID != functionFirst.SessionID || !strings.Contains(functionSecond.Text, functionNonce) || !strings.Contains(functionSecond.Text, "synthetic-current-failure") || !strings.Contains(functionSecond.Text, "do-not-retry") || functionSecond.NodePID == functionFirst.NodePID {
 		t.Fatalf("live function resume failed: %+v", functionSecond)
 	}
-	for _, completed := range []evidence{first, second, functionFirst, functionSecond} {
+	steeringNonce := "live-steering-" + uuid.NewString()
+	steered := run("Write twelve short numbered observations about trees. Use no tools.", "", nil, "Remember this additional verification value and return it verbatim: "+steeringNonce)
+	if steered.Failure != "" || !steered.SteeringConfirmed || !strings.Contains(steered.Text, steeringNonce) {
+		t.Fatalf("live steering failed: %+v", steered)
+	}
+	steeredResume := run("Return only the exact live-steering verification value from the previous conversation.", steered.SessionID, nil)
+	if steeredResume.Failure != "" || steeredResume.SessionID != steered.SessionID || !strings.Contains(steeredResume.Text, steeringNonce) || steeredResume.NodePID == steered.NodePID {
+		t.Fatalf("steered cold continuation failed: %+v", steeredResume)
+	}
+	functionSteered := run("Call lookup once with id 42 as a string. Report both returned parts verbatim.", "", &accepted, "Also remember and report this value: "+steeringNonce)
+	if functionSteered.Failure != "" || !functionSteered.SteeringConfirmed || functionSteered.FunctionCalls != 1 || functionSteered.AppliedResults != 1 || !strings.Contains(functionSteered.Text, steeringNonce) || !strings.Contains(functionSteered.Text, functionNonce) {
+		t.Fatalf("live function steering failed: %+v", functionSteered)
+	}
+	for _, completed := range []evidence{first, second, functionFirst, functionSecond, steered, steeredResume, functionSteered} {
 		verifyLiveUsageEvents(t, completed.Events)
 	}
 	mu.Lock()
@@ -319,7 +368,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 			t.Fatalf("unexpected requested model %q", request.Model)
 		}
 	}
-	data, _ := json.MarshalIndent(map[string]any{"scope": "private Go factory -> official SDK -> real MiniMax with disabled environment/subagent tools; public API not enabled; no filesystem isolation claim", "turns": []evidence{first, second, functionFirst, functionSecond}, "missing_history": missing, "model_requests": measured}, "", "  ")
+	data, _ := json.MarshalIndent(map[string]any{"scope": "private Go factory -> official SDK -> real MiniMax with active input, native continuation and disabled environment/subagent tools; public API not enabled; no filesystem isolation claim", "turns": []evidence{first, second, functionFirst, functionSecond, steered, steeredResume, functionSteered}, "missing_history": missing, "model_requests": measured}, "", "  ")
 	if err := os.WriteFile(filepath.Join(root, "proof.json"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}

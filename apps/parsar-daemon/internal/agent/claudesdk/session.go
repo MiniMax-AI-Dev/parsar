@@ -18,6 +18,7 @@ type session struct {
 	process   *clirunner.Process
 	writeMu   sync.Mutex
 	functions functionState
+	steering  steeringState
 }
 
 func NewFactory(config Config) agent.Factory {
@@ -47,6 +48,8 @@ func NewFactory(config Config) agent.Factory {
 }
 
 type bridgeEvent struct {
+	InputID    string                      `json:"input_id"`
+	ResultID   string                      `json:"result_id"`
 	Usage      json.RawMessage             `json:"usage,omitempty"`
 	Type       string                      `json:"type"`
 	Delta      string                      `json:"delta"`
@@ -63,6 +66,7 @@ type bridgeEvent struct {
 func (s *session) run(ctx context.Context, runID string, start startRequest, out chan<- proto.Envelope) {
 	defer close(out)
 	defer s.stopFunctions()
+	defer s.stopSteering()
 	emit := func(kind string, payload any) {
 		event, err := proto.NewEnvelope(kind, runID, payload)
 		if err != nil {
@@ -86,6 +90,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	var result *bridgeEvent
 	var usage proto.Usage
 	var usageSession string
+	usageIDs := map[string]bool{}
 	var sequence uint64
 	terminal := false
 	for scanner.Scan() {
@@ -120,22 +125,31 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 				failure = err
 				s.process.Cancel()
 			}
+		case "input_ready", "input_closed", "input_applied", "input_rejected":
+			if err := s.receiveInput(event, start); err != nil {
+				failure = err
+				s.process.Cancel()
+			}
 		case "usage":
-			if usage.Raw != nil || event.SessionID == "" || (start.Resume != "" && event.SessionID != start.Resume) {
+			if event.ResultID == "" || !s.matchesInputSession(event.SessionID) || event.SessionID == "" || (start.Resume != "" && event.SessionID != start.Resume) ||
+				(usageSession != "" && usageSession != event.SessionID) || usageIDs[event.ResultID] {
 				failure = fmt.Errorf("claudesdk: invalid usage identity or duplicate result")
 				s.process.Cancel()
 				break
 			}
-			usage, failure = nativeUsage(event.Usage)
+			nextUsage, err := appendNativeUsage(usage, event.Usage)
+			failure = err
 			if failure != nil {
 				s.process.Cancel()
 				break
 			}
+			usage = nextUsage
+			usageIDs[event.ResultID] = true
 			usageSession = event.SessionID
 			emit(proto.TypeUsage, proto.UsagePayload{Usage: usage})
 		case "result":
-			if event.SessionID == "" || start.Resume != "" && event.SessionID != start.Resume || usageSession != "" && event.SessionID != usageSession || !s.functionsComplete() {
-				failure = fmt.Errorf("claudesdk: invalid native completion or unconfirmed function result")
+			if !s.matchesInputSession(event.SessionID) || event.SessionID == "" || start.Resume != "" && event.SessionID != start.Resume || usageSession != "" && event.SessionID != usageSession || !s.functionsComplete() || !s.steeringComplete() {
+				failure = fmt.Errorf("claudesdk: invalid native completion or unconfirmed input/result")
 				s.process.Cancel()
 			} else {
 				result = &event
@@ -171,6 +185,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 		failure = fmt.Errorf("claudesdk: SDK result is missing")
 	}
 	s.stopFunctions()
+	s.stopSteering()
 	metadata := map[string]any{proto.DoneMetaAgentSessionType: "claude_session"}
 	if failure != nil {
 		emit(proto.TypeError, proto.ErrorPayload{Error: failure.Error()})
@@ -182,7 +197,12 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	emit(proto.TypeDone, proto.DonePayload{Content: content.String(), Usage: usage, Metadata: metadata})
 }
 
-func (s *session) Cancel(context.Context) error { s.stopFunctions(); s.process.Cancel(); return nil }
+func (s *session) Cancel(context.Context) error {
+	s.stopSteering()
+	s.stopFunctions()
+	s.process.Cancel()
+	return nil
+}
 func (s *session) SubmitPermission(context.Context, string, proto.PermissionDecisionPayload) error {
 	return agent.ErrUnknownPermission
 }

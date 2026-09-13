@@ -95,10 +95,10 @@ func runUsageHelper(request startRequest, mode string, encode func(bridgeEvent))
 		value = json.RawMessage(`[]`)
 	}
 	if mode != "missing" {
-		encode(bridgeEvent{Type: "usage", SessionID: id, Usage: value})
+		encode(bridgeEvent{Type: "usage", ResultID: "native-result", SessionID: id, Usage: value})
 	}
 	if mode == "duplicate" {
-		encode(bridgeEvent{Type: "usage", SessionID: id, Usage: value})
+		encode(bridgeEvent{Type: "usage", ResultID: "native-result", SessionID: id, Usage: value})
 		return
 	}
 	if mode == "native-error" {
@@ -132,13 +132,19 @@ func verifyLiveUsageEvents(t *testing.T, events []proto.Envelope) {
 			if err := event.DecodePayload(&payload); err != nil {
 				t.Fatal(err)
 			}
-			if count != 1 || !reflect.DeepEqual(payload.Usage, observed) {
+			if count < 1 || !reflect.DeepEqual(payload.Usage, observed) {
 				t.Fatal("missing, repeated or changed live usage")
 			}
 		}
 	}
-	if count != 1 || observed.Tokens != nil || observed.Model != "" || observed.CostUSD != 0 {
+	if count < 1 || observed.Tokens != nil || observed.Model != "" || observed.CostUSD != 0 {
 		t.Fatal("live native evidence became unsupported public accounting")
+	}
+	if count > 1 {
+		snapshots, ok := observed.Raw["claude_sdk_results"].([]any)
+		if !ok || len(snapshots) != count || !reflect.DeepEqual(snapshots[count-1], observed.Raw["claude_sdk_result"]) {
+			t.Fatal("lost native-turn snapshots")
+		}
 	}
 	snapshot, ok := observed.Raw["claude_sdk_result"].(map[string]any)
 	if !ok || snapshot["subtype"] != "success" || snapshot["is_error"] != false {
