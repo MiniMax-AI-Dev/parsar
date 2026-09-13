@@ -72,3 +72,41 @@ func TestDurableSteeringBypassesOnlyNativeResponseDeadline(t *testing.T) {
 		})
 	}
 }
+
+func TestDurableSteeringKeepsConfirmedReceiptAtCompletion(t *testing.T) {
+	for _, confirmed := range []bool{false, true} {
+		failures := 0
+		for range 40 {
+			client, server, cleanup := NewTestClient()
+			s := &Session{rpc: client.JSONRPCClient, cancelCtx: context.Background()}
+			s.setThreadID("thread")
+			s.startSteering(json.RawMessage(`{"threadId":"thread","turn":{"id":"turn"}}`))
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			inWritten, releaseWritten := make(chan struct{}), make(chan struct{})
+			reply := make(chan error, 1)
+			go func() {
+				reply <- s.SteerWithReceipt(ctx, proto.PromptSteerPayload{InputID: "extra", Text: "text"}, func() { close(inWritten); <-releaseWritten })
+			}()
+			var request JsonRpcRequest
+			if err := json.NewDecoder(server.FromClient).Decode(&request); err != nil {
+				t.Fatal(err)
+			}
+			<-inWritten
+			if confirmed {
+				id, _ := json.Marshal(request.ID)
+				client.handleResponse(id, json.RawMessage(`{"turnId":"turn"}`), nil)
+			}
+			s.stopSteering()
+			close(releaseWritten)
+			err := <-reply
+			cancel()
+			cleanup()
+			if (err == nil) != confirmed {
+				failures++
+			}
+		}
+		if failures != 0 {
+			t.Fatalf("confirmed=%v: incorrect native evidence in %d/40 completions", confirmed, failures)
+		}
+	}
+}

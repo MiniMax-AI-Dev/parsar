@@ -66,6 +66,14 @@ func (c *JSONRPCClient) requestWithTimeout(ctx context.Context, method string, p
 		c.pendingMu.Unlock()
 		return nil, fmt.Errorf("codex rpc: %s timed out after %s", method, timeout)
 	case <-ctx.Done():
+		// A durable response can arrive while its write-phase notification is sent.
+		if timeout == 0 {
+			select {
+			case r := <-pending.resp:
+				return r.result, r.err
+			default:
+			}
+		}
 		c.pendingMu.Lock()
 		delete(c.pending, id)
 		c.pendingMu.Unlock()
