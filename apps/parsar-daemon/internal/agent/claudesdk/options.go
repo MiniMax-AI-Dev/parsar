@@ -51,6 +51,9 @@ func prepare(config Config, req proto.PromptRequestPayload) (startRequest, []str
 		return startRequest{}, nil, err
 	}
 	for name, raw := range req.AgentOptions {
+		if name == "system_prompt" && raw == nil {
+			continue
+		}
 		value, ok := raw.(string)
 		if !ok {
 			return fail("model and system_prompt options must be strings")

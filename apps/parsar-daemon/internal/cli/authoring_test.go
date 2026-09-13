@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"net"
 	"os"
 	"testing"
@@ -54,4 +55,44 @@ func TestAuthoringSocketEndsWithTurnWhileSessionIsRetained(t *testing.T) {
 		t.Fatal("authoring remained available after done")
 	}
 	close(events)
+}
+
+func TestAuthoringRegistryRequiresExplicitCapability(t *testing.T) {
+	root, err := os.MkdirTemp("/tmp", "pa-opt-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(root)
+	t.Setenv("PARSAR_HOME", root)
+	for _, optIn := range []bool{false, true} {
+		reg := agent.NewRegistry()
+		called := false
+		stop := errors.New("controlled factory stop")
+		out := make(chan proto.Envelope, 1)
+		reg.RegisterKind(proto.SupportedAgentKind{Kind: "engine", Available: true, Capabilities: proto.AgentKindCapabilities{WorkspaceAuthoring: optIn}}, func(_ context.Context, req proto.PromptRequestPayload, events chan<- proto.Envelope) (agent.Session, error) {
+			called = true
+			env, _ := req.AgentOptions["env"].(map[string]any)
+			socket, _ := env[proto.AuthoringSocketEnv].(string)
+			if (socket != "") != optIn {
+				t.Fatal("authoring capability was not respected")
+			}
+			if optIn {
+				if _, err := os.Stat(socket); err != nil {
+					t.Fatal(err)
+				}
+			} else if events != out {
+				t.Fatal("non-product event channel was wrapped")
+			}
+			return nil, stop
+		})
+		wrapped := authoringRegistry(reg, authoring.New(nil))
+		factory, err := wrapped.Resolve("engine")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = factory(t.Context(), proto.PromptRequestPayload{RunID: "run", WorkspaceAuthoring: true}, out)
+		if !called || !errors.Is(err, stop) {
+			t.Fatal("registered factory was not preserved", err)
+		}
+	}
 }

@@ -255,13 +255,13 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 		r.log.ErrorContext(callerCtx, "handlePromptRequest: missing agent_kind", "run_id", runID)
 		return errors.New("dispatch: prompt_request missing agent_kind")
 	}
-	if len(req.FunctionTools) > 0 && !r.supportsFunctionTools(req.AgentKind) {
+	if len(req.FunctionTools) > 0 && !r.availableCapabilities(req.AgentKind).FunctionTools {
 		err := errors.New("engine does not support function tools")
 		r.emitTerminalError(callerCtx, runID, err.Error())
 		return err
 	}
-	if req.DisableExecutionEnvironment && req.AgentKind != "codex" {
-		err := errors.New("execution environment none requires a supported Codex engine")
+	if req.DisableExecutionEnvironment && !r.availableCapabilities(req.AgentKind).EnvironmentNone {
+		err := errors.New("engine does not support execution environment none")
 		r.emitTerminalError(callerCtx, runID, err.Error())
 		return err
 	}

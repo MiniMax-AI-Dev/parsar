@@ -69,9 +69,10 @@ func TestLoadInlineConnectEnvHydratesParentProcessFlags(t *testing.T) {
 }
 
 func TestDiscoverAgentCLIsAllowsOpenCodeWithoutClaude(t *testing.T) {
+	t.Setenv(claudeSDKEntrypointEnv, "")
 	stdout, stderr := &strings.Builder{}, &strings.Builder{}
 	rc := &runContext{stdout: stdout, stderr: stderr}
-	got, err := discoverAgentCLIs(rc, agentCLIChecks{
+	got, err := discoverAgentCLIs(rc, "default", agentCLIChecks{
 		MCode: func(context.Context, string) (string, error) { return "", mcode.ErrCLINotFound },
 		ClaudeCode: func(context.Context, string) (string, error) {
 			return "", claudecode.ErrCLINotFound
@@ -113,9 +114,10 @@ func TestDiscoverAgentCLIsAllowsOpenCodeWithoutClaude(t *testing.T) {
 }
 
 func TestDiscoverAgentCLIsBothMissingFails(t *testing.T) {
+	t.Setenv(claudeSDKEntrypointEnv, "")
 	stdout, stderr := &strings.Builder{}, &strings.Builder{}
 	rc := &runContext{stdout: stdout, stderr: stderr}
-	got, err := discoverAgentCLIs(rc, agentCLIChecks{
+	got, err := discoverAgentCLIs(rc, "default", agentCLIChecks{
 		MCode: func(context.Context, string) (string, error) { return "", mcode.ErrCLINotFound },
 		ClaudeCode: func(context.Context, string) (string, error) {
 			return "", claudecode.ErrCLINotFound
@@ -142,9 +144,10 @@ func TestDiscoverAgentCLIsBothMissingFails(t *testing.T) {
 }
 
 func TestDiscoverAgentCLIsBothAvailable(t *testing.T) {
+	t.Setenv(claudeSDKEntrypointEnv, "")
 	stdout, stderr := &strings.Builder{}, &strings.Builder{}
 	rc := &runContext{stdout: stdout, stderr: stderr}
-	got, err := discoverAgentCLIs(rc, agentCLIChecks{
+	got, err := discoverAgentCLIs(rc, "default", agentCLIChecks{
 		MCode: func(context.Context, string) (string, error) { return "0.3.11", nil },
 		ClaudeCode: func(context.Context, string) (string, error) {
 			return "claude 2.0.0", nil
