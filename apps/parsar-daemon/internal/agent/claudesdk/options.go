@@ -37,9 +37,11 @@ func prepare(config Config, req proto.PromptRequestPayload) (startRequest, []str
 	if req.RunID == "" || strings.TrimSpace(req.Prompt) == "" {
 		return fail("run id and prompt are required")
 	}
-	if req.ExecutionControls != nil || len(req.Attachments) > 0 || req.WorkspaceAuthoring || req.ObserveTools || req.DisableExecutionEnvironment || req.DisableSubagents {
+	if req.ExecutionControls != nil || len(req.Attachments) > 0 || req.WorkspaceAuthoring || req.ObserveTools {
 		return fail("requested capability is not available in the private SDK adapter")
 	}
+	// The fixed SDK profile already excludes all built-in tools and subagents.
+	// Both restriction flags are supported; omitting them does not widen the profile.
 	if err := validateFunctions(req.FunctionTools); err != nil {
 		return startRequest{}, nil, err
 	}

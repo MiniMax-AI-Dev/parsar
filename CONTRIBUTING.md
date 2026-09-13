@@ -602,6 +602,16 @@ product Claude execution remains unchanged. The bounded profile accepts only
 text, explicit model/system instructions, managed state, exact native resume and
 declared functions with ordered text results. It rejects unsupported request
 options and disables built-in tools and undeclared MCP discovery.
+`DisableExecutionEnvironment` and `DisableSubagents` are accepted assertions about
+this fixed restrictive profile. Omission does not enable built-in tools. New and
+resumed queries use the SDK's empty built-in tool set, explicit function MCP
+configuration and allowlist, strict MCP configuration and empty user/project/local
+setting sources. Native initialization and real provider request inventories must
+contain only the declared host functions. Managed operator policy may further
+restrict execution; it must not widen the profile. This limits model tool access,
+not native state files or filesystem access by an explicitly supplied host function;
+it is not sandbox/file isolation. Typed verbosity/search controls and public
+capability registration still require separate acceptance.
 Use the SDK's history lookup before explicit resume; never fall back to a new
 Session. Native files remain device-affine under a caller-selected managed
 runtime directory. The launch configuration supplies trusted provider environment;
@@ -644,7 +654,7 @@ or invent missing public token breakdowns. The API does not parse native counter
 Precise public usage projection, unreported costs and crash/partial accounting
 remain gaps; the native snapshot alone is not complete protocol Usage compatibility.
 
-This does not establish full tool/environment/text-verbosity policy, public usage,
+This does not establish environment provisioning, full tool/text-verbosity policy, public usage,
 image results, steering, public cancellation receipts or process-loss recovery.
 Those capabilities require their own acceptance before public dispatch. Registry
 adoption and release packaging are separate tasks. `make check-cli` also builds
