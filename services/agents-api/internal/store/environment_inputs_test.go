@@ -110,6 +110,8 @@ func TestEnvironmentInputReservationConcurrentIdentity(t *testing.T) {
 
 func TestEnvironmentInputReservationPromotionAndDirectRetries(t *testing.T) {
 	s, pool := testStore(t)
+	lease := executionLease(t, s)
+	writer := lease.Store()
 	tenant, session := environmentInputSession(t, s)
 	ctx := context.Background()
 	first := reserveEnvironmentInput(t, s, tenant, session.ID, "pending")
@@ -128,7 +130,7 @@ func TestEnvironmentInputReservationPromotionAndDirectRetries(t *testing.T) {
 		}
 	}
 	environmentInputHistory(t, pool, session.ID, 0, 0)
-	promoted, err := s.PromoteEnvironmentInput(ctx, tenant, session.ID, first.ID)
+	promoted, err := writer.PromoteEnvironmentInput(ctx, tenant, session.ID, first.ID)
 	if err != nil || promoted.State != EnvironmentInputAdmitted || promoted.SettledAt == nil || len(promoted.Receipts) != 2 || !promoted.Deadline.Equal(first.Deadline) {
 		t.Fatal(promoted, err)
 	}
@@ -140,7 +142,7 @@ func TestEnvironmentInputReservationPromotionAndDirectRetries(t *testing.T) {
 	environmentInputHistory(t, pool, session.ID, 1, 2)
 	for _, read := range []func() (EnvironmentInputReservation, error){
 		func() (EnvironmentInputReservation, error) {
-			return s.PromoteEnvironmentInput(ctx, tenant, session.ID, first.ID)
+			return writer.PromoteEnvironmentInput(ctx, tenant, session.ID, first.ID)
 		},
 		func() (EnvironmentInputReservation, error) {
 			return s.GetEnvironmentInputReservation(ctx, tenant, session.ID, first.ID)
@@ -163,9 +165,12 @@ func TestEnvironmentInputReservationPromotionAndDirectRetries(t *testing.T) {
 	if err != nil || len(retry) != 2 || !retry[0].Replayed || retry[0].Sequence != promoted.Receipts[0].Sequence {
 		t.Fatal("direct retry after promotion", retry, err)
 	}
+	if err := lease.Close(ctx); err != nil {
+		t.Fatal(err)
+	}
 	pool.Close()
 	restarted, pool := testStore(t)
-	after, err := restarted.PromoteEnvironmentInput(ctx, tenant, session.ID, first.ID)
+	after, err := executionLease(t, restarted).Store().PromoteEnvironmentInput(ctx, tenant, session.ID, first.ID)
 	if err != nil || after.State != EnvironmentInputAdmitted || after.Receipts[0].Sequence != promoted.Receipts[0].Sequence {
 		t.Fatal("restart repeated promotion", after, err)
 	}
@@ -203,6 +208,8 @@ func TestEnvironmentInputReservationKeepsEarlierDirectIdentity(t *testing.T) {
 
 func TestEnvironmentInputReservationRejectsUnsupportedOrForeignState(t *testing.T) {
 	s, _ := testStore(t)
+	lease := executionLease(t, s)
+	writer := lease.Store()
 	tenant, session := environmentInputSession(t, s)
 	ctx := context.Background()
 	pending := reserveEnvironmentInput(t, s, tenant, session.ID, "pending")
@@ -212,7 +219,7 @@ func TestEnvironmentInputReservationRejectsUnsupportedOrForeignState(t *testing.
 			return err
 		},
 		func() error {
-			_, err := s.PromoteEnvironmentInput(ctx, uuid.NewString(), session.ID, pending.ID)
+			_, err := writer.PromoteEnvironmentInput(ctx, uuid.NewString(), session.ID, pending.ID)
 			return err
 		},
 		func() error {
@@ -233,7 +240,7 @@ func TestEnvironmentInputReservationRejectsUnsupportedOrForeignState(t *testing.
 		t.Fatal(err)
 	}
 	for _, action := range []func(context.Context, string, string, string) (EnvironmentInputReservation, error){
-		s.GetEnvironmentInputReservation, s.PromoteEnvironmentInput, s.CancelEnvironmentInput, s.ExpireEnvironmentInput,
+		s.GetEnvironmentInputReservation, writer.PromoteEnvironmentInput, s.CancelEnvironmentInput, s.ExpireEnvironmentInput,
 	} {
 		if _, err := action(ctx, tenant, other.ID, pending.ID); !errors.Is(err, ErrNotFound) {
 			t.Fatal("reservation crossed Session ownership", err)

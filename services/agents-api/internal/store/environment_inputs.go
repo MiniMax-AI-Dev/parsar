@@ -119,8 +119,11 @@ func (s *Store) GetEnvironmentInputReservation(ctx context.Context, tenantID, se
 	return result, nil
 }
 
-// PromoteEnvironmentInput requires the caller to retain its prepared native connection.
+// PromoteEnvironmentInput admits and claims work for the retained native preparation.
 func (s *Store) PromoteEnvironmentInput(ctx context.Context, tenantID, sessionID, reservationID string) (EnvironmentInputReservation, error) {
+	if s.executionLease == nil {
+		return EnvironmentInputReservation{}, errors.New("Environment input promotion requires an execution lease")
+	}
 	return s.settleEnvironmentInput(ctx, tenantID, sessionID, reservationID, EnvironmentInputAdmitted)
 }
 
@@ -189,6 +192,17 @@ func settleEnvironmentInput(ctx context.Context, q *sqlc.Queries, tenantID strin
 	row, err = q.SettleEnvironmentInputReservation(ctx, sqlc.SettleEnvironmentInputReservationParams{SessionID: row.SessionID, ID: row.ID, State: state})
 	if err != nil {
 		return EnvironmentInputReservation{}, err
+	}
+	if state == EnvironmentInputAdmitted {
+		params, err := turnLookup(tenantID, result.SessionID, result.Receipts[0].TurnID)
+		if err != nil {
+			return EnvironmentInputReservation{}, err
+		}
+		if _, err := transitionTurn(ctx, q, params, TurnTransition{
+			ExpectedStatus: TurnQueued, Status: TurnInProgress, Outcome: json.RawMessage(`{}`),
+		}); err != nil {
+			return EnvironmentInputReservation{}, err
+		}
 	}
 	result.State = row.State
 	result.SettledAt = &row.SettledAt.Time

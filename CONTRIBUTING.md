@@ -226,8 +226,9 @@ an Environment-bearing Session without active work. Reservation and direct input
 paths share the Session lock and retry identity; pending or settled keys cannot
 bypass the reservation through direct admission. A pending reservation blocks new
 direct batches, including cancellation, while successful earlier retries remain
-readable. Promotion commits the original inputs, history and settlement together;
-expiration and targeted cancellation retain the terminal identity. Session deletion
+readable. Promotion commits the original inputs, history, reservation settlement
+and execution claim (`queued` to `in_progress`) together; expiration and targeted
+cancellation retain the terminal identity. Session deletion
 cancels pending input in the same transaction. A terminal reservation retry must not
 affect a later reservation or Turn. Evaluate deadlines after acquiring the Session
 lock, and return terminal storage outcomes without rolling their transaction back.
@@ -235,8 +236,14 @@ lock, and return terminal storage outcomes without rolling their transaction bac
 This is a message-only Store foundation, not public Environment admission or a new
 public concurrency limit. Automatic initial-input integration, public pending/failed
 Session projections, mixed inputs and native readiness before admission remain
-pending. Promotion's caller must retain the prepared native connection and use the
-current execution writer; never hold a database lock during external preparation.
+pending. Promotion requires the current leased execution writer and the caller's
+retained native preparation; never hold a database lock during external preparation. Only
+the first successful non-replay receipts authorize Start on that same preparation.
+An admitted retry returns the original receipts without reclaiming execution; a
+read or uncertain commit never authorizes another Start. A crash after promotion
+but before Start uses existing claimed-Turn reconciliation (`execution_interrupted`),
+including unbound or deleted Sessions, rather than ordinary queued dispatch. Deletion
+after claim requests cancellation under existing active-Turn semantics.
 The Worker expires at most 32 due reservations on each existing tick, after
 checking ownership and before checking devices or execution slots. The sweep
 requires the leased Store and uses its connection with the existing transaction

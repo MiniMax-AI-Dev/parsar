@@ -82,6 +82,17 @@ func TestEnvironmentInputPromotionUsesCurrentExecutionWriter(t *testing.T) {
 	s, pool := testStore(t)
 	tenant, session := environmentInputSession(t, s)
 	pending := reserveEnvironmentInput(t, s, tenant, session.ID, "pending")
+	if _, err := s.PromoteEnvironmentInput(t.Context(), tenant, session.ID, pending.ID); err == nil {
+		t.Fatal("pooled Store promoted input without execution ownership")
+	}
+	closed := executionLease(t, s)
+	if err := closed.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := closed.Store().PromoteEnvironmentInput(t.Context(), tenant, session.ID, pending.ID); err == nil {
+		t.Fatal("closed execution writer promoted pending input")
+	}
+	environmentInputHistory(t, pool, session.ID, 0, 0)
 	old := executionLease(t, s)
 	writer := old.Store()
 	var killed bool

@@ -14,6 +14,8 @@ func TestEnvironmentInputTerminalReservationsCannotRestart(t *testing.T) {
 	for _, terminal := range []string{EnvironmentInputCancelled, EnvironmentInputExpired} {
 		t.Run(terminal, func(t *testing.T) {
 			s, pool := testStore(t)
+			lease := executionLease(t, s)
+			writer := lease.Store()
 			tenant, session := environmentInputSession(t, s)
 			ctx := context.Background()
 			pending := reserveEnvironmentInput(t, s, tenant, session.ID, "pending")
@@ -26,7 +28,7 @@ func TestEnvironmentInputTerminalReservationsCannotRestart(t *testing.T) {
 				if _, err := pool.Exec(ctx, "UPDATE environment_input_reservations SET deadline=clock_timestamp()-interval '1 second' WHERE id=$1", pending.ID); err != nil {
 					t.Fatal(err)
 				}
-				settled, err = s.PromoteEnvironmentInput(ctx, tenant, session.ID, pending.ID)
+				settled, err = writer.PromoteEnvironmentInput(ctx, tenant, session.ID, pending.ID)
 			} else {
 				settled, err = s.CancelEnvironmentInput(ctx, tenant, session.ID, pending.ID)
 			}
@@ -45,7 +47,7 @@ func TestEnvironmentInputTerminalReservationsCannotRestart(t *testing.T) {
 			}
 			later := reserveEnvironmentInput(t, s, tenant, session.ID, "later")
 			for _, finish := range []func(context.Context, string, string, string) (EnvironmentInputReservation, error){
-				s.PromoteEnvironmentInput, s.CancelEnvironmentInput, s.ExpireEnvironmentInput,
+				writer.PromoteEnvironmentInput, s.CancelEnvironmentInput, s.ExpireEnvironmentInput,
 			} {
 				got, err := finish(ctx, tenant, session.ID, pending.ID)
 				if err != nil || got.State != terminal {
@@ -62,9 +64,11 @@ func TestEnvironmentInputTerminalReservationsCannotRestart(t *testing.T) {
 }
 
 func TestEnvironmentInputPromotionRollsBackHistoryAndSettlement(t *testing.T) {
-	for _, phase := range []string{"input", "settlement"} {
+	for _, phase := range []string{"input", "settlement", "claim", "claim-event"} {
 		t.Run(phase, func(t *testing.T) {
 			s, pool := testStore(t)
+			lease := executionLease(t, s)
+			writer := lease.Store()
 			tenant, session := environmentInputSession(t, s)
 			ctx := context.Background()
 			pending := reserveEnvironmentInput(t, s, tenant, session.ID, "pending")
@@ -75,11 +79,19 @@ func TestEnvironmentInputPromotionRollsBackHistoryAndSettlement(t *testing.T) {
 				table = "environment_input_reservations"
 				expression = "id <> '" + pending.ID + "'::uuid OR state <> 'admitted'"
 			}
+			if phase == "claim" {
+				table = "turns"
+				expression = "session_id <> '" + session.ID + "'::uuid OR status <> 'in_progress'"
+			}
+			if phase == "claim-event" {
+				table = "session_events"
+				expression = "session_id <> '" + session.ID + "'::uuid OR payload->'event'->>'type' <> 'agent.session.turn.in_progress'"
+			}
 			if _, err := pool.Exec(ctx, "ALTER TABLE "+table+" ADD CONSTRAINT "+name+" CHECK ("+expression+") NOT VALID"); err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _, _ = pool.Exec(ctx, "ALTER TABLE "+table+" DROP CONSTRAINT IF EXISTS "+name) })
-			if _, err := s.PromoteEnvironmentInput(ctx, tenant, session.ID, pending.ID); err == nil {
+			if _, err := writer.PromoteEnvironmentInput(ctx, tenant, session.ID, pending.ID); err == nil {
 				t.Fatal("injected failure succeeded")
 			}
 			environmentInputHistory(t, pool, session.ID, 0, 0)
@@ -90,7 +102,7 @@ func TestEnvironmentInputPromotionRollsBackHistoryAndSettlement(t *testing.T) {
 			if _, err := pool.Exec(ctx, "ALTER TABLE "+table+" DROP CONSTRAINT "+name); err != nil {
 				t.Fatal(err)
 			}
-			got, err = s.PromoteEnvironmentInput(ctx, tenant, session.ID, pending.ID)
+			got, err = writer.PromoteEnvironmentInput(ctx, tenant, session.ID, pending.ID)
 			if err != nil || got.State != EnvironmentInputAdmitted {
 				t.Fatal(got, err)
 			}
@@ -101,6 +113,8 @@ func TestEnvironmentInputPromotionRollsBackHistoryAndSettlement(t *testing.T) {
 
 func TestEnvironmentInputDeadlineIsCheckedAfterSessionLock(t *testing.T) {
 	s, pool := testStore(t)
+	lease := executionLease(t, s)
+	writer := lease.Store()
 	tenant, session := environmentInputSession(t, s)
 	pending := reserveEnvironmentInput(t, s, tenant, session.ID, "pending")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -120,7 +134,7 @@ func TestEnvironmentInputDeadlineIsCheckedAfterSessionLock(t *testing.T) {
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		got, err := s.PromoteEnvironmentInput(ctx, tenant, session.ID, pending.ID)
+		got, err := writer.PromoteEnvironmentInput(ctx, tenant, session.ID, pending.ID)
 		done <- outcome{got, err}
 	}()
 	for {
@@ -159,6 +173,8 @@ func TestEnvironmentInputDeadlineIsCheckedAfterSessionLock(t *testing.T) {
 
 func TestEnvironmentInputCancelAndPromotionShareOneOutcome(t *testing.T) {
 	s, pool := testStore(t)
+	lease := executionLease(t, s)
+	writer := lease.Store()
 	other, _ := testStore(t)
 	tenant, session := environmentInputSession(t, s)
 	ctx := context.Background()
@@ -167,7 +183,7 @@ func TestEnvironmentInputCancelAndPromotionShareOneOutcome(t *testing.T) {
 	results := make(chan EnvironmentInputReservation, 2)
 	errs := make(chan error, 2)
 	for _, finish := range []func(context.Context, string, string, string) (EnvironmentInputReservation, error){
-		s.PromoteEnvironmentInput, other.CancelEnvironmentInput,
+		writer.PromoteEnvironmentInput, other.CancelEnvironmentInput,
 	} {
 		go func() {
 			<-start
@@ -197,13 +213,15 @@ func TestEnvironmentInputDeletionSettlesPendingAndFencesPromotion(t *testing.T) 
 	for _, concurrent := range []bool{false, true} {
 		t.Run(map[bool]string{false: "pending", true: "racing-promotion"}[concurrent], func(t *testing.T) {
 			s, pool := testStore(t)
+			lease := executionLease(t, s)
+			writer := lease.Store()
 			tenant, session := environmentInputSession(t, s)
 			ctx := context.Background()
 			pending := reserveEnvironmentInput(t, s, tenant, session.ID, "pending")
 			done := make(chan error, 1)
 			if concurrent {
 				go func() {
-					_, err := s.PromoteEnvironmentInput(ctx, tenant, session.ID, pending.ID)
+					_, err := writer.PromoteEnvironmentInput(ctx, tenant, session.ID, pending.ID)
 					done <- err
 				}()
 			}
@@ -216,7 +234,7 @@ func TestEnvironmentInputDeletionSettlesPendingAndFencesPromotion(t *testing.T) 
 				}
 			}
 			for _, action := range []func(context.Context, string, string, string) (EnvironmentInputReservation, error){
-				s.GetEnvironmentInputReservation, s.PromoteEnvironmentInput, s.CancelEnvironmentInput,
+				s.GetEnvironmentInputReservation, writer.PromoteEnvironmentInput, s.CancelEnvironmentInput,
 			} {
 				if _, err := action(ctx, tenant, session.ID, pending.ID); !errors.Is(err, ErrNotFound) {
 					t.Fatal("deleted reservation remained accessible", err)
@@ -233,8 +251,8 @@ func TestEnvironmentInputDeletionSettlesPendingAndFencesPromotion(t *testing.T) 
 			if state != EnvironmentInputCancelled && (!concurrent || state != EnvironmentInputAdmitted) {
 				t.Fatal("deletion lost pending settlement", state)
 			}
-			if err := pool.QueryRow(ctx, "SELECT count(*) FROM turns WHERE session_id=$1 AND status IN ('queued','in_progress','waiting')", session.ID).Scan(&active); err != nil || active != 0 {
-				t.Fatal("deleted reservation retained runnable work", active, err)
+			if err := pool.QueryRow(ctx, "SELECT count(*) FROM turns WHERE session_id=$1 AND (status='queued' OR (status IN ('in_progress','waiting') AND cancel_requested_at IS NULL))", session.ID).Scan(&active); err != nil || active != 0 {
+				t.Fatal("deleted reservation retained unclaimed or uncancelled work", active, err)
 			}
 		})
 	}
