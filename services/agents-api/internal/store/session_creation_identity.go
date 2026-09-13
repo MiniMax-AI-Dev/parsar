@@ -52,7 +52,7 @@ func (s *Store) FindSessionCreation(ctx context.Context, tenantID, key string, r
 	if err != nil {
 		return SessionCreation{}, fmt.Errorf("find session creation: %w", err)
 	}
-	if row.CreationRequestHash.String != hash.String {
+	if row.DeletedAt.Valid || row.CreationRequestHash.String != hash.String {
 		return SessionCreation{}, ErrIdempotencyConflict
 	}
 	session, err := sessionFromRow(row)

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -94,6 +95,9 @@ func (h *Handler) serveSessionEvents(w http.ResponseWriter, r *http.Request, eve
 	defer heartbeat.Stop()
 	for {
 		changes, err := events.ListSessionEvents(r.Context(), tenant, id, cursor)
+		if errors.Is(err, store.ErrNotFound) {
+			return
+		}
 		if err != nil {
 			writeStreamFailure(write, id)
 			return

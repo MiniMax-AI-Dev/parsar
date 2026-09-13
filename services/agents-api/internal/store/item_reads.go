@@ -21,7 +21,7 @@ func (s *Store) ListItems(ctx context.Context, tenantID, sessionID, cursor strin
 		return ItemPage{}, ErrInvalidInput
 	}
 	page := ItemPage{Items: make([]v1.Item, 0, limit)}
-	err := s.withSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
+	err := s.withPublicSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
 		p := sqlc.ListSessionItemsParams{SessionID: session, PageLimit: int32(limit + 1), Ascending: ascending, AfterID: pgtype.UUID{Valid: true}}
 		if cursor != "" {
 			id, err := parseID(cursor)

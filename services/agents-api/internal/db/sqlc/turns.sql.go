@@ -232,7 +232,7 @@ func (q *Queries) ListTurnInputs(ctx context.Context, arg ListTurnInputsParams) 
 }
 
 const lockSession = `-- name: LockSession :one
-SELECT id FROM sessions WHERE tenant_id = $1 AND id = $2 FOR UPDATE
+SELECT id, deleted_at FROM sessions WHERE tenant_id = $1 AND id = $2 FOR UPDATE
 `
 
 type LockSessionParams struct {
@@ -240,11 +240,16 @@ type LockSessionParams struct {
 	ID       pgtype.UUID `json:"id"`
 }
 
-func (q *Queries) LockSession(ctx context.Context, arg LockSessionParams) (pgtype.UUID, error) {
+type LockSessionRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+func (q *Queries) LockSession(ctx context.Context, arg LockSessionParams) (LockSessionRow, error) {
 	row := q.db.QueryRow(ctx, lockSession, arg.TenantID, arg.ID)
-	var id pgtype.UUID
-	err := row.Scan(&id)
-	return id, err
+	var i LockSessionRow
+	err := row.Scan(&i.ID, &i.DeletedAt)
+	return i, err
 }
 
 const requestTurnCancel = `-- name: RequestTurnCancel :exec

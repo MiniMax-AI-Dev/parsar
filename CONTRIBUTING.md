@@ -220,6 +220,23 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   types. Product adapters live in `server/internal/agentdaemon`. Keep protocol
   frames in `internal/agentdaemon/proto` until the contracts directory migration.
   Store aliases preserve existing callers during this transition.
+- Session deletion uses a durable `sessions.deleted_at` marker, committed with an
+  existing Turn cancellation request under the tenant Session lock. Public reads,
+  metadata changes, event streams and input admission exclude deleted Sessions;
+  admission checks visibility under that lock before retry lookup. Creation keys
+  remain reserved and cannot resurrect deleted Sessions. Missing/repeated deletion
+  locally returns 404 and reuse of a deleted creation identity returns 409; exact
+  hosted errors and overlapping stream timing remain unverified. Existing streams
+  close when removal is observed without a fabricated deletion event.
+  Internal Turn/receipt/finalization and restart reconciliation retain access so
+  hidden work can settle under the existing execution lease. Queued deletion
+  prevents claim; an already claimed execution may complete or receive cancellation.
+  Confirmation does not guarantee native quiescence. Never revoke a shared device,
+  remove a saved Agent or touch product data as part of Session deletion. Physical
+  SQL/native history cleanup remains a separate required implementation gap; these
+  records are retained, not claimed purged. Do not deploy a pre-deletion service
+  against a database with deletion markers; migration rollback refuses to remove
+  the column while deleted records exist, preventing public resurrection.
 - `services/agents-api` owns its SQL schema, sqlc queries and embedded goose
   migrations. `AGENTS_API_DATABASE_URL` is required; never fall back to the product
   database URL. Its first persistence slice stores tenant-scoped Sessions with a

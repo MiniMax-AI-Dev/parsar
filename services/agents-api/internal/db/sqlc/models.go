@@ -50,6 +50,7 @@ type Session struct {
 	Configuration       []byte             `json:"configuration"`
 	EventSequence       int64              `json:"event_sequence"`
 	CreationRequestHash pgtype.Text        `json:"creation_request_hash"`
+	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type SessionDevice struct {
