@@ -607,12 +607,12 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   and cancellation batches through the pinned official client. Preserve individual
   input messages in the Item index while deriving text for native dispatch. Batch
   idempotency and cancellation targets remain durable; unsupported variants fail
-  before admission. Non-streaming Session creation accepts initial text as a string
+  before admission. Session creation accepts initial text as a string
   or user-message array through the same parser and admission path. Commit the
   Session, initial input, first Turn and Item/event projections in one transaction.
   A creation retry returns the existing Session without re-admitting initial work,
   including after terminal or later Turns. Omitted/null input retains idle creation.
-  Streaming creation and non-text initial messages remain protocol gaps.
+  Creation streaming uses the shared live path above; non-text messages remain a gap.
 - Enabling `AGENTS_API_DAEMON_WS_URL` also starts a bounded execution worker. Select
   only connected, capable devices owned by the authenticated tenant; bind once and
   preserve native continuity. Metadata cannot select a device. Offline work stays
@@ -729,8 +729,8 @@ by the native tool inventory; medium retains the SDK's default text generation,
 without adding instructions or changing caller input. The pinned SDK has no native
 verbosity-level option: low/high and enabled search remain explicit implementation
 gaps. Missing/invalid fields in a supplied control block fail before native setup;
-omitting the block keeps the same restrictive profile. This does not advertise a
-public capability or establish public engine admission.
+omitting the block keeps the same restrictive profile. Public engine admission is
+qualified separately by the API policy described above.
 Use the SDK's history lookup before explicit resume; never fall back to a new
 Session. Native files remain device-affine under a caller-selected managed
 runtime directory. The launch configuration supplies trusted provider environment;
@@ -805,13 +805,14 @@ without redelivery; a blocked write is cancelled and released.
 The private adapter permits one input awaiting consumption and at most 63 extra
 inputs per Run, preserving the native 64-UUID receipt bound. Durable receipt opt-in
 separates bounded writes from native consumption waits; calls without it retain
-the router's ten-second deadline. Larger input capacity and public admission/recovery
-remain separate work. Daemon registration does not establish public acceptance.
+the router's ten-second deadline. Larger input capacity and interrupted-input
+recovery remain separate work. Daemon registration alone does not establish public acceptance.
 
-This does not establish environment provisioning, full tool/text-verbosity policy, public usage,
-image results, public cancellation receipts or process-loss recovery.
-Those capabilities require their own acceptance before public dispatch. Registry
-adoption and release packaging are separate tasks. `make check-cli` also builds
+Public text/function execution, active input, pending-call cancellation and cold
+continuation are accepted for the registered restrictive profile. Environment
+provisioning, broader tools/verbosity, complete public Usage, image results and
+process-loss recovery remain gaps. Managed installation and release publication
+remain separate tasks. `make check-cli` also builds
 and tests the SDK package, including native output draining; CI selects that check
 for changes to the package. Live adapter
 acceptance is opt-in and must use a real provider with private credentials.
@@ -843,8 +844,9 @@ and use its absolute `dist/main.js` as the private factory entrypoint. Validate
 relocation and real provider cancellation/continuation before accepting an
 artifact. Linux x64/glibc with Node22 is the currently exercised platform;
 other hosts require their own native acceptance. Do not reuse a bundle across
-platforms or libc variants. Automatic Node installation, managed activation,
-daemon discovery/registration and release publication remain separate work.
+platforms or libc variants. Automatic Node installation, managed activation and
+release publication remain separate work. Operator-configured daemon discovery/registration is supported as
+specified above.
 
 The exported `dist/runtime_check.js` companion is the local readiness contract.
 It checks Node20+, installed SDK/MCP/native versions against the package manifest,
@@ -857,7 +859,7 @@ with shared process-group ownership, bounded output and a 15-second deadline
 plus bounded cleanup. Both native and bridge probes have five-second limits.
 Return unavailable on failed or malformed probes; never forward native diagnostics
 or treat local readiness as provider authentication, public capability acceptance
-or filesystem isolation. Registration and automatic installation remain separate.
+or filesystem isolation. Automatic installation remains separate.
 
 ### Agent knowledge references
 

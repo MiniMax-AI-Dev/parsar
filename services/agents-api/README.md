@@ -1,37 +1,46 @@
 # Agents API
 
-Execution service under construction. Current slices provide durable Session/Turn
-storage, an authenticated Session HTTP service, an internal daemon dispatcher and
-an independent migration command. Public Codex text execution is enabled with the
-standalone daemon gateway; Parsar's production dispatch is unchanged.
+Independent execution service implementing part of the pinned OpenAI Agents API.
+It owns reusable Agents, durable Sessions/Turns/Items, live events, function actions
+and a daemon execution worker. Public execution supports Codex and an opt-in Claude
+SDK profile. It builds and runs with its own PostgreSQL database and credentials;
+Parsar's product service, frontend and database are not required.
 
-A Session is an execution context with a stable engine choice. Product
-conversations can map to multiple Sessions. Device connections and bindings are
-internal primitives; pending interactions and full environment lifecycle remain unfinished.
+Use this guide to build, configure and connect a client. The
+[protocol coverage](../../contracts/agents-api/README.md) lists supported operations,
+engine limits, acceptance evidence and missing resources. The target remains the
+complete pinned protocol; current workflows do not establish full compatibility.
+Parsar product execution and its eventual public-client cutover are separate.
 
 ## Reusable Agents
 
-The pinned Python client can create, retrieve, update, list and delete configuration independently of a
-Session: `agent = client.beta.agents.create(model="your-model", name="Example")`, followed by
-`client.beta.agents.retrieve(agent.id)`. These operations use the service's normal
-base URL, bearer key and `agents=v1` header. Resources remain private to that
-execution tenant and survive service restart. Saving configuration does not launch
-an engine. Create a Session with `client.beta.agents.sessions.create(agent_id=agent.id,
-environment={"type": "none"})`, then submit work through Session events or the SDK's
-Session stream helper. Optional `agent` fields override only that Session: omitted
-fields inherit, while supplied objects/arrays replace the entire field. Source and
-Session metadata remain separate. The source resource is never read during execution.
-Iterate `client.beta.agents.list(limit=20, order="desc")` to fetch saved resources
-across pages, or pass a returned resource ID as `after` for an explicit page.
-Update selected fields with `client.beta.agents.update(agent.id, instructions="New instructions")`.
-Omitted fields remain unchanged. Metadata replaces all pairs; null/empty clears it.
-Existing Sessions retain their original configuration and recorded retry identity,
-while new Sessions resolve the update. Delete saved configuration with
-`client.beta.agents.delete(agent.id)`. Existing Sessions and their history remain
-available; deletion does not cancel execution. New references cannot resolve a
-deleted Agent, while recorded Session creation retries recover their original snapshot.
-See the [coverage and default gaps](../../contracts/agents-api/README.md#public-semantics)
-before using optional configuration.
+The pinned Python client can save configuration independently of execution:
+
+```python
+agent = client.beta.agents.create(model="your-model", name="Example")
+session = client.beta.agents.sessions.create(
+    agent_id=agent.id, environment={"type": "none"},
+)
+```
+
+These resources belong to the authenticated execution tenant. Saving configuration
+does not launch an engine. Optional Session `agent` fields override the saved
+configuration: omitted fields inherit, supplied objects/arrays replace whole fields.
+Source and Session metadata stay separate; execution never looks up the source again.
+
+- Retrieve with `client.beta.agents.retrieve(agent.id)`; list saved resources with
+  `client.beta.agents.list(limit=20, order="desc")` and SDK auto-pagination.
+- Update with `client.beta.agents.update(agent.id, instructions="New instructions")`.
+  Omitted fields remain unchanged. Metadata replaces all pairs; null/empty clears it.
+  Existing Sessions retain their configuration; new Sessions resolve the update.
+- Delete with `client.beta.agents.delete(agent.id)`. Existing Sessions and history
+  remain available. New references fail; recorded creation retries recover their
+  accepted snapshot without consulting the deleted source.
+- List Sessions with `client.beta.agents.sessions.list(agent_id=agent.id)`. Filtering
+  uses the immutable root ID, including inline Agents and history after source changes.
+
+See the [configuration and retry limits](../../contracts/agents-api/README.md#public-semantics)
+before relying on optional settings or hosted error/default equivalence.
 
 ## Build standalone binaries
 
@@ -65,65 +74,45 @@ Migrations are embedded and tracked in `agents_api_schema_version`.
 ```bash
 AGENTS_API_DATABASE_URL='postgres://.../agents_api' \
   go run ./services/agents-api/cmd/migrate
-make sqlc-generate
 ```
 
-Session and device-management operations require a tenant. The API authentication
-layer derives that tenant from the caller's credential, never a tenant
-claimed in a request body. The daemon gateway separately authenticates device
-credentials before accessing device liveness. Store methods alone do not
-authenticate callers.
+The public `Idempotency-Key` creation header is optional: omission creates a new
+Session. A supplied key identifies the request within its authenticated tenant.
+Inline retries use normalized effective configuration; new saved-Agent references
+record caller intent independently of later source updates/deletion. Retries do
+not admit initial input again. Historical rows without recorded caller intent
+retain the old resolved-snapshot behavior. See the
+[retry boundary](../../contracts/agents-api/README.md#public-semantics).
 
-Session creation requires an idempotency key scoped to the tenant. Repeating the
-same engine, metadata and configuration returns the existing Session; different input with the
-same key returns a conflict. Read/list operations are tenant-scoped, including
-pagination cursors. Metadata is limited to 64 KiB of JSON string pairs and should
-contain references or labels, not credentials or Agent configuration.
-
-The separate `configuration` field preserves the resolved non-secret Agent and
-environment snapshot as a JSON object, up to 512 KiB. Creation retries include
-that snapshot in their identity; changed configuration conflicts rather than
-mutating an existing Session. Legacy Sessions without configuration keep their
-original retry identity. JSON key order and whitespace do not affect matching.
-The API layer validates the supported upstream schema before calling the Store;
-the Store does not invent defaults or claim a daemon environment is connected.
-See [the compatibility boundary](../../contracts/agents-api/README.md).
+The Store uses internal creation keys and preserves immutable engine/configuration,
+native continuity and same-tenant device bindings. The public API applies schema
+validation/defaults before storage. Internal bounds are 64 KiB for metadata and
+512 KiB for configuration. Keep credentials out of both. Public metadata permits
+at most 16 string pairs, 64-character keys and 512-character values; storage bounds
+do not replace those rules. Tenant identity comes from authenticated credentials,
+never metadata or a caller-supplied business identity.
 
 ## Internal Turn persistence
 
-The Store accepts individual validated messages and cancellation requests.
-Messages start a Turn when idle and append to the existing Turn while active,
-including queued or waiting work. Session row locks and a PostgreSQL uniqueness
-constraint serialize admission across processes. Input keys are scoped to the
-Session across message/cancel kinds; identical retries return the original
-sequence and Turn, while different input conflicts. JSON object key order and
-whitespace are immaterial. Input payloads are limited to 512 KiB.
+Validated message/cancel/function-result batches commit under a tenant-scoped
+Session lock. Messages start a Turn when idle and steer active work. Retry keys
+identify the whole ordered batch; an invalid event does not partially admit it.
+Queued cancellation needs no live engine. Active cancellation awaits a native
+outcome, and completion may win the race. Terminal states cannot be overwritten.
 
-Cancellation records its original target even when there was no active Turn.
-Queued work cancels immediately; a dispatcher must claim `in_progress` before
-dispatch. Running/waiting work records the request and remains active until the
-executor reports a terminal outcome. Completion may win a cancellation race;
-once stored, terminal status, timestamps and outcome cannot be overwritten.
-Outcome is a bounded adapter payload, not a second public response schema.
+A Session keeps its effective configuration, engine and device across Turns;
+product Conversations, native Sessions, connections, processes and sandboxes are
+different objects. Strict native resume requires retained history on that device.
+The API owns durable public history and pending function decisions; adapters own
+native translation and their harness owns the model/tool loop.
 
-Tenant-scoped Turn and ordered input reads survive process restarts. The Session
-configuration remains immutable and shared by its Turns. The internal dispatcher
-claims a Turn before delivery, confirms additional messages through native steering,
-and commits the outcome and native engine ID together. It accepts public `environment.type=none` or an internally resolved `daemon.work_dir`
-configuration and a bound device advertising streaming
-and steering plus `durable_turns` (strict resume, process release and cancellation
-snapshots). Failed resumes report an error instead of starting a fresh thread. Public messages retain their upstream input shape; private legacy `{"text":"..."}`
-payloads remain readable.
-
-The dispatcher takes immutable model/instructions from the Session snapshot and
-resolves ephemeral engine credentials separately. Matching daemon versions release
-the native writer before completing a Turn and acknowledge cancellation after the
-engine returns. Subsequent Turns resume the native ID on the same device. Device
-history must still exist. This is not the public self-hosted executor protocol.
-
-Uncertain delivery, disconnected devices and unsupported interactions fail rather
-than report success or automatically replay. The standalone worker reconciles previously claimed work as failed on restart
-and preserves queued work. Pending interactions and SSE are still unsupported. Durable input acceptance is not an exactly-once execution guarantee.
+The worker uses its database lease connection for execution writes. Lease loss
+fences those writes; it does not prove native commands or side effects have stopped.
+Restart conservatively fails previously claimed work and retains queued work.
+Uncertain delivery is never blindly replayed. Function actions and live SSE are
+available within the [current coverage](../../contracts/agents-api/README.md);
+other pending interactions, process-loss recovery and environment lifecycle remain
+incomplete. Durable acceptance is not an exactly-once side-effect guarantee.
 
 ## Standalone HTTP service
 
@@ -133,24 +122,32 @@ product database or accept product login cookies. The key file is a JSON array o
 `{"tenant_id":"<nonzero UUID>","token_sha256":"<SHA-256 hex digest>"}` bindings.
 Provision a random bearer key per execution tenant and give clients the plaintext
 key securely; keep only its digest in the server file. Rotate by replacing the
-bindings and restarting. These service identities do not grant product-user rights.
+bindings and restarting. These identities do not grant product-user rights.
 
 `AGENTS_API_ADDR` defaults to `127.0.0.1:8091`; use a TLS reverse proxy for remote
-access. `AGENTS_API_ENGINE` defaults to `codex` and is stored independently from
-the client's requested model. Public execution currently supports Codex with explicit environment `none`.
+access. `AGENTS_API_ENGINE` defaults to `codex`; set it to `claude_sdk` for the
+registered SDK profile. It selects new Sessions independently of the requested
+model. Existing Sessions retain their stored engine.
 
-The SDK base URL is `http://127.0.0.1:8091/v1`. Supported operations are Session
-create, retrieve and list, with `OpenAI-Beta: agents=v1` (set by the official SDK).
-Creation supports inline `agent.model` or a saved `agent_id`, per-Session overrides,
-`environment: {"type":"none"}`, and metadata. Metadata allows at most 16 pairs,
-64-character keys and 512-character values, including Unicode. Requests have a
-1 MiB body limit and resolved configuration retains the 512 KiB Store limit.
-`Idempotency-Key` makes creation retries safe; omission creates a new Session.
-Inline Agent IDs identify the Session's immutable execution configuration, not a
-reusable Parsar Agent. List supports `after`, `limit` (1–100) and `order` (asc/desc).
+The SDK base URL is `http://127.0.0.1:8091/v1`. Requests require a bearer key and
+`OpenAI-Beta: agents=v1` (set by the official SDK). Supported operations include:
 
-Unsupported execution settings, vaults and non-text initial input
-return explicit errors. Session update/delete and other unsupported resources remain explicit errors. `/healthz` reports process liveness only.
+- Saved Agent create/retrieve/update/list/delete.
+- Session create/retrieve/list and metadata-only update. Creation supports inline
+  configuration or a saved `agent_id`, field replacements, optional initial text
+  and ordinary or streaming responses.
+- Session event submission and live streaming, Turn retrieve/list and Items list.
+
+Execution currently requires `environment: {"type":"none"}` and the selected
+[engine profile](../../contracts/agents-api/README.md#public-engine-profiles).
+Requests have a 1 MiB body limit. Session lists support `after`, `limit` (1..100),
+`order` (`asc`/`desc`) and optional immutable root `agent_id`. The local defaults
+are 20 and descending order; exact hosted limits/error semantics remain unverified.
+Metadata updates preserve omission, clear on null/empty and replace supplied pairs.
+
+Session deletion, non-text message input, Vaults, Subagents and environment/file
+resources remain unsupported. Saving optional Agent configuration does not make
+it executable. Unsupported requests fail explicitly. `/healthz` reports liveness only.
 
 ## Internal execution device connection
 
@@ -187,9 +184,34 @@ An existing connection is retired on its next heartbeat; new connections are
 rejected immediately. The internal Store binds each Session to one same-tenant
 device, preserves that assignment across retries/restarts, and refuses a silent
 move to another device. Revoked bindings cannot be used for dispatch. Device
-connections alone do not start a Turn. Submit text/cancellation through the official
-Session events endpoint; the worker assigns a same-tenant host and preserves that
+connections alone do not start a Turn. Submit text, cancellation or function results
+through the official Session events endpoint; the worker assigns a same-tenant host and preserves that
 binding. Provider lifecycle remains under construction. See the [ownership rules](../../CONTRIBUTING.md#product-and-execution-service-separation).
+
+### Enable Claude SDK execution
+
+Build and extract the runtime archive into a fresh managed directory on a matching
+executor host. The archive contains the compiled bridge and pinned production
+SDK/MCP/native dependencies; Node is installed separately. Linux x64/glibc with
+Node22 is the accepted platform. See the
+[runtime artifact contract](../../CONTRIBUTING.md#private-claude-sdk-runtime-artifact)
+for build outputs, version checks and platform restrictions.
+
+```bash
+make build-claude-sdk-runtime
+# After extracting the matching archive into this operator-chosen directory:
+export PARSAR_CLAUDE_SDK_ENTRYPOINT="$HOME/.parsar/runtimes/claude-sdk/dist/main.js"
+export PARSAR_CLAUDE_SDK_NODE="/absolute/path/to/node"
+parsar-daemon connect --profile agents-api
+```
+
+Set `AGENTS_API_ENGINE=claude_sdk` on the API service. Configure provider access in
+the daemon's private native SDK environment. Runtime readiness checks versions and
+startup before daemon registration; it does not validate provider credentials.
+SDK state stays under the daemon profile, independently of the replaceable bundle.
+A ready SDK can start the daemon without a legacy CLI. Product `claude_code` remains
+separate. Managed Node installation, runtime activation and registry publication
+are not supplied by these commands.
 
 ## Official client verification
 
@@ -204,8 +226,9 @@ AGENTS_API_SERVER_BIN="${PARSAR_HOME:-$HOME/.parsar}/build/agents-api/agents-api
 ```
 
 The test uses `PARSAR_AGENTS_API_TEST_DATABASE_URL`, temporary service keys and
-fresh tenant IDs. It checks upstream and generated response schemas, retries, ordering, tenant
-isolation, unsupported options and reads after a process restart. It also runs the
+fresh tenant IDs. The suite checks upstream and generated response schemas, retries,
+ordering, tenant isolation, unsupported options and reads after a process restart,
+without a model provider. It also runs the
 [official Go client integration](../../packages/agents-client/README.md), using two
 fresh tenants, and validates its created Sessions through the Python SDK.
 
@@ -216,6 +239,8 @@ PARSAR_AGENTS_API_TEST_DATABASE_URL='postgres://.../parsar_agents_api_local_test
   make check-agents-api
 ```
 
+Set `PARSAR_OFFICIAL_SDK_PYTHON` to the fixed SDK interpreter for the Store client
+fixtures, and run the separate official-client command above as well.
 The test database must be named `parsar_agents_api_*_tests` and contain no product
 workspace tables. Tests apply only this service's migrations and use new tenant
 IDs without truncating tables. Missing test configuration skips DB tests locally;
@@ -226,12 +251,9 @@ service; its supported HTTP contract is generated separately.
 ## Public text execution
 
 With the daemon gateway enabled, the service owns one worker per execution database
-and processes up to four Turns concurrently. Other service instances are rejected
-by a PostgreSQL advisory lock. A disconnected host leaves unsent work queued;
-clients may cancel it. Restart marks previously claimed work failed rather than
-replaying an uncertain native operation. Session/Turn/Items queries expose durable
-results. See the [public contract](../../contracts/agents-api/README.md#public-execution-admission)
-for supported inputs and limitations.
+and processes up to four Turns concurrently. Other workers are rejected by a
+PostgreSQL advisory lock. A disconnected host leaves unsent work queued; clients
+may cancel it. Session/Turn/Items queries expose durable results.
 
 ```python
 from openai import OpenAI
@@ -254,6 +276,19 @@ Configure model access in the engine host's native configuration. API tenant key
 and daemon credentials authenticate this service, not a model provider. Never put
 provider secrets in Session metadata. This path does not enable Parsar Skill/SP
 callbacks or bypass the pending product authorization work.
+
+Session creation also accepts `input="Hello"` to admit initial text atomically and
+`stream=True` for created/live events. Open a GET event stream before submitting
+later work, or use the official `sessions.stream` helper for one Turn. Function
+handlers return results through the same public events endpoint. Recover missed
+output with Session/Turn/Items queries; reconnecting SSE does not replay history.
+See [creation streaming](../../contracts/agents-api/README.md#session-creation-streaming)
+for retry behavior and unverified hosted timing.
+
+The [accepted workflows](../../contracts/agents-api/README.md#acceptance-evidence-and-remaining-scope)
+include real MiniMax execution through built API/daemon/Codex and Claude SDK,
+function success/error, cancellation and native continuation. Controlled fixtures
+remain useful but do not replace real-provider acceptance for execution changes.
 
 ## Upgrading archived Item history
 
@@ -290,8 +325,3 @@ for session in client.beta.agents.sessions.list():
 Fresh installations and already indexed history need no backfill. Recovery reads
 continue to use Session/Turn/Items; this procedure is an upgrade operation, not
 an official SSE replay mechanism.
-
-Session creation also accepts `stream=true`, returning a created Session event
-and live execution events through the shared SSE path. See the
-[creation streaming contract](../../contracts/agents-api/README.md#session-creation-streaming)
-for supported inputs, retry recovery and unverified upstream timing details.
