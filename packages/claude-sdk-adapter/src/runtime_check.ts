@@ -34,14 +34,18 @@ try {
   await access(binary, constants.X_OK);
   const options = { encoding: "utf8" as const, timeout: 5000, killSignal: "SIGKILL" as const, maxBuffer: 64 * 1024, cwd: root };
   const version = spawnSync(binary, ["--version"], options);
+  assert.equal(version.error, undefined, "native_unavailable");
   assert.equal(version.status, 0, "native_unavailable");
-  assert(version.stdout.trim(), "missing_native_version");
+  assert.match(sdk.claudeCodeVersion, /^\d+\.\d+\.\d+$/);
+  const nativeVersion = `${sdk.claudeCodeVersion} (Claude Code)`;
+  assert.equal(version.stdout.trim(), nativeVersion, "unexpected_native_version");
   const entrypoint = await inside(process.argv[2] ?? join(root, "dist/main.js"));
   assert.equal(entrypoint, await realpath(join(root, "dist/main.js")), "unexpected_entrypoint");
   const smoke = spawnSync(process.execPath, [entrypoint], { ...options, input: "" });
+  assert.equal(smoke.error, undefined, "bridge_unavailable");
   assert.equal(smoke.status, 0, "bridge_unavailable");
   assert.deepEqual(JSON.parse(smoke.stdout), { type: "error", code: "invalid_request" });
-  process.stdout.write(JSON.stringify({ type: "runtime_ready", protocol: 1, node: process.versions.node, sdk: sdk.version, mcp: mcp.version, native: version.stdout.trim() }) + "\n");
+  process.stdout.write(JSON.stringify({ type: "runtime_ready", protocol: 1, node: process.versions.node, sdk: sdk.version, mcp: mcp.version, native: nativeVersion }) + "\n");
 } catch {
   // Native diagnostics can include operator environment; never forward them.
   process.stdout.write(JSON.stringify({ type: "runtime_unavailable" }) + "\n");
