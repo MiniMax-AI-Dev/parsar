@@ -43,6 +43,22 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 	return i, err
 }
 
+const deleteAgent = `-- name: DeleteAgent :one
+DELETE FROM agents WHERE tenant_id = $1 AND id = $2 RETURNING id
+`
+
+type DeleteAgentParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) DeleteAgent(ctx context.Context, arg DeleteAgentParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, deleteAgent, arg.TenantID, arg.ID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getAgent = `-- name: GetAgent :one
 SELECT id, tenant_id, metadata, configuration, created_at, updated_at FROM agents WHERE tenant_id = $1 AND id = $2
 `

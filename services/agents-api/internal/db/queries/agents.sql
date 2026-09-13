@@ -26,3 +26,6 @@ SELECT * FROM agents WHERE tenant_id = $1 AND id = $2 FOR UPDATE;
 UPDATE agents SET configuration = $3, metadata = $4, updated_at = clock_timestamp()
 WHERE tenant_id = $1 AND id = $2
 RETURNING *;
+
+-- name: DeleteAgent :one
+DELETE FROM agents WHERE tenant_id = $1 AND id = $2 RETURNING id;

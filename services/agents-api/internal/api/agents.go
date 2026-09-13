@@ -12,6 +12,7 @@ import (
 )
 
 type AgentStore interface {
+	DeleteAgent(context.Context, string, string) (string, error)
 	UpdateAgent(context.Context, string, string, store.UpdateAgentInput) (store.SavedAgent, error)
 	ListAgents(context.Context, string, string, int, bool) (store.AgentPage, error)
 	CreateAgent(context.Context, string, store.CreateAgentInput) (store.SavedAgent, error)
@@ -100,9 +101,13 @@ func agentResponse(agent store.SavedAgent) (v1.SavedAgent, error) {
 }
 
 func (h *Handler) lookupAgent(ctx context.Context, tenant, id string) (store.SavedAgent, error) {
-	parsed, err := uuid.Parse(id)
-	if err != nil || parsed == uuid.Nil {
+	if !validAgentID(id) {
 		return store.SavedAgent{}, store.ErrNotFound
 	}
 	return h.store.GetAgent(ctx, tenant, id)
+}
+
+func validAgentID(id string) bool {
+	parsed, err := uuid.Parse(id)
+	return err == nil && parsed != uuid.Nil
 }

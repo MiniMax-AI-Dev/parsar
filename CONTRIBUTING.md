@@ -255,6 +255,15 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   existing saved defaults; exact hosted nested/null and no-op timestamp semantics
   remain unverified. Model-derived reasoning defaults remain a separate gap.
   Neither updates nor retries modify existing Session snapshots or execution state.
+- Public Agent deletion uses `DELETE /v1/agents/{agent_id}` and one tenant-scoped
+  `DELETE RETURNING id` statement. Return the stored canonical ID with
+  `object=agent.deleted` and `deleted=true`; missing/repeated deletion locally
+  returns not found. It never deletes Sessions, history or runtime state and does
+  not cancel accepted execution. Recorded creation identities still recover the
+  accepted Session; new references cannot resolve an absent source. Historical
+  identities retain their documented limitation. Exact hosted errors and ordering
+  of overlapping source creation/deletion remain unverified; no tombstone or
+  successful result is fabricated for an absent resource. Reject query/body data.
 - Reusable Agent listing uses the same tenant/Beta-header and response mapping as
   create/retrieve. Page by `(created_at, id)` with a same-tenant saved-Agent cursor;
   listing never resolves Sessions, product objects or execution capabilities.
@@ -285,8 +294,8 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Inline requests keep their existing resolved/default equivalences. Historical rows
   without caller identity retain the old resolved-hash behavior; original overrides
   cannot be reconstructed, so no backfill or automatic upgrade is permitted. Source
-  mutation-independent retries apply only to recorded identities. Public Agent
-  delete and exact hosted retry/error semantics remain separate work.
+  mutation-independent retries apply only to recorded identities. Exact hosted
+  retry/error semantics remain separate work.
 - Tenant scope must come from authenticated service identity before calling the
   execution Store. Product workspace/user references in metadata grant no access.
   Keep credentials and effective execution options out of Session metadata.
