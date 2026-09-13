@@ -143,7 +143,7 @@ Creation supports inline `agent.model` or a saved `agent_id`, per-Session overri
 Inline Agent IDs identify the Session's immutable execution configuration, not a
 reusable Parsar Agent. List supports `after`, `limit` (1–100) and `order` (asc/desc).
 
-Unsupported execution settings, vaults, non-text initial input and creation streaming
+Unsupported execution settings, vaults and non-text initial input
 return explicit errors. Session update/delete and other unsupported resources remain explicit errors. `/healthz` reports process liveness only.
 
 ## Internal execution device connection
@@ -284,3 +284,8 @@ for session in client.beta.agents.sessions.list():
 Fresh installations and already indexed history need no backfill. Recovery reads
 continue to use Session/Turn/Items; this procedure is an upgrade operation, not
 an official SSE replay mechanism.
+
+Session creation also accepts `stream=true`, returning a created Session event
+and live execution events through the shared SSE path. See the
+[creation streaming contract](../../contracts/agents-api/README.md#session-creation-streaming)
+for supported inputs, retry recovery and unverified upstream timing details.

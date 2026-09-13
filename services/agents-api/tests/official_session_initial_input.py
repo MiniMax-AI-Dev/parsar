@@ -3,8 +3,11 @@ import json
 import sys
 import uuid
 
+sys.dont_write_bytecode = True
+
 import httpx2
 from openai import OpenAI
+from official_session_creation_stream import verify_creation_streams
 
 
 def main():
@@ -45,11 +48,12 @@ def main():
             assert sessions.create(**configuration, input=initial, extra_headers=key).status == "idle"
             assert len(list(sessions.turns.list(session.id))) == 1
 
+        verify_creation_streams(client, raw, base, headers, foreign, unsupported)
+
         before = {session.id for session in sessions.list()}
         for fields in [{"input": 0}, {"input": {}}, {"input": []}, {"input": " "},
                        {"input": [{"role": "assistant", "content": [{"type": "input_text", "text": "x"}]}]},
-                       {"input": [{"role": "user", "content": [{"type": "input_image", "image_url": "https://example.com/x.png"}]}]},
-                       {"input": "x", "stream": True}]:
+                       {"input": [{"role": "user", "content": [{"type": "input_image", "image_url": "https://example.com/x.png"}]}]}]:
             reply = raw.post(base + "/v1/agents/sessions", headers=headers, json={**spec, **fields})
             assert reply.status_code == 400, (fields, reply.status_code)
         reply = raw.post(unsupported + "/v1/agents/sessions", headers=headers, json={**spec, "input": "x"})

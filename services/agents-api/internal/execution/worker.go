@@ -49,6 +49,14 @@ func (w *Worker) CreateSession(ctx context.Context, tenant string, input store.C
 	return w.Dispatcher.Store.CreateSession(ctx, tenant, input)
 }
 
+// CreateSessionStream applies the same execution admission before creating a stream.
+func (w *Worker) CreateSessionStream(ctx context.Context, tenant string, input store.CreateSessionInput) (store.SessionCreation, error) {
+	if !canAdmitInputs(input.Engine, input.Configuration) {
+		return store.SessionCreation{}, store.ErrInvalidInput
+	}
+	return w.Dispatcher.Store.CreateSessionStream(ctx, tenant, input)
+}
+
 func canAdmitInputs(engine string, configuration json.RawMessage) bool {
 	var snapshot Snapshot
 	return engine == "codex" && json.Unmarshal(configuration, &snapshot) == nil && snapshot.Environment != nil && snapshot.Environment.Type == "none" && snapshot.Daemon == nil

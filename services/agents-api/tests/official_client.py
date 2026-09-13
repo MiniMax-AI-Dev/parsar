@@ -143,7 +143,6 @@ def main():
                     expect_error(AuthenticationError, lambda: invalid.beta.agents.sessions.retrieve(first.id))
                     expect_error(BadRequestError, lambda: sessions.retrieve(first.id, extra_headers={"OpenAI-Beta": ""}))
                     expect_error(BadRequestError, lambda: sessions.create(**spec, input=[{"role": "user", "content": [{"type": "input_image", "image_url": "https://example.com/image.png"}]}]))
-                    expect_error(BadRequestError, lambda: sessions.create(**spec, stream=True))
                     expect_error(BadRequestError, lambda: sessions.create(agent=spec["agent"], environment={"type": "self_hosted", "workspace_directory": "/workspace"}))
                     expect_error(BadRequestError, lambda: sessions.create(**spec, extra_body={"tenant_id": bindings[1]["tenant_id"]}))
                     expect_error(BadRequestError, lambda: sessions.list(agent_id="unsupported-saved-agent"))

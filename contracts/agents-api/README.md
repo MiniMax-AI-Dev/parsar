@@ -62,7 +62,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | vaults.credentials | create, retrieve, update, list, delete | Missing |
 
 For each resource, verify the referenced request/response unions and observable
-behavior, not just the route. Creation streaming/non-text initial input, configuration
+behavior, not just the route. Non-text initial input, configuration
 options, text/image content, function results, environment variants, full Item/SSE
 variants, defaults, field omission/nullability and errors need their own cases.
 Use strict official-client tests plus raw HTTP assertions; SDKs can accept extra
@@ -176,7 +176,7 @@ extension separately from upstream fields and document it here when implemented.
 
 `openapi.yaml` is our generated supported surface; it is not the full upstream
 specification. The shared Go wire types are in `v1`. Session update/delete, saved
-Agent references/filtering, structured output, other agent options, vaults, non-text initial input, creation streaming
+Agent references/filtering, structured output, other agent options, vaults, non-text initial input
 and execution/provider resources are not supported by this slice. Reject them
 explicitly. `AGENTS_API_ENGINE` selects the service's engine independently of the
 requested model; it does not add a competing field to the upstream request.
@@ -316,8 +316,7 @@ by Item ID and retain finalized Items when applying buffered updates.
 The internal buffer is limited to 256 events / 64 MiB per Session, with a single
 oversized-event exception. A lagging reader receives a customer-safe `error` and
 disconnects rather than silently skipping output. Slow socket writes time out
-without blocking execution. Creation streaming and unsupported event variants
-are not implied by this endpoint.
+without blocking execution. Unsupported event variants are not implied by this endpoint.
 
 Internal function execution uses the same native daemon harness, with resolved
 non-deferred definitions and Store result admission. It verifies ordered text/image
@@ -413,7 +412,7 @@ establish non-default verbosity, tool-set enforcement or full protocol conforman
 
 ### Initial text at Session creation
 
-Non-streaming creation accepts the pinned string and user-message-array input
+Session creation accepts the pinned string and user-message-array input
 forms. It shares text validation and admission with the events endpoint. The
 Session, first Turn, input Items and event records commit atomically; an identical
 creation retry never re-admits the input, including after later or terminal Turns.
@@ -422,7 +421,30 @@ configured engine must support admission before any initial work is persisted.
 
 Fixed SDK/raw HTTP and PostgreSQL tests cover the accepted forms, saved and inline
 configuration, ordering, tenant isolation, retries, rollback and persistence.
-Streaming creation and non-text input remain gaps. Empty arrays and blank text
+Non-text input remains a gap. Empty arrays and blank text
 currently fail the shared message validator; exact upstream handling of these
 cases, local size limits and error details remains unverified. Swagger 2 cannot
 express the string/array union, so input is unconstrained with a type description.
+
+### Session creation streaming
+
+`POST /v1/agents/sessions` also accepts `stream=true` for the supported creation
+inputs. Fresh creation sends `agent.session.created` with the pre-input Session,
+then the same committed Turn/Item/output events as GET streams. The cursor comes
+from the atomic creation upsert, so rapid initial execution cannot move the start
+past its own events. The ordinary bounded-buffer/gap policy still applies.
+
+The local `Idempotency-Key` creation extension shares identity across response
+modes. Retrying creation streams only future changes and never resubmits input or
+replays old events. Recover a lost Session ID by repeating the same request/key
+with `stream=false`, then use Session/Turn/Items reads. Disconnect only stops the
+HTTP observer; admitted execution continues. Idle streams remain open for later
+Turns. Pinned SDK3.13.0 proves the creation stream and created-event schema; exact
+upstream initial snapshot/order, POST stream lifetime and retry behavior have not
+been compared with the hosted service. These choices are not full conformance.
+
+`official_session_creation_stream.py` covers the pinned client and raw HTTP on
+real PostgreSQL: idle/initial text and saved Agents, first snapshots and ordered
+Items, retries across response modes, later Turns, disconnect recovery, isolation
+and errors before stream headers. Store tests cover concurrent upsert ownership,
+pre-admission cursors and observers draining after execution has completed.
