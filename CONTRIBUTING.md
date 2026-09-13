@@ -796,7 +796,20 @@ relocation and real provider cancellation/continuation before accepting an
 artifact. Linux x64/glibc with Node22 is the currently exercised platform;
 other hosts require their own native acceptance. Do not reuse a bundle across
 platforms or libc variants. Automatic Node installation, managed activation,
-daemon readiness/registration and release publication remain separate work.
+daemon discovery/registration and release publication remain separate work.
+
+The exported `dist/runtime_check.js` companion is the local readiness contract.
+It checks Node20+, installed SDK/MCP/native versions against the package manifest,
+contained dependency resolution, native startup, and the exact `dist/main.js` bridge
+with stdin EOF. It emits one versioned JSON report without calling a model or
+creating Session state. The artifact check reuses this companion and separately
+checks all exported links, the lockfile and source pins. `claudesdk.CheckRuntime`
+uses the same operator-supplied Node, entrypoint and environment as execution,
+with shared process-group ownership, bounded output and a 15-second deadline
+plus bounded cleanup. Both native and bridge probes have five-second limits.
+Return unavailable on failed or malformed probes; never forward native diagnostics
+or treat local readiness as provider authentication, public capability acceptance
+or filesystem isolation. Registration and automatic installation remain separate.
 
 ### Agent knowledge references
 
