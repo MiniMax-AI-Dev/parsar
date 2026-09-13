@@ -12,6 +12,7 @@ import (
 // otherwise erase it. The embedded wire type retains strict nested decoding.
 type decodedSessionRequest struct {
 	v1.CreateSessionRequest
+	Input    json.RawMessage    `json:"input"`
 	Agent    json.RawMessage    `json:"agent"`
 	AgentID  json.RawMessage    `json:"agent_id"`
 	Stream   json.RawMessage    `json:"stream"`
@@ -20,11 +21,12 @@ type decodedSessionRequest struct {
 
 type sessionRequest struct {
 	v1.CreateSessionRequest
+	Input       json.RawMessage
 	agentFields map[string]json.RawMessage
 }
 
 func (request decodedSessionRequest) validated() (sessionRequest, error) {
-	input := sessionRequest{CreateSessionRequest: request.CreateSessionRequest}
+	input := sessionRequest{CreateSessionRequest: request.CreateSessionRequest, Input: request.Input}
 	if len(request.Agent) > 0 {
 		if decodeInputObject(request.Agent, &input.Agent, "model", "instructions", "multi_agent", "reasoning", "service_tier", "text", "tools") != nil {
 			return input, store.ErrInvalidInput

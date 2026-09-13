@@ -62,7 +62,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | vaults.credentials | create, retrieve, update, list, delete | Missing |
 
 For each resource, verify the referenced request/response unions and observable
-behavior, not just the route. Creation streaming/initial input, configuration
+behavior, not just the route. Creation streaming/non-text initial input, configuration
 options, text/image content, function results, environment variants, full Item/SSE
 variants, defaults, field omission/nullability and errors need their own cases.
 Use strict official-client tests plus raw HTTP assertions; SDKs can accept extra
@@ -176,7 +176,7 @@ extension separately from upstream fields and document it here when implemented.
 
 `openapi.yaml` is our generated supported surface; it is not the full upstream
 specification. The shared Go wire types are in `v1`. Session update/delete, saved
-Agent references/filtering, structured output, other agent options, vaults, initial input, creation streaming
+Agent references/filtering, structured output, other agent options, vaults, non-text initial input, creation streaming
 and execution/provider resources are not supported by this slice. Reject them
 explicitly. `AGENTS_API_ENGINE` selects the service's engine independently of the
 requested model; it does not add a competing field to the upstream request.
@@ -410,3 +410,19 @@ native history continuity by recalling a random value returned only by the first
 tool invocation. Omitted, null and explicit medium reused the same creation
 identity. The tool data was synthetic; model responses were live. This does not
 establish non-default verbosity, tool-set enforcement or full protocol conformance.
+
+### Initial text at Session creation
+
+Non-streaming creation accepts the pinned string and user-message-array input
+forms. It shares text validation and admission with the events endpoint. The
+Session, first Turn, input Items and event records commit atomically; an identical
+creation retry never re-admits the input, including after later or terminal Turns.
+Omitted/null input creates an idle Session. Execution must be enabled and the
+configured engine must support admission before any initial work is persisted.
+
+Fixed SDK/raw HTTP and PostgreSQL tests cover the accepted forms, saved and inline
+configuration, ordering, tenant isolation, retries, rollback and persistence.
+Streaming creation and non-text input remain gaps. Empty arrays and blank text
+currently fail the shared message validator; exact upstream handling of these
+cases, local size limits and error details remains unverified. Swagger 2 cannot
+express the string/array union, so input is unconstrained with a type description.

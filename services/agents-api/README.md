@@ -143,7 +143,7 @@ Creation supports inline `agent.model` or a saved `agent_id`, per-Session overri
 Inline Agent IDs identify the Session's immutable execution configuration, not a
 reusable Parsar Agent. List supports `after`, `limit` (1–100) and `order` (asc/desc).
 
-Unsupported execution settings, vaults, initial input and streaming
+Unsupported execution settings, vaults, non-text initial input and creation streaming
 return explicit errors. Session update/delete and other unsupported resources remain explicit errors. `/healthz` reports process liveness only.
 
 ## Internal execution device connection

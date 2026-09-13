@@ -113,7 +113,9 @@ definitions:
       environment:
         $ref: '#/definitions/v1.Environment'
       input:
-        type: object
+        description: |-
+          Input accepts a string or an ordered array of user InputMessage objects.
+          Omission and null create an idle Session; non-text content is not supported yet.
         x-nullable: true
       metadata:
         additionalProperties:
@@ -966,8 +968,9 @@ paths:
         text verbosity, non-deferred function tools, disabled multi_agent, implicit
         reasoning, service tier auto and environment type none. Omitted stream defaults
         to false; stream and agent_id cannot be null. Metadata may be null, but its
-        values must be strings. Execution input and other options are explicitly unsupported
-        in this slice.
+        values must be strings. Initial input accepts a string or user-message array
+        containing text and atomically starts a Turn; omitted or null input creates
+        an idle Session. Streaming creation and non-text initial input remain unsupported.
       parameters:
       - description: agents=v1
         in: header
@@ -1013,6 +1016,10 @@ paths:
             $ref: '#/definitions/v1.ErrorResponse'
         "500":
           description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:

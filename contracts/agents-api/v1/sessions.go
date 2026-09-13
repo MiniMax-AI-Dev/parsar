@@ -4,15 +4,17 @@ package v1
 import "encoding/json"
 
 // CreateSessionRequest supports inline configuration or a saved Agent reference.
-// Initial input remains unsupported.
+// Initial text input is accepted when streaming is disabled.
 type CreateSessionRequest struct {
-	Agent       *InlineAgent      `json:"agent,omitempty"`
-	AgentID     *string           `json:"agent_id,omitempty"`
-	Environment *Environment      `json:"environment" binding:"required"`
-	Input       json.RawMessage   `json:"input,omitempty" swaggertype:"object" extensions:"x-nullable"`
-	Metadata    map[string]string `json:"metadata,omitempty" extensions:"x-nullable"`
-	Stream      bool              `json:"stream,omitempty" default:"false"`
-	VaultIDs    []string          `json:"vault_ids,omitempty"`
+	Agent       *InlineAgent `json:"agent,omitempty"`
+	AgentID     *string      `json:"agent_id,omitempty"`
+	Environment *Environment `json:"environment" binding:"required"`
+	// Input accepts a string or an ordered array of user InputMessage objects.
+	// Omission and null create an idle Session; non-text content is not supported yet.
+	Input    any               `json:"input,omitempty" extensions:"x-nullable"`
+	Metadata map[string]string `json:"metadata,omitempty" extensions:"x-nullable"`
+	Stream   bool              `json:"stream,omitempty" default:"false"`
+	VaultIDs []string          `json:"vault_ids,omitempty"`
 }
 
 type UpdateSessionRequest struct {
