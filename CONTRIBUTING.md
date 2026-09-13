@@ -664,6 +664,9 @@ native turns. Never promise Codex's same-native-turn semantics. Writes, queued
 notifications and user-message echoes do not confirm consumption. Only matching
 root assistant/partial/result `user_message_uuids` (or the singular fallback)
 confirm applied input. Typed mid-turn folds may appear only on the native result.
+Preserve that receipt even when the result reports failure. Check pending functions
+after the query drains: the SDK may dispatch later-turn callbacks before the
+earlier result handler finishes.
 Keep the iterator open until every submitted input has a consuming result, even
 when an earlier result reports an empty native queue. Close admission before
 releasing final receipt waiters; drain and release the SDK/native processes before

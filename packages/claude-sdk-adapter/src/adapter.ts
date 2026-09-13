@@ -99,12 +99,13 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
         if (!message.uuid || resultIDs.has(message.uuid) || !nativeID || message.session_id !== nativeID) throw new Error("invalid native result identity");
         resultIDs.add(message.uuid);
         await emit({ type: "usage", session_id: nativeID, result_id: message.uuid, usage: resultUsage(message) });
+        for (const event of inputs.consume(message)) await emit(event);
         if (message.subtype !== "success" || message.is_error) throw new Error("unsuccessful native result");
-        functions.assertComplete();
         result = { type: "result", session_id: nativeID, text: message.result };
       }
-      for (const event of inputs.consume(message)) await emit(event);
+      if (message.type !== "result") for (const event of inputs.consume(message)) await emit(event);
     }
+    functions.assertComplete();
   } catch {
     failed = true;
   } finally {
