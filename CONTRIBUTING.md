@@ -768,6 +768,36 @@ and tests the SDK package, including native output draining; CI selects that che
 for changes to the package. Live adapter
 acceptance is opt-in and must use a real provider with private credentials.
 
+### Private Claude SDK runtime artifact
+
+`make build-claude-sdk-runtime` exports the compiled bridge and pinned production
+SDK/MCP dependencies, including the native package for the build host, into a
+platform/architecture/libc-specific `.tar.gz` and SHA256 file under
+`${PARSAR_HOME:-$HOME/.parsar}/build/claude-sdk-runtime`. `CLAUDE_SDK_BUILD_DIR`
+may select another absolute output directory. The production dependency closure
+requires Node20 or newer; Node22 is the tested version. Node is operator-supplied
+and is not bundled; the bundle is independent of product sources, services and databases.
+It does not add Node or SDK assets to the Agents API binaries/image.
+
+The build validates source manifests with the repository-pinned pnpm frozen
+install and compiles into fresh managed staging, never exporting incremental
+checkout output. It then uses modern `pnpm deploy` with command-scoped workspace injection
+and its dedicated frozen lock. The adapter has no workspace dependencies; keep
+that boundary explicit. Do not enable injection globally or replace this with a
+custom dependency copier. Export only compiled `dist` and production dependencies;
+retain their package metadata, lockfile and licenses. Check dependency links stay
+inside the export, pinned SDK/MCP/native versions, native `--version`, and bridge
+startup before publishing the archive. Startup with stdin EOF is an import check,
+not model execution acceptance. `make check-cli` includes this artifact check.
+
+Extract the archive into a fresh managed runtime directory on a matching host
+and use its absolute `dist/main.js` as the private factory entrypoint. Validate
+relocation and real provider cancellation/continuation before accepting an
+artifact. Linux x64/glibc with Node22 is the currently exercised platform;
+other hosts require their own native acceptance. Do not reuse a bundle across
+platforms or libc variants. Automatic Node installation, managed activation,
+daemon readiness/registration and release publication remain separate work.
+
 ### Agent knowledge references
 
 - Unpublished knowledge retains only the bound version in other workspaces;
