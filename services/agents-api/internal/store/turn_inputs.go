@@ -56,8 +56,8 @@ func (s *Store) submitOne(ctx context.Context, tenantID, sessionID, key string, 
 // batch is the retry identity; replay never re-evaluates a cancellation target.
 // Internal receipts are not the response body of the public events endpoint.
 func (s *Store) SubmitInputs(ctx context.Context, tenantID, sessionID, key string, inputs []Input) ([]InputReceipt, error) {
-	if strings.TrimSpace(key) == "" || len(key) > 128 {
-		return nil, fmt.Errorf("%w: idempotency key is required and limited to 128 bytes", ErrInvalidInput)
+	if err := validateInputKey(key); err != nil {
+		return nil, err
 	}
 	batch, encoded, err := validateInputs(inputs)
 	if err != nil {
@@ -65,18 +65,16 @@ func (s *Store) SubmitInputs(ctx context.Context, tenantID, sessionID, key strin
 	}
 	receipts := make([]InputReceipt, 0, len(batch))
 	err = s.withPublicSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
-		previous, err := q.FindInputBatch(ctx, sqlc.FindInputBatchParams{SessionID: session, IdempotencyKey: key, Batch: encoded})
+		previous, err := inputBatchReceipts(ctx, q, session, key, encoded)
 		if err != nil {
 			return err
 		}
 		if len(previous) > 0 {
-			if !previous[0].Matches {
-				return ErrIdempotencyConflict
-			}
-			for _, row := range previous {
-				receipts = append(receipts, inputReceipt(row.Sequence, row.TurnID, true))
-			}
+			receipts = previous
 			return nil
+		}
+		if err := checkEnvironmentInputGate(ctx, q, session, key, encoded); err != nil {
+			return err
 		}
 		for position, input := range batch {
 			receipt, err := admitInput(ctx, q, tenantID, session, key, int32(position), input)
@@ -89,6 +87,28 @@ func (s *Store) SubmitInputs(ctx context.Context, tenantID, sessionID, key strin
 	})
 	if err != nil {
 		return nil, fmt.Errorf("submit turn inputs: %w", err)
+	}
+	return receipts, nil
+}
+
+func validateInputKey(key string) error {
+	if strings.TrimSpace(key) == "" || len(key) > 128 {
+		return fmt.Errorf("%w: idempotency key is required and limited to 128 bytes", ErrInvalidInput)
+	}
+	return nil
+}
+
+func inputBatchReceipts(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, key string, batch json.RawMessage) ([]InputReceipt, error) {
+	rows, err := q.FindInputBatch(ctx, sqlc.FindInputBatchParams{SessionID: session, IdempotencyKey: key, Batch: batch})
+	if err != nil {
+		return nil, err
+	}
+	receipts := make([]InputReceipt, 0, len(rows))
+	for _, row := range rows {
+		if !row.Matches {
+			return nil, ErrIdempotencyConflict
+		}
+		receipts = append(receipts, inputReceipt(row.Sequence, row.TurnID, true))
 	}
 	return receipts, nil
 }

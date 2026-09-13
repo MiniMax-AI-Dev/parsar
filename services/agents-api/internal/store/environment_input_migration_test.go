@@ -1,0 +1,101 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
+)
+
+func TestEnvironmentInputMigrationRetainsHistoryAndRetryIdentity(t *testing.T) {
+	_, pool := testStore(t)
+	ctx := context.Background()
+	schema := "environment_input_" + uuid.NewString()[:8]
+	quoted := pgx.Identifier{schema}.Sanitize()
+	if _, err := pool.Exec(ctx, "CREATE SCHEMA "+quoted); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := pool.Exec(ctx, "DROP SCHEMA "+quoted+" CASCADE"); err != nil {
+			t.Error(err)
+		}
+	})
+	cfg := pool.Config().ConnConfig.Copy()
+	cfg.RuntimeParams["search_path"] = schema
+	db := sql.OpenDB(stdlib.GetConnector(*cfg))
+	t.Cleanup(func() { _ = db.Close() })
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, os.DirFS("../../migrations"), goose.WithTableName("agents_api_schema_version"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 21); err != nil {
+		t.Fatal(err)
+	}
+	poolConfig := pool.Config()
+	poolConfig.ConnConfig = cfg
+	migrated, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(migrated.Close)
+	s := New(migrated)
+	tenant, session := environmentInputSession(t, s)
+	before, err := s.GetSession(ctx, tenant, session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 22); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM environment_input_reservations").Scan(&count); err != nil || count != 0 {
+		t.Fatal("migration manufactured reservations", count, err)
+	}
+	if _, err := provider.DownTo(ctx, 21); err != nil {
+		t.Fatal("empty downgrade", err)
+	}
+	if _, err := provider.UpTo(ctx, 22); err != nil {
+		t.Fatal(err)
+	}
+	pending := reserveEnvironmentInput(t, s, tenant, session.ID, "pending")
+	if _, err := provider.DownTo(ctx, 21); err == nil || !strings.Contains(err.Error(), "Cannot remove durable Environment input identities") {
+		t.Fatal("downgrade discarded retry identity", err)
+	}
+	retained, err := s.GetEnvironmentInputReservation(ctx, tenant, session.ID, pending.ID)
+	if err != nil || retained.ID != pending.ID || !retained.Deadline.Equal(pending.Deadline) {
+		t.Fatal("downgrade lost reservation", retained, err)
+	}
+	after, err := s.GetSession(ctx, tenant, session.ID)
+	if err != nil || before.ID != after.ID || !before.CreatedAt.Equal(after.CreatedAt) || string(before.Configuration) != string(after.Configuration) || after.LastTurn != nil {
+		t.Fatal("migration changed Session", after, err)
+	}
+}
+
+func TestEnvironmentInputPromotionUsesCurrentExecutionWriter(t *testing.T) {
+	s, pool := testStore(t)
+	tenant, session := environmentInputSession(t, s)
+	pending := reserveEnvironmentInput(t, s, tenant, session.ID, "pending")
+	old := executionLease(t, s)
+	writer := old.Store()
+	var killed bool
+	if err := pool.QueryRow(t.Context(), "SELECT pg_terminate_backend($1, 1000)", old.conn.Conn().PgConn().PID()).Scan(&killed); err != nil || !killed {
+		t.Fatal(killed, err)
+	}
+	successor := executionLease(t, s)
+	if _, err := writer.PromoteEnvironmentInput(t.Context(), tenant, session.ID, pending.ID); err == nil {
+		t.Fatal("stale execution writer promoted pending input")
+	}
+	environmentInputHistory(t, pool, session.ID, 0, 0)
+	got, err := successor.Store().PromoteEnvironmentInput(t.Context(), tenant, session.ID, pending.ID)
+	if err != nil || got.State != EnvironmentInputAdmitted {
+		t.Fatal("successor could not promote", got, err)
+	}
+	environmentInputHistory(t, pool, session.ID, 1, 2)
+}

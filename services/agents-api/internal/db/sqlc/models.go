@@ -41,6 +41,17 @@ type EnvironmentExecutorCredential struct {
 	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
 }
 
+type EnvironmentInputReservation struct {
+	ID             pgtype.UUID        `json:"id"`
+	SessionID      pgtype.UUID        `json:"session_id"`
+	IdempotencyKey string             `json:"idempotency_key"`
+	Batch          []byte             `json:"batch"`
+	State          string             `json:"state"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Deadline       pgtype.Timestamptz `json:"deadline"`
+	SettledAt      pgtype.Timestamptz `json:"settled_at"`
+}
+
 type FunctionCall struct {
 	SessionID      pgtype.UUID        `json:"session_id"`
 	TurnID         pgtype.UUID        `json:"turn_id"`

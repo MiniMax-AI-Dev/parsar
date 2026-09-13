@@ -220,6 +220,27 @@ Registration fencing, readiness before input/Turn admission, native/provider
 integration and real-model Environment acceptance remain separate required work.
 
 
+The private Environment input reservation stores one canonical message batch before
+Turn admission, with a five-minute deadline from the database clock. It requires
+an Environment-bearing Session without active work. Reservation and direct input
+paths share the Session lock and retry identity; pending or settled keys cannot
+bypass the reservation through direct admission. A pending reservation blocks new
+direct batches, including cancellation, while successful earlier retries remain
+readable. Promotion commits the original inputs, history and settlement together;
+expiration and targeted cancellation retain the terminal identity. Session deletion
+cancels pending input in the same transaction. A terminal reservation retry must not
+affect a later reservation or Turn. Evaluate deadlines after acquiring the Session
+lock, and return terminal storage outcomes without rolling their transaction back.
+
+This is a message-only Store foundation, not public Environment admission or a new
+public concurrency limit. Automatic initial-input integration, public pending/failed
+Session projections, mixed inputs, connection readiness and Worker scheduling remain
+pending. Promotion's caller must retain the prepared native connection and use the
+current execution writer; never hold a database lock during external preparation.
+The future Worker must expire pending input even without available devices or
+execution slots. No failed Turn may stand in for a pre-Turn connection failure.
+
+
 The opt-in native Codex executor registry lives in
 `services/agents-api/internal/executor/codex`, outside public API handlers and the
 daemon device gateway. It reuses the worker's execution lease and Store ownership

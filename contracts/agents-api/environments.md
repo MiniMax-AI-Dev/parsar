@@ -250,6 +250,22 @@ native detached cleanup may delay that exit. This slice does not implement publi
 resource lifecycle. Public `self_hosted` remains disabled until those dependencies
 are accepted together.
 
+
+## Pending input storage prerequisite
+
+A private Store reservation can retain one ordered message batch without a Turn,
+Items or Turn events. It shares request identity with direct input admission and
+preserves the original five-minute database deadline across retries. Promotion
+atomically creates history and settles the reservation; expiration, targeted
+cancellation and Session deletion retain an outcome without admitting late work.
+
+This primitive does not connect an executor, publish environment actions or change
+public admission. Its message-only scope and single pending reservation are internal
+limits, not claims about the final public protocol. Initial creation, mixed inputs,
+public Session activity and the existing Worker's readiness/expiry integration remain
+required. See the [contributor boundary](../../CONTRIBUTING.md) for the prepared
+connection and transaction rules.
+
 ## Dependency-ordered implementation
 
 1. **Executor interoperability.** Demonstrate the documented unmodified executor

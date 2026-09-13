@@ -21,6 +21,9 @@ func (s *Store) DeleteSession(ctx context.Context, tenantID, sessionID string) e
 				return err
 			}
 		}
+		if err := q.CancelSessionEnvironmentInput(ctx, session); err != nil {
+			return err
+		}
 		return q.MarkSessionDeleted(ctx, session)
 	})
 }
