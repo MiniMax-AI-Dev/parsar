@@ -564,11 +564,20 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   preserve native continuity. Metadata cannot select a device. Offline work stays
   queued and can be cancelled. An engine host is not a self-hosted environment.
 - One worker service owns an execution database through a dedicated PostgreSQL
-  advisory-lock connection. Losing that connection stops dispatch. At startup,
-  reconcile previously claimed work as failed, preserve queued inputs and never
-  replay uncertain execution. Shutdown cancels active dispatch and persists its
-  terminal result before releasing the lease. This is not distributed exactly-once
-  side-effect execution or restoration of unreported native outcomes.
+  advisory-lock connection. Its execution Store view uses that same connection for
+  every Session transaction: binding, claim/reconciliation, journal/Items/Usage,
+  function callbacks/application receipts and terminal/native continuity. Serialize
+  these short transactions and lease pings; execution transactions have a five-second
+  deadline including gate and Session-lock waits. Never hold a transaction across
+  daemon/model work, reconnect the writer or fall back to the pool after lease loss.
+  The original Store handles public admission and device/auth maintenance on pooled
+  connections. Execution reads may also use the pool; a read grants no write authority.
+  At startup, reconcile previously claimed work as failed, preserve queued inputs
+  and never replay uncertain execution. Shutdown cancels active dispatch and attempts
+  terminal persistence before releasing the lease; a lost owner cannot commit it.
+  This fences database writes, not already queued daemon commands or native effects.
+  Native quiescence/reconnect and recovery of unreported outcomes remain separate
+  gaps; this is not distributed exactly-once side-effect execution.
 - Session state and last activity derive from its latest persisted Turn. Queued or
   active work is `in_progress`, successful/cancelled work is `idle`, and failures
   use a safe public error. The worker does not replace product dispatch, business

@@ -26,7 +26,7 @@ func (s *Store) CompleteExecution(ctx context.Context, tenantID, sessionID, turn
 		return Turn{}, err
 	}
 	var row sqlc.Turn
-	err = s.withSession(ctx, tenantID, sessionID, func(q *sqlc.Queries, session pgtype.UUID) error {
+	err = s.withSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
 		current, err := q.GetTurn(ctx, p)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound

@@ -28,7 +28,7 @@ func (s *Store) RecordFunctionCall(ctx context.Context, tenantID, sessionID, tur
 	if !validFunctionIdentity(call.CallID) || !validFunctionIdentity(call.ExecutorCallID) || !validFunctionIdentity(call.Name) || len(call.Arguments) > 512*1024 || !json.Valid(call.Arguments) || call.Result != nil || call.Applied {
 		return ErrInvalidInput
 	}
-	return s.withSession(ctx, tenantID, sessionID, func(q *sqlc.Queries, session pgtype.UUID) error {
+	return s.withSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
 		turn, err := q.GetTurn(ctx, p)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
@@ -85,7 +85,7 @@ func (s *Store) PendingFunctionCalls(ctx context.Context, tenantID, sessionID, t
 		return nil, err
 	}
 	result := make([]FunctionCall, 0)
-	err = s.withSession(ctx, tenantID, sessionID, func(q *sqlc.Queries, session pgtype.UUID) error {
+	err = s.withSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
 		if _, err := q.GetTurn(ctx, p); errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		} else if err != nil {
