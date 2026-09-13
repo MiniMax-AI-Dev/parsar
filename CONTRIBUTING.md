@@ -331,6 +331,19 @@ restore it. Reject conflicting native transport settings, unsupported engines or
 versions, non-POSIX executor paths, and local managed Skills/MCP/plugins/authoring
 or attachments. Apply explicit core shell inheritance and credential exclusions.
 
+Codex preparation initializes the existing RPC child and verifies environment
+readiness without creating a native thread or starting model work. It carries no
+RunID or prompt; the existing Factory resolves its state key before using the same
+Prepare/Start implementation. The resolved plan, tools and resume identity are
+fixed during preparation. Start accepts the actual RunID, prompt and output sink,
+checks remote status on the retained RPC without reconnecting, and transfers that
+resource once to the normal Session. Failed start or abandoned preparation closes
+the child and cleans temporary plan resources; deferred preparation Close is inert
+after transfer. The owner context spans the whole harness lifetime, while startup
+operation deadlines remain separate. Owner cancellation/RPC exit release pending
+resources; executor loss is checked at Start, not continuously monitored. This
+adapter seam adds no daemon wire operation, public admission or new scheduler.
+
 This daemon slice keeps existing best-effort cancellation and harness cleanup.
 Native detached-session cleanup may stop remote commands after a delay; an applied
 receipt is not immediate process quiescence or complete final output/Usage. The

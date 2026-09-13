@@ -39,7 +39,7 @@ func prepareFunctionTools(tools []proto.FunctionTool) (*functionCalls, error) {
 			return nil, errors.New("function tools require unique names and object schemas")
 		}
 		state.names[tool.Name] = true
-		state.definitions = append(state.definitions, dynamicFunctionTool{Type: "function", Name: tool.Name, Description: tool.Description, InputSchema: tool.Parameters})
+		state.definitions = append(state.definitions, dynamicFunctionTool{Type: "function", Name: tool.Name, Description: tool.Description, InputSchema: append(json.RawMessage(nil), tool.Parameters...)})
 	}
 	return state, nil
 }

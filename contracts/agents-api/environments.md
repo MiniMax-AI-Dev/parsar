@@ -243,6 +243,14 @@ See [the contributor boundary](../../CONTRIBUTING.md) and
 [the real-provider fixture](../../services/agents-api/tests/native/README.md) for
 supported native version, rejected combinations and acceptance commands.
 
+The Codex adapter now separates preparation from prompt start using the same native
+RPC resource. It retains initialized environment access without starting a thread
+or model work, then transfers its fixed configuration and ownership once to the
+normal Session. The existing Factory uses that path. Daemon preparation messages
+and Worker admission/start integration remain pending; this adapter primitive does
+not expose public readiness. See the contributor guide for context and cleanup
+ownership.
+
 Cancellation still uses the existing best-effort interrupt and harness release.
 The fixture measures remote PID exit and stopped side effects independently;
 native detached cleanup may delay that exit. This slice does not implement public

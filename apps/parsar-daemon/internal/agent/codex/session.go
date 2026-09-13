@@ -3,10 +3,8 @@ package codex
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -48,8 +46,8 @@ func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- pro
 
 // Session implements agent.Session. State lifecycle:
 //
-//  1. Factory builds it, RPC client is spawned + initialized.
-//  2. registerHandlers wires notification + server-request handlers.
+//  1. Preparation initializes RPC and verifies the selected environment.
+//  2. Start transfers that RPC and wires notification/server-request handlers.
 //  3. thread/start or thread/resume runs (resume falls back to start).
 //  4. turn/start delivers the user prompt; subsequent stream notifications
 //     fan out to proto.Envelope via session_items.go.
@@ -103,112 +101,6 @@ type Session struct {
 
 var _ agent.Session = (*Session)(nil)
 
-func newSession(parent context.Context, req proto.PromptRequestPayload, out chan<- proto.Envelope, cfg sessionConfig) (*Session, error) {
-	if out == nil {
-		return nil, errors.New("codex: nil out channel")
-	}
-	if cfg.logger == nil {
-		cfg.logger = obslog.Bg()
-	}
-	if cfg.codexBinary == "" {
-		cfg.codexBinary = defaultBinary()
-	}
-	if cfg.killTimeout <= 0 {
-		cfg.killTimeout = rpcKillTimeout
-	}
-	functions, err := prepareFunctionTools(req.FunctionTools)
-	if err != nil {
-		return nil, err
-	}
-	if err := validateRemoteEnvironmentRequest(req); err != nil {
-		return nil, err
-	}
-	req.AgentStateKey = effectiveAgentStateKey(req)
-
-	req.AgentOptions = executionOptions(req)
-	plan, skillRoot, err := prepareSessionPlan(parent, req, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	cancelCtx, cancelFn := context.WithCancel(parent)
-
-	rpcCfg := JSONRPCConfig{
-		Binary:          cfg.codexBinary,
-		EnableFeatures:  plan.EnableFeatures,
-		DisableFeatures: plan.DisableFeatures,
-		Cwd:             plan.Cwd,
-		Env:             append(os.Environ(), plan.Env...),
-		LogTag:          "codex-" + req.RunID,
-		Logger:          cfg.logger,
-	}
-	for _, kv := range plan.ExtraConfig {
-		rpcCfg.ExtraArgs = append(rpcCfg.ExtraArgs, "-c", kv[0]+"="+kv[1])
-	}
-
-	rpc := NewJSONRPCClient(rpcCfg)
-
-	s := &Session{
-		runID:                   req.RunID,
-		functions:               functions,
-		observeMessages:         req.ObserveMessages,
-		observeTools:            req.ObserveTools,
-		observeToolObservations: req.ObserveToolObservations,
-		cfg:                     cfg,
-		out:                     out,
-		rpc:                     rpc,
-		cancelCtx:               cancelCtx,
-		cancelFn:                cancelFn,
-		waitDone:                make(chan struct{}),
-		cleanup:                 plan.Cleanup,
-		bufs:                    NewItemBuffers(),
-		resolvedModel:           plan.Model,
-		interactions:            newPendingCodexInteractions(),
-	}
-	s.registerHandlers()
-
-	initParams := InitializeParams{
-		ClientInfo:   InitializeClientInfo{Name: "parsar-daemon", Version: "0.0.0"},
-		Capabilities: &InitializeCapabilities{ExperimentalAPI: true},
-	}
-	if _, err := rpc.Start(cancelCtx, initParams); err != nil {
-		cancelFn()
-		plan.Cleanup()
-		return nil, fmt.Errorf("codex: rpc start: %w", err)
-	}
-	if req.DisableExecutionEnvironment {
-		if err := verifyNoExecutionEnvironment(cancelCtx, rpc); err != nil {
-			cancelFn()
-			_ = rpc.Close()
-			plan.Cleanup()
-			return nil, err
-		}
-	}
-	if req.RemoteEnvironment != nil {
-		if err := verifyRemoteEnvironment(cancelCtx, rpc); err != nil {
-			cancelFn()
-			_ = rpc.Close()
-			plan.Cleanup()
-			return nil, err
-		}
-	}
-	if skillRoot != "" {
-		if err := setSkillExtraRoots(cancelCtx, rpc, []string{skillRoot}); err != nil {
-			cancelFn()
-			_ = rpc.Close()
-			plan.Cleanup()
-			return nil, fmt.Errorf("codex: register skill root: %w", err)
-		}
-	}
-
-	// thread/start (or resume) + turn/start happen in the run goroutine
-	// so newSession returns quickly; if any of those fail the failure
-	// is surfaced as TypeError + TypeDone on out.
-	go s.run(plan, req)
-
-	return s, nil
-}
-
 // SubmitPermission completes the deferred Codex app-server request that
 // produced the Parsar permission envelope.
 func (s *Session) SubmitPermission(_ context.Context, permID string, decision proto.PermissionDecisionPayload) error {
@@ -219,73 +111,6 @@ func (s *Session) SubmitPermission(_ context.Context, permID string, decision pr
 // Codex's question-id keyed requestUserInput response.
 func (s *Session) SubmitPromptForUserChoice(_ context.Context, askID string, decision proto.PromptForUserChoiceDecisionPayload) error {
 	return s.submitCodexUserInput(askID, decision)
-}
-
-// ---------------------------------------------------------------------------
-// run loop
-// ---------------------------------------------------------------------------
-
-func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
-	defer close(s.waitDone)
-	defer s.stopCodexInteractionTimers()
-	defer s.stopFunctionCalls()
-	defer s.cleanup()
-	defer s.closeOut()
-
-	if err := s.resolveThread(req, plan); err != nil {
-		s.emitTerminal(err.Error(), true)
-		return
-	}
-
-	// turn/start fires the first prompt. The reply ack is fire-and-forget
-	// — streaming events flow via notifications + the eventual
-	// turn/completed.
-	input := FirstUserInput(req.Prompt)
-	if len(input) == 0 {
-		s.emitTerminal("codex: empty prompt", true)
-		return
-	}
-	turnParams := TurnStartParams{
-		ThreadID:     s.currentThreadID(),
-		Input:        input,
-		Environments: plan.Environments,
-	}
-	if plan.CollaborationMode != "" {
-		model := strings.TrimSpace(s.resolvedModel)
-		if model == "" {
-			s.emitTerminal("codex: collaboration mode requires a resolved model", true)
-			return
-		}
-		var developerInstructions *string
-		if plan.SystemPrompt != "" {
-			developerInstructions = &plan.SystemPrompt
-		}
-		turnParams.CollaborationMode = &CollaborationMode{
-			Mode: plan.CollaborationMode,
-			Settings: CollaborationModeSettings{
-				Model:                 model,
-				DeveloperInstructions: developerInstructions,
-			},
-		}
-	}
-	turnCtx, turnCancel := context.WithTimeout(s.cancelCtx, 10*time.Second)
-	_, ackErr := s.rpc.Request(turnCtx, "turn/start", turnParams)
-	turnCancel()
-	if ackErr != nil {
-		s.cfg.logger.Warn("codex: turn/start ack failed", "run_id", s.runID, "err", ackErr)
-		s.emitTerminal(fmt.Sprintf("codex: turn/start: %v", ackErr), true)
-		return
-	}
-
-	// Block until terminal handlers close the RPC child or cancellation arrives.
-	select {
-	case <-s.rpc.Done():
-		if !s.cancelled.Load() && s.cancelCtx.Err() == nil {
-			s.emitTerminal("codex: connection closed before the run completed", true)
-		}
-	case <-s.cancelCtx.Done():
-		_ = s.rpc.Close()
-	}
 }
 
 // ---------------------------------------------------------------------------
