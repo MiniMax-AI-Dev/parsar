@@ -19,6 +19,8 @@ type session struct {
 	writeMu   sync.Mutex
 	functions functionState
 	steering  steeringState
+	settled   chan struct{}
+	outcome   proto.DonePayload
 }
 
 func NewFactory(config Config) agent.Factory {
@@ -41,7 +43,7 @@ func NewFactory(config Config) agent.Factory {
 		if err != nil {
 			return nil, err
 		}
-		s := &session{process: process, functions: functionState{calls: map[string]*pendingFunction{}}}
+		s := &session{process: process, functions: functionState{calls: map[string]*pendingFunction{}}, settled: make(chan struct{})}
 		go s.run(ctx, req.RunID, start, out)
 		return s, nil
 	}
@@ -72,9 +74,16 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 		if err != nil {
 			return
 		}
+		// Cancellation must drain native output even if the event consumer stops.
+		// Terminal publication follows settlement and cannot hold up Cancel.
+		var stopping <-chan struct{}
+		if kind != proto.TypeError && kind != proto.TypeDone {
+			stopping = s.process.Context().Done()
+		}
 		select {
 		case out <- event:
 		case <-ctx.Done():
+		case <-stopping:
 		}
 	}
 	stderrDone := make(chan struct{})
@@ -187,22 +196,23 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	s.stopFunctions()
 	s.stopSteering()
 	metadata := map[string]any{proto.DoneMetaAgentSessionType: "claude_session"}
-	if failure != nil {
-		emit(proto.TypeError, proto.ErrorPayload{Error: failure.Error()})
-	} else {
+	if id := s.inputSessionID(); id != "" {
+		metadata[proto.DoneMetaAgentSessionID] = id
+	}
+	if failure == nil {
 		content.Reset()
 		content.WriteString(result.Text)
 		metadata[proto.DoneMetaAgentSessionID] = result.SessionID
 	}
-	emit(proto.TypeDone, proto.DonePayload{Content: content.String(), Usage: usage, Metadata: metadata})
+	s.outcome = proto.DonePayload{Content: content.String(), Usage: usage, Metadata: metadata}
+	// Router completion cleanup calls Cancel while consuming Done. Settle first.
+	close(s.settled)
+	if failure != nil {
+		emit(proto.TypeError, proto.ErrorPayload{Error: failure.Error()})
+	}
+	emit(proto.TypeDone, s.outcome)
 }
 
-func (s *session) Cancel(context.Context) error {
-	s.stopSteering()
-	s.stopFunctions()
-	s.process.Cancel()
-	return nil
-}
 func (s *session) SubmitPermission(context.Context, string, proto.PermissionDecisionPayload) error {
 	return agent.ErrUnknownPermission
 }

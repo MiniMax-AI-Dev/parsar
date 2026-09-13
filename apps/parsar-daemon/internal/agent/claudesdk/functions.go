@@ -127,7 +127,7 @@ func (s *session) SubmitFunctionResult(ctx context.Context, result proto.Functio
 	}
 	s.functions.mu.Lock()
 	pending := s.functions.calls[result.CallID]
-	if s.functions.closed || pending == nil || pending.result != nil {
+	if s.functions.closed || s.process.Context().Err() != nil || pending == nil || pending.result != nil {
 		s.functions.mu.Unlock()
 		return agent.ErrUnknownFunctionCall
 	}

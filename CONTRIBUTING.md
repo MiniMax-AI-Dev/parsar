@@ -743,9 +743,17 @@ earlier result handler finishes.
 Keep the iterator open until every submitted input has a consuming result, even
 when an earlier result reports an empty native queue. Close admission before
 releasing final receipt waiters; drain and release the SDK/native processes before
-one daemon Done. Cancellation resolves pending receipts as unknown and ends the
-owned execution. A receipt timeout after a full write preserves the process and
-pending identity without redelivery; a blocked write is cancelled and released.
+one daemon Done. Cancellation resolves unconfirmed pending receipts as unknown and ends the
+owned execution. Successful private SDK Cancel waits for owned-process exit and
+stdout/stderr drain, then exposes the same settled CancellationOutcome as Done.
+It retains native identity verified at input readiness, partial text and observed
+Usage even on cancellation/failure; requested resume identity alone is not evidence.
+A caller deadline before settlement reports failure/unknown, while cleanup continues.
+Settlement precedes terminal publication so router completion cleanup cannot wait
+on its own Done consumer. Cancellation releases intermediate event backpressure;
+the settled outcome remains readable even when connection loss prevents publication.
+A receipt timeout after a full write preserves the process and pending identity
+without redelivery; a blocked write is cancelled and released.
 The private adapter permits one input awaiting consumption and at most 63 extra
 inputs per Run, preserving the native 64-UUID receipt bound. Durable receipt opt-in
 separates bounded writes from native consumption waits; calls without it retain
