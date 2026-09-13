@@ -8,6 +8,7 @@ CREATE TABLE environments (
 );
 
 -- +goose Down
+LOCK TABLE environments IN ACCESS EXCLUSIVE MODE;
 -- +goose StatementBegin
 DO $$
 BEGIN

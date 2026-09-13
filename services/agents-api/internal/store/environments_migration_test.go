@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -78,19 +79,53 @@ func TestEnvironmentMigrationPreservesHistoryAndGuardsIdentity(t *testing.T) {
 	}
 	t.Cleanup(migrated.Close)
 	s := New(migrated)
-	session, err := s.CreateSession(ctx, tenant, environmentInput("new", "self_hosted", "/workspace"))
+
+	sessionID, environmentID := uuid.NewString(), uuid.NewString()
+	tx, err := migrated.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	environment, err := s.GetSessionEnvironment(ctx, tenant, session.ID)
-	if err != nil {
+	defer func() { _ = tx.Rollback(ctx) }()
+	input := environmentInput("new", "self_hosted", "/workspace")
+	if _, err := tx.Exec(ctx, `INSERT INTO sessions(id,tenant_id,engine,idempotency_key,request_hash,configuration)
+        VALUES ($1,$2,'codex','new','new',$3)`, sessionID, tenant, input.Configuration); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := provider.DownTo(ctx, 19); err == nil || !strings.Contains(err.Error(), "Cannot remove durable Environment identities") {
-		t.Fatal("unsafe downgrade", err)
+	if _, err := tx.Exec(ctx, "INSERT INTO environments(id,session_id) VALUES ($1,$2)", environmentID, sessionID); err != nil {
+		t.Fatal(err)
 	}
-	retained, err := s.GetEnvironment(ctx, tenant, environment.ID)
-	if err != nil || retained.ID != environment.ID || retained.SessionID != session.ID {
+	downgradeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	outcome := make(chan error, 1)
+	go func() { _, err := provider.DownTo(downgradeCtx, 19); outcome <- err }()
+	// The uncommitted creator must block the downgrade before its emptiness decision.
+	for {
+		var blocked bool
+		err := pool.QueryRow(downgradeCtx, `SELECT EXISTS (
+            SELECT 1 FROM pg_locks WHERE relation=$1::regclass
+              AND mode='AccessExclusiveLock' AND NOT granted)`, quoted+".environments").Scan(&blocked)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if blocked {
+			break
+		}
+		select {
+		case err := <-outcome:
+			t.Fatal("downgrade did not wait for creator", err)
+		case <-downgradeCtx.Done():
+			t.Fatal("downgrade lock was not observed")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-outcome; err == nil || !strings.Contains(err.Error(), "Cannot remove durable Environment identities") {
+		t.Fatal("concurrent downgrade discarded identity", err)
+	}
+	retained, err := s.GetEnvironment(ctx, tenant, environmentID)
+	if err != nil || retained.ID != environmentID || retained.SessionID != sessionID {
 		t.Fatal("downgrade destroyed ownership", retained, err)
 	}
 }
