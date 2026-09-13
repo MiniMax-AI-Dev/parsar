@@ -77,36 +77,45 @@ func (s *Store) TransitionTurn(ctx context.Context, tenantID, sessionID, turnID 
 	if !terminalStatus(input.Status) && string(outcome) != "{}" {
 		return Turn{}, fmt.Errorf("%w: outcome requires a terminal status", ErrInvalidInput)
 	}
+	input.Outcome = outcome
 	var row sqlc.Turn
 	err = s.withSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, _ pgtype.UUID) error {
-		if _, err := q.GetTurn(ctx, params); errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
-		} else if err != nil {
-			return err
-		}
 		var err error
-		row, err = q.TransitionTurn(ctx, sqlc.TransitionTurnParams{
-			ID: params.ID, SessionID: params.SessionID, ExpectedStatus: input.ExpectedStatus,
-			NewStatus: input.Status, Outcome: outcome,
-		})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrTurnConflict
-		}
-		if err == nil && terminalStatus(row.Status) {
-			if err = projectSource(ctx, q, row.SessionID, row.ID, "execution_"+row.Status, 0, row.Outcome, row.CompletedAt); err != nil {
-				return err
-			}
-			row, err = q.GetTurn(ctx, params)
-		}
-		if err != nil {
-			return err
-		}
-		return recordTurnChange(ctx, q, row, false)
+		row, err = transitionTurn(ctx, q, params, input)
+		return err
 	})
 	if err != nil {
 		return Turn{}, fmt.Errorf("transition turn: %w", err)
 	}
 	return turnFromRow(row), nil
+}
+
+func transitionTurn(ctx context.Context, q *sqlc.Queries, params sqlc.GetTurnParams, input TurnTransition) (sqlc.Turn, error) {
+	if _, err := q.GetTurn(ctx, params); errors.Is(err, pgx.ErrNoRows) {
+		return sqlc.Turn{}, ErrNotFound
+	} else if err != nil {
+		return sqlc.Turn{}, err
+	}
+	row, err := q.TransitionTurn(ctx, sqlc.TransitionTurnParams{
+		ID: params.ID, SessionID: params.SessionID, ExpectedStatus: input.ExpectedStatus,
+		NewStatus: input.Status, Outcome: input.Outcome,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return sqlc.Turn{}, ErrTurnConflict
+	}
+	if err == nil && terminalStatus(row.Status) {
+		if err = projectSource(ctx, q, row.SessionID, row.ID, "execution_"+row.Status, 0, row.Outcome, row.CompletedAt); err != nil {
+			return sqlc.Turn{}, err
+		}
+		row, err = q.GetTurn(ctx, params)
+	}
+	if err != nil {
+		return sqlc.Turn{}, err
+	}
+	if err := recordTurnChange(ctx, q, row, false); err != nil {
+		return sqlc.Turn{}, err
+	}
+	return row, nil
 }
 
 func validTransition(from, to string) bool {

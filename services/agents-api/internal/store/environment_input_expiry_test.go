@@ -106,7 +106,7 @@ func TestEnvironmentExpirySerializesWithTargetedSettlement(t *testing.T) {
 				var err error
 				switch action {
 				case "promote":
-					_, err = s.PromoteEnvironmentInput(t.Context(), tenant, session.ID, pending.ID)
+					_, err = lease.Store().PromoteEnvironmentInput(t.Context(), tenant, session.ID, pending.ID)
 				case "cancel":
 					_, err = s.CancelEnvironmentInput(t.Context(), tenant, session.ID, pending.ID)
 				case "delete":
@@ -129,13 +129,13 @@ func TestEnvironmentExpirySerializesWithTargetedSettlement(t *testing.T) {
 			}
 			environmentInputHistory(t, pool, session.ID, 0, 0)
 			if action == "delete" {
-				if _, err := s.PromoteEnvironmentInput(t.Context(), tenant, session.ID, pending.ID); !errors.Is(err, ErrNotFound) {
+				if _, err := lease.Store().PromoteEnvironmentInput(t.Context(), tenant, session.ID, pending.ID); !errors.Is(err, ErrNotFound) {
 					t.Fatal("deleted input resurrected", err)
 				}
 				return
 			}
 			later := reserveEnvironmentInput(t, s, tenant, session.ID, uuid.NewString())
-			for _, settle := range []func(context.Context, string, string, string) (EnvironmentInputReservation, error){s.PromoteEnvironmentInput, s.CancelEnvironmentInput, s.ExpireEnvironmentInput} {
+			for _, settle := range []func(context.Context, string, string, string) (EnvironmentInputReservation, error){lease.Store().PromoteEnvironmentInput, s.CancelEnvironmentInput, s.ExpireEnvironmentInput} {
 				old, err := settle(t.Context(), tenant, session.ID, pending.ID)
 				if err != nil || old.State != state {
 					t.Fatal("old reservation changed", old, err)

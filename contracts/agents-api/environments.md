@@ -271,8 +271,12 @@ are accepted together.
 A private Store reservation can retain one ordered message batch without a Turn,
 Items or Turn events. It shares request identity with direct input admission and
 preserves the original five-minute database deadline across retries. Promotion
-atomically creates history and settles the reservation; expiration, targeted
-cancellation and Session deletion retain an outcome without admitting late work.
+requires the leased writer and atomically creates history, settles the reservation
+and claims its Turn as `in_progress`. Only the first non-replay receipts authorize
+Start on the retained native preparation. Retries cannot reclaim execution. Startup
+reconciliation settles a committed claim interrupted before Start, without replay.
+Expiration, targeted cancellation and Session deletion retain their existing
+pre-admission or claimed-Turn semantics.
 
 This primitive does not connect an executor, publish environment actions or change
 public admission. Its message-only scope and single pending reservation are internal
