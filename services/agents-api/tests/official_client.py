@@ -145,7 +145,9 @@ def main():
                     expect_error(BadRequestError, lambda: sessions.create(**spec, input=[{"role": "user", "content": [{"type": "input_image", "image_url": "https://example.com/image.png"}]}]))
                     expect_error(BadRequestError, lambda: sessions.create(agent=spec["agent"], environment={"type": "self_hosted", "workspace_directory": "/workspace"}))
                     expect_error(BadRequestError, lambda: sessions.create(**spec, extra_body={"tenant_id": bindings[1]["tenant_id"]}))
-                    expect_error(BadRequestError, lambda: sessions.list(agent_id="unsupported-saved-agent"))
+                    assert list(sessions.list(agent_id="unknown-agent")) == []
+                    assert list(sessions.list(agent_id=first.agent.id)) == [first]
+                    assert list(b.beta.agents.sessions.list(agent_id=first.agent.id)) == []
                     expect_error(BadRequestError, lambda: sessions.list(limit=0))
                     assert {item.id for item in sessions.list()} == expected
                     metadata = {str(i): "🧪" * 512 for i in range(16)}

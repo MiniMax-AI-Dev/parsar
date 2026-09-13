@@ -171,7 +171,7 @@ func assertFunctionState(t *testing.T, s *Store, tenant, sessionID, status strin
 	if err != nil || current.LastTurn == nil || current.LastTurn.Status != status || len(current.RequiredActions) != count {
 		t.Fatalf("state: %+v; %v", current, err)
 	}
-	page, err := s.ListSessions(t.Context(), tenant, "", 10, true)
+	page, err := s.ListSessions(t.Context(), tenant, "", 10, true, nil)
 	if err != nil || len(page.Sessions) != 1 || len(page.Sessions[0].RequiredActions) != count || page.Sessions[0].LastTurn.Status != status {
 		t.Fatal("list differs from retrieve", page, err)
 	}

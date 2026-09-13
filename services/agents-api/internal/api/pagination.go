@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -12,15 +13,16 @@ type pageOptions struct {
 	ascending bool
 }
 
-func readPage(w http.ResponseWriter, r *http.Request) (pageOptions, bool) {
-	return readPageSize(w, r, true)
+func readPage(w http.ResponseWriter, r *http.Request, extraKeys ...string) (pageOptions, bool) {
+	return readPageSize(w, r, true, extraKeys...)
 }
 
-func readPageSize(w http.ResponseWriter, r *http.Request, rejectLarger bool) (pageOptions, bool) {
+func readPageSize(w http.ResponseWriter, r *http.Request, rejectLarger bool, extraKeys ...string) (pageOptions, bool) {
 	q := r.URL.Query()
+	keys := append([]string{"after", "limit", "order"}, extraKeys...)
 	for key, values := range q {
-		if (key != "after" && key != "limit" && key != "order") || len(values) != 1 {
-			writeError(w, http.StatusBadRequest, "unsupported_parameter", "Supported list parameters are after, limit and order, each supplied once.")
+		if !slices.Contains(keys, key) || len(values) != 1 {
+			writeError(w, http.StatusBadRequest, "unsupported_parameter", "Supported list parameters are "+strings.Join(keys[:len(keys)-1], ", ")+" and "+keys[len(keys)-1]+", each supplied once.")
 			return pageOptions{}, false
 		}
 	}
