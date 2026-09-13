@@ -631,8 +631,14 @@ setting sources. Native initialization and real provider request inventories mus
 contain only the declared host functions. Managed operator policy may further
 restrict execution; it must not widen the profile. This limits model tool access,
 not native state files or filesystem access by an explicitly supplied host function;
-it is not sandbox/file isolation. Typed verbosity/search controls and public
-capability registration still require separate acceptance.
+it is not sandbox/file isolation. The private factory accepts typed execution
+controls only for disabled search and medium text verbosity. Search remains excluded
+by the native tool inventory; medium retains the SDK's default text generation,
+without adding instructions or changing caller input. The pinned SDK has no native
+verbosity-level option: low/high and enabled search remain explicit implementation
+gaps. Missing/invalid fields in a supplied control block fail before native setup;
+omitting the block keeps the same restrictive profile. This does not advertise a
+public capability or establish public engine admission.
 Use the SDK's history lookup before explicit resume; never fall back to a new
 Session. Native files remain device-affine under a caller-selected managed
 runtime directory. The launch configuration supplies trusted provider environment;

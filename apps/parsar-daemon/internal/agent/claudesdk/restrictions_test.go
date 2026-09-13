@@ -16,14 +16,16 @@ func TestTextFactoryAcceptsRestrictiveCapabilities(t *testing.T) {
 	for _, test := range []struct {
 		name                   string
 		environment, subagents bool
+		controls               *proto.ExecutionControls
 	}{
-		{"environment", true, false}, {"subagents", false, true}, {"both", true, true},
+		{"environment", true, false, nil}, {"subagents", false, true, nil}, {"both", true, true, nil},
+		{"execution-controls", true, true, &proto.ExecutionControls{WebSearch: "disabled", TextVerbosity: "medium"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := t.TempDir()
 			t.Setenv("PARSAR_HOME", root)
 			config := Config{Node: os.Args[0], Entrypoint: filepath.Join(root, "worker"), StateDir: filepath.Join(root, "state"), Env: []string{"GO_CLAUDE_SDK_HELPER=1", "SDK_HELPER_MODE=success", "GORACE=atexit_sleep_ms=0"}}
-			request := proto.PromptRequestPayload{RunID: "restricted-run", Prompt: "hello", AgentSessionID: "native-session", DisableExecutionEnvironment: test.environment, DisableSubagents: test.subagents, AgentOptions: map[string]any{"model": "fake-model", "system_prompt": "instructions"}}
+			request := proto.PromptRequestPayload{RunID: "restricted-run", Prompt: "hello", AgentSessionID: "native-session", DisableExecutionEnvironment: test.environment, DisableSubagents: test.subagents, ExecutionControls: test.controls, AgentOptions: map[string]any{"model": "fake-model", "system_prompt": "instructions"}}
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			out := make(chan proto.Envelope, 16)

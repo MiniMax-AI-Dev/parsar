@@ -101,19 +101,20 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		t.Fatal(err)
 	}
 	type evidence struct {
-		SteeringText         string            `json:"steering_text,omitempty"`
-		SteeringConfirmed    bool              `json:"steering_confirmed,omitempty"`
-		SteeringMilliseconds int64             `json:"steering_milliseconds,omitempty"`
-		SessionID            string            `json:"session_id"`
-		NodePID              int               `json:"node_pid"`
-		NativePIDs           []int             `json:"native_pids"`
-		ChildPIDs            []int             `json:"child_pids"`
-		Text                 string            `json:"text"`
-		Failure              string            `json:"failure,omitempty"`
-		Events               []proto.Envelope  `json:"events"`
-		FunctionCalls        int               `json:"function_calls"`
-		AppliedResults       int               `json:"applied_results"`
-		ProviderRequests     []providerRequest `json:"provider_requests"`
+		ExecutionControls    *proto.ExecutionControls `json:"execution_controls"`
+		SteeringText         string                   `json:"steering_text,omitempty"`
+		SteeringConfirmed    bool                     `json:"steering_confirmed,omitempty"`
+		SteeringMilliseconds int64                    `json:"steering_milliseconds,omitempty"`
+		SessionID            string                   `json:"session_id"`
+		NodePID              int                      `json:"node_pid"`
+		NativePIDs           []int                    `json:"native_pids"`
+		ChildPIDs            []int                    `json:"child_pids"`
+		Text                 string                   `json:"text"`
+		Failure              string                   `json:"failure,omitempty"`
+		Events               []proto.Envelope         `json:"events"`
+		FunctionCalls        int                      `json:"function_calls"`
+		AppliedResults       int                      `json:"applied_results"`
+		ProviderRequests     []providerRequest        `json:"provider_requests"`
 	}
 	functionNonce := "function-" + uuid.NewString()
 	run := func(prompt, resume string, success *bool, steering ...string) evidence {
@@ -124,7 +125,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		requestStart := len(requests)
 		mu.Unlock()
 		out := make(chan proto.Envelope, 64)
-		request := proto.PromptRequestPayload{RunID: uuid.NewString(), Prompt: prompt, AgentSessionID: resume, StrictResume: true, ReleaseOnCompletion: true, ObserveMessages: true, DisableExecutionEnvironment: true, DisableSubagents: true, AgentOptions: map[string]any{"model": "MiniMax-M3", "system_prompt": "Answer briefly and preserve the exact verification value in the conversation. Use no tools."}}
+		request := proto.PromptRequestPayload{RunID: uuid.NewString(), Prompt: prompt, AgentSessionID: resume, StrictResume: true, ReleaseOnCompletion: true, ObserveMessages: true, DisableExecutionEnvironment: true, DisableSubagents: true, ExecutionControls: &proto.ExecutionControls{WebSearch: "disabled", TextVerbosity: "medium"}, AgentOptions: map[string]any{"model": "MiniMax-M3", "system_prompt": "Answer briefly and preserve the exact verification value in the conversation. Use no tools."}}
 		if success != nil {
 			request.ObserveToolObservations = true
 			request.AgentOptions["system_prompt"] = "Call lookup exactly once as requested, then report both result parts and any prior verification value. Never retry a failed tool."
@@ -136,7 +137,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		}
 		s := running.(*session)
 		defer running.Cancel(context.Background())
-		proof := evidence{NodePID: s.process.Cmd.Process.Pid}
+		proof := evidence{NodePID: s.process.Cmd.Process.Pid, ExecutionControls: request.ExecutionControls}
 		if len(steering) > 0 {
 			proof.SteeringText = steering[0]
 		}
@@ -368,7 +369,7 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 			t.Fatalf("unexpected requested model %q", request.Model)
 		}
 	}
-	data, _ := json.MarshalIndent(map[string]any{"scope": "private Go factory -> official SDK -> real MiniMax with active input, native continuation and disabled environment/subagent tools; public API not enabled; no filesystem isolation claim", "turns": []evidence{first, second, functionFirst, functionSecond, steered, steeredResume, functionSteered}, "missing_history": missing, "model_requests": measured}, "", "  ")
+	data, _ := json.MarshalIndent(map[string]any{"scope": "private Go factory -> official SDK -> real MiniMax with default typed execution controls, active input, native continuation and disabled environment/subagent tools; public API not enabled; no filesystem isolation claim", "turns": []evidence{first, second, functionFirst, functionSecond, steered, steeredResume, functionSteered}, "missing_history": missing, "model_requests": measured}, "", "  ")
 	if err := os.WriteFile(filepath.Join(root, "proof.json"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
