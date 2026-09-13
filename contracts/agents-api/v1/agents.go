@@ -16,6 +16,19 @@ type CreateAgentRequest struct {
 	Tools        []json.RawMessage    `json:"tools,omitempty" swaggertype:"array,object" extensions:"x-nullable"`
 }
 
+// UpdateAgentRequest replaces supplied fields and preserves omitted fields.
+type UpdateAgentRequest struct {
+	Model        *string              `json:"model,omitempty"`
+	Name         *string              `json:"name,omitempty" extensions:"x-nullable" maxLength:"128"`
+	Instructions *string              `json:"instructions,omitempty" extensions:"x-nullable"`
+	Metadata     map[string]*string   `json:"metadata,omitempty" swaggertype:"object,string" extensions:"x-nullable"`
+	MultiAgent   json.RawMessage      `json:"multi_agent,omitempty" swaggertype:"object" extensions:"x-nullable"`
+	Reasoning    *Reasoning           `json:"reasoning,omitempty" extensions:"x-nullable"`
+	ServiceTier  *string              `json:"service_tier,omitempty" enums:"auto,default,flex,priority,fast" extensions:"x-nullable"`
+	Text         *SavedAgentTextInput `json:"text,omitempty" extensions:"x-nullable"`
+	Tools        []json.RawMessage    `json:"tools,omitempty" swaggertype:"array,object" extensions:"x-nullable"`
+}
+
 type SavedAgentTextInput struct {
 	Format    json.RawMessage `json:"format,omitempty" swaggertype:"object" extensions:"x-nullable"`
 	Verbosity *string         `json:"verbosity,omitempty" enums:"low,medium,high" extensions:"x-nullable"`

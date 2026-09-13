@@ -12,6 +12,7 @@ import (
 )
 
 type AgentStore interface {
+	UpdateAgent(context.Context, string, string, store.UpdateAgentInput) (store.SavedAgent, error)
 	ListAgents(context.Context, string, string, int, bool) (store.AgentPage, error)
 	CreateAgent(context.Context, string, store.CreateAgentInput) (store.SavedAgent, error)
 	GetAgent(context.Context, string, string) (store.SavedAgent, error)

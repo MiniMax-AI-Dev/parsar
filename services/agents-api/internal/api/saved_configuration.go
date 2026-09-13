@@ -15,6 +15,11 @@ func resolveSavedAgent(input v1.CreateAgentRequest) (store.CreateAgentInput, err
 	if input.Model == nil {
 		return store.CreateAgentInput{}, errors.New("model is required and must be a string.")
 	}
+	return resolveSavedFields(input)
+}
+
+// Update requests reuse field validation without requiring an omitted model.
+func resolveSavedFields(input v1.CreateAgentRequest) (store.CreateAgentInput, error) {
 	if input.Name != nil && utf8.RuneCountInString(*input.Name) > 128 {
 		return store.CreateAgentInput{}, errors.New("name must be at most 128 characters.")
 	}
@@ -25,7 +30,10 @@ func resolveSavedAgent(input v1.CreateAgentRequest) (store.CreateAgentInput, err
 	if err := validateMetadata(metadata); err != nil {
 		return store.CreateAgentInput{}, err
 	}
-	cfg := v1.SavedAgentConfiguration{Model: *input.Model, Name: input.Name, Instructions: input.Instructions, ServiceTier: "auto"}
+	cfg := v1.SavedAgentConfiguration{Name: input.Name, Instructions: input.Instructions, ServiceTier: "auto"}
+	if input.Model != nil {
+		cfg.Model = *input.Model
+	}
 	cfg.MultiAgent, err = resolveSavedMultiAgent(input.MultiAgent)
 	if err != nil {
 		return store.CreateAgentInput{}, err

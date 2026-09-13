@@ -244,6 +244,17 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   the selected harness. Omitted/null service tier currently uses `auto`; complete
   upstream default/error/retry conformance and persisted MCP/web-search tools remain
   gaps. Unknown/unsupported variants fail explicitly. No product lookup is permitted.
+- Public Agent updates use `POST /v1/agents/{agent_id}` with the same tenant/Beta
+  boundary and shared saved-field validation. Preserve omission separately from
+  null; only supplied fields replace saved values. Metadata is a separate whole-map
+  replacement, with null/empty clearing it. Lock the tenant-owned Agent row while
+  merging validated fields and enforcing the complete configuration bound, then
+  commit configuration, metadata and update timestamp together. Never write a stale
+  full snapshot over another update. No-field updates read without changing timestamps.
+  Supplied nested fields currently replace the whole field and explicit null uses
+  existing saved defaults; exact hosted nested/null and no-op timestamp semantics
+  remain unverified. Model-derived reasoning defaults remain a separate gap.
+  Neither updates nor retries modify existing Session snapshots or execution state.
 - Reusable Agent listing uses the same tenant/Beta-header and response mapping as
   create/retrieve. Page by `(created_at, id)` with a same-tenant saved-Agent cursor;
   listing never resolves Sessions, product objects or execution capabilities.
@@ -275,7 +286,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   without caller identity retain the old resolved-hash behavior; original overrides
   cannot be reconstructed, so no backfill or automatic upgrade is permitted. Source
   mutation-independent retries apply only to recorded identities. Public Agent
-  update/delete and exact hosted retry/error semantics remain separate work.
+  delete and exact hosted retry/error semantics remain separate work.
 - Tenant scope must come from authenticated service identity before calling the
   execution Store. Product workspace/user references in metadata grant no access.
   Keep credentials and effective execution options out of Session metadata.
