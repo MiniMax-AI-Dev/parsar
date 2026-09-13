@@ -716,9 +716,10 @@ one daemon Done. Cancellation resolves pending receipts as unknown and ends the
 owned execution. A receipt timeout after a full write preserves the process and
 pending identity without redelivery; a blocked write is cancelled and released.
 The private adapter permits one input awaiting consumption and at most 63 extra
-inputs per Run, preserving the native 64-UUID receipt bound. Larger input capacity
-and receipt latency beyond the router's current ten-second deadline remain public
-admission/recovery work. Do not advertise this private profile before that acceptance.
+inputs per Run, preserving the native 64-UUID receipt bound. Durable receipt opt-in
+separates bounded writes from native consumption waits; calls without it retain
+the router's ten-second deadline. Larger input capacity and public admission/recovery
+remain separate work. Do not advertise this private profile before that acceptance.
 
 This does not establish environment provisioning, full tool/text-verbosity policy, public usage,
 image results, public cancellation receipts or process-loss recovery.
