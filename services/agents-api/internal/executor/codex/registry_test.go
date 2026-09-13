@@ -10,7 +10,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -269,16 +268,6 @@ func TestExecutorConfigRejectsUnsafeOrAmbiguousBindings(t *testing.T) {
 		if _, err := New(c); err == nil {
 			t.Fatal("unsafe URL accepted")
 		}
-	}
-	c := base
-	c.HarnessKeys = append(append([]ScopedKey{}, f.keys...), f.keys[0])
-	if _, err := New(c); err == nil {
-		t.Fatal("duplicate scope accepted")
-	}
-	c = base
-	c.HarnessKeys = []ScopedKey{{TokenSHA256: strings.Repeat("g", 64), TenantID: uuid.NewString(), EnvironmentID: uuid.NewString()}}
-	if _, err := New(c); err == nil {
-		t.Fatal("invalid digest accepted")
 	}
 }
 

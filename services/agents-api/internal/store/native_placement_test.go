@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/executor/codex"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/google/uuid"
@@ -30,7 +29,7 @@ func TestNativeAppServerRemoteModelPlacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer lease.Close(context.Background())
-	tenant, executorToken, harnessToken := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	tenant, executorToken := uuid.NewString(), uuid.NewString()
 	workspace := "/parsar-remote-" + uuid.NewString()
 	configuration, err := json.Marshal(map[string]any{"environment": map[string]any{"type": "self_hosted", "workspace_directory": workspace, "capability_directories": []string{}}})
 	if err != nil {
@@ -44,18 +43,21 @@ func TestNativeAppServerRemoteModelPlacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope := func(token string) codex.ScopedKey {
-		return codex.ScopedKey{TokenSHA256: device.HashCredential(token), TenantID: tenant, EnvironmentID: environment.ID}
-	}
 	executorToken, err = s.IssueEnvironmentExecutorCredential(t.Context(), tenant, environment.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String(), HarnessKeys: []codex.ScopedKey{scope(harnessToken)}})
+	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String()})
 	if err != nil {
 		t.Fatal(err)
 	}
+	harnessToken, releaseHarness, err := registry.IssueHarnessCredential(ctx, tenant, environment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseHarness()
+
 	server.Config.Handler = registry.Handler()
 	server.Start()
 	defer func() { registry.Close(); server.Close() }()

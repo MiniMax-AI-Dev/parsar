@@ -2,7 +2,6 @@ package codex
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -16,11 +15,14 @@ import (
 func relayFixture(t *testing.T) (fixture, []string) {
 	t.Helper()
 	f := newFixture(t)
-	tokens := []string{uuid.NewString(), uuid.NewString()}
-	for i, token := range tokens {
-		key := f.keys[i]
-		key.TokenSHA256 = digest(token)
-		f.registry.harnessKeys[sha256.Sum256([]byte(token))] = key
+	tokens := []string{}
+	for _, key := range f.keys {
+		token, release, err := f.registry.IssueHarnessCredential(t.Context(), key.TenantID, key.EnvironmentID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(release)
+		tokens = append(tokens, token)
 	}
 	return f, tokens
 }

@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/executor/codex"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
@@ -60,7 +59,7 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 		prompt = daemonPreparedRemotePrompt
 	}
 	// These credentials do not exist when the authenticated daemon starts.
-	executorToken, harnessToken := uuid.NewString(), uuid.NewString()
+	executorToken := uuid.NewString()
 	workspace := "/parsar-daemon-remote-" + uuid.NewString()
 	configuration, err := json.Marshal(map[string]any{"environment": map[string]any{"type": "self_hosted", "workspace_directory": workspace, "capability_directories": []string{}}})
 	if err != nil {
@@ -79,18 +78,21 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 		t.Fatal(err)
 	}
 	defer lease.Close(context.Background())
-	scope := func(token string) codex.ScopedKey {
-		return codex.ScopedKey{TokenSHA256: device.HashCredential(token), TenantID: h.tenant, EnvironmentID: environment.ID}
-	}
 	executorToken, err = h.s.IssueEnvironmentExecutorCredential(t.Context(), h.tenant, environment.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := codex.New(codex.Config{Store: h.s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String(), HarnessKeys: []codex.ScopedKey{scope(harnessToken)}})
+	registry, err := codex.New(codex.Config{Store: h.s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String()})
 	if err != nil {
 		t.Fatal(err)
 	}
+	harnessToken, releaseHarness, err := registry.IssueHarnessCredential(ctx, h.tenant, environment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseHarness()
+
 	observation := &relayObservation{}
 	handler := registry.Handler()
 	server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -196,6 +198,17 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 	if strings.Contains(string(session.Configuration), harnessToken) {
 		t.Fatal("connection credential reached stored configuration")
 	}
+	releaseHarness()
+	revoked := req
+	revoked.AgentStateKey += "-revoked"
+	revoked.AgentSessionID = ""
+	revoked.Prompt = "This must fail before a model Turn."
+	_, revokedEvents, _ := prompt(t, ctx, peer, revoked, nil)
+	if !daemonRemoteHasError(revokedEvents) && !(prepared && daemonRemotePreparationFailed(revokedEvents)) {
+		t.Fatal("released harness credential still authorized native preparation")
+	}
+	proof["dynamic_harness_credential"] = true
+	proof["released_harness_rejected"] = true
 	proof["status"] = "daemon_adapter_verified_public_integration_pending"
 	proof["separate_executor_launcher"] = os.Getenv("PARSAR_EXECUTOR_LAUNCHER") != ""
 	proof["native_thread_id"] = req.AgentSessionID

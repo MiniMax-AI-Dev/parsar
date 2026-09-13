@@ -5,11 +5,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/executor/codex"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/google/uuid"
@@ -37,20 +37,28 @@ func TestHarnessGrantsCheckPostgreSQLTenantOwnership(t *testing.T) {
 		sessions = append(sessions, session.ID)
 		environments = append(environments, environment.ID)
 	}
-	tokens := []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
-	executorToken := uuid.NewString()
-	key := func(token, tenant, environment string) codex.ScopedKey {
-		return codex.ScopedKey{TokenSHA256: device.HashCredential(token), TenantID: tenant, EnvironmentID: environment}
-	}
-	executorToken, err = s.IssueEnvironmentExecutorCredential(t.Context(), tenants[0], environments[0])
+	executorToken, err := s.IssueEnvironmentExecutorCredential(t.Context(), tenants[0], environments[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String(), HarnessKeys: []codex.ScopedKey{key(tokens[0], tenants[0], environments[0]), key(tokens[1], tenants[1], environments[1]), key(tokens[2], tenants[1], environments[0])}})
+	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String()})
 	if err != nil {
 		t.Fatal(err)
 	}
+	tokens := []string{}
+	for i, tenant := range tenants {
+		token, release, err := registry.IssueHarnessCredential(t.Context(), tenant, environments[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer release()
+		tokens = append(tokens, token)
+	}
+	if _, _, err := registry.IssueHarnessCredential(t.Context(), tenants[1], environments[0]); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("cross-tenant harness issuance accepted", err)
+	}
+
 	server.Config.Handler = registry.Handler()
 	server.Start()
 	defer func() { registry.Close(); server.Close() }()
@@ -93,7 +101,6 @@ func TestHarnessGrantsCheckPostgreSQLTenantOwnership(t *testing.T) {
 	body := codex.ConnectRequest{HarnessPublicKey: publicKey}
 	post(environments[1], "connect", tokens[0], body, 401, nil)
 	post(environments[0], "connect", tokens[1], body, 401, nil)
-	post(environments[0], "connect", tokens[2], body, 404, nil)
 	var grant codex.ConnectResponse
 	post(environments[0], "connect", tokens[0], body, 200, &grant)
 	if err := s.DeleteSession(t.Context(), tenants[0], sessions[0]); err != nil {

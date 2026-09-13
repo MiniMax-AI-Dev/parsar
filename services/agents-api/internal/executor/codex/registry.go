@@ -21,7 +21,7 @@ type Registry struct {
 	source         EnvironmentStore
 	checkOwnership func(context.Context) error
 	publicWS       string
-	harnessKeys    map[[32]byte]ScopedKey
+	harnessKeys    map[[32]byte]*harnessCredential
 	registrationMu sync.Mutex
 	mu             sync.Mutex
 	closed         bool
@@ -43,12 +43,7 @@ func New(c Config) (*Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	harnessKeys, err := scopedKeys(c.HarnessKeys)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Registry{harnessKeys: harnessKeys, source: c.Store, checkOwnership: c.CheckOwnership, publicWS: url, registrations: make(map[string]*registration)}, nil
+	return &Registry{harnessKeys: make(map[[32]byte]*harnessCredential), source: c.Store, checkOwnership: c.CheckOwnership, publicWS: url, registrations: make(map[string]*registration)}, nil
 }
 
 func (r *Registry) Handler() http.Handler {
@@ -158,6 +153,10 @@ func (r *Registry) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.closed = true
+	for hash, credential := range r.harnessKeys {
+		credential.stop()
+		delete(r.harnessKeys, hash)
+	}
 	for environment, reg := range r.registrations {
 		r.closeConnectionLocked(reg, reg.socket)
 		delete(r.registrations, environment)

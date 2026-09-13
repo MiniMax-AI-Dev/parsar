@@ -79,7 +79,11 @@ exercise private prepare/ready/start through the registered daemon. Its separate
 preparation subscription creates no Run, then the actual Run starts using the
 returned handle. This repeats real remote command/file, cold-history and
 cancellation acceptance; it does not enable public Environment admission. Controlled
-subprocess/router tests establish deferred-start ownership independently.
+subprocess/router tests establish deferred-start ownership independently. Both
+variants obtain their harness credential from the current registry under the
+fixture's execution owner; after real execution, they release it and verify that
+native preparation rejects the former credential. No static harness-key file is
+used. Public caller principal identity and Worker admission remain separate work.
 
 The fixture explicitly sets daemon `PARSAR_CODEX_BIN` to `PARSAR_CODEX_BINARY`.
 It checks invalid transient authorization, remote instructions/cwd/output/exit/files,

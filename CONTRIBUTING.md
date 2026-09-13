@@ -281,6 +281,20 @@ one-use key authorization are separate five-minute capabilities bound to the
 current registration, executor socket and complete harness public key. Grants are
 bounded; refresh may issue unused grants without disturbing an active pair.
 
+Internal execution owners obtain random harness credentials from the native
+registry after current lease and exact tenant/Environment authorization. The
+registry retains at most 32 credential digests in memory. The owner context spans
+preparation and its transferred Run; release, owner cancellation and registry
+shutdown invalidate that credential, its pending grants and its own connected pair.
+Recheck the same live credential under the registry lock after authorization
+queries in connect, attach and validation. Old cleanup cannot revoke a successor.
+The five-minute connection-ticket lifetime does not expire an active execution
+owner or impose a Turn deadline. Pair closure is not proof of OS quiescence.
+Static harness-key files are retired explicitly, without a fallback or public
+issuance endpoint. Worker orchestration and public caller principal identity remain
+separate required work; tenant ownership is not upstream user/service-account
+identity. No credential bearer belongs in snapshots, events, logs or the database.
+
 One independent harness connection pairs with each executor connection. Native
 binary messages pass unchanged, up to the pinned 256 KiB limit, with one data
 writer and one in-flight message per direction. Write deadlines bound stalled

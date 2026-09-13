@@ -3,16 +3,12 @@ package codex
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"net"
-	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
-	"github.com/google/uuid"
 )
 
 type EnvironmentStore interface {
@@ -31,7 +27,6 @@ type Config struct {
 	Store          EnvironmentStore
 	CheckOwnership func(context.Context) error
 	PublicURL      string
-	HarnessKeys    []ScopedKey
 }
 
 func validateConfig(c Config) (string, error) {
@@ -55,32 +50,4 @@ func validateConfig(c Config) (string, error) {
 		return "", errors.New("executor URL must use HTTPS or loopback HTTP")
 	}
 	return strings.TrimRight(u.String(), "/"), nil
-}
-
-func scopedKeys(bindings []ScopedKey) (map[[32]byte]ScopedKey, error) {
-	keys := make(map[[32]byte]ScopedKey, len(bindings))
-	for _, key := range bindings {
-		tenant, e1 := uuid.Parse(key.TenantID)
-		environment, e2 := uuid.Parse(key.EnvironmentID)
-		digest, e3 := hex.DecodeString(key.TokenSHA256)
-		if e1 != nil || e2 != nil || e3 != nil || tenant == uuid.Nil || environment == uuid.Nil || len(digest) != sha256.Size {
-			return nil, errors.New("transport key requires tenant, Environment and SHA-256 digest")
-		}
-		hash := [32]byte(digest)
-		if _, exists := keys[hash]; exists {
-			return nil, errors.New("duplicate transport key digest")
-		}
-		key.TenantID, key.EnvironmentID = tenant.String(), environment.String()
-		keys[hash] = key
-	}
-	return keys, nil
-}
-
-func credential(req *http.Request, environment string, keys map[[32]byte]ScopedKey) (ScopedKey, bool) {
-	parts := strings.Fields(req.Header.Get("Authorization"))
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-		return ScopedKey{}, false
-	}
-	key, ok := keys[sha256.Sum256([]byte(parts[1]))]
-	return key, ok && key.EnvironmentID == environment
 }

@@ -20,13 +20,15 @@ func (r *Registry) executorCredential(w http.ResponseWriter, req *http.Request, 
 		writeError(w, http.StatusUnauthorized)
 		return ScopedKey{}, false
 	}
-	parts := strings.Fields(req.Header.Get("Authorization"))
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+	hash, ok := credentialHash(req)
+	if !ok {
 		writeError(w, http.StatusUnauthorized)
 		return ScopedKey{}, false
 	}
-	hash := sha256.Sum256([]byte(parts[1]))
-	if _, wrongPurpose := r.harnessKeys[hash]; wrongPurpose {
+	r.mu.Lock()
+	_, wrongPurpose := r.harnessKeys[hash]
+	r.mu.Unlock()
+	if wrongPurpose {
 		writeError(w, http.StatusUnauthorized)
 		return ScopedKey{}, false
 	}
@@ -38,6 +40,14 @@ func (r *Registry) executorCredential(w http.ResponseWriter, req *http.Request, 
 		return ScopedKey{}, false
 	}
 	return ScopedKey{TenantID: tenant, EnvironmentID: environment, TokenSHA256: digest}, true
+}
+
+func credentialHash(req *http.Request) ([32]byte, bool) {
+	parts := strings.Fields(req.Header.Get("Authorization"))
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return [32]byte{}, false
+	}
+	return sha256.Sum256([]byte(parts[1])), true
 }
 
 func (r *Registry) currentExecutor(ctx context.Context, key ScopedKey) error {

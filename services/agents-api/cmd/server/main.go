@@ -97,7 +97,7 @@ func run() error {
 		}()
 		options = append(options, api.WithExecution(worker))
 	}
-	executor, err := executorRegistry(executionStore, worker, keys)
+	executor, err := executorRegistry(executionStore, worker)
 	if err != nil {
 		return err
 	}

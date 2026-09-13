@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/executor/codex"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/google/uuid"
@@ -51,7 +50,6 @@ func TestNativeExecutorLauncherTLSAndHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harnessToken := uuid.NewString()
 	root, err := os.MkdirTemp(proof, "launcher-tls-")
 	if err != nil {
 		t.Fatal(err)
@@ -68,11 +66,16 @@ func TestNativeExecutorLauncherTLSAndHelpers(t *testing.T) {
 		t.Fatal(err)
 	}
 	remote := "https://" + launcherTestHost + ":" + port
-	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: remote,
-		HarnessKeys: []codex.ScopedKey{{TokenSHA256: device.HashCredential(harnessToken), TenantID: tenant, EnvironmentID: environment.ID}}})
+	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: remote})
 	if err != nil {
 		t.Fatal(err)
 	}
+	harnessToken, releaseHarness, err := registry.IssueHarnessCredential(ctx, tenant, environment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseHarness()
+
 	var connections, requests atomic.Int64
 	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
 		if state == http.StateNew {

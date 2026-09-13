@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/executor/codex"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/google/uuid"
@@ -120,7 +119,7 @@ func TestNativeHarnessRelayPostgreSQLAndProcessRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer lease.Close(context.Background())
-	tenant, executorToken, harnessToken := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	tenant, executorToken := uuid.NewString(), uuid.NewString()
 	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "native-relay", Configuration: json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace","capability_directories":[]}}`)})
 	if err != nil {
 		t.Fatal(err)
@@ -129,18 +128,21 @@ func TestNativeHarnessRelayPostgreSQLAndProcessRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope := func(token, owner, id string) codex.ScopedKey {
-		return codex.ScopedKey{TokenSHA256: device.HashCredential(token), TenantID: owner, EnvironmentID: id}
-	}
 	executorToken, err = s.IssueEnvironmentExecutorCredential(t.Context(), tenant, environment.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String(), HarnessKeys: []codex.ScopedKey{scope(harnessToken, tenant, environment.ID)}})
+	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String()})
 	if err != nil {
 		t.Fatal(err)
 	}
+	harnessToken, releaseHarness, err := registry.IssueHarnessCredential(ctx, tenant, environment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseHarness()
+
 	observation := &relayObservation{}
 	handler := registry.Handler()
 	server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
