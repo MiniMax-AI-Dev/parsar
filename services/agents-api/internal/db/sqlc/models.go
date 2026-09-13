@@ -40,15 +40,16 @@ type FunctionCall struct {
 }
 
 type Session struct {
-	ID             pgtype.UUID        `json:"id"`
-	TenantID       pgtype.UUID        `json:"tenant_id"`
-	Engine         string             `json:"engine"`
-	Metadata       []byte             `json:"metadata"`
-	IdempotencyKey string             `json:"idempotency_key"`
-	RequestHash    string             `json:"request_hash"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	Configuration  []byte             `json:"configuration"`
-	EventSequence  int64              `json:"event_sequence"`
+	ID                  pgtype.UUID        `json:"id"`
+	TenantID            pgtype.UUID        `json:"tenant_id"`
+	Engine              string             `json:"engine"`
+	Metadata            []byte             `json:"metadata"`
+	IdempotencyKey      string             `json:"idempotency_key"`
+	RequestHash         string             `json:"request_hash"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	Configuration       []byte             `json:"configuration"`
+	EventSequence       int64              `json:"event_sequence"`
+	CreationRequestHash pgtype.Text        `json:"creation_request_hash"`
 }
 
 type SessionDevice struct {
