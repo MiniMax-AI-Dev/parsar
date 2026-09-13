@@ -111,7 +111,7 @@ func TestInitialInputFailureRollsBackSessionAndWork(t *testing.T) {
 	if got, err := s.CreateSession(ctx, tenant, input); err == nil || got.ID != "" {
 		t.Fatal("partial creation succeeded", got, err)
 	}
-	page, err := s.ListSessions(ctx, tenant, "", 100, true)
+	page, err := s.ListSessions(ctx, tenant, "", 100, true, nil)
 	if err != nil || len(page.Sessions) != 0 {
 		t.Fatal("partial Session survived", page, err)
 	}

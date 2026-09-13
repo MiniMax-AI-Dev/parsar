@@ -1070,12 +1070,18 @@ paths:
   /agents/sessions:
     get:
       description: Cursor and results are scoped to the authenticated execution tenant.
-        Saved agent filtering is not supported yet.
+        Optional agent_id matches the immutable root Agent ID, including inline Agents
+        and historical Sessions whose saved source was updated or deleted. Omission
+        lists all Agents.
       parameters:
       - description: agents=v1
         in: header
         name: OpenAI-Beta
         required: true
+        type: string
+      - description: Root Agent ID whose Sessions to return
+        in: query
+        name: agent_id
         type: string
       - description: Last Session ID from the previous page
         in: query

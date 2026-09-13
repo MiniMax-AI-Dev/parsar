@@ -307,6 +307,14 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Keep execution state, timestamps and the original creation request hash unchanged;
   creation retries return the current resource without restoring its old metadata.
   Public schema validation belongs to the API; the Store validates JSON structure.
+- Session listing optionally filters by the immutable root `configuration.agent.id`
+  within the authenticated tenant. IDs are opaque and include inline Agents; never
+  require a surviving saved Agent or resolve product ownership. Apply filtering
+  before pagination and activity projection, using the tenant/Agent/creation index.
+  Omission retains unfiltered listing; a supplied empty string remains a filter.
+  Preserve the existing tenant-owned cursor and creation-time/ID ordering rules.
+  Hosted empty-filter, mismatched-filter cursor and exact error semantics remain
+  unverified. Other resource lists do not accept this parameter.
 - `make sqlc-generate` and the drift gate cover both services. Run
   `make check-agents-api` with `PARSAR_AGENTS_API_TEST_DATABASE_URL` pointing to a
   dedicated `parsar_agents_api_*_tests` database for Session integration tests.

@@ -168,7 +168,7 @@ func (s *Store) GetSession(ctx context.Context, tenantID, sessionID string) (Ses
 
 // ListSessions orders by creation time and ID. The cursor is the last returned
 // session ID and must belong to the same tenant; it grants no additional access.
-func (s *Store) ListSessions(ctx context.Context, tenantID, cursor string, limit int, ascending bool) (SessionPage, error) {
+func (s *Store) ListSessions(ctx context.Context, tenantID, cursor string, limit int, ascending bool, agentID *string) (SessionPage, error) {
 	tenant, err := parseID(tenantID)
 	if err != nil {
 		return SessionPage{}, err
@@ -177,6 +177,9 @@ func (s *Store) ListSessions(ctx context.Context, tenantID, cursor string, limit
 		return SessionPage{}, fmt.Errorf("%w: page size must be 1..100", ErrInvalidInput)
 	}
 	params := sqlc.ListSessionsParams{TenantID: tenant, PageLimit: int32(limit + 1), AfterID: pgtype.UUID{Valid: true}, Ascending: ascending}
+	if agentID != nil {
+		params.AgentID = pgtype.Text{String: *agentID, Valid: true}
+	}
 	if cursor != "" {
 		after, err := s.GetSession(ctx, tenantID, cursor)
 		if err != nil {

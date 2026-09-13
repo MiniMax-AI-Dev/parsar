@@ -93,7 +93,7 @@ func TestTokenUsageDurableSnapshotsAndSessionTotals(t *testing.T) {
 	if total.InputTokens != 40 || total.OutputTokens != 6 || total.TotalTokens != 46 || total.InputTokensDetails.CachedTokens != 8 || total.OutputTokensDetails.ReasoningTokens != 4 {
 		t.Fatalf("double counted totals: %+v", total)
 	}
-	page, err := fresh.ListSessions(ctx, tenant, "", 100, true)
+	page, err := fresh.ListSessions(ctx, tenant, "", 100, true, nil)
 	if err != nil || len(page.Sessions) != 1 || string(page.Sessions[0].Usage) != string(got.Usage) {
 		t.Fatalf("list totals: %+v %v", page, err)
 	}

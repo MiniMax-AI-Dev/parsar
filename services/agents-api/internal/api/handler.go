@@ -24,7 +24,7 @@ type ResourceStore interface {
 	FindSessionCreation(context.Context, string, string, json.RawMessage) (store.SessionCreation, error)
 	GetSession(context.Context, string, string) (store.Session, error)
 	UpdateSessionMetadata(context.Context, string, string, map[string]string) (store.Session, error)
-	ListSessions(context.Context, string, string, int, bool) (store.SessionPage, error)
+	ListSessions(context.Context, string, string, int, bool, *string) (store.SessionPage, error)
 }
 
 type Handler struct {
@@ -231,11 +231,12 @@ func (h *Handler) respondSession(w http.ResponseWriter, r *http.Request, session
 }
 
 // @Summary List execution Sessions
-// @Description Cursor and results are scoped to the authenticated execution tenant. Saved agent filtering is not supported yet.
+// @Description Cursor and results are scoped to the authenticated execution tenant. Optional agent_id matches the immutable root Agent ID, including inline Agents and historical Sessions whose saved source was updated or deleted. Omission lists all Agents.
 // @Tags Sessions
 // @Produce json
 // @Security BearerAuth
 // @Param OpenAI-Beta header string true "agents=v1"
+// @Param agent_id query string false "Root Agent ID whose Sessions to return"
 // @Param after query string false "Last Session ID from the previous page"
 // @Param limit query int false "Page size" minimum(1) maximum(100) default(20)
 // @Param order query string false "Creation order" Enums(asc,desc) default(desc)
@@ -243,11 +244,15 @@ func (h *Handler) respondSession(w http.ResponseWriter, r *http.Request, session
 // @Failure 400,401,404,500 {object} v1.ErrorResponse
 // @Router /agents/sessions [get]
 func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
-	options, ok := readPage(w, r)
+	options, ok := readPage(w, r, "agent_id")
 	if !ok {
 		return
 	}
-	page, err := h.store.ListSessions(r.Context(), tenantID(r), options.after, options.limit, options.ascending)
+	var agentID *string
+	if values, present := r.URL.Query()["agent_id"]; present {
+		agentID = &values[0]
+	}
+	page, err := h.store.ListSessions(r.Context(), tenantID(r), options.after, options.limit, options.ascending, agentID)
 	if err != nil {
 		writeStoreError(w, r, err)
 		return

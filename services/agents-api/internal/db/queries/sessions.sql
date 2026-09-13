@@ -14,6 +14,7 @@ SELECT * FROM sessions WHERE tenant_id = $1 AND id = $2;
 -- name: ListSessions :many
 SELECT * FROM sessions
 WHERE tenant_id = sqlc.arg(tenant_id)
+  AND (sqlc.narg(agent_id)::text IS NULL OR configuration #>> '{agent,id}' = sqlc.narg(agent_id)::text)
   AND (sqlc.narg(after_created)::timestamptz IS NULL
        OR (NOT sqlc.arg(ascending)::boolean AND (created_at, id) < (sqlc.narg(after_created)::timestamptz, sqlc.arg(after_id)::uuid))
        OR (sqlc.arg(ascending)::boolean AND (created_at, id) > (sqlc.narg(after_created)::timestamptz, sqlc.arg(after_id)::uuid)))
