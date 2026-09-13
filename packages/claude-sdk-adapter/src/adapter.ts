@@ -1,4 +1,5 @@
 import { getSessionInfo, query, type McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
+import { Inputs, type InputEvent } from "./inputs.js";
 import { resultUsage, type NativeUsage } from "./usage.js";
 import { spawnNative } from "./native.js";
 import { MessageObserver, type MessageEvent } from "./messages.js";
@@ -19,8 +20,9 @@ export type Start = {
 };
 export type Event =
   | MessageEvent
+  | InputEvent
   | FunctionEvent
-  | { type: "usage"; session_id: string; usage: NativeUsage }
+  | { type: "usage"; session_id: string; result_id: string; usage: NativeUsage }
   | { type: "delta"; delta: string }
   | { type: "result"; session_id: string; text: string }
   | { type: "error"; code: "invalid_request" | "history_unavailable" | "execution_failed" | "cancelled" };
@@ -45,7 +47,7 @@ export function parseStart(line: string): Start {
   return request as Start;
 }
 
-export async function execute(request: Start, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit)): Promise<void> {
+export async function execute(request: Start, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit), inputs = new Inputs(request.prompt)): Promise<void> {
   if (request.resume && !await getSessionInfo(request.resume, { dir: request.cwd })) {
     await emit({ type: "error", code: "history_unavailable" });
     return;
@@ -56,13 +58,13 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
   const children: Promise<number | null>[] = [];
   let result: Extract<Event, { type: "result" }> | undefined;
   let nativeID = "";
-  let resultSeen = false;
+  const resultIDs = new Set<string>();
   let failed = false;
   const messages = request.observe_messages ? new MessageObserver() : undefined;
   let stream: ReturnType<typeof query> | undefined;
   try {
     stream = query({
-      prompt: request.prompt,
+      prompt: inputs,
       options: {
         cwd: request.cwd,
         env: { ...process.env },
@@ -89,27 +91,30 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
             message.mcp_servers.some(server => server.name !== "functions" || server.status !== "connected")) {
           throw new Error("unexpected native configuration");
         }
+        for (const event of inputs.start(nativeID)) await emit(event);
       } else if (!messages && message.type === "stream_event" && message.parent_tool_use_id === null &&
                  message.event.type === "content_block_delta" && message.event.delta.type === "text_delta") {
         await emit({ type: "delta", delta: message.event.delta.text });
       } else if (message.type === "result") {
-        if (resultSeen || !nativeID || message.session_id !== nativeID) throw new Error("invalid native result identity");
-        resultSeen = true;
-        await emit({ type: "usage", session_id: nativeID, usage: resultUsage(message) });
+        if (!message.uuid || resultIDs.has(message.uuid) || !nativeID || message.session_id !== nativeID) throw new Error("invalid native result identity");
+        resultIDs.add(message.uuid);
+        await emit({ type: "usage", session_id: nativeID, result_id: message.uuid, usage: resultUsage(message) });
         if (message.subtype !== "success" || message.is_error) throw new Error("unsuccessful native result");
         functions.assertComplete();
         result = { type: "result", session_id: nativeID, text: message.result };
       }
+      for (const event of inputs.consume(message)) await emit(event);
     }
   } catch {
     failed = true;
   } finally {
+    inputs.close();
     functions.close();
     stream?.close();
     const exits = await Promise.all(children);
     if (!exits.length || exits.some(code => code !== 0)) failed = true;
   }
   if (abort.signal.aborted) await emit({ type: "error", code: "cancelled" });
-  else if (failed || !result) await emit({ type: "error", code: "execution_failed" });
+  else if (failed || !result || !inputs.complete) await emit({ type: "error", code: "execution_failed" });
   else await emit(result);
 }
