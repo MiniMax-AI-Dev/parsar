@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-GO_TEST_PACKAGE ?= $(shell cd server && go list ./... ../apps/parsar-daemon/... ../internal/agentdaemon/... ../services/agents-api/... ../packages/agents-client/... | grep -Ev '/server/internal/(store|seed)$$')
+GO_TEST_PACKAGE ?= $(filter-out $(GO_TEST_EXCLUDE),$(shell cd server && go list ./... ../apps/parsar-daemon/... ../internal/agentdaemon/... ../services/agents-api/... ../packages/agents-client/... | grep -Ev '/server/internal/(store|seed)$$'))
 GO_TEST_RUN ?=
 GO_TEST_ARGS ?=
 SQLC_VERSION ?= v1.29.0
@@ -87,6 +87,8 @@ dev-db:
 # Backward-compatible alias. Prefer `make dev-db` for the DB-only dev stack.
 dev: dev-db
 
+# The full gate runs independent API tests once, after their isolated build.
+check: GO_TEST_EXCLUDE = $(if $(strip $(GO_TEST_RUN) $(GO_TEST_ARGS)),,github.com/MiniMax-AI-Dev/parsar/services/agents-api/% github.com/MiniMax-AI-Dev/parsar/packages/agents-client/%)
 check: check-go check-store check-web check-cli check-hygiene check-installer check-agents-api
 	@printf 'Parsar harness checks passed.\n'
 
