@@ -1730,9 +1730,11 @@ trigger the same Go checks in CI as server changes.
 In the default full `make check`, `check-agents-api` owns the execution service
 and Agents client Go tests after their isolated build. The inherited
 `GO_TEST_EXCLUDE` removes those packages only from the default broad Go suite,
-so they execute once. Standalone `check-go`, `test-go` and `test-fast` retain
-their full package selection; explicit `GO_TEST_PACKAGE` overrides retain their
-existing behavior. Other check commands and CI target coverage remain unchanged.
+so they execute once. Custom `GO_TEST_RUN` or `GO_TEST_ARGS` keeps the original
+broad pass, including API tests with those filters or flags. Standalone
+`check-go`, `test-go` and `test-fast` retain their full package selection; explicit
+`GO_TEST_PACKAGE` overrides retain their existing behavior. Other check commands
+and CI target coverage remain unchanged.
 
 Pin the CI vulnerability scanner to a version compatible with the workflow's
 Go toolchain; do not use `@latest` for that build-time tool.

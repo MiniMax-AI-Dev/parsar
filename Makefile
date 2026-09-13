@@ -88,7 +88,7 @@ dev-db:
 dev: dev-db
 
 # The full gate runs independent API tests once, after their isolated build.
-check: GO_TEST_EXCLUDE := github.com/MiniMax-AI-Dev/parsar/services/agents-api/% github.com/MiniMax-AI-Dev/parsar/packages/agents-client/%
+check: GO_TEST_EXCLUDE = $(if $(strip $(GO_TEST_RUN) $(GO_TEST_ARGS)),,github.com/MiniMax-AI-Dev/parsar/services/agents-api/% github.com/MiniMax-AI-Dev/parsar/packages/agents-client/%)
 check: check-go check-store check-web check-cli check-hygiene check-installer check-agents-api
 	@printf 'Parsar harness checks passed.\n'
 
