@@ -8,7 +8,6 @@ import (
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 // @Summary Update a reusable Agent
@@ -38,7 +37,7 @@ func (h *Handler) updateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "agent_id")
-	if parsed, err := uuid.Parse(id); err != nil || parsed == uuid.Nil {
+	if !validAgentID(id) {
 		writeStoreError(w, r, store.ErrNotFound)
 		return
 	}

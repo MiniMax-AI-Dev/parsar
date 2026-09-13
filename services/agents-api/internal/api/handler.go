@@ -52,6 +52,7 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 		r.Get("/agents", h.listAgents)
 		r.Get("/agents/{agent_id}", h.getAgent)
 		r.Post("/agents/{agent_id}", h.updateAgent)
+		r.Delete("/agents/{agent_id}", h.deleteAgent)
 		r.Post("/agents/sessions", h.createSession)
 		r.Get("/agents/sessions", h.listSessions)
 		r.Get("/agents/sessions/{session_id}", h.getSession)

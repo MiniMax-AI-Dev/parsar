@@ -45,7 +45,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 
 | Resource | Upstream operations | Current coverage |
 | --- | --- | --- |
-| Root reusable Agents | create, retrieve, update, list, delete | Partial create/retrieve/update/list and Session references; delete missing |
+| Root reusable Agents | create, retrieve, update, list, delete | Partial create/retrieve/update/list/delete and Session references; configuration/error gaps remain |
 | sessions | create, retrieve, update, list, delete | Partial create/retrieve/list; metadata update implemented; delete missing |
 | sessions.events | create, stream | Text/cancel/function-result admission and live events; function-action state snapshots supported |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
@@ -88,6 +88,11 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   Nested fields currently replace whole values and null uses the saved defaults;
   hosted nested/null behavior, no-op timestamp policy and exact errors remain
   unverified. This operation shares the existing saved-configuration coverage gaps.
+- `DELETE /agents/{agent_id}` removes the tenant-owned saved configuration and
+  returns `id`, `object=agent.deleted`, and `deleted=true`. Existing Sessions and
+  history are retained; recorded creation retries recover their frozen snapshot,
+  while new references to the source fail. Local missing/repeated deletion returns
+  404. Exact hosted errors and overlapping creation/deletion ordering are unverified.
 - `GET /agents` lists tenant-owned reusable resources with `after`, `limit` and
   `order` (default `desc`). It uses creation-time/ID keysets and the same resource
   mapping as retrieval. Positive int64 limits are accepted; pages contain up to
@@ -150,7 +155,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Capability | Current state |
 | --- | --- |
 | Shared daemon connection layer | Implemented; existing product protocol retained |
-| Reusable Agents | Tenant-scoped public create/retrieve/update/list with cursor pagination, metadata, explicit reasoning/service tiers, multi_agent, text/json_schema and function/tool_search/programmatic tool configuration; not execution admission |
+| Reusable Agents | Tenant-scoped public create/retrieve/update/list/delete with cursor pagination, metadata, explicit reasoning/service tiers, multi_agent, text/json_schema and function/tool_search/programmatic tool configuration; not execution admission |
 | Tenant-scoped Session persistence | Implemented; internal Store, not a public API |
 | Effective Session configuration persistence | Implemented; immutable JSON snapshot and retry identity |
 | Authenticated Session HTTP API | Create/retrieve/list and metadata-only update; inline or referenced Agent with field replacements, model/instructions, ordinary text with low/medium/high verbosity (Unix daemon; non-default levels require native model support), non-deferred function tools, environment `none`, metadata and creation retry keys |

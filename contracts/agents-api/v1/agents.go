@@ -73,3 +73,10 @@ type SavedAgentList struct {
 	FirstID *string      `json:"first_id" extensions:"x-nullable"`
 	LastID  *string      `json:"last_id" extensions:"x-nullable"`
 }
+
+// AgentDeleted is the pinned successful saved-resource deletion response.
+type AgentDeleted struct {
+	ID      string `json:"id" binding:"required"`
+	Object  string `json:"object" binding:"required" enums:"agent.deleted"`
+	Deleted bool   `json:"deleted" binding:"required" enums:"true"`
+}
