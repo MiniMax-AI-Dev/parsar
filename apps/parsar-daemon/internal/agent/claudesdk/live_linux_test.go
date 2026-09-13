@@ -54,7 +54,13 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		http.Error(w, "provider transport failed", http.StatusBadGateway)
 	}
 	var mu sync.Mutex
-	var models []string
+	type providerRequest struct {
+		Model string `json:"model"`
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+	var requests []providerRequest
 	forwarder := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/messages") {
 			body, err := io.ReadAll(req.Body)
@@ -64,12 +70,10 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 			}
 			_ = req.Body.Close()
 			req.Body = io.NopCloser(bytes.NewReader(body))
-			var value struct {
-				Model string `json:"model"`
-			}
+			var value providerRequest
 			_ = json.Unmarshal(body, &value)
 			mu.Lock()
-			models = append(models, value.Model)
+			requests = append(requests, value)
 			mu.Unlock()
 		}
 		proxy.ServeHTTP(w, req)
@@ -80,24 +84,44 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		"ANTHROPIC_API_KEY=", "CLAUDE_CODE_OAUTH_TOKEN=", "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1",
 		"ANTHROPIC_DEFAULT_SONNET_MODEL=MiniMax-M3", "ANTHROPIC_DEFAULT_OPUS_MODEL=MiniMax-M3", "ANTHROPIC_DEFAULT_HAIKU_MODEL=MiniMax-M3",
 	}}
+
+	// Ambient project configuration must not add a model tool or start a server.
+	work := filepath.Join(config.StateDir, "work")
+	if err := os.MkdirAll(filepath.Join(work, ".claude"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	canary := filepath.Join(root, "ambient-mcp-started")
+	ambient, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"ambient": map[string]any{
+		"command": "node", "args": []string{"-e", "require('node:fs').writeFileSync(process.argv[1], 'unexpected')", canary},
+	}}})
+	if err := os.WriteFile(filepath.Join(work, ".mcp.json"), ambient, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, ".claude", "settings.json"), []byte(`{"enableAllProjectMcpServers":true,"permissions":{"allow":["Bash","Read","Agent","WebSearch"]}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	type evidence struct {
-		SessionID      string           `json:"session_id"`
-		NodePID        int              `json:"node_pid"`
-		NativePIDs     []int            `json:"native_pids"`
-		ChildPIDs      []int            `json:"child_pids"`
-		Text           string           `json:"text"`
-		Failure        string           `json:"failure,omitempty"`
-		Events         []proto.Envelope `json:"events"`
-		FunctionCalls  int              `json:"function_calls"`
-		AppliedResults int              `json:"applied_results"`
+		SessionID        string            `json:"session_id"`
+		NodePID          int               `json:"node_pid"`
+		NativePIDs       []int             `json:"native_pids"`
+		ChildPIDs        []int             `json:"child_pids"`
+		Text             string            `json:"text"`
+		Failure          string            `json:"failure,omitempty"`
+		Events           []proto.Envelope  `json:"events"`
+		FunctionCalls    int               `json:"function_calls"`
+		AppliedResults   int               `json:"applied_results"`
+		ProviderRequests []providerRequest `json:"provider_requests"`
 	}
 	functionNonce := "function-" + uuid.NewString()
 	run := func(prompt, resume string, success *bool) evidence {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
+		mu.Lock()
+		requestStart := len(requests)
+		mu.Unlock()
 		out := make(chan proto.Envelope, 64)
-		request := proto.PromptRequestPayload{RunID: uuid.NewString(), Prompt: prompt, AgentSessionID: resume, StrictResume: true, ReleaseOnCompletion: true, ObserveMessages: true, AgentOptions: map[string]any{"model": "MiniMax-M3", "system_prompt": "Answer briefly and preserve the exact verification value in the conversation. Use no tools."}}
+		request := proto.PromptRequestPayload{RunID: uuid.NewString(), Prompt: prompt, AgentSessionID: resume, StrictResume: true, ReleaseOnCompletion: true, ObserveMessages: true, DisableExecutionEnvironment: true, DisableSubagents: true, AgentOptions: map[string]any{"model": "MiniMax-M3", "system_prompt": "Answer briefly and preserve the exact verification value in the conversation. Use no tools."}}
 		if success != nil {
 			request.ObserveToolObservations = true
 			request.AgentOptions["system_prompt"] = "Call lookup exactly once as requested, then report both result parts and any prior verification value. Never retry a failed tool."
@@ -214,6 +238,30 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 				}
 			}
 		}
+
+		mu.Lock()
+		proof.ProviderRequests = append([]providerRequest{}, requests[requestStart:]...)
+		mu.Unlock()
+		for _, sent := range proof.ProviderRequests {
+			if sent.Model != "MiniMax-M3" {
+				t.Fatal("unexpected provider model", sent.Model)
+			}
+			want := 0
+			if success != nil {
+				want = 1
+			}
+			if len(sent.Tools) != want {
+				t.Fatal("native tool inventory widened", sent.Tools)
+			}
+			for _, tool := range sent.Tools {
+				if tool.Name != "mcp__functions__lookup" {
+					t.Fatal("undeclared native tool", tool.Name)
+				}
+			}
+		}
+		if _, err := os.Stat(canary); !os.IsNotExist(err) {
+			t.Fatal("ambient MCP configuration was not excluded", err)
+		}
 		data, err := json.MarshalIndent(proof, "", "  ")
 		if err != nil {
 			t.Fatal(err)
@@ -254,11 +302,11 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 		verifyLiveUsageEvents(t, completed.Events)
 	}
 	mu.Lock()
-	before := len(models)
+	before := len(requests)
 	mu.Unlock()
 	missing := run("Say hello.", uuid.NewString(), nil)
 	mu.Lock()
-	measured := append([]string{}, models...)
+	measured := append([]providerRequest{}, requests...)
 	mu.Unlock()
 	if !strings.Contains(missing.Failure, "history_unavailable") || missing.SessionID != "" || len(missing.NativePIDs) != 0 || len(measured) != before {
 		t.Fatalf("missing history did not fail before native/model start: %+v", missing)
@@ -266,12 +314,12 @@ func TestLiveClaudeSDKTextResume(t *testing.T) {
 	if len(measured) < 2 {
 		t.Fatal("expected real model requests")
 	}
-	for _, model := range measured {
-		if model != "MiniMax-M3" {
-			t.Fatalf("unexpected requested model %q", model)
+	for _, request := range measured {
+		if request.Model != "MiniMax-M3" {
+			t.Fatalf("unexpected requested model %q", request.Model)
 		}
 	}
-	data, _ := json.MarshalIndent(map[string]any{"scope": "Go daemon factory -> official SDK -> real MiniMax API; public API not enabled", "turns": []evidence{first, second, functionFirst, functionSecond}, "missing_history": missing, "model_requests": measured}, "", "  ")
+	data, _ := json.MarshalIndent(map[string]any{"scope": "private Go factory -> official SDK -> real MiniMax with disabled environment/subagent tools; public API not enabled; no filesystem isolation claim", "turns": []evidence{first, second, functionFirst, functionSecond}, "missing_history": missing, "model_requests": measured}, "", "  ")
 	if err := os.WriteFile(filepath.Join(root, "proof.json"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
