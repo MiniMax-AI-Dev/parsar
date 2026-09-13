@@ -5,16 +5,13 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 )
 
 const ticketLifetime = 5 * time.Minute
@@ -24,7 +21,8 @@ type Registry struct {
 	source         EnvironmentStore
 	checkOwnership func(context.Context) error
 	publicWS       string
-	keys           map[[32]byte]ExecutorKey
+	keys           map[[32]byte]ScopedKey
+	harnessKeys    map[[32]byte]ScopedKey
 	mu             sync.Mutex
 	closed         bool
 	registrations  map[string]*registration
@@ -32,11 +30,12 @@ type Registry struct {
 
 type registration struct {
 	id        string
-	key       ExecutorKey
+	key       ScopedKey
 	publicKey PublicKey
 	ticket    [32]byte
 	expires   time.Time
-	socket    *websocket.Conn
+	socket    *connection
+	grants    map[[32]byte]*harnessGrant
 }
 
 func New(c Config) (*Registry, error) {
@@ -44,17 +43,29 @@ func New(c Config) (*Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Registry{source: c.Store, checkOwnership: c.CheckOwnership, publicWS: url, keys: keys, registrations: make(map[string]*registration)}, nil
+	harnessKeys, err := scopedKeys(c.HarnessKeys)
+	if err != nil {
+		return nil, err
+	}
+	for digest := range harnessKeys {
+		if _, exists := keys[digest]; exists {
+			return nil, errors.New("harness and executor keys must be distinct")
+		}
+	}
+	return &Registry{harnessKeys: harnessKeys, source: c.Store, checkOwnership: c.CheckOwnership, publicWS: url, keys: keys, registrations: make(map[string]*registration)}, nil
 }
 
 func (r *Registry) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /cloud/environment/{environment}/register", r.register)
 	mux.HandleFunc("GET /cloud/environment/{environment}/executor/{registration}", r.connectExecutor)
+	mux.HandleFunc("POST /cloud/environment/{environment}/connect", r.connect)
+	mux.HandleFunc("POST /cloud/environment/{environment}/validate", r.validate)
+	mux.HandleFunc("GET /cloud/environment/{environment}/harness/{registration}", r.connectHarness)
 	return mux
 }
 
-func (r *Registry) authorized(ctx context.Context, key ExecutorKey) error {
+func (r *Registry) authorized(ctx context.Context, key ScopedKey) error {
 	// Client disconnects must not cancel a query on the shared execution lease.
 	ownerCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
@@ -66,7 +77,7 @@ func (r *Registry) authorized(ctx context.Context, key ExecutorKey) error {
 	return err
 }
 
-func (r *Registry) check(w http.ResponseWriter, req *http.Request, key ExecutorKey) bool {
+func (r *Registry) check(w http.ResponseWriter, req *http.Request, key ScopedKey) bool {
 	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
 	defer cancel()
 	err := r.authorized(ctx, key)
@@ -92,7 +103,7 @@ func (r *Registry) check(w http.ResponseWriter, req *http.Request, key ExecutorK
 // @Router /cloud/environment/{environment}/register [post]
 func (r *Registry) register(w http.ResponseWriter, req *http.Request) {
 	environment := req.PathValue("environment")
-	key, ok := r.credential(req, environment)
+	key, ok := credential(req, environment, r.keys)
 	if !ok {
 		writeError(w, http.StatusUnauthorized)
 		return
@@ -101,23 +112,19 @@ func (r *Registry) register(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var body RegistrationRequest
-	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 8*1024))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil || body.SecurityProfile != securityProfile || !body.ExecutorPublicKey.valid() {
+	if !decodeRequest(w, req, &body) {
+		return
+	}
+	if body.SecurityProfile != securityProfile || !body.ExecutorPublicKey.valid() {
 		writeError(w, http.StatusBadRequest)
 		return
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		writeError(w, http.StatusBadRequest)
-		return
-	}
-	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
+	ticket, err := capability()
+	if err != nil {
 		writeError(w, http.StatusServiceUnavailable)
 		return
 	}
-	ticket := base64.RawURLEncoding.EncodeToString(secret)
-	next := &registration{id: uuid.NewString(), key: key, publicKey: body.ExecutorPublicKey, ticket: sha256.Sum256([]byte(ticket)), expires: time.Now().Add(ticketLifetime)}
+	next := &registration{id: uuid.NewString(), key: key, publicKey: body.ExecutorPublicKey, ticket: sha256.Sum256([]byte(ticket)), expires: time.Now().Add(ticketLifetime), grants: make(map[[32]byte]*harnessGrant)}
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
@@ -126,20 +133,16 @@ func (r *Registry) register(w http.ResponseWriter, req *http.Request) {
 	}
 	previous := r.registrations[environment]
 	r.registrations[environment] = next
-	var oldSocket *websocket.Conn
 	if previous != nil {
-		oldSocket = previous.socket
+		r.closeConnectionLocked(previous, previous.socket)
 	}
 	r.mu.Unlock()
-	if oldSocket != nil {
-		_ = oldSocket.Close()
-	}
 	writeJSON(w, http.StatusOK, RegistrationResponse{EnvironmentID: environment, ExecutorRegistrationID: next.id, SecurityProfile: securityProfile, URL: r.publicWS + "/cloud/environment/" + environment + "/executor/" + next.id + "?ticket=" + ticket})
 }
 
 // Connected reports a current authenticated socket, not harness readiness or filesystem isolation.
 func (r *Registry) Connected(ctx context.Context, tenant, environment string) (bool, error) {
-	if err := r.authorized(ctx, ExecutorKey{TenantID: tenant, EnvironmentID: environment}); err != nil {
+	if err := r.authorized(ctx, ScopedKey{TenantID: tenant, EnvironmentID: environment}); err != nil {
 		return false, err
 	}
 	r.mu.Lock()
@@ -153,9 +156,15 @@ func (r *Registry) Close() {
 	defer r.mu.Unlock()
 	r.closed = true
 	for environment, reg := range r.registrations {
-		if reg.socket != nil {
-			_ = reg.socket.Close()
-		}
+		r.closeConnectionLocked(reg, reg.socket)
 		delete(r.registrations, environment)
 	}
+}
+
+func capability() (string, error) {
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(secret), nil
 }

@@ -11,6 +11,15 @@ import (
 )
 
 const heartbeatInterval = 5 * time.Second
+const maxRelayMessageSize = 256 * 1024
+const relayWriteTimeout = 5 * time.Second
+
+var nativeUpgrader = websocket.Upgrader{HandshakeTimeout: 5 * time.Second, ReadBufferSize: 1024, WriteBufferSize: 1024}
+
+type connection struct {
+	socket *websocket.Conn
+	peer   *connection
+}
 
 // @Summary Attach an executor using a registration-scoped connection capability
 // @Tags Native executor registry
@@ -34,51 +43,78 @@ func (r *Registry) connectExecutor(w http.ResponseWriter, req *http.Request) {
 	if !r.check(w, req, reg.key) {
 		return
 	}
-	// Upgrade only the current registration, and never replace an established socket by replaying its URL.
 	r.mu.Lock()
-	if r.closed || r.registrations[environment] != reg || reg.socket != nil {
+	if r.closed || r.registrations[environment] != reg || !time.Now().Before(reg.expires) || reg.socket != nil {
 		r.mu.Unlock()
 		writeError(w, http.StatusConflict)
 		return
 	}
-	upgrader := websocket.Upgrader{HandshakeTimeout: 5 * time.Second, ReadBufferSize: 1024, WriteBufferSize: 1024}
-	socket, err := upgrader.Upgrade(w, req, nil)
+	socket, err := nativeUpgrader.Upgrade(w, req, nil)
 	if err != nil {
 		r.mu.Unlock()
 		return
 	}
-	reg.socket = socket
+	c := &connection{socket: socket}
+	reg.socket = c
 	r.mu.Unlock()
-	defer r.disconnected(environment, reg, socket)
-	socket.SetReadLimit(64 * 1024)
+	r.serveConnection(environment, reg, c)
+}
+
+func (r *Registry) serveConnection(environment string, reg *registration, c *connection) {
+	defer func() {
+		r.mu.Lock()
+		r.closeConnectionLocked(reg, c)
+		r.mu.Unlock()
+	}()
+	socket := c.socket
+	socket.SetReadLimit(maxRelayMessageSize)
 	_ = socket.SetReadDeadline(time.Now().Add(3 * heartbeatInterval))
 	socket.SetPongHandler(func(string) error { return socket.SetReadDeadline(time.Now().Add(3 * heartbeatInterval)) })
 	done := make(chan struct{})
 	defer close(done)
-	go r.heartbeat(environment, reg, socket, done)
+	go r.heartbeat(environment, reg, c, done)
 	for {
-		kind, _, err := socket.ReadMessage()
+		kind, data, err := socket.ReadMessage()
 		if err != nil {
 			return
 		}
-		if kind == websocket.BinaryMessage || kind == websocket.TextMessage {
-			// Data forwarding is deliberately unavailable until harness grants and routing are implemented.
-			_ = socket.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseUnsupportedData, "harness relay unavailable"), time.Now().Add(time.Second))
+		r.mu.Lock()
+		peer := c.peer
+		current := !r.closed && r.registrations[environment] == reg && (reg.socket == c || reg.socket == peer)
+		r.mu.Unlock()
+		if kind != websocket.BinaryMessage || peer == nil {
+			_ = socket.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseUnsupportedData, "binary paired relay required"), time.Now().Add(time.Second))
+			return
+		}
+		if !current {
+			return
+		}
+		// Each peer has exactly one data writer. Blocking bounds buffering to one native frame per direction.
+		if err := peer.socket.SetWriteDeadline(time.Now().Add(relayWriteTimeout)); err != nil {
+			return
+		}
+		if err := peer.socket.WriteMessage(websocket.BinaryMessage, data); err != nil {
 			return
 		}
 	}
 }
 
-func (r *Registry) disconnected(environment string, reg *registration, socket *websocket.Conn) {
-	_ = socket.Close()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.registrations[environment] == reg && reg.socket == socket {
+func (r *Registry) closeConnectionLocked(reg *registration, c *connection) {
+	if c == nil {
+		return
+	}
+	_ = c.socket.Close()
+	if c.peer != nil {
+		_ = c.peer.socket.Close()
+	}
+	// Close both physical peers so the native executor detaches its virtual Session before reconnecting.
+	if reg.socket == c || reg.socket == c.peer {
 		reg.socket = nil
+		clear(reg.grants)
 	}
 }
 
-func (r *Registry) heartbeat(environment string, reg *registration, socket *websocket.Conn, done <-chan struct{}) {
+func (r *Registry) heartbeat(environment string, reg *registration, c *connection, done <-chan struct{}) {
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 	for {
@@ -90,14 +126,14 @@ func (r *Registry) heartbeat(environment string, reg *registration, socket *webs
 			err := r.authorized(ctx, reg.key)
 			cancel()
 			r.mu.Lock()
-			current := !r.closed && r.registrations[environment] == reg && reg.socket == socket
+			current := !r.closed && r.registrations[environment] == reg && (reg.socket == c || (reg.socket != nil && reg.socket.peer == c))
 			r.mu.Unlock()
 			if err != nil || !current {
-				_ = socket.Close()
+				_ = c.socket.Close()
 				return
 			}
-			if err := socket.WriteControl(websocket.PingMessage, nil, time.Now().Add(time.Second)); err != nil {
-				_ = socket.Close()
+			if err := c.socket.WriteControl(websocket.PingMessage, nil, time.Now().Add(time.Second)); err != nil {
+				_ = c.socket.Close()
 				return
 			}
 		}

@@ -61,17 +61,17 @@ type fixture struct {
 	registry *Registry
 	server   *httptest.Server
 	source   *environmentFixture
-	keys     []ExecutorKey
+	keys     []ScopedKey
 	tokens   []string
 }
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 	source := &environmentFixture{values: map[string]string{}}
-	keys, tokens := []ExecutorKey{}, []string{}
+	keys, tokens := []ScopedKey{}, []string{}
 	for range 2 {
 		token := uuid.NewString()
-		k := ExecutorKey{TokenSHA256: digest(token), TenantID: uuid.NewString(), EnvironmentID: uuid.NewString()}
+		k := ScopedKey{TokenSHA256: digest(token), TenantID: uuid.NewString(), EnvironmentID: uuid.NewString()}
 		keys = append(keys, k)
 		tokens = append(tokens, token)
 		source.values[k.EnvironmentID] = k.TenantID
@@ -262,7 +262,7 @@ func TestExecutorConfigRejectsUnsafeOrAmbiguousBindings(t *testing.T) {
 		t.Fatal("duplicate scope accepted")
 	}
 	c = base
-	c.Keys = []ExecutorKey{{TokenSHA256: strings.Repeat("g", 64), TenantID: uuid.NewString(), EnvironmentID: uuid.NewString()}}
+	c.Keys = []ScopedKey{{TokenSHA256: strings.Repeat("g", 64), TenantID: uuid.NewString(), EnvironmentID: uuid.NewString()}}
 	if _, err := New(c); err == nil {
 		t.Fatal("invalid digest accepted")
 	}

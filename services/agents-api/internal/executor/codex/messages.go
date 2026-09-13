@@ -3,6 +3,7 @@ package codex
 import (
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 )
 
@@ -51,4 +52,35 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func writeError(w http.ResponseWriter, status int) {
 	writeJSON(w, status, RegistryError{Error: ErrorDetail{Code: "executor_registry_error", Message: http.StatusText(status)}})
+}
+
+type ConnectRequest struct {
+	HarnessPublicKey PublicKey `json:"harness_public_key"`
+}
+type ConnectResponse struct {
+	RegistrationResponse
+	ExecutorPublicKey       PublicKey `json:"executor_public_key"`
+	HarnessKeyAuthorization string    `json:"harness_key_authorization"`
+}
+type ValidationRequest struct {
+	ExecutorRegistrationID  string    `json:"executor_registration_id"`
+	HarnessPublicKey        PublicKey `json:"harness_public_key"`
+	HarnessKeyAuthorization string    `json:"harness_key_authorization"`
+}
+type ValidationResponse struct {
+	Valid bool `json:"valid"`
+}
+
+func decodeRequest(w http.ResponseWriter, req *http.Request, body any) bool {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 8*1024))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(body); err != nil {
+		writeError(w, http.StatusBadRequest)
+		return false
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		writeError(w, http.StatusBadRequest)
+		return false
+	}
+	return true
 }

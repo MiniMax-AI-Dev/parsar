@@ -14,26 +14,44 @@ import (
 
 func executorRegistry(s *store.Store, worker *execution.Worker, callerKeys []api.APIKey) (*codex.Registry, error) {
 	file, url := os.Getenv("AGENTS_API_EXECUTOR_KEYS_FILE"), os.Getenv("AGENTS_API_EXECUTOR_URL")
-	if file == "" && url == "" {
+	harnessFile := os.Getenv("AGENTS_API_HARNESS_KEYS_FILE")
+	if file == "" && url == "" && harnessFile == "" {
 		return nil, nil
 	}
 	if file == "" || url == "" || worker == nil {
 		return nil, errors.New("executor registry requires keys, URL and the daemon execution worker")
 	}
-	data, err := os.ReadFile(file)
+	keys, err := readNativeKeys(file)
 	if err != nil {
-		return nil, errors.New("cannot read AGENTS_API_EXECUTOR_KEYS_FILE")
+		return nil, err
 	}
-	var keys []codex.ExecutorKey
-	if err := json.Unmarshal(data, &keys); err != nil {
-		return nil, errors.New("executor keys must be an array of scoped digest bindings")
+	var harnessKeys []codex.ScopedKey
+	if harnessFile != "" {
+		harnessKeys, err = readNativeKeys(harnessFile)
+		if err != nil {
+			return nil, err
+		}
 	}
-	for _, executor := range keys {
-		for _, caller := range callerKeys {
-			if strings.EqualFold(executor.TokenSHA256, caller.TokenSHA256) {
-				return nil, errors.New("executor keys must be distinct from caller keys")
+	for _, purpose := range [][]codex.ScopedKey{keys, harnessKeys} {
+		for _, transport := range purpose {
+			for _, caller := range callerKeys {
+				if strings.EqualFold(transport.TokenSHA256, caller.TokenSHA256) {
+					return nil, errors.New("native transport keys must be distinct from caller keys")
+				}
 			}
 		}
 	}
-	return codex.New(codex.Config{Store: s, CheckOwnership: worker.CheckOwnership, PublicURL: url, Keys: keys})
+	return codex.New(codex.Config{Store: s, CheckOwnership: worker.CheckOwnership, PublicURL: url, Keys: keys, HarnessKeys: harnessKeys})
+}
+
+func readNativeKeys(file string) ([]codex.ScopedKey, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil, errors.New("cannot read native transport keys file")
+	}
+	var keys []codex.ScopedKey
+	if err := json.Unmarshal(data, &keys); err != nil || len(keys) == 0 {
+		return nil, errors.New("native transport keys must be a nonempty array of scoped digest bindings")
+	}
+	return keys, nil
 }
