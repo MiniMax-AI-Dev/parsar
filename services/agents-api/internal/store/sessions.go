@@ -129,12 +129,7 @@ func (s *Store) createSession(ctx context.Context, tenantID string, input Create
 		Metadata: metadata, IdempotencyKey: input.IdempotencyKey, RequestHash: hex.EncodeToString(hash[:]),
 		Configuration: configuration, CreationRequestHash: creationHash,
 	}
-	var row sqlc.Session
-	if len(batch) == 0 {
-		row, err = s.queries.CreateSession(ctx, params)
-	} else {
-		row, err = s.createSessionWithInputs(ctx, tenantID, params, batch)
-	}
+	row, err := s.createSessionResources(ctx, tenantID, params, batch)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SessionCreation{}, ErrIdempotencyConflict
 	}

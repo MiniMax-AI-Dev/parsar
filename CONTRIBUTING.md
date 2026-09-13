@@ -205,6 +205,21 @@ Self-hosted compute/files remain caller-owned, with explicit cleanup separate fr
 Session deletion. The full Environment implementation remains pending; follow the
 [pinned contract and acceptance sequence](contracts/agents-api/environments.md).
 
+The internal Store creates one Environment with an environment-bearing Session in
+its creation transaction. The Session upsert selects the retry winner; retries
+never create or repair associations. Environment identity/state live in their own
+table. Tenant ownership and immutable configuration come from the owning Session,
+without duplicated JSON, tenant columns or generated IDs in the creation hash.
+Environment reads join that Session and exclude deleted Sessions; deletion retains
+ownership for later settlement/cleanup. Existing `none` and legacy missing
+configuration create no Environment, and historical internal snapshots are not
+backfilled. Initial state is `pending`, with no lifecycle transition API yet.
+Public admission remains `none` only. The internal configuration read is not a safe
+public metadata projection; add that projection with the public resource behavior.
+Registration fencing, readiness before input/Turn admission, native/provider
+integration and real-model Environment acceptance remain separate required work.
+
+
 #### Independent build artifacts
 
 `make build-agents-api` produces `agents-api`, `agents-api-migrate` and
