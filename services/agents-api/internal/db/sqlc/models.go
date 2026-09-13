@@ -27,6 +27,13 @@ type Device struct {
 	RevokedAt      pgtype.Timestamptz `json:"revoked_at"`
 }
 
+type Environment struct {
+	ID        pgtype.UUID        `json:"id"`
+	SessionID pgtype.UUID        `json:"session_id"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type FunctionCall struct {
 	SessionID      pgtype.UUID        `json:"session_id"`
 	TurnID         pgtype.UUID        `json:"turn_id"`

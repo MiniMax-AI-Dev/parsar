@@ -6,6 +6,15 @@ currently admits `environment.type=none` on the verified Codex and Claude SDK
 profiles. No public Environment, template, file or executor registry route is
 implemented. See [current coverage](README.md#public-semantics).
 
+The internal Store now owns a durable Environment association for newly created
+`self_hosted` and `openai_hosted` snapshots, atomically with Session creation.
+It derives configuration and tenant ownership from the Session; retries preserve
+the existing identity. Scoped reads hide associations after Session deletion while
+retaining the underlying record. This is a persistence primitive, with no public
+admission, lifecycle transitions, readiness gating or native/provider integration.
+Missing/`none` configurations and historical internal snapshots gain no backfill.
+
+
 ## Contract inventory
 
 Paths below follow the SDK resource methods, before the service's `/v1` prefix.
