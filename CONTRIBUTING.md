@@ -298,7 +298,7 @@ queries in connect, attach and validation. Old cleanup cannot revoke a successor
 The five-minute connection-ticket lifetime does not expire an active execution
 owner or impose a Turn deadline. Pair closure is not proof of OS quiescence.
 Static harness-key files are retired explicitly, without a fallback or public
-issuance endpoint. Worker orchestration and public caller principal identity remain
+issuance endpoint. Production resolver wiring and public caller principal identity remain
 separate required work; tenant ownership is not upstream user/service-account
 identity. No credential bearer belongs in snapshots, events, logs or the database.
 
@@ -391,7 +391,7 @@ captures cancellation/session references under the lock. Successful transfer sto
 the preparation deadline and uses the ordinary run pump and completion release;
 later preparation Release cannot cancel that Run. Released/expired status makes
 the handle unusable; asynchronous native cleanup still counts toward capacity and
-does not promise immediate OS quiescence. Worker admission/start integration and
+does not promise immediate OS quiescence. Production admission/start wiring and
 public Environment lifecycle remain separate required work.
 
 This daemon slice keeps existing best-effort cancellation and harness cleanup.
@@ -423,9 +423,20 @@ The daemon may acknowledge cancellation before a native Session provides an outc
 without an observed final Done, delivery conservatively fails as outcome unavailable.
 Do not fabricate an empty cancellation outcome or infer native quiescence.
 The connection owner spans preparation and the transferred Run without a reservation-derived Run
-deadline; every exit releases it. This is a private dispatch primitive: Worker
-discovery/scheduling, public admission/initial inputs, principal identity and public
-Environment lifecycle remain separate work.
+deadline; every exit releases it.
+
+The existing Worker discovers pending input only for already bound, connected,
+non-revoked devices when its Dispatcher has a connection resolver. Preparation,
+claim, Run and cleanup occupy one of the same four slots as ordinary Turns, keyed
+by Session. Both queues advance bounded ID cursors and alternate candidates; the
+pending queue is scanned at most once every five seconds on the existing tick.
+A preparation failure may retry while still pending, without extending its stored
+deadline. This is private scheduling policy, not an upstream timing guarantee.
+Unknown promotion results and errors after admission stop scheduling; existing
+claimed-Turn reconciliation handles restart without another Start. Expiry retains
+its ordinary cadence even at capacity. Device selection, production resolver
+wiring, public admission/initial inputs, principal identity and public Environment
+lifecycle remain separate work.
 
 #### Independent build artifacts
 

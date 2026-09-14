@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestNativePreparedDispatcherRemoteEnvironment(t *testing.T) {
+func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	binary, image := os.Getenv("PARSAR_CODEX_BINARY"), os.Getenv("PARSAR_PLACEMENT_EXECUTOR_IMAGE")
 	keyFile := os.Getenv("PARSAR_PLACEMENT_MODEL_KEY_FILE")
 	if binary == "" || !strings.HasPrefix(image, "sha256:") || keyFile == "" {
@@ -54,24 +55,13 @@ func TestNativePreparedDispatcherRemoteEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lease, err := h.s.AcquireExecutionLease(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer lease.Close(context.Background())
-	h.d.Store = lease.Store()
 	executorToken, err := h.s.IssueEnvironmentExecutorCredential(ctx, h.tenant, environment.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := codex.New(codex.Config{Store: h.s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	server.Config.Handler = registry.Handler()
-	server.Start()
-	defer func() { registry.Close(); server.Close() }()
+	var registry *codex.Registry
+	var tokenMu sync.Mutex
 	secrets := []string{key, executorToken, h.credential}
 	harnessTokens := []string{}
 	h.d.EnvironmentConnection = func(owner context.Context, session store.Session, selected store.Environment) (execution.EnvironmentConnection, error) {
@@ -79,6 +69,8 @@ func TestNativePreparedDispatcherRemoteEnvironment(t *testing.T) {
 		if err != nil {
 			return execution.EnvironmentConnection{}, err
 		}
+		tokenMu.Lock()
+		defer tokenMu.Unlock()
 		harnessTokens = append(harnessTokens, token)
 		secrets = append(secrets, token)
 		return execution.EnvironmentConnection{URL: server.URL, Token: token, Release: release}, nil
@@ -86,11 +78,41 @@ func TestNativePreparedDispatcherRemoteEnvironment(t *testing.T) {
 	h.d.Options = func(context.Context, store.Session) (map[string]any, error) {
 		return map[string]any{"codex_provider": map[string]any{"name": "MiniMax validation", "base_url": "https://api.minimax.cn/v1", "bearer_token": key, "wire_api": "responses"}}, nil
 	}
+	worker, err := execution.StartWorker(ctx, h.d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workerCtx, cancelWorker := context.WithCancel(ctx)
+	workerDone := make(chan error, 1)
+	defer func() {
+		cancelWorker()
+		select {
+		case err := <-workerDone:
+			if err != nil && err != context.Canceled {
+				t.Error("worker stopped unexpectedly", err)
+			}
+		case <-time.After(15 * time.Second):
+			t.Error("worker did not release execution ownership")
+		}
+		if registry != nil {
+			registry.Close()
+		}
+		server.Close()
+	}()
+	registry, err = codex.New(codex.Config{Store: h.s, CheckOwnership: worker.CheckOwnership, PublicURL: "http://" + server.Listener.Addr().String()})
+	if err != nil {
+		cancelWorker()
+		workerDone <- worker.Run(workerCtx)
+		t.Fatal(err)
+	}
+	server.Config.Handler = registry.Handler()
+	server.Start()
+	go func() { workerDone <- worker.Run(workerCtx) }()
 	instruction := "REMOTE_" + uuid.NewString()
 	local := prepareDaemonRemoteWorkspace(t, root, instruction)
 	startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, server.URL, environment.ID, executorToken)
-	proof := map[string]any{"scope": "private Dispatcher reservation execution; Worker admission and public Environment lifecycle remain pending", "environment_id": environment.ID, "session_id": h.session.ID, "native_version": strings.TrimSpace(string(version))}
-	defer func() { persistDaemonRemoteProof(t, root, proof, secrets) }()
+	proof := map[string]any{"scope": "private Worker scheduling for bound Sessions; production wiring and public Environment lifecycle remain pending", "environment_id": environment.ID, "session_id": h.session.ID, "native_version": strings.TrimSpace(string(version))}
+	defer func() { tokenMu.Lock(); defer tokenMu.Unlock(); persistDaemonRemoteProof(t, root, proof, secrets) }()
 	const memory = "walnut heron violet cedar cobalt willow moss iris"
 	nativeID := ""
 	for index, phase := range []string{"first", "resumed"} {
@@ -109,9 +131,9 @@ func TestNativePreparedDispatcherRemoteEnvironment(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		run, err := h.d.RunEnvironmentInput(ctx, h.tenant, h.session.ID, pending.ID)
+		run := awaitWorkerEnvironmentRun(t, ctx, h.s, h.tenant, pending)
 		proof[phase] = run
-		if err != nil || run.Turn.Status != store.TurnCompleted || len(run.Reservation.Receipts) != 1 || run.Reservation.Receipts[0].Replayed {
+		if run.Turn.Status != store.TurnCompleted || len(run.Reservation.Receipts) != 1 {
 			t.Fatal("native prepared dispatch did not complete; inspect private proof", err)
 		}
 		var result execution.Result
@@ -140,9 +162,8 @@ func TestNativePreparedDispatcherRemoteEnvironment(t *testing.T) {
 		}
 		proof[phase+"_events"] = events
 		assertDaemonRemoteCommand(t, events, phase, workspace)
-		before := len(harnessTokens)
-		retry, err := h.d.RunEnvironmentInput(ctx, h.tenant, h.session.ID, pending.ID)
-		if err != nil || len(retry.Reservation.Receipts) != 1 || !retry.Reservation.Receipts[0].Replayed || retry.Reservation.Receipts[0].TurnID != run.Turn.ID || retry.Turn.ID != "" || len(harnessTokens) != before {
+		retry, err := h.s.ReserveEnvironmentInput(ctx, h.tenant, h.session.ID, phase, []store.Input{{Kind: "message", Payload: payload}})
+		if err != nil || len(retry.Receipts) != 1 || !retry.Receipts[0].Replayed || retry.Receipts[0].TurnID != run.Turn.ID {
 			t.Fatal("reservation retry allocated or executed another native preparation")
 		}
 	}
@@ -156,12 +177,18 @@ func TestNativePreparedDispatcherRemoteEnvironment(t *testing.T) {
 	if _, err := os.Stat(workspace); !os.IsNotExist(err) {
 		t.Fatal("executor path appeared on the harness host")
 	}
-	for _, token := range harnessTokens {
+	tokenMu.Lock()
+	tokens := append([]string(nil), harnessTokens...)
+	tokenMu.Unlock()
+	if len(tokens) != 2 {
+		t.Fatal("worker prepared a reservation more than once")
+	}
+	for _, token := range tokens {
 		assertDaemonRemoteSecrets(t, root, "agents-api-"+h.session.ID, key, executorToken, token, h.credential)
 	}
 	proof["native_thread_id"] = nativeID
-	proof["status"] = "private_dispatcher_verified_public_integration_pending"
+	proof["status"] = "private_worker_verified_public_integration_pending"
 	proof["completed_turns"] = 2
 	proof["reservation_retries_did_not_prepare_or_start"] = true
-	t.Log("real-provider prepared Dispatcher evidence", root)
+	t.Log("real-provider bound Worker evidence", root)
 }

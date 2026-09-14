@@ -12,22 +12,48 @@ import (
 
 type ExecutionWork struct{ TenantID, SessionID, TurnID, Status string }
 
-func (s *Store) ListExecutionWork(ctx context.Context, after string, statuses []string, connectedDevices []string) ([]ExecutionWork, error) {
+type EnvironmentInputWork struct{ TenantID, SessionID, ReservationID string }
+
+func executionWorkCursor(after string, connectedDevices []string) (pgtype.UUID, []pgtype.UUID, error) {
 	id := pgtype.UUID{Valid: true}
 	var err error
 	if after != "" {
 		id, err = parseID(after)
 		if err != nil {
-			return nil, err
+			return id, nil, err
 		}
 	}
 	devices := make([]pgtype.UUID, 0, len(connectedDevices))
 	for _, value := range connectedDevices {
 		device, err := parseID(value)
 		if err != nil {
-			return nil, err
+			return id, nil, err
 		}
 		devices = append(devices, device)
+	}
+	return id, devices, nil
+}
+
+func (s *Store) ListEnvironmentInputWork(ctx context.Context, after string, connectedDevices []string) ([]EnvironmentInputWork, error) {
+	id, devices, err := executionWorkCursor(after, connectedDevices)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListEnvironmentInputWork(ctx, sqlc.ListEnvironmentInputWorkParams{AfterID: id, ConnectedDevices: devices})
+	if err != nil {
+		return nil, err
+	}
+	work := make([]EnvironmentInputWork, 0, len(rows))
+	for _, row := range rows {
+		work = append(work, EnvironmentInputWork{TenantID: uuid.UUID(row.TenantID.Bytes).String(), SessionID: uuid.UUID(row.SessionID.Bytes).String(), ReservationID: uuid.UUID(row.ID.Bytes).String()})
+	}
+	return work, nil
+}
+
+func (s *Store) ListExecutionWork(ctx context.Context, after string, statuses []string, connectedDevices []string) ([]ExecutionWork, error) {
+	id, devices, err := executionWorkCursor(after, connectedDevices)
+	if err != nil {
+		return nil, err
 	}
 	rows, err := s.queries.ListExecutionWork(ctx, sqlc.ListExecutionWorkParams{AfterID: id, Statuses: statuses, ConnectedOnly: connectedDevices != nil, ConnectedDevices: devices})
 	if err != nil {
