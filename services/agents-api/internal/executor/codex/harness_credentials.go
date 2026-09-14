@@ -79,22 +79,26 @@ func (r *Registry) harnessCredentialActiveLocked(credential *harnessCredential) 
 
 func (r *Registry) releaseHarnessCredential(credential *harnessCredential) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.harnessKeys[credential.hash] != credential {
+		r.mu.Unlock()
 		return
 	}
 	delete(r.harnessKeys, credential.hash)
 	credential.stop()
 	reg := r.registrations[credential.key.EnvironmentID]
 	if reg == nil {
+		r.mu.Unlock()
 		return
 	}
+	var observation *connectionObservation
 	for ticket, grant := range reg.grants {
 		if grant.credential == credential {
 			delete(reg.grants, ticket)
 			if grant.harness != nil {
-				r.closeConnectionLocked(reg, grant.harness)
+				observation = r.closeConnectionLocked(reg, grant.harness)
 			}
 		}
 	}
+	r.mu.Unlock()
+	_ = r.deliverObservation(observation)
 }

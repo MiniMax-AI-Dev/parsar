@@ -34,12 +34,21 @@ func TestEnvironmentConnectionUsesScopedOwnerCredentials(t *testing.T) {
 	}
 	source := connectionStore{tenant: uuid.NewString(), environment: uuid.NewString()}
 	owned := true
-	registry, err := codex.New(codex.Config{Store: source, PublicURL: "https://executor.example/", CheckOwnership: func(context.Context) error {
-		if !owned {
-			return errors.New("execution ownership lost")
-		}
-		return nil
-	}})
+	registry, err := codex.New(codex.Config{Store: source, PublicURL: "https://executor.example/",
+		ReplaceConnection: func(context.Context, string, string, string) error {
+			t.Fatal("credential-only fixture replaced a connection")
+			return nil
+		},
+		ObserveConnection: func(context.Context, string, string, string, int64, bool) error {
+			t.Fatal("credential-only fixture observed a connection")
+			return nil
+		},
+		CheckOwnership: func(context.Context) error {
+			if !owned {
+				return errors.New("execution ownership lost")
+			}
+			return nil
+		}})
 	if err != nil {
 		t.Fatal(err)
 	}

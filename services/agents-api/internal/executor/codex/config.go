@@ -26,12 +26,16 @@ type ScopedKey struct {
 type Config struct {
 	Store          EnvironmentStore
 	CheckOwnership func(context.Context) error
-	PublicURL      string
+	// Callbacks must honor their context and use the current execution writer.
+	// They run outside the registry mutex and must not call Registry.Close.
+	ReplaceConnection func(context.Context, string, string, string) error
+	ObserveConnection func(context.Context, string, string, string, int64, bool) error
+	PublicURL         string
 }
 
 func validateConfig(c Config) (string, error) {
-	if c.Store == nil || c.CheckOwnership == nil {
-		return "", errors.New("executor registry requires Store and execution ownership")
+	if c.Store == nil || c.CheckOwnership == nil || c.ReplaceConnection == nil || c.ObserveConnection == nil {
+		return "", errors.New("executor registry requires Store, execution ownership and connection lifecycle callbacks")
 	}
 	u, err := url.Parse(c.PublicURL)
 	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {

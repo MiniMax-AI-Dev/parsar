@@ -56,15 +56,20 @@ func (r *Registry) connectExecutor(w http.ResponseWriter, req *http.Request) {
 	}
 	c := &connection{socket: socket}
 	reg.socket = c
+	observation := r.connectionObservationLocked(reg, true)
 	r.mu.Unlock()
+	if err := r.deliverObservation(observation); err != nil {
+		return
+	}
 	r.serveConnection(environment, reg, c)
 }
 
 func (r *Registry) serveConnection(environment string, reg *registration, c *connection) {
 	defer func() {
 		r.mu.Lock()
-		r.closeConnectionLocked(reg, c)
+		observation := r.closeConnectionLocked(reg, c)
 		r.mu.Unlock()
+		_ = r.deliverObservation(observation)
 	}()
 	socket := c.socket
 	socket.SetReadLimit(maxRelayMessageSize)
@@ -99,19 +104,23 @@ func (r *Registry) serveConnection(environment string, reg *registration, c *con
 	}
 }
 
-func (r *Registry) closeConnectionLocked(reg *registration, c *connection) {
+func (r *Registry) closeConnectionLocked(reg *registration, c *connection) *connectionObservation {
 	if c == nil {
-		return
+		return nil
 	}
 	_ = c.socket.Close()
 	if c.peer != nil {
 		_ = c.peer.socket.Close()
 	}
 	// Close both physical peers so the native executor detaches its virtual Session before reconnecting.
-	if reg.socket == c || reg.socket == c.peer {
+	if reg.socket != nil && (reg.socket == c || reg.socket == c.peer) {
 		reg.socket = nil
 		clear(reg.grants)
+		if r.registrations[reg.key.EnvironmentID] == reg {
+			return r.connectionObservationLocked(reg, false)
+		}
 	}
+	return nil
 }
 
 func (r *Registry) heartbeat(environment string, reg *registration, c *connection, done <-chan struct{}) {

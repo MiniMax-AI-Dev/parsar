@@ -67,7 +67,7 @@ func TestNativeExecutorLauncherTLSAndHelpers(t *testing.T) {
 		t.Fatal(err)
 	}
 	remote := "https://" + launcherTestHost + ":" + port
-	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: remote})
+	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, ReplaceConnection: lease.Store().ReplaceEnvironmentConnection, ObserveConnection: lease.Store().ObserveEnvironmentConnection, PublicURL: remote})
 	if err != nil {
 		t.Fatal(err)
 	}

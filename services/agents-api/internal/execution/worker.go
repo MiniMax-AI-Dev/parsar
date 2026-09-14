@@ -26,6 +26,10 @@ func StartWorker(ctx context.Context, dispatcher *Dispatcher) (*Worker, error) {
 	owned := *dispatcher
 	owned.Store = lease.Store()
 	worker := &Worker{dispatcher: &owned, admission: dispatcher.Store, lease: lease}
+	if err := owned.Store.ReconcileEnvironmentConnections(ctx); err != nil {
+		_ = lease.Close(context.Background())
+		return nil, err
+	}
 	if err := worker.reconcile(ctx); err != nil {
 		_ = lease.Close(context.Background())
 		return nil, err
@@ -73,6 +77,9 @@ func (w *Worker) Run(ctx context.Context) error {
 	defer func() {
 		cancel()
 		running.Wait()
+		if w.dispatcher.CloseEnvironmentConnections != nil {
+			w.dispatcher.CloseEnvironmentConnections()
+		}
 		closeCtx, stop := context.WithTimeout(context.Background(), 5*time.Second)
 		defer stop()
 		_ = w.lease.Close(closeCtx)

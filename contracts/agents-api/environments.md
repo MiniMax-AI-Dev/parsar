@@ -12,7 +12,8 @@ The internal Store now owns a durable Environment association for newly created
 It derives configuration and tenant ownership from the Session; retries preserve
 the existing identity. Scoped reads hide associations after Session deletion while
 retaining the underlying record. This is a persistence primitive, with no public
-admission, lifecycle transitions, readiness gating or native/provider integration.
+admission. Authenticated connection observations are integrated below; readiness
+gating and complete public/native/provider integration remain separate work.
 Missing/`none` configurations and historical internal snapshots gain no backfill.
 
 
@@ -21,8 +22,14 @@ restrictions, the existing execution owner and scoped Store reads. Registration 
 socket identity are process-local; the returned WebSocket capability expires for
 new connections after five minutes. Restart invalidates registrations, causing the
 native executor to register again. Replaced socket callbacks cannot clear a newer
-connection. These observations do not change durable `pending` state or emit public
-Environment readiness. Deleting the owning Session rejects new requests and closes
+connection. Current socket observations now commit `connected`/`disconnected` and
+immutable pinned Environment-event snapshots through the leased Store. Replacement
+and revision fencing prevent late observations from overwriting successors; startup
+reconciliation removes the previous process's connection evidence. Registration
+alone is not connection, and connection is not native readiness. No public
+Environment admission or read route is enabled by this bridge. The canonical
+[observation and shutdown rules](../../CONTRIBUTING.md#environment-ownership-and-placement)
+cover write failures and recovery. Deleting the owning Session rejects new requests and closes
 existing sockets on the next ownership heartbeat. A previous holder of a still-valid
 executor credential can register again; permanent exclusion requires revocation.
 Execution owners now obtain transient harness credentials through the internal

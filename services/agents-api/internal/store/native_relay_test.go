@@ -135,7 +135,7 @@ func TestNativeHarnessRelayPostgreSQLAndProcessRecovery(t *testing.T) {
 	}
 	executorToken := credential.Token
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String()})
+	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, ReplaceConnection: lease.Store().ReplaceEnvironmentConnection, ObserveConnection: lease.Store().ObserveEnvironmentConnection, PublicURL: "http://" + server.Listener.Addr().String()})
 	if err != nil {
 		t.Fatal(err)
 	}

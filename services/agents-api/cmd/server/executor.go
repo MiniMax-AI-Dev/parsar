@@ -11,7 +11,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
 
-func executorRegistry(s *store.Store, checkOwnership func(context.Context) error) (*codex.Registry, error) {
+func executorRegistry(s *store.Store, worker func() *execution.Worker, checkOwnership func(context.Context) error) (*codex.Registry, error) {
 	file, url := os.Getenv("AGENTS_API_EXECUTOR_KEYS_FILE"), os.Getenv("AGENTS_API_EXECUTOR_URL")
 	harnessFile := os.Getenv("AGENTS_API_HARNESS_KEYS_FILE")
 	if file == "" && url == "" && harnessFile == "" {
@@ -23,10 +23,23 @@ func executorRegistry(s *store.Store, checkOwnership func(context.Context) error
 	if harnessFile != "" {
 		return nil, errors.New("AGENTS_API_HARNESS_KEYS_FILE is retired; harness credentials belong to internal execution ownership; remove the old setting")
 	}
-	if url == "" || checkOwnership == nil {
+	if url == "" || checkOwnership == nil || worker == nil {
 		return nil, errors.New("executor registry requires URL and the daemon execution worker")
 	}
-	return codex.New(codex.Config{Store: s, CheckOwnership: checkOwnership, PublicURL: url})
+	return codex.New(codex.Config{Store: s, CheckOwnership: checkOwnership, PublicURL: url,
+		ReplaceConnection: func(ctx context.Context, tenant, environment, generation string) error {
+			if worker() == nil {
+				return errors.New("execution worker is not initialized")
+			}
+			return worker().ReplaceEnvironmentConnection(ctx, tenant, environment, generation)
+		},
+		ObserveConnection: func(ctx context.Context, tenant, environment, generation string, revision int64, connected bool) error {
+			if worker() == nil {
+				return errors.New("execution worker is not initialized")
+			}
+			return worker().ObserveEnvironmentConnection(ctx, tenant, environment, generation, revision, connected)
+		},
+	})
 }
 
 func environmentConnection(registry *codex.Registry, origin string) func(context.Context, store.Session, store.Environment) (execution.EnvironmentConnection, error) {

@@ -95,6 +95,7 @@ func TestHarnessCredentialReleaseFencesGrantsAndPreservesSuccessor(t *testing.T)
 			nativePOST(t, f, k.EnvironmentID, "connect", token, ConnectRequest{nativeRequest().ExecutorPublicKey}, 401, nil)
 			expectClosed(t, harness)
 			expectClosed(t, executor)
+			awaitLifecycle(t, f, k.EnvironmentID, reg.ExecutorRegistrationID, 2, false)
 			rejectSocket(t, pending.URL, 401)
 			if cause == "shutdown" {
 				return

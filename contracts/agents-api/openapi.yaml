@@ -555,12 +555,37 @@ definitions:
     - id
     - object
     type: object
+  v1.SessionEnvironmentState:
+    properties:
+      error:
+        allOf:
+        - $ref: '#/definitions/v1.StreamError'
+        x-nullable: true
+      id:
+        type: string
+      status:
+        enum:
+        - pending
+        - ready
+        - connected
+        - disconnected
+        - failed
+        type: string
+      type:
+        type: string
+    required:
+    - id
+    - status
+    - type
+    type: object
   v1.SessionEvent:
     properties:
       content_index:
         type: integer
       delta:
         type: string
+      environment:
+        $ref: '#/definitions/v1.SessionEnvironmentState'
       error:
         $ref: '#/definitions/v1.StreamError'
       event_id:

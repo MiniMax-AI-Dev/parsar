@@ -213,7 +213,8 @@ without duplicated JSON, tenant columns or generated IDs in the creation hash.
 Environment reads join that Session and exclude deleted Sessions; deletion retains
 ownership for later settlement/cleanup. Existing `none` and legacy missing
 configuration create no Environment, and historical internal snapshots are not
-backfilled. Initial state is `pending`, with no lifecycle transition API yet.
+backfilled. Initial state is `pending`; authenticated connection observations follow
+the lifecycle rules below.
 Public admission remains `none` only. The internal configuration read is not a safe
 public metadata projection; add that projection with the public resource behavior.
 Registration fencing, readiness before input/Turn admission, native/provider
@@ -294,8 +295,8 @@ overwrite a newer credential's registration. Heartbeats run every five seconds
 with a four-second authorization budget; closing sockets is an observation bound,
 not immediate revocation of remote side effects. Ownership is also rechecked; failed execution ownership closes the registry. This
 is bounded connection observation, not a guarantee of native process quiescence.
-Durable Environment state remains `pending`; no public readiness/event transition
-is inferred from a socket. The harness registry grants a distinct, exact-Environment credential access to
+Durable connection state and immutable Environment event snapshots follow the
+leased observation path below; a socket never establishes harness readiness. The harness registry grants a distinct, exact-Environment credential access to
 native `/connect`; the executor alone calls `/validate`. Each connection URL and
 one-use key authorization are separate five-minute capabilities bound to the
 current registration, executor socket and complete harness public key. Grants are
@@ -324,6 +325,32 @@ Concurrent native commands and files share one connection; additional independen
 harnesses are rejected without eviction. Public Environment admission and typed
 daemon dispatch integration remain separate work. Native transport annotations are excluded from the
 pinned public SDK OpenAPI output; their routes are documented in the service guide.
+
+Connection observations use the existing execution lease and Session lock. A
+separate `environment_connections` row retains the current generation and revision;
+`environments.status` and its Session Environment-event snapshot commit together.
+The producer serializes replacements, then numbers socket observations within each
+generation. Duplicate or older revisions and superseded generations are inert.
+Replacement retires a previously connected observation before publishing its new
+registration. Registration alone creates no connected event. Event payloads contain
+only public Environment identity/type/status and nullable error, never configuration,
+credentials, registration IDs or revisions. Transport observations have no asserted
+Turn association. `connected`/`disconnected` are distinct from native preparation
+readiness; do not cast resource `expired` into the event vocabulary or emit `ready`
+for a self-hosted connection.
+
+Registry writes run synchronously outside the relay mutex, with a four-second
+operation budget independent of client disconnect. Shutdown closes sockets, shares
+one four-second budget across captured disconnects, and drains accepted writes
+before the Worker releases its lease. Missing/deleted/terminal targets retire only
+the matching connection; other write failures are logged, retained by
+`LifecycleError`, and close the registry until restart. No successful persistence
+or continuous connectivity is inferred after a failed write. Before starting
+connection producers, a new Worker clears old generations and records disconnected
+state for old connected observations in batches of 32. Deleted resources stay
+hidden. Stop old writers before migrating/deploying this lifecycle; downgrade
+refuses to discard retained generation fencing. Public admission, metadata reads,
+full lifecycle events and pending-input projection remain separate requirements.
 
 The optional [Codex executor launcher](packages/codex-executor/README.md) is a
 separate Cargo package. Pin its native git revisions, transport patches, toolchain
@@ -460,7 +487,8 @@ configure the Dispatcher, then acquire Worker ownership before starting scheduli
 or HTTP consumers. Registry construction does not call the ownership callback;
 its Worker reference is assigned once before either consumer starts. Invalid
 registry configuration therefore fails before acquiring the execution lease.
-Shutdown waits for Worker cleanup before closing the registry and gateway.
+Shutdown waits for Run cleanup, drains registry observations while the Worker
+still owns its lease, then releases execution ownership and the gateway.
 The Codex resolver issues a fresh exact-Environment credential for the supplied
 execution owner; it does not admit public Environment input or
 define a transport for other engines.
