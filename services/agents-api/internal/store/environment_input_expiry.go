@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/db/sqlc"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -17,9 +18,24 @@ func (s *Store) ExpireEnvironmentInputs(ctx context.Context) (int64, error) {
 	defer cancel()
 	var expired int64
 	err := s.executionLease.transaction(ctx, func(tx pgx.Tx) error {
-		var err error
-		expired, err = s.queries.WithTx(tx).ExpireDueEnvironmentInputs(ctx)
-		return err
+		q := s.queries.WithTx(tx)
+		rows, err := q.ListDueEnvironmentInputs(ctx)
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			err := withEnvironmentInputActivity(ctx, q, row.SessionID, func() error {
+				return q.ExpireEnvironmentInputReservation(ctx, sqlc.ExpireEnvironmentInputReservationParams{SessionID: row.SessionID, ID: row.ID})
+			})
+			if err != nil {
+				return err
+			}
+			if err := q.PruneSessionEvents(ctx, row.SessionID); err != nil {
+				return err
+			}
+			expired++
+		}
+		return nil
 	})
 	if err != nil {
 		return 0, err

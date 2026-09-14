@@ -463,6 +463,15 @@ process state before opening connections. Shutdown drains observations before
 releasing execution ownership. Persistence failures close the registry and require
 a service restart; review its lifecycle error logs rather than treating closure as
 a successful write. See the [lifecycle rules](../../CONTRIBUTING.md#environment-ownership-and-placement).
+
+When the executor origin is configured, Session GET/list/metadata and live SSE can
+expose privately provisioned `self_hosted` Sessions through a safe output-only
+projection. Waiting input requests `environment_connection` before any Turn;
+connection arrival clears the action, and the existing Worker still verifies
+native readiness before admission. No waiting input means no connection request.
+The returned `remote_url` is the configured executor origin. Public self-hosted
+creation/input and standalone Environment metadata/file routes remain unavailable.
+
 The adapter checks its execution lease and visible Environment on requests and
 five-second heartbeats; deleted ownership, shutdown or lost ownership closes
 connections. Re-registering replaces an old socket without allowing its late close

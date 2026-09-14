@@ -7,32 +7,43 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const expireDueEnvironmentInputs = `-- name: ExpireDueEnvironmentInputs :execrows
-WITH candidates AS MATERIALIZED (
-    SELECT r.id, r.session_id
-    FROM environment_input_reservations r
-    JOIN sessions s ON s.id = r.session_id
-    WHERE r.state = 'pending'
-      AND r.deadline <= statement_timestamp()
-      AND s.deleted_at IS NULL
-    ORDER BY r.deadline, r.id
-    LIMIT 32
-    FOR UPDATE OF s SKIP LOCKED
-)
-UPDATE environment_input_reservations r
-SET state = 'expired', settled_at = clock_timestamp()
-FROM candidates c
-WHERE r.id = c.id AND r.session_id = c.session_id
-  AND r.state = 'pending'
-  AND r.deadline <= clock_timestamp()
+const listDueEnvironmentInputs = `-- name: ListDueEnvironmentInputs :many
+SELECT r.id, r.session_id
+FROM environment_input_reservations r
+JOIN sessions s ON s.id = r.session_id
+WHERE r.state = 'pending'
+  AND r.deadline <= statement_timestamp()
+  AND s.deleted_at IS NULL
+ORDER BY r.deadline, r.id
+LIMIT 32
+FOR UPDATE OF s SKIP LOCKED
 `
 
-func (q *Queries) ExpireDueEnvironmentInputs(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, expireDueEnvironmentInputs)
+type ListDueEnvironmentInputsRow struct {
+	ID        pgtype.UUID `json:"id"`
+	SessionID pgtype.UUID `json:"session_id"`
+}
+
+func (q *Queries) ListDueEnvironmentInputs(ctx context.Context) ([]ListDueEnvironmentInputsRow, error) {
+	rows, err := q.db.Query(ctx, listDueEnvironmentInputs)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	items := []ListDueEnvironmentInputsRow{}
+	for rows.Next() {
+		var i ListDueEnvironmentInputsRow
+		if err := rows.Scan(&i.ID, &i.SessionID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

@@ -95,8 +95,17 @@ cold native history. Repeated reservation submission must return replay receipts
 without allocating credentials or executing another command. Controlled Store and
 gateway tests separately cover preparation failure, expiry/deletion/cancellation,
 control-only Start rejection and cancellation while Start is pending. This fixture
-configures the Worker resolver before startup; public Environment admission and
-lifecycle remain separate work.
+configures the Worker resolver before startup. It additionally requires
+`PARSAR_OFFICIAL_SDK_PYTHON` pointing to the fixed SDK in `upstream.json`.
+Strict SDK and independent raw HTTP/SSE observers subscribe before reservation,
+verify the connection action without Turns/Items, and supply the returned URL and
+Environment ID unchanged to the caller-started executor. Scheduling begins after
+that offline snapshot and initial connection; native readiness, promotion and both
+Runs remain Worker-owned. The observers verify action clearing before the first
+Turn, both completed Turns/Items, tenant isolation and recovery through a new
+client. Private evidence includes `public-environment/public-environment-proof.json`.
+Session provisioning and input reservation stay private; public creation/input
+remain gated and complete Environment lifecycle is separate work.
 The current daemon's pending-start cancellation acknowledgment may omit Outcome;
 controlled coverage verifies conservative failure without final Done as well
 as cancellation with a supplied outcome. It does not claim complete native
@@ -114,7 +123,7 @@ credential remains in its profile; the existing provider adapter may store its k
 in private harness `config.toml`. Neither is mounted into the executor. The explicit
 shell policy checks inheritance, not arbitrary same-user process visibility.
 `remote-adapter-proof.json` describes this bounded daemon acceptance; public input
-admission, durable lifecycle, credentials, files/templates and API projection still
+admission, complete lifecycle, files/templates and broader resource projection still
 need their own implementation and real acceptance.
 
 ## Separate executor launcher

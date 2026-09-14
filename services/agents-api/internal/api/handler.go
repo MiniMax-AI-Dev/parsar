@@ -30,10 +30,11 @@ type ResourceStore interface {
 }
 
 type Handler struct {
-	store  ResourceStore
-	auth   *Authenticator
-	engine string
-	inputs InputSubmitter
+	store       ResourceStore
+	auth        *Authenticator
+	engine      string
+	inputs      InputSubmitter
+	executorURL string
 }
 
 func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...Option) (http.Handler, error) {
@@ -210,6 +211,7 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Retrieve an execution Session
+// @Description Returns supported none and privately provisioned self_hosted Session environments. Pending input can require an Environment connection before a Turn exists; connection observations are not native execution readiness. Public self_hosted creation and input remain unsupported.
 // @Tags Sessions
 // @Produce json
 // @Security BearerAuth
@@ -232,7 +234,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) respondSession(w http.ResponseWriter, r *http.Request, session store.Session) {
-	response, err := sessionResponse(session)
+	response, err := sessionResponse(session, h.executorURL)
 	if err != nil {
 		writeStoreError(w, r, err)
 		return
@@ -241,7 +243,7 @@ func (h *Handler) respondSession(w http.ResponseWriter, r *http.Request, session
 }
 
 // @Summary List execution Sessions
-// @Description Cursor and results are scoped to the authenticated execution tenant. Optional agent_id matches the immutable root Agent ID, including inline Agents and historical Sessions whose saved source was updated or deleted. Omission lists all Agents.
+// @Description Cursor and results are scoped to the authenticated execution tenant. Optional agent_id matches the immutable root Agent ID, including inline Agents and historical Sessions whose saved source was updated or deleted. Omission lists all Agents. Returns the same Environment and pending-input activity projection as Session retrieval, including privately provisioned self_hosted Sessions.
 // @Tags Sessions
 // @Produce json
 // @Security BearerAuth
@@ -269,7 +271,7 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	response := v1.SessionList{Data: make([]v1.Session, 0, len(page.Sessions)), HasMore: page.NextCursor != ""}
 	for _, session := range page.Sessions {
-		item, err := sessionResponse(session)
+		item, err := sessionResponse(session, h.executorURL)
 		if err != nil {
 			writeStoreError(w, r, err)
 			return

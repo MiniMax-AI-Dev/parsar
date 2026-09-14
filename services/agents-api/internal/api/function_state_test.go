@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"reflect"
 	"testing"
 	"time"
 
@@ -18,9 +17,14 @@ func TestFunctionStateEventsUseTheirOwnSnapshot(t *testing.T) {
 	for _, arguments := range []string{`{"n":9007199254740993}`, `null`, `[1,"value"]`, `"value"`, `false`} {
 		action := v1.FunctionCallAction{Type: "function_call", CallID: "call", Name: "lookup", TurnID: "turn", Arguments: json.RawMessage(arguments)}
 		change := store.SessionChange{Event: v1.SessionEvent{Type: "agent.session.requires_action", EventID: "event", SessionID: "session"}, Turn: &store.Turn{ID: "turn", Status: store.TurnWaiting}, RequiredActions: []v1.FunctionCallAction{action}}
-		event, err := streamResponse(session, change)
-		if err != nil || event.Session.Status != "requires_action" || !reflect.DeepEqual(event.Session.RequiredActions, change.RequiredActions) {
+		event, err := streamResponse(session, change, "")
+		if err != nil || event.Session.Status != "requires_action" {
 			t.Fatal(event, err)
+		}
+		actual, _ := json.Marshal(event.Session.RequiredActions)
+		want, _ := json.Marshal(change.RequiredActions)
+		if string(actual) != string(want) {
+			t.Fatal("function action projection changed", string(actual), string(want))
 		}
 		raw, err := json.Marshal(event)
 		if err != nil {
@@ -36,7 +40,7 @@ func TestFunctionStateEventsUseTheirOwnSnapshot(t *testing.T) {
 		change.RequiredActions = nil
 		change.Turn.Status = store.TurnInProgress
 		change.Event.Type = "agent.session.in_progress"
-		event, err = streamResponse(session, change)
+		event, err = streamResponse(session, change, "")
 		if err != nil || event.Session.Status != "in_progress" || event.Session.RequiredActions == nil || len(event.Session.RequiredActions) != 0 {
 			t.Fatal("stale actions leaked", event, err)
 		}

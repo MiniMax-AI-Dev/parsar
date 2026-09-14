@@ -215,8 +215,9 @@ ownership for later settlement/cleanup. Existing `none` and legacy missing
 configuration create no Environment, and historical internal snapshots are not
 backfilled. Initial state is `pending`; authenticated connection observations follow
 the lifecycle rules below.
-Public admission remains `none` only. The internal configuration read is not a safe
-public metadata projection; add that projection with the public resource behavior.
+Public admission remains `none` only. Session reads may expose privately provisioned
+`self_hosted` configuration through the output-only projection described below;
+the internal configuration read is not public Environment metadata.
 Registration fencing, readiness before input/Turn admission, native/provider
 integration and real-model Environment acceptance remain separate required work.
 
@@ -235,9 +236,8 @@ affect a later reservation or Turn. Evaluate deadlines after acquiring the Sessi
 lock, and return terminal storage outcomes without rolling their transaction back.
 
 This is a message-only Store foundation, not public Environment admission or a new
-public concurrency limit. Automatic initial-input integration, public pending/failed
-Session projections, mixed inputs and native readiness before admission remain
-pending. Promotion requires the current leased execution writer and the caller's
+public concurrency limit. Automatic initial-input integration, initial failure
+policy and mixed inputs remain pending. Promotion requires the current leased execution writer and the caller's
 retained native preparation; never hold a database lock during external preparation. Only
 the first successful non-replay receipts authorize Start on that same preparation.
 An admitted retry returns the original receipts without reclaiming execution; a
@@ -255,6 +255,26 @@ after acquiring the Session lock. This bounds mutations and transaction time, no
 the number of examined locked rows. Restart resumes expiry on normal ticks without
 a separate scheduler or backlog-draining loop. No failed Turn may stand in for a
 pre-Turn connection failure.
+
+Session activity before a Turn is derived from the latest relevant reservation and
+authenticated connection state. Offline input requests `environment_connection`;
+connection arrival clears that action to `idle`, while the prepared Worker still
+owns native readiness and admission. An idle offline Environment alone requests no
+connection. Reservation/connection changes commit immutable Session activity and
+usage snapshots in the same transaction; SSE must not substitute a later Turn or
+action set. A newer or active Turn owns subsequent activity. Settled non-initial
+reservations clear their action to `idle` until newer work exists, even after an
+earlier failed Turn. This local settlement policy does not establish hosted expiry
+errors or initial-input asynchronous failure semantics; those remain unverified.
+
+Session GET/list/metadata responses and live SSE share the safe `self_hosted`
+output projection. Its `remote_url` comes only from the executor registry's
+validated configured origin, never request headers or a daemon address. Include
+the owned Environment ID, workspace and capability directories without exposing
+private configuration. This read path does not open public creation/input or the
+standalone Environment resource. Acceptance must pass that exact URL and ID to the
+caller-started executor and observe real remote execution through the existing
+Worker, daemon and harness, with fixed SDK and raw HTTP/SSE checks.
 
 
 The opt-in native Codex executor registry lives in

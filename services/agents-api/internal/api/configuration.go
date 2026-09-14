@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
-	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/google/uuid"
 )
 
@@ -35,40 +34,4 @@ func resolve(input sessionRequest, tenant, key string, saved *v1.SavedAgent) (js
 		agent.ID = saved.ID
 	}
 	return json.Marshal(configuration{Agent: agent, Environment: *input.Environment})
-}
-
-func sessionResponse(session store.Session) (v1.Session, error) {
-	var cfg configuration
-	if err := json.Unmarshal(session.Configuration, &cfg); err != nil || cfg.Agent.ID == "" || cfg.Agent.Model == "" || cfg.Environment.Type != "none" {
-		return v1.Session{}, errors.New("unsupported stored session configuration")
-	}
-	response := v1.Session{
-		ID: session.ID, Agent: cfg.Agent, Environment: cfg.Environment, Usage: tokenUsage(session.Usage),
-		CreatedAt: session.CreatedAt.Unix(), LastActiveAt: session.CreatedAt.Unix(),
-		Metadata: session.Metadata, Object: "agent.session", Status: "idle",
-		RequiredActions: []v1.FunctionCallAction{}, VaultIDs: []string{},
-	}
-	if turn := session.LastTurn; turn != nil {
-		active := turn.CreatedAt
-		if turn.StartedAt.After(active) {
-			active = turn.StartedAt
-		}
-		if turn.CompletedAt.After(active) {
-			active = turn.CompletedAt
-		}
-		response.LastActiveAt = active.Unix()
-		switch turn.Status {
-		case store.TurnQueued, store.TurnInProgress, store.TurnWaiting:
-			response.Status = "in_progress"
-			if turn.CancelRequestedAt.IsZero() && len(session.RequiredActions) > 0 {
-				response.Status = "requires_action"
-				response.RequiredActions = session.RequiredActions
-			}
-		case store.TurnFailed:
-			response.Status = "failed"
-			message := "The execution could not complete."
-			response.Error = &message
-		}
-	}
-	return response, nil
 }
