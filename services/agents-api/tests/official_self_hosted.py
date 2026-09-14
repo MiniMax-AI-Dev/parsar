@@ -4,6 +4,7 @@ import importlib.metadata
 import json
 import os
 from pathlib import Path
+import shlex
 import sys
 import threading
 import time
@@ -259,7 +260,8 @@ def main():
                 assert len(commands) == 1
                 command = commands[0]
                 assert command["exit_code"] == 7 and command["cwd"] == settings["workspace_directory"]
-                assert command["command"] == "./placement.sh " + phase
+                argv = shlex.split(command["command"])
+                assert Path(argv[0]).name == "bash" and argv[1:] == ["-lc", "./placement.sh " + phase]
                 answer = "\n".join(part.get("text", "") for item in group
                                    if item["type"] == "message" and item.get("role") == "assistant" for part in item["content"])
                 assert settings["memory"] in answer and settings["instruction"] in answer
