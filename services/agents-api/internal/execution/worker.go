@@ -153,56 +153,6 @@ func (w *Worker) reconcile(ctx context.Context) error {
 	}
 }
 
-func (w *Worker) bind(ctx context.Context, item store.ExecutionWork) (bool, error) {
-	session, err := w.dispatcher.Store.GetSession(ctx, item.TenantID, item.SessionID)
-	if errors.Is(err, store.ErrNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	var snapshot Snapshot
-	if err := json.Unmarshal(session.Configuration, &snapshot); err != nil {
-		return false, err
-	}
-
-	bound, err := w.dispatcher.Store.GetSessionDevice(ctx, item.TenantID, item.SessionID)
-	if err == nil {
-		return w.ready(bound.ID, session.Engine, snapshot), nil
-	}
-	if !errors.Is(err, store.ErrNotFound) {
-		return false, err
-	}
-	devices, err := w.dispatcher.Store.ListExecutionDevices(ctx, item.TenantID)
-	if err != nil {
-		return false, err
-	}
-	for _, device := range devices {
-		if !w.ready(device.ID, session.Engine, snapshot) {
-			continue
-		}
-		err := w.dispatcher.Store.BindSessionDevice(ctx, item.TenantID, item.SessionID, device.ID)
-		if errors.Is(err, store.ErrDeviceBindingConflict) {
-			_, err = w.dispatcher.Store.TransitionTurn(ctx, item.TenantID, item.SessionID, item.TurnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnFailed, Outcome: json.RawMessage(`{"error_code":"execution_device_unavailable"}`)})
-			if errors.Is(err, store.ErrTurnConflict) {
-				err = nil
-			}
-			return false, err
-		}
-		return err == nil, err
-	}
-	return false, nil
-}
-
-func (w *Worker) ready(deviceID, engine string, snapshot Snapshot) bool {
-	peer, err := w.dispatcher.Registry.LookupDevice(deviceID)
-	if err != nil {
-		return false
-	}
-	_, err = engineCapabilities(peer, engine, snapshot)
-	return err == nil
-}
-
 func (w *Worker) runClaim(ctx context.Context, item store.ExecutionWork) error {
 	_, err := w.dispatcher.Run(ctx, item.TenantID, item.SessionID, item.TurnID)
 	if err == nil || errors.Is(err, store.ErrTurnConflict) {

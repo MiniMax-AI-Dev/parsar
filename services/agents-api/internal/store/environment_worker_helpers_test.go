@@ -16,9 +16,7 @@ import (
 
 func enableWorkerEnvironment(t *testing.T, h *dispatchHarness) *atomic.Int32 {
 	t.Helper()
-	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{
-		Streaming: true, Steering: true, DurableTurns: true, DurableInputReceipts: true, EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: true, SubagentControl: true, ToolObservations: true, Preparation: true, RemoteEnvironment: true,
-	}}}})
+	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: workerEnvironmentCapabilities()}}})
 	awaitDaemonRemoteCondition(t, t.Context(), 3*time.Second, "worker preparation capability", func() bool {
 		peer, err := h.registry.LookupDevice(h.device.ID)
 		if err != nil {
@@ -35,13 +33,23 @@ func enableWorkerEnvironment(t *testing.T, h *dispatchHarness) *atomic.Int32 {
 	return released
 }
 
+func workerEnvironmentCapabilities() proto.AgentKindCapabilities {
+	return proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, DurableInputReceipts: true, EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: true, SubagentControl: true, ToolObservations: true, Preparation: true, RemoteEnvironment: true}
+}
+
 func workerEnvironmentReservation(t *testing.T, h *dispatchHarness) store.EnvironmentInputReservation {
+	t.Helper()
+	pending := unboundWorkerEnvironmentReservation(t, h)
+	if err := h.s.BindSessionDevice(t.Context(), h.tenant, pending.SessionID, h.device.ID); err != nil {
+		t.Fatal(err)
+	}
+	return pending
+}
+
+func unboundWorkerEnvironmentReservation(t *testing.T, h *dispatchHarness) store.EnvironmentInputReservation {
 	t.Helper()
 	session, err := h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: uuid.NewString(), Configuration: json.RawMessage(`{"agent":{"model":"test-model"},"environment":{"type":"self_hosted","workspace_directory":"/remote"}}`)})
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := h.s.BindSessionDevice(t.Context(), h.tenant, session.ID, h.device.ID); err != nil {
 		t.Fatal(err)
 	}
 	pending, err := h.s.ReserveEnvironmentInput(t.Context(), h.tenant, session.ID, "work", []store.Input{{Kind: "message", Payload: json.RawMessage(`{"text":"first"}`)}})

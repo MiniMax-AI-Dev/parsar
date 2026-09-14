@@ -16,11 +16,14 @@ ORDER BY t.id LIMIT 100;
 SELECT r.id, r.session_id, s.tenant_id
 FROM environment_input_reservations r
 JOIN sessions s ON s.id = r.session_id
-JOIN session_devices b ON b.session_id = s.id
-JOIN devices d ON d.id = b.device_id AND d.tenant_id = s.tenant_id
+LEFT JOIN session_devices b ON b.session_id = s.id
 WHERE r.state = 'pending' AND r.deadline > clock_timestamp()
 AND r.id > sqlc.arg(after_id)::uuid AND s.deleted_at IS NULL
-AND d.revoked_at IS NULL AND d.id = ANY(sqlc.arg(connected_devices)::uuid[])
+AND EXISTS (
+    SELECT 1 FROM devices d WHERE d.tenant_id = s.tenant_id AND d.revoked_at IS NULL
+        AND d.id = ANY(sqlc.arg(connected_devices)::uuid[])
+        AND (b.device_id IS NULL OR d.id = b.device_id)
+)
 ORDER BY r.id LIMIT 100;
 
 -- name: ListExecutionDevices :many

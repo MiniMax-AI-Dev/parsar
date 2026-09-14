@@ -57,14 +57,20 @@ func (s *workerSchedule) selectWork(ctx context.Context, w *Worker, devices []st
 		if active[item.SessionID] {
 			continue
 		}
+		var ready bool
 		if item.reservationID == "" {
-			ready, err := w.bind(ctx, item.ExecutionWork)
-			if err != nil {
-				return nil, err
-			}
-			if !ready {
+			ready, err = w.bind(ctx, item.ExecutionWork)
+		} else {
+			ready, err = w.bindDevice(ctx, item.TenantID, item.SessionID)
+			if errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrDeviceBindingConflict) {
 				continue
 			}
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !ready {
+			continue
 		}
 		active[item.SessionID] = true
 		selected = append(selected, item)

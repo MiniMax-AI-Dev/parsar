@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -48,8 +49,8 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.s.BindSessionDevice(ctx, h.tenant, h.session.ID, h.device.ID); err != nil {
-		t.Fatal(err)
+	if _, err := h.s.GetSessionDevice(ctx, h.tenant, h.session.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("native fixture must begin without a device binding", err)
 	}
 	environment, err := h.s.GetSessionEnvironment(ctx, h.tenant, h.session.ID)
 	if err != nil {
@@ -111,7 +112,7 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	instruction := "REMOTE_" + uuid.NewString()
 	local := prepareDaemonRemoteWorkspace(t, root, instruction)
 	startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, server.URL, environment.ID, executorToken)
-	proof := map[string]any{"scope": "private Worker scheduling for bound Sessions; production wiring and public Environment lifecycle remain pending", "environment_id": environment.ID, "session_id": h.session.ID, "native_version": strings.TrimSpace(string(version))}
+	proof := map[string]any{"scope": "private Worker device selection and scheduling; public Environment lifecycle remains pending", "environment_id": environment.ID, "session_id": h.session.ID, "native_version": strings.TrimSpace(string(version))}
 	defer func() { tokenMu.Lock(); defer tokenMu.Unlock(); persistDaemonRemoteProof(t, root, proof, secrets) }()
 	const memory = "walnut heron violet cedar cobalt willow moss iris"
 	nativeID := ""
@@ -141,7 +142,7 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 			t.Fatal("remote instructions or native memory missing; inspect private proof")
 		}
 		bound, err := h.s.GetSessionDevice(ctx, h.tenant, h.session.ID)
-		if err != nil || bound.NativeSessionID == "" || (index == 1 && bound.NativeSessionID != nativeID) {
+		if err != nil || bound.ID != h.device.ID || bound.NativeSessionID == "" || (index == 1 && bound.NativeSessionID != nativeID) {
 			t.Fatal("native continuation identity changed", err)
 		}
 		nativeID = bound.NativeSessionID

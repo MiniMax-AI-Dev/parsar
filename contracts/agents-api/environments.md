@@ -297,16 +297,17 @@ persists terminal state and native continuation. A transient connection callback
 keeps native registry code outside the execution core. Its credential owner spans
 the complete Run; a pending-input deadline does not limit an admitted Turn.
 Controlled database/gateway tests cover pre-ready settlement and pending-start
-cancellation. The existing Worker now selects pending reservations for already
-bound, connected devices when configured with a connection resolver. Preparation
+cancellation. The existing Worker selects pending reservations with a live tenant device when
+configured with a connection resolver. Unbound Sessions select a capable device
+and retain that binding; existing bindings are never moved. Preparation
 through Run cleanup shares its four ordinary execution slots, with one active job
 per Session and bounded, alternating cursor scans. Private pending selection runs
 at most once per five seconds; failed preparation can retry without extending the
 original deadline, while claimed/uncertain work is not replayed. The opt-in
 real-provider Worker fixture verifies automatic discovery, remote commands, files,
 cold continuation and reservation retries. The standalone service wires the resolver
-when its daemon gateway and executor URL are configured. Device
-selection, public initial input, lifecycle/actions and caller principal identity
+when its daemon gateway and executor URL are configured. Public initial input,
+lifecycle/actions and caller principal identity
 remain unimplemented.
 The current daemon can acknowledge pending-start cancellation without a final
 outcome; without an observed final Done, delivery records an unknown failure.

@@ -17,7 +17,7 @@ func TestWorkerEnvironmentSharesCapacityThroughClaimAndCleanup(t *testing.T) {
 	frames := workerFrames(t, h)
 	pending := map[string]store.EnvironmentInputReservation{}
 	for range 2 {
-		value := workerEnvironmentReservation(t, h)
+		value := unboundWorkerEnvironmentReservation(t, h)
 		pending[value.SessionID] = value
 	}
 	ordinary := map[string]store.Session{}
@@ -106,7 +106,7 @@ func TestWorkerEnvironmentRetriesPendingWithoutExtendingDeadline(t *testing.T) {
 	h := newDispatchHarness(t)
 	released := enableWorkerEnvironment(t, h)
 	frames := workerFrames(t, h)
-	pending := workerEnvironmentReservation(t, h)
+	pending := unboundWorkerEnvironmentReservation(t, h)
 	_, stop := startEnvironmentExpiryWorker(t, h.d)
 	first := nextWorkerFrame(t, frames, proto.TypeExecutionPrepare)
 	started := time.Now()

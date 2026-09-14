@@ -118,6 +118,9 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	if len(snapshot.Agent.Tools) > 0 && !caps.FunctionTools {
 		return fail("device must advertise function_tools")
 	}
+	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" && (!caps.Preparation || !caps.RemoteEnvironment) {
+		return fail("device must advertise preparation and remote_environment")
+	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "none" && !caps.EnvironmentNone {
 		return fail("device must advertise environment_none")
 	}

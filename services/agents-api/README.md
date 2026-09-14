@@ -396,8 +396,9 @@ See the [canonical ownership rules](../../CONTRIBUTING.md#environment-ownership-
 `AGENTS_API_HARNESS_KEYS_FILE`, retire its secrets/files and restart. That setting
 now fails startup rather than retaining a static fallback. With the daemon gateway
 and executor URL configured, the service Worker issues and releases these credentials
-for already-bound pending Environment inputs. Automatic device selection and public
-Environment admission remain pending. There is no public harness-key endpoint or user/service-account
+for pending Environment inputs, selecting a capable tenant device once for an
+unbound Session and retaining existing bindings. Public Environment admission
+remains pending. There is no public harness-key endpoint or user/service-account
 identity equivalence. Caller, device, executor and harness credentials stay separate.
 
 Native routes live outside `/v1/agents`: `POST /cloud/environment/{id}/register`
