@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/execution"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/executor/codex"
@@ -42,7 +41,7 @@ func executorRegistry(s *store.Store, worker func() *execution.Worker, checkOwne
 	})
 }
 
-func environmentConnection(registry *codex.Registry, origin string) func(context.Context, store.Session, store.Environment) (execution.EnvironmentConnection, error) {
+func environmentConnection(registry *codex.Registry) func(context.Context, store.Session, store.Environment) (execution.EnvironmentConnection, error) {
 	if registry == nil {
 		return nil
 	}
@@ -54,6 +53,6 @@ func environmentConnection(registry *codex.Registry, origin string) func(context
 		if err != nil {
 			return execution.EnvironmentConnection{}, err
 		}
-		return execution.EnvironmentConnection{URL: strings.TrimRight(origin, "/"), Token: token, Release: release}, nil
+		return execution.EnvironmentConnection{URL: registry.PublicURL(), Token: token, Release: release}, nil
 	}
 }

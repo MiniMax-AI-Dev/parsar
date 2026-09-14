@@ -47,7 +47,7 @@ func (s *Store) ReserveEnvironmentInput(ctx context.Context, tenantID, sessionID
 		return EnvironmentInputReservation{}, err
 	}
 	var result EnvironmentInputReservation
-	err = s.withPublicSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
+	err = s.withEnvironmentInputSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
 		previous, err := q.FindEnvironmentInputReservation(ctx, sqlc.FindEnvironmentInputReservationParams{
 			SessionID: session, IdempotencyKey: key, Batch: encoded,
 		})
@@ -141,7 +141,7 @@ func (s *Store) settleEnvironmentInput(ctx context.Context, tenantID, sessionID,
 		return EnvironmentInputReservation{}, err
 	}
 	var result EnvironmentInputReservation
-	err = s.withPublicSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
+	err = s.withEnvironmentInputSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
 		row, err := q.GetEnvironmentInputReservation(ctx, sqlc.GetEnvironmentInputReservationParams{SessionID: session, ID: id})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound

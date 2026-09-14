@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,6 +52,14 @@ func New(c Config) (*Registry, error) {
 	return &Registry{harnessKeys: make(map[[32]byte]*harnessCredential), source: c.Store, checkOwnership: c.CheckOwnership,
 		replaceConnection: c.ReplaceConnection, observeConnection: c.ObserveConnection,
 		publicWS: url, registrations: make(map[string]*registration)}, nil
+}
+
+// PublicURL returns the validated origin used for native executor registration.
+func (r *Registry) PublicURL() string {
+	if origin, ok := strings.CutPrefix(r.publicWS, "wss://"); ok {
+		return "https://" + origin
+	}
+	return "http://" + strings.TrimPrefix(r.publicWS, "ws://")
 }
 
 func (r *Registry) Handler() http.Handler {

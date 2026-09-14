@@ -39,7 +39,8 @@ func environmentInputHistory(t *testing.T, pool *pgxpool.Pool, session string, t
 		SELECT (SELECT count(*) FROM turns WHERE session_id=$1),
 		       (SELECT count(*) FROM turn_inputs WHERE session_id=$1),
 		       (SELECT count(*) FROM session_items WHERE session_id=$1),
-		       (SELECT count(*) FROM session_events WHERE session_id=$1)`, session).Scan(&gotTurns, &gotInputs, &items, &events)
+		       (SELECT count(*) FROM session_events WHERE session_id=$1
+		        AND (payload ? 'turn' OR payload->'event' ? 'item'))`, session).Scan(&gotTurns, &gotInputs, &items, &events)
 	if err != nil || gotTurns != turns || gotInputs != inputs || items != inputs || (inputs == 0 && events != 0) {
 		t.Fatal("history", gotTurns, gotInputs, items, events, err)
 	}

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/execution"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/executor/codex"
@@ -23,8 +24,8 @@ import (
 func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	binary, image := os.Getenv("PARSAR_CODEX_BINARY"), os.Getenv("PARSAR_PLACEMENT_EXECUTOR_IMAGE")
 	keyFile := os.Getenv("PARSAR_PLACEMENT_MODEL_KEY_FILE")
-	if binary == "" || !strings.HasPrefix(image, "sha256:") || keyFile == "" || os.Getenv("PARSAR_EXECUTOR_LAUNCHER") == "" {
-		t.Skip("built executor launcher, pinned native binary, local executor image and real provider key file required")
+	if binary == "" || !strings.HasPrefix(image, "sha256:") || keyFile == "" || os.Getenv("PARSAR_EXECUTOR_LAUNCHER") == "" || os.Getenv("PARSAR_OFFICIAL_SDK_PYTHON") == "" {
+		t.Skip("built executor launcher, pinned native binary and official SDK, local executor image and real provider key file required")
 	}
 	version, err := exec.Command(binary, "--version").Output()
 	if err != nil || strings.TrimSpace(string(version)) != "codex-cli 0.153.4" {
@@ -43,8 +44,12 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspace := "/parsar-prepared-dispatch-" + uuid.NewString()
+	instructions := "Use the native shell for requested commands. Command verification requires the exact supplied command argument. Never append echo, separators, wrappers or error recovery. Exit 7 is intentional and must remain the tool's exit status; do not turn it into exit 0."
+	agent := v1.Agent{ID: "agent_" + uuid.NewString(), Model: "MiniMax-M3", Instructions: &instructions,
+		MultiAgent: v1.MultiAgentConfig{Enabled: false}, Reasoning: v1.Reasoning{}, ServiceTier: "auto",
+		Text: v1.TextConfig{Format: v1.TextFormat{Type: "text"}, Verbosity: "medium"}, Tools: []json.RawMessage{}}
 	configuration, err := json.Marshal(map[string]any{
-		"agent":       map[string]any{"model": "MiniMax-M3", "instructions": "Use the native shell for requested commands. Command verification requires the exact supplied command argument. Never append echo, separators, wrappers or error recovery. Exit 7 is intentional and must remain the tool's exit status; do not turn it into exit 0."},
+		"agent":       agent,
 		"environment": map[string]any{"type": "self_hosted", "workspace_directory": workspace, "capability_directories": []string{}},
 	})
 	if err != nil {
@@ -75,7 +80,7 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 		defer tokenMu.Unlock()
 		harnessTokens = append(harnessTokens, token)
 		secrets = append(secrets, token)
-		return execution.EnvironmentConnection{URL: server.URL, Token: token, Release: release}, nil
+		return execution.EnvironmentConnection{URL: registry.PublicURL(), Token: token, Release: release}, nil
 	}
 	h.d.Options = func(context.Context, store.Session) (map[string]any, error) {
 		return map[string]any{"codex_provider": map[string]any{"name": "MiniMax validation", "base_url": "https://api.minimax.cn/v1", "bearer_token": key, "wire_api": "responses"}}, nil
@@ -94,8 +99,12 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	}
 	workerCtx, cancelWorker := context.WithCancel(ctx)
 	workerDone := make(chan error, 1)
+	var workerStarted sync.Once
+	// Capture the offline public snapshot before scheduling the first native preparation.
+	startWorker := func() { workerStarted.Do(func() { go func() { workerDone <- worker.Run(workerCtx) }() }) }
 	defer func() {
 		cancelWorker()
+		startWorker()
 		select {
 		case err := <-workerDone:
 			if err != nil && err != context.Canceled {
@@ -114,42 +123,34 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	}()
 	registry, err = codex.New(codex.Config{Store: h.s, CheckOwnership: worker.CheckOwnership, ReplaceConnection: worker.ReplaceEnvironmentConnection, ObserveConnection: worker.ObserveEnvironmentConnection, PublicURL: "http://" + server.Listener.Addr().String()})
 	if err != nil {
-		cancelWorker()
-		workerDone <- worker.Run(workerCtx)
 		t.Fatal(err)
 	}
-	server.Config.Handler = registry.Handler()
+	public, publicToken, foreignToken := preparedPublicHandler(t, h, worker, registry)
+	secrets = append(secrets, publicToken, foreignToken)
+	server.Config.Handler = public
 	server.Start()
-	go func() { workerDone <- worker.Run(workerCtx) }()
 	awaitEnvironmentConnectionState(t, ctx, h.s, h.tenant, environment.ID, "pending")
 	instruction := "REMOTE_" + uuid.NewString()
 	local := prepareDaemonRemoteWorkspace(t, root, instruction)
-	startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, server.URL, environment.ID, credential)
-	credentialData, err := os.ReadFile(filepath.Join(root, "executor", "credential.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var launcherCredential map[string]json.RawMessage
-	if err := json.Unmarshal(credentialData, &launcherCredential); err != nil {
-		t.Fatal(err)
-	}
-	if _, restricted := launcherCredential["environment_id"]; restricted {
-		t.Fatal("principal credential file contains an Environment restriction")
-	}
-	var launcherKeyID string
-	if err := json.Unmarshal(launcherCredential["key_id"], &launcherKeyID); err != nil || launcherKeyID != credential.KeyID {
-		t.Fatal("launcher credential file lost the stable key ID")
-	}
-	proof := map[string]any{"scope": "private Worker device selection and scheduling; public Environment lifecycle remains pending", "environment_id": environment.ID, "session_id": h.session.ID, "executor_key_id": credential.KeyID, "executor_key_issued_before_session": true, "executor_key_environment_restricted": false, "native_version": strings.TrimSpace(string(version))}
+	proof := map[string]any{"scope": "private Session provisioning and input reservation; public Session read/SSE acceptance with caller-started remote execution; public create/input remain gated", "environment_id": environment.ID, "session_id": h.session.ID, "executor_key_id": credential.KeyID, "executor_key_issued_before_session": true, "executor_key_environment_restricted": false, "native_version": strings.TrimSpace(string(version))}
 	defer func() { tokenMu.Lock(); defer tokenMu.Unlock(); persistDaemonRemoteProof(t, root, proof, secrets) }()
 	const memory = "walnut heron violet cedar cobalt willow moss iris"
+	observer := startPreparedPublicObserver(t, ctx, root, map[string]string{
+		"base": server.URL, "token": publicToken, "foreign_token": foreignToken, "session_id": h.session.ID,
+		"agent_id": agent.ID, "environment_id": environment.ID, "workspace_directory": workspace,
+		"remote_url": registry.PublicURL(), "memory": memory, "instruction": instruction,
+	})
+	defer observer.close()
+	observer.await(t, ctx, "ready")
 	nativeID := ""
 	for index, phase := range []string{"first", "resumed"} {
-		awaitDaemonRemoteCondition(t, ctx, 30*time.Second, "executor registration after previous release", func() bool {
-			connected, err := registry.Connected(ctx, h.tenant, environment.ID)
-			return err == nil && connected
-		})
-		awaitEnvironmentConnectionState(t, ctx, h.s, h.tenant, environment.ID, "connected")
+		if index > 0 {
+			awaitDaemonRemoteCondition(t, ctx, 30*time.Second, "executor registration after previous release", func() bool {
+				connected, err := registry.Connected(ctx, h.tenant, environment.ID)
+				return err == nil && connected
+			})
+			awaitEnvironmentConnectionState(t, ctx, h.s, h.tenant, environment.ID, "connected")
+		}
 		text := "Run the exact command `./placement.sh " + phase + "` once with the native shell. The tool command argument must be exactly the text inside the backticks: no wrapper, no appended echo, no separators, no error recovery. Exit 7 is intentional; preserve that native exit status and do not retry. Report stdout, stderr and the verification memory briefly."
 		if index == 0 {
 			text += " The fictional festival name to remember is " + memory + "."
@@ -160,6 +161,17 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 		pending, err := h.s.ReserveEnvironmentInput(ctx, h.tenant, h.session.ID, phase, []store.Input{{Kind: "message", Payload: payload}})
 		if err != nil {
 			t.Fatal(err)
+		}
+		if index == 0 {
+			connection := observer.await(t, ctx, "waiting")
+			if connection.RemoteURL != registry.PublicURL() || connection.EnvironmentID != environment.ID {
+				t.Fatal("public Environment identity differs from the provisioned target")
+			}
+			startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, connection.RemoteURL, connection.EnvironmentID, credential)
+			awaitEnvironmentConnectionState(t, ctx, h.s, h.tenant, environment.ID, "connected")
+			proof["launcher_remote_url"] = connection.RemoteURL
+			proof["launcher_environment_id"] = connection.EnvironmentID
+			startWorker()
 		}
 		run := awaitWorkerEnvironmentRun(t, ctx, h.s, h.tenant, pending)
 		proof[phase] = run
@@ -197,6 +209,22 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 			t.Fatal("reservation retry allocated or executed another native preparation")
 		}
 	}
+	observer.finish(t)
+	credentialData, err := os.ReadFile(filepath.Join(root, "executor", "credential.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var launcherCredential map[string]json.RawMessage
+	if err := json.Unmarshal(credentialData, &launcherCredential); err != nil {
+		t.Fatal(err)
+	}
+	if _, restricted := launcherCredential["environment_id"]; restricted {
+		t.Fatal("principal credential file contains an Environment restriction")
+	}
+	var launcherKeyID string
+	if err := json.Unmarshal(launcherCredential["key_id"], &launcherKeyID); err != nil || launcherKeyID != credential.KeyID {
+		t.Fatal("launcher credential file lost the stable key ID")
+	}
 	count, err := os.ReadFile(filepath.Join(local, "execution-count"))
 	if err != nil || string(count) != "first\nresumed\n" {
 		t.Fatal("native command omitted or repeated")
@@ -220,7 +248,8 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	verifyEnvironmentEventsWithSDK(t, root, environmentEvents)
 	proof["environment_events"] = environmentEvents
 	proof["native_thread_id"] = nativeID
-	proof["status"] = "private_worker_verified_public_integration_pending"
+	proof["status"] = "private_provisioning_public_read_sse_remote_execution_verified"
+	proof["public_evidence"] = filepath.Join(observer.directory, "public-environment-proof.json")
 	proof["completed_turns"] = 2
 	proof["reservation_retries_did_not_prepare_or_start"] = true
 	t.Log("real-provider bound Worker evidence", root)

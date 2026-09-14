@@ -87,8 +87,23 @@ func (s *Store) sessionActivity(ctx context.Context, session Session, err error)
 		return Session{}, err
 	}
 	id, _ := parseID(session.ID)
+	tenant, _ := parseID(session.TenantID)
 	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		q := s.queries.WithTx(tx)
+		environment, err := q.GetSessionEnvironment(ctx, sqlc.GetSessionEnvironmentParams{TenantID: tenant, ID: id})
+		if err == nil {
+			value, err := environmentFromRow(environment.Environment, environment.TenantID, environment.Configuration, nil)
+			if err != nil {
+				return err
+			}
+			session.Environment = &value
+			session.EnvironmentInputActivity, err = environmentInputActivity(ctx, q, id)
+			if err != nil {
+				return err
+			}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
 		row, err := q.GetLatestSessionTurn(ctx, id)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil

@@ -32,16 +32,18 @@ var (
 // Session is a durable execution context, separate from product conversations
 // and from live daemon connections. Engine session IDs will be bound at execution.
 type Session struct {
-	ID              string
-	TenantID        string
-	Creator         *identity.Subject
-	Engine          string
-	Metadata        map[string]string
-	CreatedAt       time.Time
-	Configuration   json.RawMessage
-	LastTurn        *Turn
-	Usage           json.RawMessage
-	RequiredActions []v1.FunctionCallAction
+	ID                       string
+	TenantID                 string
+	Creator                  *identity.Subject
+	Engine                   string
+	Metadata                 map[string]string
+	CreatedAt                time.Time
+	Configuration            json.RawMessage
+	LastTurn                 *Turn
+	Usage                    json.RawMessage
+	RequiredActions          []v1.FunctionCallAction
+	Environment              *Environment
+	EnvironmentInputActivity *EnvironmentInputActivity
 }
 
 type CreateSessionInput struct {

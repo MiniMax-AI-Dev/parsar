@@ -11,7 +11,7 @@ import (
 )
 
 // @Summary Update execution Session metadata
-// @Description Omit metadata to leave it unchanged, send null or {} to clear it, or supply an object to replace all pairs. Up to 16 string pairs, with keys at most 64 characters and values at most 512 characters. Execution configuration and activity are unchanged.
+// @Description Omit metadata to leave it unchanged, send null or {} to clear it, or supply an object to replace all pairs. Up to 16 string pairs, with keys at most 64 characters and values at most 512 characters. Execution configuration and activity are unchanged. Returns the same safe Environment and pending-input activity projection as Session retrieval.
 // @Tags Sessions
 // @Accept json
 // @Produce json

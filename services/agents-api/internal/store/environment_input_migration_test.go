@@ -73,7 +73,14 @@ func TestEnvironmentInputMigrationRetainsHistoryAndRetryIdentity(t *testing.T) {
 	if _, err := provider.UpTo(ctx, 22); err != nil {
 		t.Fatal(err)
 	}
+	if err := db.QueryRowContext(ctx, "SELECT to_jsonb(s)::text FROM sessions s WHERE id=$1", session).Scan(&after); err != nil || before != after {
+		t.Fatal("migration changed Session", err)
+	}
 	pending := reserveEnvironmentInput(t, s, tenant, session, "pending")
+	// Current reservation writes append activity; the rejected downgrade must preserve it.
+	if err := db.QueryRowContext(ctx, "SELECT to_jsonb(s)::text FROM sessions s WHERE id=$1", session).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := provider.DownTo(ctx, 21); err == nil || !strings.Contains(err.Error(), "Cannot remove durable Environment input identities") {
 		t.Fatal("downgrade discarded retry identity", err)
 	}

@@ -27,9 +27,11 @@ for further harnesses rather than adding another model/tool loop.
 Verify configuration against actual execution: response defaults must not merely
 describe values the adapter never applied.
 
-The private native registry now persists fenced connection observations and pinned
-Environment-event snapshots through the existing execution owner. Public Environment
-admission, resource metadata and full lifecycle conformance remain unimplemented.
+The private native registry persists fenced connection observations and pinned
+Environment-event snapshots through the existing execution owner. Session reads
+and live SSE also expose safe `self_hosted` output and reservation-owned connection
+actions for privately provisioned Sessions. Public Environment admission, resource
+metadata and full lifecycle conformance remain unimplemented.
 
 Remaining work includes physical Session cleanup/content variants, broader configuration
 and tools, execution recovery, environments/files, Vaults and protocol Subagents.

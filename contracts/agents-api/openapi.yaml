@@ -165,26 +165,6 @@ definitions:
     required:
     - error
     type: object
-  v1.FunctionCallAction:
-    properties:
-      arguments: {}
-      call_id:
-        type: string
-      name:
-        type: string
-      turn_id:
-        type: string
-      type:
-        enum:
-        - function_call
-        type: string
-    required:
-    - arguments
-    - call_id
-    - name
-    - turn_id
-    - type
-    type: object
   v1.InlineAgent:
     properties:
       instructions:
@@ -369,6 +349,25 @@ definitions:
         type: string
         x-nullable: true
     type: object
+  v1.RequiredAction:
+    properties:
+      arguments: {}
+      call_id:
+        type: string
+      environment_id:
+        type: string
+      name:
+        type: string
+      turn_id:
+        type: string
+      type:
+        enum:
+        - function_call
+        - environment_connection
+        type: string
+    required:
+    - type
+    type: object
   v1.SavedAgent:
     properties:
       created_at:
@@ -493,7 +492,7 @@ definitions:
       created_at:
         type: integer
       environment:
-        $ref: '#/definitions/v1.Environment'
+        $ref: '#/definitions/v1.SessionEnvironment'
       error:
         type: string
         x-nullable: true
@@ -511,7 +510,7 @@ definitions:
         type: string
       required_actions:
         items:
-          $ref: '#/definitions/v1.FunctionCallAction'
+          $ref: '#/definitions/v1.RequiredAction'
         type: array
       status:
         enum:
@@ -554,6 +553,26 @@ definitions:
     - deleted
     - id
     - object
+    type: object
+  v1.SessionEnvironment:
+    properties:
+      capability_directories:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      remote_url:
+        type: string
+      type:
+        enum:
+        - none
+        - self_hosted
+        type: string
+      workspace_directory:
+        type: string
+    required:
+    - type
     type: object
   v1.SessionEnvironmentState:
     properties:
@@ -1113,7 +1132,9 @@ paths:
       description: Cursor and results are scoped to the authenticated execution tenant.
         Optional agent_id matches the immutable root Agent ID, including inline Agents
         and historical Sessions whose saved source was updated or deleted. Omission
-        lists all Agents.
+        lists all Agents. Returns the same Environment and pending-input activity
+        projection as Session retrieval, including privately provisioned self_hosted
+        Sessions.
       parameters:
       - description: agents=v1
         in: header
@@ -1299,6 +1320,10 @@ paths:
       tags:
       - Sessions
     get:
+      description: Returns supported none and privately provisioned self_hosted Session
+        environments. Pending input can require an Environment connection before a
+        Turn exists; connection observations are not native execution readiness. Public
+        self_hosted creation and input remain unsupported.
       parameters:
       - description: agents=v1
         in: header
@@ -1344,7 +1369,8 @@ paths:
       description: Omit metadata to leave it unchanged, send null or {} to clear it,
         or supply an object to replace all pairs. Up to 16 string pairs, with keys
         at most 64 characters and values at most 512 characters. Execution configuration
-        and activity are unchanged.
+        and activity are unchanged. Returns the same safe Environment and pending-input
+        activity projection as Session retrieval.
       parameters:
       - description: agents=v1
         in: header
@@ -1398,7 +1424,9 @@ paths:
     get:
       description: Live-only events. Reconnect through Session, Turn and Items reads;
         missed events are not replayed. A lagging stream closes with an error when
-        its bounded buffer is exceeded.
+        its bounded buffer is exceeded. Session activity includes immutable pending-input
+        connection actions before Turn creation; privately provisioned self_hosted
+        environments use the same safe output as Session retrieval.
       parameters:
       - description: agents=v1
         in: header

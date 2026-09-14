@@ -18,11 +18,12 @@ var ErrStreamGap = errors.New("live event buffer exceeded; recover through Sessi
 
 // SessionChange keeps transition snapshots separate from public response rendering.
 type SessionChange struct {
-	Sequence        int64                   `json:"-"`
-	Event           v1.SessionEvent         `json:"event"`
-	Turn            *Turn                   `json:"turn,omitempty"`
-	SessionUsage    json.RawMessage         `json:"session_usage,omitempty"`
-	RequiredActions []v1.FunctionCallAction `json:"required_actions,omitempty"`
+	Sequence                 int64                     `json:"-"`
+	Event                    v1.SessionEvent           `json:"event"`
+	Turn                     *Turn                     `json:"turn,omitempty"`
+	SessionUsage             json.RawMessage           `json:"session_usage,omitempty"`
+	RequiredActions          []v1.FunctionCallAction   `json:"required_actions,omitempty"`
+	EnvironmentInputActivity *EnvironmentInputActivity `json:"environment_input_activity,omitempty"`
 }
 
 func recordSessionChange(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, change SessionChange) error {

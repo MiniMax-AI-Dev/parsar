@@ -101,10 +101,11 @@ func run() error {
 	}
 	if executor != nil {
 		defer executor.Close()
+		options = append(options, api.WithEnvironmentRemoteURL(executor.PublicURL()))
 	}
 	if registry != nil {
 		dispatcher := &execution.Dispatcher{Store: executionStore, Registry: registry,
-			EnvironmentConnection: environmentConnection(executor, os.Getenv("AGENTS_API_EXECUTOR_URL"))}
+			EnvironmentConnection: environmentConnection(executor)}
 		if executor != nil {
 			dispatcher.CloseEnvironmentConnections = executor.Close
 		}

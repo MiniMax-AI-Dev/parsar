@@ -29,7 +29,7 @@ func (connectionStore) AuthenticateEnvironmentExecutor(context.Context, string, 
 }
 
 func TestEnvironmentConnectionUsesScopedOwnerCredentials(t *testing.T) {
-	if environmentConnection(nil, "") != nil {
+	if environmentConnection(nil) != nil {
 		t.Fatal("disabled registry enabled pending-input scheduling")
 	}
 	source := connectionStore{tenant: uuid.NewString(), environment: uuid.NewString()}
@@ -53,7 +53,7 @@ func TestEnvironmentConnectionUsesScopedOwnerCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer registry.Close()
-	resolve := environmentConnection(registry, "https://executor.example/")
+	resolve := environmentConnection(registry)
 	session := store.Session{TenantID: source.tenant, Engine: "codex"}
 	environment := store.Environment{ID: source.environment}
 	owner, cancel := context.WithCancel(context.Background())

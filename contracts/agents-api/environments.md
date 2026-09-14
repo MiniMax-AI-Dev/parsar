@@ -268,8 +268,8 @@ revision and cleanup rules.
 Cancellation still uses the existing best-effort interrupt and harness release.
 The fixture measures remote PID exit and stopped side effects independently;
 native detached cleanup may delay that exit. This slice does not implement public
-`environment_connection`, public admission, credential renewal or
-resource lifecycle. Public `self_hosted` remains disabled until those dependencies
+public admission or complete resource lifecycle. Public `self_hosted` creation and
+input remain disabled until those dependencies
 are accepted together.
 
 
@@ -285,11 +285,10 @@ reconciliation settles a committed claim interrupted before Start, without repla
 Expiration, targeted cancellation and Session deletion retain their existing
 pre-admission or claimed-Turn semantics.
 
-This primitive does not connect an executor, publish environment actions or change
-public admission. Its message-only scope and single pending reservation are internal
-limits, not claims about the final public protocol. Initial creation, mixed inputs,
-public Session activity and production readiness wiring remain
-required. The Worker settles due reservations in bounded batches even without
+This primitive does not connect an executor or change public admission. Its
+message-only scope and single pending reservation are internal limits, not claims
+about the final public protocol. Initial creation and mixed inputs remain required.
+The Worker settles due reservations in bounded batches even without
 devices or available execution slots, skipping contended Session locks and retaining
 its current execution ownership. Restart does not reset stored deadlines. This
 private expiry creates no public failure event or Turn. See the
@@ -314,16 +313,39 @@ original deadline, while claimed/uncertain work is not replayed. The opt-in
 real-provider Worker fixture verifies automatic discovery, remote commands, files,
 cold continuation and reservation retries. The standalone service wires the resolver
 when its daemon gateway and executor URL are configured. Public initial input,
-lifecycle/actions and public admission remain unimplemented.
+asynchronous failure policy and public admission remain unimplemented.
 Caller keys resolve trusted project/subject identities, with persistent project
 bindings verified before startup. New Sessions persist the typed creator and
 require it for creation retries; historical unknown creators cannot be claimed.
 Executor keys match the recorded project and typed creator; public Environment
-connections still require admission/readiness and lifecycle implementation.
+connections still require public admission and complete lifecycle validation.
 The current daemon can acknowledge pending-start cancellation without a final
 outcome; without an observed final Done, delivery records an unknown failure.
 Preparation failure cannot discard a cancellation receipt already being awaited.
 Complete cancellation output/Usage and native cleanup remain required work.
+
+### Pending input activity and Session reads
+
+The latest relevant reservation now owns a narrow pre-Turn activity projection.
+Pending offline input emits `requires_action` with `environment_connection`;
+connection arrival clears it to `idle` before native preparation admits a Turn.
+Offline Sessions without waiting input request nothing. Newer or active Turns
+supersede the reservation. Connection/reservation mutations and immutable activity
+events commit together, including captured Usage; reads and SSE share that state.
+Cancelling or expiring a non-initial reservation clears its action to `idle`,
+without reviving an earlier failed Turn. Exact hosted settlement/error behavior and
+initial-input asynchronous failure remain unverified; this policy does not claim
+their compatibility.
+
+With the validated executor origin configured, ordinary Session GET/list/metadata
+and live SSE can return privately provisioned `self_hosted` Sessions. Their safe
+output contains the real Environment ID, unchanged configured `remote_url`,
+workspace and capability directories. It excludes private configuration and does
+not infer URLs from request headers. Fixed SDK/raw HTTP/live SSE acceptance uses
+the returned URL and ID to start the real executor, then observes the existing
+Worker's remote first/resumed model workflow. Provisioning and reservation remain
+private in this fixture; public creation/input, Environment GET/metadata/files,
+hosted output and complete public Environment execution remain separate work.
 
 ## Dependency-ordered implementation
 

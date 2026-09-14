@@ -56,14 +56,7 @@ func TestPreparedDispatchSettlesOnlyReadyInput(t *testing.T) {
 			if action == "delete" && !errors.Is(got.err, store.ErrNotFound) {
 				t.Fatal("deleted reservation remained accessible", got.err)
 			}
-			var history int
-			err := pool.QueryRow(t.Context(), `SELECT
-				(SELECT count(*) FROM turns WHERE session_id=$1)+
-				(SELECT count(*) FROM session_items WHERE session_id=$1)+
-				(SELECT count(*) FROM session_events WHERE session_id=$1)`, h.session.ID).Scan(&history)
-			if err != nil || history != 0 {
-				t.Fatal("unready preparation produced history", history, err)
-			}
+			assertEnvironmentExpiryHasNoHistory(t, pool, h.session.ID)
 			if action == "prepare-failure" || action == "disconnect" {
 				stored, err := h.s.GetEnvironmentInputReservation(t.Context(), h.tenant, h.session.ID, pending.ID)
 				if err != nil || stored.State != store.EnvironmentInputPending || !stored.Deadline.Equal(pending.Deadline) {

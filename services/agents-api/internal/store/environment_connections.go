@@ -97,7 +97,7 @@ func (s *Store) withEnvironmentConnection(ctx context.Context, tenant, environme
 		if err != nil {
 			return err
 		}
-		return apply(ctx, q, row)
+		return withEnvironmentInputActivity(ctx, q, session, func() error { return apply(ctx, q, row) })
 	})
 }
 

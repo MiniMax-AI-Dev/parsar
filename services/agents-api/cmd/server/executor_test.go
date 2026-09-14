@@ -35,5 +35,37 @@ func TestExecutorRegistryIsExplicitAndRetiresStaticKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if registry.PublicURL() != "https://executor.example" {
+		t.Fatal("public executor origin differs from configured registration origin", registry.PublicURL())
+	}
 	registry.Close()
+}
+
+func TestExecutorPublicOriginUsesRegistryValidation(t *testing.T) {
+	t.Setenv("AGENTS_API_EXECUTOR_KEYS_FILE", "")
+	t.Setenv("AGENTS_API_HARNESS_KEYS_FILE", "")
+	for _, origin := range []string{
+		"https://token@executor.example", "https://executor.example?token=secret", "https://executor.example?",
+		"https://executor.example/#token", "https://executor.example/daemon", "http://executor.example", "",
+	} {
+		t.Setenv("AGENTS_API_EXECUTOR_URL", origin)
+		registry, err := executorRegistry(store.New(nil), func() *execution.Worker { return nil }, func(context.Context) error { return nil })
+		if err == nil && registry != nil {
+			registry.Close()
+			t.Fatal("invalid public executor origin accepted", origin)
+		}
+	}
+	for origin, want := range map[string]string{
+		"https://executor.example/": "https://executor.example", "http://127.0.0.1:8091/": "http://127.0.0.1:8091",
+	} {
+		t.Setenv("AGENTS_API_EXECUTOR_URL", origin)
+		registry, err := executorRegistry(store.New(nil), func() *execution.Worker { return nil }, func(context.Context) error { return nil })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if registry.PublicURL() != want {
+			t.Fatal("incorrect executor registration origin", registry.PublicURL(), want)
+		}
+		registry.Close()
+	}
 }

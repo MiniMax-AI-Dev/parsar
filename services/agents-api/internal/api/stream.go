@@ -21,7 +21,7 @@ type eventStore interface {
 }
 
 // @Summary Stream live Session events
-// @Description Live-only events. Reconnect through Session, Turn and Items reads; missed events are not replayed. A lagging stream closes with an error when its bounded buffer is exceeded.
+// @Description Live-only events. Reconnect through Session, Turn and Items reads; missed events are not replayed. A lagging stream closes with an error when its bounded buffer is exceeded. Session activity includes immutable pending-input connection actions before Turn creation; privately provisioned self_hosted environments use the same safe output as Session retrieval.
 // @Tags Events
 // @Produce text/event-stream
 // @Security BearerAuth
@@ -46,7 +46,7 @@ func (h *Handler) streamEvents(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, r, err)
 		return
 	}
-	if _, err = sessionResponse(session); err != nil {
+	if _, err = sessionResponse(session, h.executorURL); err != nil {
 		writeStoreError(w, r, err)
 		return
 	}
@@ -103,7 +103,7 @@ func (h *Handler) serveSessionEvents(w http.ResponseWriter, r *http.Request, eve
 			return
 		}
 		for _, change := range changes {
-			event, err := streamResponse(session, change)
+			event, err := streamResponse(session, change, h.executorURL)
 			if err != nil {
 				writeStreamFailure(write, id)
 				return
@@ -128,12 +128,12 @@ func (h *Handler) serveSessionEvents(w http.ResponseWriter, r *http.Request, eve
 	}
 }
 
-func streamResponse(session store.Session, change store.SessionChange) (v1.SessionEvent, error) {
+func streamResponse(session store.Session, change store.SessionChange, executorURL string) (v1.SessionEvent, error) {
 	event := change.Event
-	if change.Turn == nil {
+	if change.Turn == nil && change.EnvironmentInputActivity == nil {
 		return event, nil
 	}
-	if strings.HasPrefix(event.Type, "agent.session.turn.") {
+	if change.Turn != nil && strings.HasPrefix(event.Type, "agent.session.turn.") {
 		turn, err := turnResponse(session, *change.Turn)
 		event.Turn = &turn
 		return event, err
@@ -141,7 +141,8 @@ func streamResponse(session store.Session, change store.SessionChange) (v1.Sessi
 	event.SessionID = ""
 	session.RequiredActions = change.RequiredActions
 	session.LastTurn, session.Usage = change.Turn, change.SessionUsage
-	value, err := sessionResponse(session)
+	session.EnvironmentInputActivity = change.EnvironmentInputActivity
+	value, err := sessionResponse(session, executorURL)
 	event.Session = &value
 	return event, err
 }

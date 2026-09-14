@@ -94,9 +94,10 @@ func assertEnvironmentExpiryHasNoHistory(t *testing.T, pool *pgxpool.Pool, sessi
   SELECT (SELECT count(*) FROM turns WHERE session_id=$1)
        + (SELECT count(*) FROM turn_inputs WHERE session_id=$1)
        + (SELECT count(*) FROM session_items WHERE session_id=$1)
-       + (SELECT count(*) FROM session_events WHERE session_id=$1)`, session).Scan(&count)
+       + (SELECT count(*) FROM session_events WHERE session_id=$1
+          AND (payload ? 'turn' OR payload->'event' ? 'item'))`, session).Scan(&count)
 	if err != nil || count != 0 {
-		t.Fatal("pre-Turn expiry created history", count, err)
+		t.Fatal("pre-Turn expiry created Turn or Item history", count, err)
 	}
 }
 

@@ -10,6 +10,10 @@ func TestEnvironmentInputConcurrentPromotionClaimsOnce(t *testing.T) {
 	writer := executionLease(t, s).Store()
 	tenant, session := environmentInputSession(t, s)
 	pending := reserveEnvironmentInput(t, s, tenant, session.ID, "pending")
+	reservationCursor, err := s.SessionEventCursor(t.Context(), tenant, session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	const count = 8
 	results := make(chan EnvironmentInputReservation, count)
 	var group sync.WaitGroup
@@ -52,7 +56,7 @@ func TestEnvironmentInputConcurrentPromotionClaimsOnce(t *testing.T) {
 		t.Fatal("promotion did not persist its execution claim", turn, err)
 	}
 	environmentInputHistory(t, pool, session.ID, 1, 2)
-	changes, err := s.ListSessionEvents(t.Context(), tenant, session.ID, 0)
+	changes, err := s.ListSessionEvents(t.Context(), tenant, session.ID, reservationCursor)
 	if err != nil || len(changes) < 2 {
 		t.Fatal("missing promotion events", changes, err)
 	}

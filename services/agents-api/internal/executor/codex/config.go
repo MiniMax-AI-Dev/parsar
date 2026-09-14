@@ -38,7 +38,7 @@ func validateConfig(c Config) (string, error) {
 		return "", errors.New("executor registry requires Store, execution ownership and connection lifecycle callbacks")
 	}
 	u, err := url.Parse(c.PublicURL)
-	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
 		return "", errors.New("executor URL must be an absolute origin without credentials")
 	}
 	switch u.Scheme {
@@ -53,5 +53,6 @@ func validateConfig(c Config) (string, error) {
 	default:
 		return "", errors.New("executor URL must use HTTPS or loopback HTTP")
 	}
+	u.Path, u.RawPath = "", ""
 	return strings.TrimRight(u.String(), "/"), nil
 }
