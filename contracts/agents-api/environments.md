@@ -254,8 +254,8 @@ normal Session. The existing Factory uses that path. Private daemon controls now
 retain it through asynchronous preparation and one start, using a connection-owned
 handle, bounded lifetime/capacity and separate gateway response correlation.
 Preparation creates no Run subscription; only Start supplies the actual RunID.
-Production Worker wiring remains pending, and this private primitive
-does not expose public readiness. See the contributor guide for ownership, retry,
+The configured service Worker now uses this private primitive;
+it does not expose public readiness. See the contributor guide for ownership, retry,
 revision and cleanup rules.
 
 Cancellation still uses the existing best-effort interrupt and harness release.
@@ -304,7 +304,8 @@ per Session and bounded, alternating cursor scans. Private pending selection run
 at most once per five seconds; failed preparation can retry without extending the
 original deadline, while claimed/uncertain work is not replayed. The opt-in
 real-provider Worker fixture verifies automatic discovery, remote commands, files,
-cold continuation and reservation retries. Production resolver wiring, device
+cold continuation and reservation retries. The standalone service wires the resolver
+when its daemon gateway and executor URL are configured. Device
 selection, public initial input, lifecycle/actions and caller principal identity
 remain unimplemented.
 The current daemon can acknowledge pending-start cancellation without a final
