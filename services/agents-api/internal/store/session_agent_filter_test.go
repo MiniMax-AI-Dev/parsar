@@ -18,7 +18,7 @@ func TestSessionAgentFilterPaginationAndIsolation(t *testing.T) {
 	var expected []string
 	create := func(tenant, key, agent string) Session {
 		configuration, _ := json.Marshal(map[string]any{"agent": map[string]string{"id": agent, "model": "test-model"}, "environment": map[string]string{"type": "none"}})
-		value, err := s.CreateSession(t.Context(), tenant, CreateSessionInput{Engine: "codex", IdempotencyKey: key, Configuration: configuration})
+		value, err := s.CreateSession(t.Context(), tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: key, Configuration: configuration})
 		if err != nil {
 			t.Fatal(err)
 		}

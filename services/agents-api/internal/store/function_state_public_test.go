@@ -27,7 +27,7 @@ func TestFunctionStateOfficialClientReadsAndLiveEvents(t *testing.T) {
 	defer cancel()
 	tenant, token, foreign := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	cfg := json.RawMessage(`{"agent":{"id":"agent_fixture","model":"fixture","tools":[],"multi_agent":{"enabled":false,"max_concurrent_subagents":null},"reasoning":{},"service_tier":"auto","text":{"format":{"type":"text"},"verbosity":"medium"}},"environment":{"type":"none"}}`)
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "fixture", Configuration: cfg})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "fixture", Configuration: cfg})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -26,11 +26,11 @@ func TestFunctionInputsOfficialClientAtomicAdmission(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	tenant, token, foreign := uuid.NewString(), uuid.NewString(), uuid.NewString()
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "fixture"})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "fixture"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "other"})
+	other, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "other"})
 	if err != nil {
 		t.Fatal(err)
 	}

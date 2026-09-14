@@ -81,8 +81,11 @@ The public `Idempotency-Key` creation header is optional: omission creates a new
 Session. A supplied key identifies the request within its authenticated tenant.
 Inline retries use normalized effective configuration; new saved-Agent references
 record caller intent independently of later source updates/deletion. Retries do
-not admit initial input again. Historical rows without recorded caller intent
-retain the old resolved-snapshot behavior. See the
+not admit initial input again. Every retry must match the original typed creator,
+including across key rotation. Another principal using the same project/key gets
+the local 409 conflict. Records with a known creator but no recorded request intent
+retain resolved-snapshot behavior; records without a creator cannot be retried.
+These retry policies are not verified hosted semantics. See the
 [retry boundary](../../contracts/agents-api/README.md#public-semantics).
 
 The Store uses internal creation keys and preserves immutable engine/configuration,
@@ -146,8 +149,13 @@ keep digests in the server file. Rotate or revoke by changing bindings and
 restarting the service. Keep the same principal IDs when rotating a caller's key.
 Optional `OpenAI-Organization` and `OpenAI-Project` headers must match its binding;
 repeated or conflicting values fail authentication. These identities do not grant
-product-user rights. Session creator persistence and principal-scoped Environment
-executor authorization remain separate work; project resource visibility is unchanged.
+product-user rights. New Sessions persist the authenticated creator kind/ID
+atomically and never change them on retry. Project resource visibility and mutation
+authorization are unchanged. Historical Sessions keep unknown creators and remain
+readable; no key, metadata or product record can assign their ownership through a
+retry. Retire older API writers before starting this deployment; mixed-version
+creation is unsupported. Principal-scoped Environment executor authorization
+remains separate work.
 
 `AGENTS_API_ADDR` defaults to `127.0.0.1:8091`; use a TLS reverse proxy for remote
 access. `AGENTS_API_ENGINE` defaults to `codex`; set it to `claude_sdk` for the

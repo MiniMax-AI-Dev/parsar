@@ -25,10 +25,7 @@ func (p Principal) Validate() error {
 	if _, err := ProjectScopes([]ProjectScope{p.ProjectScope}); err != nil {
 		return err
 	}
-	if (p.SubjectKind != "user" && p.SubjectKind != "service_account") || !validID(p.SubjectID) {
-		return errors.New("caller subject_kind must be user or service_account with a nonempty subject_id")
-	}
-	return nil
+	return p.Subject().Validate()
 }
 
 // ProjectScopes validates the bijection and returns unique scopes in stable lock order.

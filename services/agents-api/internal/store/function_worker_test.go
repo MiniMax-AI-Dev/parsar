@@ -18,7 +18,7 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 				h := newFunctionHarness(t)
 				if !prebound {
 					var err error
-					h.session, err = h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "unbound", Configuration: []byte(functionConfiguration)})
+					h.session, err = h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "unbound", Configuration: []byte(functionConfiguration)})
 					if err != nil {
 						t.Fatal(err)
 					}

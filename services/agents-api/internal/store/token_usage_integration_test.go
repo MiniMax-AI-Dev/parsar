@@ -16,7 +16,7 @@ func TestTokenUsageDurableSnapshotsAndSessionTotals(t *testing.T) {
 	ctx := context.Background()
 	s, pool := store.NewTestStore(t)
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "usage"})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "usage"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestCancellationReceiptUsageSurvivesRecovery(t *testing.T) {
 	ctx := context.Background()
 	s, _ := store.NewTestStore(t)
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "cancel-recovery"})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "cancel-recovery"})
 	if err != nil {
 		t.Fatal(err)
 	}

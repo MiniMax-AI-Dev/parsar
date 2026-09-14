@@ -136,8 +136,9 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   source preservation, independent Session snapshots, retries and service restart.
   New saved-reference Sessions record caller intent before source lookup. Matching
   creation retries recover their accepted snapshot even after source update/deletion;
-  changed overrides conflict. Historical rows without that identity retain the old
-  resolved-hash behavior; their original intent cannot be backfilled. These local
+  changed overrides conflict. Retries also require the original typed creator.
+  Known creators without recorded request intent retain resolved-hash behavior;
+  records without creator identity reject retries. Neither identity is backfilled. These local
   retry rules are not verified hosted semantics.
   In the pinned `session_create_params.py`, `stream` defaults to false and neither
   `stream` nor `agent_id` permits null. Metadata omission/null defaults to an empty
@@ -522,7 +523,12 @@ against PostgreSQL before startup. Optional official organization/project header
 must match the key's authorized scope; ambiguous or conflicting headers use the
 existing `401 invalid_api_key` response. This error policy is an implementation
 choice, not verified hosted error parity. Project resource access remains shared
-within the authorized project. Session creator persistence and principal-owned
-executor credentials are still pending, so this foundation does not open public
+within the authorized project. New Sessions persist immutable creator kind/ID from
+the authenticated principal; ordinary and streaming creation retries require the
+same typed subject, including when recovering before saved-Agent lookup. Rotated
+keys for that subject share retry identity. Unknown historical creators cannot be
+claimed by retry. This local 409 policy is not verified hosted retry parity.
+Creator fields remain internal and do not extend the public Session schema.
+Principal-owned executor credentials are still pending, so this foundation does not open public
 Environment admission or establish complete ownership compatibility. See the
 [standalone configuration](../../services/agents-api/README.md#standalone-http-service).

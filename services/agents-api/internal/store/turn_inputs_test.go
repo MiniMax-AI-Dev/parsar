@@ -17,7 +17,7 @@ var messagePayload = json.RawMessage(`{"input":[{"role":"user","content":[{"type
 func newTurnSession(t *testing.T, s *Store) (string, Session) {
 	t.Helper()
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(context.Background(), tenant, CreateSessionInput{
+	session, err := s.CreateSession(context.Background(), tenant, CreateSessionInput{Creator: FixtureCreator(),
 		Engine: "codex", IdempotencyKey: "session", Configuration: json.RawMessage(`{"agent":{"model":"test","instructions":"original"}}`),
 	})
 	if err != nil {
@@ -198,7 +198,7 @@ func TestTurnOperationsAreTenantAndSessionScoped(t *testing.T) {
 		}
 	}
 	// Turn IDs cannot be used with another valid Session in the same tenant either.
-	second, err := s.CreateSession(ctx, tenant, CreateSessionInput{Engine: "codex", IdempotencyKey: "second"})
+	second, err := s.CreateSession(ctx, tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "second"})
 	if err != nil {
 		t.Fatal(err)
 	}

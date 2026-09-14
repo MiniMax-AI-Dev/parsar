@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/db/sqlc"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/identity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -30,7 +31,10 @@ func creationRequestHash(raw json.RawMessage) (pgtype.Text, error) {
 }
 
 // FindSessionCreation recovers recorded caller intent without resolving a mutable source.
-func (s *Store) FindSessionCreation(ctx context.Context, tenantID, key string, request json.RawMessage) (SessionCreation, error) {
+func (s *Store) FindSessionCreation(ctx context.Context, tenantID, key string, request json.RawMessage, creator identity.Subject) (SessionCreation, error) {
+	if err := creator.Validate(); err != nil {
+		return SessionCreation{}, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
 	tenant, err := parseID(tenantID)
 	if err != nil {
 		return SessionCreation{}, err
@@ -52,7 +56,15 @@ func (s *Store) FindSessionCreation(ctx context.Context, tenantID, key string, r
 	if err != nil {
 		return SessionCreation{}, fmt.Errorf("find session creation: %w", err)
 	}
-	if row.DeletedAt.Valid || row.CreationRequestHash.String != hash.String {
+	if row.DeletedAt.Valid || !row.CreatorKind.Valid || !row.CreatorID.Valid || row.CreatorKind.String != creator.Kind || row.CreatorID.String != creator.ID {
+		return SessionCreation{}, ErrIdempotencyConflict
+	}
+	// Missing request intent does not imply missing ownership. Known creators may
+	// still fall back to the original resolved-request equivalence at the upsert.
+	if !row.CreationRequestHash.Valid {
+		return SessionCreation{}, ErrNotFound
+	}
+	if row.CreationRequestHash.String != hash.String {
 		return SessionCreation{}, ErrIdempotencyConflict
 	}
 	session, err := sessionFromRow(row)

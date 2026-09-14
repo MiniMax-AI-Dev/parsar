@@ -26,7 +26,7 @@ func TestHarnessGrantsCheckPostgreSQLTenantOwnership(t *testing.T) {
 	tenants := []string{uuid.NewString(), uuid.NewString()}
 	sessions, environments := []string{}, []string{}
 	for _, tenant := range tenants {
-		session, err := s.CreateSession(t.Context(), tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "harness-scope", Configuration: json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace"}}`)})
+		session, err := s.CreateSession(t.Context(), tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "harness-scope", Configuration: json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace"}}`)})
 		if err != nil {
 			t.Fatal(err)
 		}

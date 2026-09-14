@@ -307,10 +307,11 @@ original deadline, while claimed/uncertain work is not replayed. The opt-in
 real-provider Worker fixture verifies automatic discovery, remote commands, files,
 cold continuation and reservation retries. The standalone service wires the resolver
 when its daemon gateway and executor URL are configured. Public initial input,
-lifecycle/actions, durable Session creator identity and principal-scoped executor
-authorization remain unimplemented. Caller keys resolve trusted project/subject
-identities, with persistent project bindings verified before startup; this does
-not yet establish Session ownership for public Environment connections.
+lifecycle/actions and principal-scoped executor authorization remain unimplemented.
+Caller keys resolve trusted project/subject identities, with persistent project
+bindings verified before startup. New Sessions persist the typed creator and
+require it for creation retries; historical unknown creators cannot be claimed.
+Executor principal matching is still required for public Environment connections.
 The current daemon can acknowledge pending-start cancellation without a final
 outcome; without an observed final Done, delivery records an unknown failure.
 Preparation failure cannot discard a cancellation receipt already being awaited.

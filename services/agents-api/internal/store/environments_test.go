@@ -18,7 +18,7 @@ func environmentInput(key, kind, directory string) CreateSessionInput {
 		"agent":       map[string]string{"model": "fixture-model"},
 		"environment": map[string]any{"type": kind, "workspace_directory": directory, "capability_directories": []string{}},
 	})
-	return CreateSessionInput{Engine: "codex", IdempotencyKey: key, Configuration: configuration}
+	return CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: key, Configuration: configuration}
 }
 
 func TestEnvironmentOwnershipPersistsAndStaysScoped(t *testing.T) {
@@ -163,7 +163,7 @@ func TestEnvironmentCreationWinnerOwnsSnapshotAndIdentity(t *testing.T) {
 	if err != nil || retry.Created || retry.Session.ID != first.creation.Session.ID {
 		t.Fatal(retry, err)
 	}
-	found, err := restarted.FindSessionCreation(ctx, tenant, "winner", intent)
+	found, err := restarted.FindSessionCreation(ctx, tenant, "winner", intent, FixtureCreator())
 	if err != nil || found.Created || found.Session.ID != first.creation.Session.ID {
 		t.Fatal(found, err)
 	}
@@ -258,7 +258,7 @@ func TestEnvironmentAbsentForNoneAndLegacySnapshots(t *testing.T) {
 	ctx := context.Background()
 	tenant := uuid.NewString()
 	for i, configuration := range []json.RawMessage{nil, json.RawMessage(`{}`), json.RawMessage(`{"environment":{"type":"none"}}`)} {
-		input := CreateSessionInput{Engine: "codex", IdempotencyKey: fmt.Sprintf("none-%d", i), Configuration: configuration}
+		input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: fmt.Sprintf("none-%d", i), Configuration: configuration}
 		session, err := s.CreateSession(ctx, tenant, input)
 		if err != nil {
 			t.Fatal(err)

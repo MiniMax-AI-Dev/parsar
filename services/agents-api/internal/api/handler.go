@@ -22,7 +22,7 @@ type ResourceStore interface {
 	GetTurn(context.Context, string, string, string) (store.Turn, error)
 	ListTurns(context.Context, string, string, string, int, bool) (store.TurnPage, error)
 	CreateSession(context.Context, string, store.CreateSessionInput) (store.Session, error)
-	FindSessionCreation(context.Context, string, string, json.RawMessage) (store.SessionCreation, error)
+	FindSessionCreation(context.Context, string, string, json.RawMessage, identity.Subject) (store.SessionCreation, error)
 	GetSession(context.Context, string, string) (store.Session, error)
 	DeleteSession(context.Context, string, string) error
 	UpdateSessionMetadata(context.Context, string, string, map[string]string) (store.Session, error)
@@ -98,9 +98,13 @@ func tenantID(r *http.Request) string {
 	return r.Context().Value(principalContextKey{}).(identity.Principal).TenantID
 }
 
+func sessionCreator(r *http.Request) identity.Subject {
+	return r.Context().Value(principalContextKey{}).(identity.Principal).Subject()
+}
+
 // createSession optionally admits initial text in the same transaction as the Session.
 // @Summary Create an execution Session
-// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none, subject to the configured engine. Claude SDK currently requires medium verbosity and object-root function schemas. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text and atomically starts a Turn; omitted or null input creates an idle Session. With stream=true, returns live Session events starting at creation; disconnect does not cancel execution. New saved-Agent creation retries retain caller identity independently of later Agent changes; existing records without that identity retain their previous retry rules. Creation retries observe future events without replay; retry with stream=false to retrieve the Session. Non-text initial input remains unsupported.
+// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none, subject to the configured engine. Claude SDK currently requires medium verbosity and object-root function schemas. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text and atomically starts a Turn; omitted or null input creates an idle Session. With stream=true, returns live Session events starting at creation; disconnect does not cancel execution. New Sessions retain their authenticated creator; all creation retries require the same typed subject, including across key rotation. Saved-Agent retries retain request intent independently of later Agent changes. Unknown historical creators reject retries; known creators without recorded intent retain resolved-snapshot retry rules. These conflict policies are local and not verified hosted parity. Creation retries observe future events without replay; retry with stream=false to retrieve the Session. Non-text initial input remains unsupported.
 // @Tags Sessions
 // @Accept json
 // @Produce json,text/event-stream
@@ -182,7 +186,8 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	createInput := store.CreateSessionInput{
-		Engine: h.engine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs, CreationRequest: creationRequest,
+		Creator: sessionCreator(r),
+		Engine:  h.engine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs, CreationRequest: creationRequest,
 	}
 	if input.Stream {
 		h.createSessionStream(w, r, createInput)

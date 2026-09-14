@@ -15,7 +15,7 @@ func TestSavedAgentsPersistIndependentlyAndStayTenantScoped(t *testing.T) {
 	s, pool := testStore(t)
 	ctx := context.Background()
 	tenantA, tenantB := uuid.NewString(), uuid.NewString()
-	session, err := s.CreateSession(ctx, tenantA, CreateSessionInput{Engine: "codex", IdempotencyKey: "session"})
+	session, err := s.CreateSession(ctx, tenantA, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "session"})
 	if err != nil {
 		t.Fatal(err)
 	}

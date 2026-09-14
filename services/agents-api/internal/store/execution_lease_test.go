@@ -37,12 +37,12 @@ func TestExecutionLeaseLossFencesAllLifecycleWrites(t *testing.T) {
 	if err = writer.BindSessionDevice(t.Context(), tenant, active.ID, host.ID); err != nil {
 		t.Fatal(err)
 	}
-	queued, err := s.CreateSession(t.Context(), tenant, CreateSessionInput{Engine: "codex", IdempotencyKey: "queued"})
+	queued, err := s.CreateSession(t.Context(), tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "queued"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	pending := submitMessage(t, s, tenant, queued.ID, "queued")
-	waiting, err := s.CreateSession(t.Context(), tenant, CreateSessionInput{Engine: "codex", IdempotencyKey: "waiting"})
+	waiting, err := s.CreateSession(t.Context(), tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "waiting"})
 	if err != nil {
 		t.Fatal(err)
 	}

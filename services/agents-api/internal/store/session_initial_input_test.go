@@ -16,7 +16,7 @@ func TestInitialInputCreationRetriesAcrossConnectionsAndLaterTurns(t *testing.T)
 	other, _ := testStore(t)
 	ctx := context.Background()
 	tenant := uuid.NewString()
-	input := CreateSessionInput{Engine: "codex", IdempotencyKey: "initial", InitialInputs: []Input{messageInput("first"), messageInput("second")}}
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "initial", InitialInputs: []Input{messageInput("first"), messageInput("second")}}
 	var wg sync.WaitGroup
 	results := make(chan Session, 8)
 	for i := range 8 {
@@ -107,7 +107,7 @@ func TestInitialInputFailureRollsBackSessionAndWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = pool.Exec(ctx, "ALTER TABLE turn_inputs DROP CONSTRAINT IF EXISTS "+constraint) })
-	input := CreateSessionInput{Engine: "codex", IdempotencyKey: "rollback", InitialInputs: []Input{messageInput("first"), messageInput(marker)}}
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "rollback", InitialInputs: []Input{messageInput("first"), messageInput(marker)}}
 	if got, err := s.CreateSession(ctx, tenant, input); err == nil || got.ID != "" {
 		t.Fatal("partial creation succeeded", got, err)
 	}

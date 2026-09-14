@@ -35,7 +35,7 @@ func TestNativeAppServerRemoteModelPlacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "native-placement", Configuration: configuration})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "native-placement", Configuration: configuration})
 	if err != nil {
 		t.Fatal(err)
 	}

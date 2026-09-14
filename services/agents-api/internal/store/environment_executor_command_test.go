@@ -19,7 +19,7 @@ func TestEnvironmentExecutorOperatorCommand(t *testing.T) {
 	}
 	s, pool := store.NewTestStore(t)
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(t.Context(), tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "operator-key", Configuration: json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace"}}`)})
+	session, err := s.CreateSession(t.Context(), tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "operator-key", Configuration: json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace"}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

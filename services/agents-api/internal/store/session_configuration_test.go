@@ -31,7 +31,7 @@ func TestConfigurationSizeLimitSurvivesJSONBRoundTrip(t *testing.T) {
 	tenant := uuid.NewString()
 	empty := `{"agent":{"model":"example","instructions":""},"environment":{"type":"none"}}`
 	raw := strings.Replace(empty, `"instructions":""`, `"instructions":"`+strings.Repeat("x", 512*1024-len(empty))+`"`, 1)
-	input := CreateSessionInput{Engine: "codex", IdempotencyKey: "size-limit", Configuration: []byte(raw)}
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "size-limit", Configuration: []byte(raw)}
 	first, err := s.CreateSession(ctx, tenant, input)
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestConfigurationIsPartOfSessionIdentity(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
 	tenant := uuid.NewString()
-	input := CreateSessionInput{Engine: "codex", IdempotencyKey: "configured",
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "configured",
 		Configuration: []byte(`{"agent":{"model":"example","instructions":"First"},"environment":{"type":"none"}}`)}
 	first, err := s.CreateSession(ctx, tenant, input)
 	if err != nil {
@@ -92,7 +92,7 @@ func TestLegacySessionIdempotencySurvivesConfigurationMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, configuration := range [][]byte{nil, []byte(`{}`), []byte(` { } `)} {
-		got, err := s.CreateSession(ctx, tenant, CreateSessionInput{Engine: "codex", IdempotencyKey: "legacy", Configuration: configuration})
+		got, err := s.CreateSession(ctx, tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "legacy", Configuration: configuration})
 		if err != nil || got.ID != id || string(got.Configuration) != "{}" {
 			t.Fatalf("legacy retry = %+v, %v", got, err)
 		}

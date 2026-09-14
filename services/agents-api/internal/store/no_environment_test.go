@@ -11,7 +11,7 @@ func TestNoEnvironmentRejectsUnadvertisedDeviceBeforeClaim(t *testing.T) {
 	h := newDispatchHarness(t)
 	ctx := context.Background()
 	var err error
-	h.session, err = h.s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "none", Configuration: []byte(`{"agent":{"model":"test-model"},"environment":{"type":"none"}}`)})
+	h.session, err = h.s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "none", Configuration: []byte(`{"agent":{"model":"test-model"},"environment":{"type":"none"}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

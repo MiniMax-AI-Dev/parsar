@@ -15,7 +15,7 @@ func TestSessionDeletionPreservesExecutionAndRejectsAdmission(t *testing.T) {
 	tenant := uuid.NewString()
 	for _, status := range []string{TurnQueued, TurnInProgress, TurnCompleted} {
 		t.Run(status, func(t *testing.T) {
-			input := CreateSessionInput{Engine: "codex", IdempotencyKey: status}
+			input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: status}
 			session, err := s.CreateSession(ctx, tenant, input)
 			if err != nil {
 				t.Fatal(err)
@@ -97,7 +97,7 @@ func TestSessionDeletionSerializesAdmissionBeforeRetryLookup(t *testing.T) {
 	s, pool := testStore(t)
 	ctx := t.Context()
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(ctx, tenant, CreateSessionInput{Engine: "codex", IdempotencyKey: "creation"})
+	session, err := s.CreateSession(ctx, tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "creation"})
 	if err != nil {
 		t.Fatal(err)
 	}

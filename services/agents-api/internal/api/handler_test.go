@@ -12,6 +12,7 @@ import (
 	"time"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/identity"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/google/uuid"
 )
@@ -22,7 +23,7 @@ type recordingStore struct {
 	input  store.CreateSessionInput
 }
 
-func (s *recordingStore) FindSessionCreation(context.Context, string, string, json.RawMessage) (store.SessionCreation, error) {
+func (s *recordingStore) FindSessionCreation(context.Context, string, string, json.RawMessage, identity.Subject) (store.SessionCreation, error) {
 	return store.SessionCreation{}, store.ErrNotFound
 }
 
