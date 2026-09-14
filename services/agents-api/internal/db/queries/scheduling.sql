@@ -12,6 +12,17 @@ AND (NOT sqlc.arg(connected_only)::boolean OR EXISTS (
 ))
 ORDER BY t.id LIMIT 100;
 
+-- name: ListEnvironmentInputWork :many
+SELECT r.id, r.session_id, s.tenant_id
+FROM environment_input_reservations r
+JOIN sessions s ON s.id = r.session_id
+JOIN session_devices b ON b.session_id = s.id
+JOIN devices d ON d.id = b.device_id AND d.tenant_id = s.tenant_id
+WHERE r.state = 'pending' AND r.deadline > clock_timestamp()
+AND r.id > sqlc.arg(after_id)::uuid AND s.deleted_at IS NULL
+AND d.revoked_at IS NULL AND d.id = ANY(sqlc.arg(connected_devices)::uuid[])
+ORDER BY r.id LIMIT 100;
+
 -- name: ListExecutionDevices :many
 SELECT id, name FROM devices
 WHERE tenant_id = $1 AND revoked_at IS NULL

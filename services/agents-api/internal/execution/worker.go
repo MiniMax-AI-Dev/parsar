@@ -85,7 +85,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	completed := make(chan completion, 4)
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
-	cursor := ""
+	schedule := workerSchedule{}
 	for {
 		select {
 		case <-ctx.Done():
@@ -112,35 +112,21 @@ func (w *Worker) Run(ctx context.Context) error {
 			if len(devices) == 0 {
 				continue
 			}
-			work, err := w.dispatcher.Store.ListExecutionWork(ctx, cursor, []string{store.TurnQueued}, devices)
+			work, err := schedule.selectWork(ctx, w, devices, active)
 			if err != nil {
 				return err
 			}
-			if len(work) == 0 {
-				cursor = ""
-				continue
-			}
 			for _, item := range work {
-				if len(active) == 4 {
-					break
-				}
-				cursor = item.TurnID
-				if active[item.TurnID] {
-					continue
-				}
-				ready, err := w.bind(ctx, item)
-				if err != nil {
-					return err
-				}
-				if !ready {
-					continue
-				}
-				active[item.TurnID] = true
 				running.Add(1)
 				go func() {
 					defer running.Done()
-					err := w.runClaim(ctx, item)
-					completed <- completion{id: item.TurnID, err: err}
+					var err error
+					if item.reservationID != "" {
+						err = w.runEnvironmentInput(ctx, item)
+					} else {
+						err = w.runClaim(ctx, item.ExecutionWork)
+					}
+					completed <- completion{id: item.SessionID, err: err}
 				}()
 			}
 		}

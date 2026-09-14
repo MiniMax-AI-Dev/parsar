@@ -34,6 +34,49 @@ func (q *Queries) GetLatestSessionTurn(ctx context.Context, sessionID pgtype.UUI
 	return i, err
 }
 
+const listEnvironmentInputWork = `-- name: ListEnvironmentInputWork :many
+SELECT r.id, r.session_id, s.tenant_id
+FROM environment_input_reservations r
+JOIN sessions s ON s.id = r.session_id
+JOIN session_devices b ON b.session_id = s.id
+JOIN devices d ON d.id = b.device_id AND d.tenant_id = s.tenant_id
+WHERE r.state = 'pending' AND r.deadline > clock_timestamp()
+AND r.id > $1::uuid AND s.deleted_at IS NULL
+AND d.revoked_at IS NULL AND d.id = ANY($2::uuid[])
+ORDER BY r.id LIMIT 100
+`
+
+type ListEnvironmentInputWorkParams struct {
+	AfterID          pgtype.UUID   `json:"after_id"`
+	ConnectedDevices []pgtype.UUID `json:"connected_devices"`
+}
+
+type ListEnvironmentInputWorkRow struct {
+	ID        pgtype.UUID `json:"id"`
+	SessionID pgtype.UUID `json:"session_id"`
+	TenantID  pgtype.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) ListEnvironmentInputWork(ctx context.Context, arg ListEnvironmentInputWorkParams) ([]ListEnvironmentInputWorkRow, error) {
+	rows, err := q.db.Query(ctx, listEnvironmentInputWork, arg.AfterID, arg.ConnectedDevices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEnvironmentInputWorkRow{}
+	for rows.Next() {
+		var i ListEnvironmentInputWorkRow
+		if err := rows.Scan(&i.ID, &i.SessionID, &i.TenantID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listExecutionDevices = `-- name: ListExecutionDevices :many
 SELECT id, name FROM devices
 WHERE tenant_id = $1 AND revoked_at IS NULL

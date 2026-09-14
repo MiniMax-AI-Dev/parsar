@@ -254,7 +254,7 @@ normal Session. The existing Factory uses that path. Private daemon controls now
 retain it through asynchronous preparation and one start, using a connection-owned
 handle, bounded lifetime/capacity and separate gateway response correlation.
 Preparation creates no Run subscription; only Start supplies the actual RunID.
-Worker scheduling integration remains pending, and this private primitive
+Production Worker wiring remains pending, and this private primitive
 does not expose public readiness. See the contributor guide for ownership, retry,
 revision and cleanup rules.
 
@@ -281,7 +281,7 @@ pre-admission or claimed-Turn semantics.
 This primitive does not connect an executor, publish environment actions or change
 public admission. Its message-only scope and single pending reservation are internal
 limits, not claims about the final public protocol. Initial creation, mixed inputs,
-public Session activity and the existing Worker's readiness integration remain
+public Session activity and production readiness wiring remain
 required. The Worker settles due reservations in bounded batches even without
 devices or available execution slots, skipping contended Session locks and retaining
 its current execution ownership. Restart does not reset stored deadlines. This
@@ -297,9 +297,16 @@ persists terminal state and native continuation. A transient connection callback
 keeps native registry code outside the execution core. Its credential owner spans
 the complete Run; a pending-input deadline does not limit an admitted Turn.
 Controlled database/gateway tests cover pre-ready settlement and pending-start
-cancellation. The opt-in real-provider Dispatcher fixture verifies remote commands,
-files, cold continuation and reservation retries. Worker selection, public initial
-input, lifecycle/actions and caller principal identity remain unimplemented.
+cancellation. The existing Worker now selects pending reservations for already
+bound, connected devices when configured with a connection resolver. Preparation
+through Run cleanup shares its four ordinary execution slots, with one active job
+per Session and bounded, alternating cursor scans. Private pending selection runs
+at most once per five seconds; failed preparation can retry without extending the
+original deadline, while claimed/uncertain work is not replayed. The opt-in
+real-provider Worker fixture verifies automatic discovery, remote commands, files,
+cold continuation and reservation retries. Production resolver wiring, device
+selection, public initial input, lifecycle/actions and caller principal identity
+remain unimplemented.
 The current daemon can acknowledge pending-start cancellation without a final
 outcome; without an observed final Done, delivery records an unknown failure.
 Preparation failure cannot discard a cancellation receipt already being awaited.

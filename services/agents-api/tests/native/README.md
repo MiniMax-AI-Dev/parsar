@@ -85,16 +85,17 @@ fixture's execution owner; after real execution, they release it and verify that
 native preparation rejects the former credential. No static harness-key file is
 used. Public caller principal identity and Worker admission remain separate work.
 
-Run `TestNativePreparedDispatcherRemoteEnvironment` with the same prerequisites to
-exercise the private Dispatcher above these controls. It reserves input without a
+Run `TestNativePreparedWorkerRemoteEnvironment` with the same prerequisites to
+exercise the real Worker above these controls. It reserves input without a
 Turn, resolves a live harness credential, prepares the bound daemon, atomically
 claims the original batch and persists ordinary events/completion. Two real model
 Turns verify remote instructions, exact command cwd/output/exit, retained files and
-cold native history. Repeated reservation dispatch must return replay receipts
+cold native history. Repeated reservation submission must return replay receipts
 without allocating credentials or executing another command. Controlled Store and
 gateway tests separately cover preparation failure, expiry/deletion/cancellation,
 control-only Start rejection and cancellation while Start is pending. This fixture
-does not enable Worker scheduling or public Environment admission/lifecycle.
+configures the Worker resolver before startup; it does not enable production
+resolver wiring or public Environment admission/lifecycle.
 The current daemon's pending-start cancellation acknowledgment may omit Outcome;
 controlled coverage verifies conservative failure without final Done as well
 as cancellation with a supplied outcome. It does not claim complete native
