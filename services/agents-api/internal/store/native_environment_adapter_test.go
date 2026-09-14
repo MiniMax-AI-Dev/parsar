@@ -83,7 +83,7 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 		t.Fatal(err)
 	}
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := codex.New(codex.Config{Store: h.s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String()})
+	registry, err := codex.New(codex.Config{Store: h.s, CheckOwnership: lease.Ping, ReplaceConnection: lease.Store().ReplaceEnvironmentConnection, ObserveConnection: lease.Store().ObserveEnvironmentConnection, PublicURL: "http://" + server.Listener.Addr().String()})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -70,14 +70,15 @@ func nativeRequest() RegistrationRequest {
 }
 
 type fixture struct {
-	registry *Registry
-	server   *httptest.Server
-	source   *environmentFixture
-	keys     []ScopedKey
-	tokens   []string
+	registry  *Registry
+	server    *httptest.Server
+	source    *environmentFixture
+	keys      []ScopedKey
+	tokens    []string
+	lifecycle *lifecycleFixture
 }
 
-func newFixture(t *testing.T) fixture {
+func newFixture(t *testing.T, configure ...func(*Config)) fixture {
 	t.Helper()
 	source := &environmentFixture{values: map[string]string{}, keys: map[string]string{}}
 	keys, tokens := []ScopedKey{}, []string{}
@@ -90,14 +91,20 @@ func newFixture(t *testing.T) fixture {
 		source.keys[k.EnvironmentID] = k.TokenSHA256
 	}
 	server := httptest.NewUnstartedServer(nil)
-	registry, err := New(Config{Store: source, CheckOwnership: source.owner, PublicURL: "http://" + server.Listener.Addr().String()})
+	lifecycle := &lifecycleFixture{states: make(map[string]connectionObservation)}
+	config := Config{Store: source, CheckOwnership: source.owner, ReplaceConnection: lifecycle.replace,
+		ObserveConnection: lifecycle.observe, PublicURL: "http://" + server.Listener.Addr().String()}
+	for _, option := range configure {
+		option(&config)
+	}
+	registry, err := New(config)
 	if err != nil {
 		t.Fatal(err)
 	}
 	server.Config.Handler = registry.Handler()
 	server.Start()
 	t.Cleanup(func() { registry.Close(); server.Close() })
-	return fixture{registry, server, source, keys, tokens}
+	return fixture{registry, server, source, keys, tokens, lifecycle}
 }
 func (f fixture) register(t *testing.T, environment, token string, body any, expected int) RegistrationResponse {
 	t.Helper()
@@ -261,7 +268,8 @@ func TestExecutorPresenceHasNoCommandRelay(t *testing.T) {
 
 func TestExecutorConfigRejectsUnsafeOrAmbiguousBindings(t *testing.T) {
 	f := newFixture(t)
-	base := Config{Store: f.source, CheckOwnership: f.source.owner, PublicURL: f.server.URL}
+	base := Config{Store: f.source, CheckOwnership: f.source.owner, ReplaceConnection: f.lifecycle.replace,
+		ObserveConnection: f.lifecycle.observe, PublicURL: f.server.URL}
 	for _, url := range []string{"http://executor.example", "https://user:secret@example", "https://example/path", "https://example?token=x", "ws://localhost"} {
 		c := base
 		c.PublicURL = url

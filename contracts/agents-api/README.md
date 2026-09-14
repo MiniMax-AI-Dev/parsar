@@ -27,6 +27,10 @@ for further harnesses rather than adding another model/tool loop.
 Verify configuration against actual execution: response defaults must not merely
 describe values the adapter never applied.
 
+The private native registry now persists fenced connection observations and pinned
+Environment-event snapshots through the existing execution owner. Public Environment
+admission, resource metadata and full lifecycle conformance remain unimplemented.
+
 Remaining work includes physical Session cleanup/content variants, broader configuration
 and tools, execution recovery, environments/files, Vaults and protocol Subagents.
 Reusable Agent routes and two public execution profiles are available within the

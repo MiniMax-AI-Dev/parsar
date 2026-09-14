@@ -84,7 +84,7 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 	address := server.Listener.Addr().String()
 	var attempts atomic.Int64
 	start := func(server *httptest.Server) *codex.Registry {
-		r, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + address})
+		r, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, ReplaceConnection: lease.Store().ReplaceEnvironmentConnection, ObserveConnection: lease.Store().ObserveEnvironmentConnection, PublicURL: "http://" + address})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,6 +140,7 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 		}
 		t.Fatal("scoped socket failed")
 	}
+	awaitEnvironmentConnectionState(t, ctx, s, tenant, environment.ID, "connected")
 	socket.Close()
 	connected := func(want bool) {
 		t.Helper()
@@ -154,6 +155,7 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 		t.Fatal("native presence did not converge")
 	}
 	connected(false)
+	awaitEnvironmentConnectionState(t, ctx, s, tenant, environment.ID, "disconnected")
 	binary := os.Getenv("PARSAR_CODEX_BINARY")
 	if binary != "" {
 		version, err := exec.CommandContext(ctx, binary, "--version").Output()
@@ -254,6 +256,7 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 		t.Fatal("rotated key could not connect")
 	}
 	defer socket.Close()
+	awaitEnvironmentConnectionState(t, ctx, s, tenant, environment.ID, "connected")
 	if err := s.RevokeExecutorCredential(ctx, principal, credential.KeyID); err != nil {
 		t.Fatal(err)
 	}
@@ -263,6 +266,10 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 		t.Fatal("revoked socket survived")
 	}
 	connected(false)
+	awaitEnvironmentConnectionState(t, ctx, s, tenant, environment.ID, "disconnected")
+	if len(retainedEnvironmentEvents(t, ctx, s, tenant, session.ID, environment.ID)) < 4 {
+		t.Fatal("real sockets did not persist connection transitions")
+	}
 	register(otherEnvironment.ID, wrongTenantToken, 200)
 	if err := s.DeleteSession(ctx, tenant, session.ID); err != nil {
 		t.Fatal(err)

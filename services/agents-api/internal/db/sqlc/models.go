@@ -34,6 +34,12 @@ type Environment struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type EnvironmentConnection struct {
+	EnvironmentID pgtype.UUID `json:"environment_id"`
+	Generation    pgtype.UUID `json:"generation"`
+	Revision      int64       `json:"revision"`
+}
+
 type EnvironmentExecutorCredential struct {
 	EnvironmentID pgtype.UUID        `json:"environment_id"`
 	TokenSha256   string             `json:"token_sha256"`

@@ -95,7 +95,7 @@ func run() error {
 			return worker.CheckOwnership(ctx)
 		}
 	}
-	executor, err := executorRegistry(executionStore, checkOwnership)
+	executor, err := executorRegistry(executionStore, func() *execution.Worker { return worker }, checkOwnership)
 	if err != nil {
 		return err
 	}
@@ -105,6 +105,9 @@ func run() error {
 	if registry != nil {
 		dispatcher := &execution.Dispatcher{Store: executionStore, Registry: registry,
 			EnvironmentConnection: environmentConnection(executor, os.Getenv("AGENTS_API_EXECUTOR_URL"))}
+		if executor != nil {
+			dispatcher.CloseEnvironmentConnections = executor.Close
+		}
 		worker, err = execution.StartWorker(ctx, dispatcher)
 		if err != nil {
 			return err

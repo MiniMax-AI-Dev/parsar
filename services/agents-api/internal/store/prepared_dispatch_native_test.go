@@ -80,6 +80,14 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	h.d.Options = func(context.Context, store.Session) (map[string]any, error) {
 		return map[string]any{"codex_provider": map[string]any{"name": "MiniMax validation", "base_url": "https://api.minimax.cn/v1", "bearer_token": key, "wire_api": "responses"}}, nil
 	}
+	h.d.CloseEnvironmentConnections = func() {
+		if registry != nil {
+			registry.Close()
+			if registry.LifecycleError() != nil {
+				t.Error("registry connection lifecycle failed")
+			}
+		}
+	}
 	worker, err := execution.StartWorker(ctx, h.d)
 	if err != nil {
 		t.Fatal(err)
@@ -98,10 +106,13 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 		}
 		if registry != nil {
 			registry.Close()
+			if registry.LifecycleError() != nil {
+				t.Error("registry connection lifecycle failed")
+			}
 		}
 		server.Close()
 	}()
-	registry, err = codex.New(codex.Config{Store: h.s, CheckOwnership: worker.CheckOwnership, PublicURL: "http://" + server.Listener.Addr().String()})
+	registry, err = codex.New(codex.Config{Store: h.s, CheckOwnership: worker.CheckOwnership, ReplaceConnection: worker.ReplaceEnvironmentConnection, ObserveConnection: worker.ObserveEnvironmentConnection, PublicURL: "http://" + server.Listener.Addr().String()})
 	if err != nil {
 		cancelWorker()
 		workerDone <- worker.Run(workerCtx)
@@ -110,6 +121,7 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	server.Config.Handler = registry.Handler()
 	server.Start()
 	go func() { workerDone <- worker.Run(workerCtx) }()
+	awaitEnvironmentConnectionState(t, ctx, h.s, h.tenant, environment.ID, "pending")
 	instruction := "REMOTE_" + uuid.NewString()
 	local := prepareDaemonRemoteWorkspace(t, root, instruction)
 	startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, server.URL, environment.ID, credential)
@@ -137,6 +149,7 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 			connected, err := registry.Connected(ctx, h.tenant, environment.ID)
 			return err == nil && connected
 		})
+		awaitEnvironmentConnectionState(t, ctx, h.s, h.tenant, environment.ID, "connected")
 		text := "Run the exact command `./placement.sh " + phase + "` once with the native shell. The tool command argument must be exactly the text inside the backticks: no wrapper, no appended echo, no separators, no error recovery. Exit 7 is intentional; preserve that native exit status and do not retry. Report stdout, stderr and the verification memory briefly."
 		if index == 0 {
 			text += " The fictional festival name to remember is " + memory + "."
@@ -203,6 +216,9 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	for _, token := range tokens {
 		assertDaemonRemoteSecrets(t, root, "agents-api-"+h.session.ID, key, credential.Token, token, h.credential)
 	}
+	environmentEvents := retainedEnvironmentEvents(t, ctx, h.s, h.tenant, h.session.ID, environment.ID)
+	verifyEnvironmentEventsWithSDK(t, root, environmentEvents)
+	proof["environment_events"] = environmentEvents
 	proof["native_thread_id"] = nativeID
 	proof["status"] = "private_worker_verified_public_integration_pending"
 	proof["completed_turns"] = 2

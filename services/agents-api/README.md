@@ -455,7 +455,14 @@ public SDK OpenAPI surface. HTTP is
 allowed only on loopback for development. Production TLS termination remains an
 operator responsibility and requires deployment validation.
 
-A connected socket is an internal observation, not public Environment readiness.
+Authenticated socket observations now persist connection state and immutable
+Environment event snapshots. They do not enable public Environment admission or
+metadata reads, and do not establish native readiness. Registration replacement
+and numbered callbacks fence old observations; a new Worker reconciles previous
+process state before opening connections. Shutdown drains observations before
+releasing execution ownership. Persistence failures close the registry and require
+a service restart; review its lifecycle error logs rather than treating closure as
+a successful write. See the [lifecycle rules](../../CONTRIBUTING.md#environment-ownership-and-placement).
 The adapter checks its execution lease and visible Environment on requests and
 five-second heartbeats; deleted ownership, shutdown or lost ownership closes
 connections. Re-registering replaces an old socket without allowing its late close

@@ -18,14 +18,18 @@ const ticketLifetime = 5 * time.Minute
 
 // Registry owns replaceable connections, never durable public readiness.
 type Registry struct {
-	source         EnvironmentStore
-	checkOwnership func(context.Context) error
-	publicWS       string
-	harnessKeys    map[[32]byte]*harnessCredential
-	registrationMu sync.Mutex
-	mu             sync.Mutex
-	closed         bool
-	registrations  map[string]*registration
+	source            EnvironmentStore
+	checkOwnership    func(context.Context) error
+	replaceConnection func(context.Context, string, string, string) error
+	observeConnection func(context.Context, string, string, string, int64, bool) error
+	observations      sync.WaitGroup
+	lifecycleErr      error
+	publicWS          string
+	harnessKeys       map[[32]byte]*harnessCredential
+	registrationMu    sync.Mutex
+	mu                sync.Mutex
+	closed            bool
+	registrations     map[string]*registration
 }
 
 type registration struct {
@@ -36,6 +40,7 @@ type registration struct {
 	expires   time.Time
 	socket    *connection
 	grants    map[[32]byte]*harnessGrant
+	revision  int64
 }
 
 func New(c Config) (*Registry, error) {
@@ -43,7 +48,9 @@ func New(c Config) (*Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Registry{harnessKeys: make(map[[32]byte]*harnessCredential), source: c.Store, checkOwnership: c.CheckOwnership, publicWS: url, registrations: make(map[string]*registration)}, nil
+	return &Registry{harnessKeys: make(map[[32]byte]*harnessCredential), source: c.Store, checkOwnership: c.CheckOwnership,
+		replaceConnection: c.ReplaceConnection, observeConnection: c.ObserveConnection,
+		publicWS: url, registrations: make(map[string]*registration)}, nil
 }
 
 func (r *Registry) Handler() http.Handler {
@@ -61,7 +68,7 @@ func (r *Registry) authorized(ctx context.Context, key ScopedKey) error {
 	ownerCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	if err := r.checkOwnership(ownerCtx); err != nil {
-		r.Close()
+		r.closeConnections()
 		return err
 	}
 	_, err := r.source.GetEnvironment(ctx, key.TenantID, key.EnvironmentID)
@@ -128,6 +135,20 @@ func (r *Registry) register(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusServiceUnavailable)
 		return
 	}
+	r.observations.Add(1)
+	r.mu.Unlock()
+	if err := r.replaceGeneration(next); err != nil {
+		r.registrationMu.Unlock()
+		writeError(w, http.StatusServiceUnavailable)
+		return
+	}
+	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		r.registrationMu.Unlock()
+		writeError(w, http.StatusServiceUnavailable)
+		return
+	}
 	previous := r.registrations[environment]
 	r.registrations[environment] = next
 	if previous != nil {
@@ -147,20 +168,6 @@ func (r *Registry) Connected(ctx context.Context, tenant, environment string) (b
 	defer r.mu.Unlock()
 	reg := r.registrations[environment]
 	return !r.closed && reg != nil && reg.socket != nil, nil
-}
-
-func (r *Registry) Close() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.closed = true
-	for hash, credential := range r.harnessKeys {
-		credential.stop()
-		delete(r.harnessKeys, hash)
-	}
-	for environment, reg := range r.registrations {
-		r.closeConnectionLocked(reg, reg.socket)
-		delete(r.registrations, environment)
-	}
 }
 
 func capability() (string, error) {
