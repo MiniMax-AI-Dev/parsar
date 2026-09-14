@@ -10,6 +10,7 @@ import (
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/execution"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/identity"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -75,11 +76,11 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 	return router, nil
 }
 
-type tenantContextKey struct{}
+type principalContextKey struct{}
 
 func (h *Handler) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tenant, ok := h.auth.tenant(r)
+		principal, ok := h.auth.principal(r)
 		if !ok {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			writeError(w, http.StatusUnauthorized, "invalid_api_key", "A valid Agents API bearer key is required.")
@@ -89,11 +90,13 @@ func (h *Handler) authenticate(next http.Handler) http.Handler {
 			writeError(w, http.StatusBadRequest, "invalid_beta_header", "OpenAI-Beta: agents=v1 is required.")
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), tenantContextKey{}, tenant)))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalContextKey{}, principal)))
 	})
 }
 
-func tenantID(r *http.Request) string { return r.Context().Value(tenantContextKey{}).(string) }
+func tenantID(r *http.Request) string {
+	return r.Context().Value(principalContextKey{}).(identity.Principal).TenantID
+}
 
 // createSession optionally admits initial text in the same transaction as the Session.
 // @Summary Create an execution Session

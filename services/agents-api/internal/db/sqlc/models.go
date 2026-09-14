@@ -52,6 +52,12 @@ type EnvironmentInputReservation struct {
 	SettledAt      pgtype.Timestamptz `json:"settled_at"`
 }
 
+type ExecutionProjectScope struct {
+	TenantID       pgtype.UUID `json:"tenant_id"`
+	OrganizationID string      `json:"organization_id"`
+	ProjectID      string      `json:"project_id"`
+}
+
 type FunctionCall struct {
 	SessionID      pgtype.UUID        `json:"session_id"`
 	TurnID         pgtype.UUID        `json:"turn_id"`
