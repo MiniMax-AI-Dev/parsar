@@ -399,9 +399,33 @@ Native detached-session cleanup may stop remote commands after a delay; an appli
 receipt is not immediate process quiescence or complete final output/Usage. The
 opt-in registered-daemon test independently observes PID exit and stopped heartbeats
 while the daemon, registry and executor stay alive. Targeted process termination,
-cross-Turn background preservation, public `self_hosted` admission, dispatcher
-readiness-before-claim, public credential identity/renewal and public lifecycle remain
+cross-Turn background preservation, public `self_hosted` admission,
+public credential identity/renewal and public lifecycle remain
 separate work. Do not expose the public mode merely because the adapter probe passes.
+
+The private Dispatcher can execute a pending Environment input on an already bound,
+capable daemon. It requires the current leased Store before resolving transient
+connection credentials. A typed callback supplies only the URL, token and release;
+native registry types remain outside execution code. Derive Environment identity
+and workspace from Store ownership. Retain the same physical peer and preparation
+handle through readiness, atomic promotion/claim and the first non-replay Start.
+Initial prompt/cursor come from the reserved batch and its receipts; later messages
+use ordinary steering. Never hold a database lock during native preparation.
+
+Observe the original pending deadline, cancellation, deletion and peer loss while
+waiting for readiness. Preparation failure leaves pending input and its deadline
+intact unless storage has settled it; it creates no failed Turn or input history.
+During Start, consume preparation controls alongside the ordinary Run stream so a
+control-only rejection or pending-start cancellation can settle promptly. Reuse
+ordinary journal, receipt and completion/native-history persistence. Once cancellation
+is sent, preparation errors/closure cannot replace its receipt or timeout path.
+The daemon may acknowledge cancellation before a native Session provides an outcome;
+without an observed final Done, delivery conservatively fails as outcome unavailable.
+Do not fabricate an empty cancellation outcome or infer native quiescence.
+The connection owner spans preparation and the transferred Run without a reservation-derived Run
+deadline; every exit releases it. This is a private dispatch primitive: Worker
+discovery/scheduling, public admission/initial inputs, principal identity and public
+Environment lifecycle remain separate work.
 
 #### Independent build artifacts
 

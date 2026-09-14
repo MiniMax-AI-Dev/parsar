@@ -85,6 +85,21 @@ fixture's execution owner; after real execution, they release it and verify that
 native preparation rejects the former credential. No static harness-key file is
 used. Public caller principal identity and Worker admission remain separate work.
 
+Run `TestNativePreparedDispatcherRemoteEnvironment` with the same prerequisites to
+exercise the private Dispatcher above these controls. It reserves input without a
+Turn, resolves a live harness credential, prepares the bound daemon, atomically
+claims the original batch and persists ordinary events/completion. Two real model
+Turns verify remote instructions, exact command cwd/output/exit, retained files and
+cold native history. Repeated reservation dispatch must return replay receipts
+without allocating credentials or executing another command. Controlled Store and
+gateway tests separately cover preparation failure, expiry/deletion/cancellation,
+control-only Start rejection and cancellation while Start is pending. This fixture
+does not enable Worker scheduling or public Environment admission/lifecycle.
+The current daemon's pending-start cancellation acknowledgment may omit Outcome;
+controlled coverage verifies conservative failure without final Done as well
+as cancellation with a supplied outcome. It does not claim complete native
+pending-start cancellation results or immediate process quiescence.
+
 The fixture explicitly sets daemon `PARSAR_CODEX_BIN` to `PARSAR_CODEX_BINARY`.
 It checks invalid transient authorization, remote instructions/cwd/output/exit/files,
 release and same-thread cold continuation, then sends `prompt_cancel` during an
