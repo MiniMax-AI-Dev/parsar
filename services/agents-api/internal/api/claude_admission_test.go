@@ -29,7 +29,7 @@ func TestClaudeSessionConfigurationAdmission(t *testing.T) {
 			} {
 				t.Run(fmt.Sprintf("%s/stream=%t/initial=%t", test.name, stream, initial), func(t *testing.T) {
 					digest := sha256.Sum256([]byte("test-api-key"))
-					auth, err := NewAuthenticator([]APIKey{{TokenSHA256: hex.EncodeToString(digest[:]), TenantID: uuid.NewString()}})
+					auth, err := NewAuthenticator([]APIKey{{OrganizationID: "test-org", ProjectID: uuid.NewString(), SubjectKind: "service_account", SubjectID: "test-runner", TokenSHA256: hex.EncodeToString(digest[:]), TenantID: uuid.NewString()}})
 					if err != nil {
 						t.Fatal(err)
 					}

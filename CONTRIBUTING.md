@@ -268,7 +268,8 @@ Executor credentials have no connection-ticket expiry: they remain valid until
 rotation, revocation or Session deletion. Keep caller/device/harness credentials
 independent; never reuse the executor secret for another purpose. Registry request authentication
 and WebSocket URL capabilities have separate purposes; never log either secret.
-Current API keys identify tenants only, not upstream user/service-account identities.
+Caller keys identify a configured project and user/service account; durable Session
+creator matching remains a separate prerequisite for public executor authorization.
 
 Registration IDs, five-minute connection capabilities and socket generations are
 process-local. Re-registration replaces the current socket; late close callbacks
@@ -298,9 +299,9 @@ queries in connect, attach and validation. Old cleanup cannot revoke a successor
 The five-minute connection-ticket lifetime does not expire an active execution
 owner or impose a Turn deadline. Pair closure is not proof of OS quiescence.
 Static harness-key files are retired explicitly, without a fallback or public
-issuance endpoint. Public caller principal identity remains
-separate required work; tenant ownership is not upstream user/service-account
-identity. No credential bearer belongs in snapshots, events, logs or the database.
+issuance endpoint. Durable Session creator identity remains
+separate required work; tenant ownership alone cannot authorize public executor
+connections. No credential bearer belongs in snapshots, events, logs or the database.
 
 One independent harness connection pairs with each executor connection. Native
 binary messages pass unchanged, up to the pinned 256 KiB limit, with one data
@@ -631,9 +632,20 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   separately generates the product spec and `contracts/agents-api/openapi.yaml`;
   never mix their routes or authentication schemes. CI checks both for drift.
 - The standalone service uses `AGENTS_API_DATABASE_URL` and operator-provisioned
-  SHA-256 API key bindings from `AGENTS_API_KEYS_FILE`. Tenant identity comes only
-  from that binding; metadata and product session cookies grant no access. The
-  operator-selected `AGENTS_API_ENGINE` is separate from the requested model.
+  SHA-256 API key bindings from `AGENTS_API_KEYS_FILE`. Each key resolves one
+  organization/project and typed user/service-account principal. The internal
+  tenant UUID is its project resource partition. Before starting the listener or
+  Worker, atomically insert or verify the configured project-to-tenant bijection
+  in `execution_project_scopes`; never remap or delete existing associations when
+  keys change. Configuration requires explicit identities, with no legacy default.
+  Optional `OpenAI-Organization` and `OpenAI-Project` headers must match the key;
+  repeated/conflicting values fail authentication. Metadata, forwarded identities
+  and product session cookies grant no access. Keys can rotate under the same
+  principal; changing or removing caller bindings requires a service restart.
+  This establishes caller identity only: Session creators remain unrecorded until
+  the separate creation-ownership change, and project-scoped resource access is
+  unchanged. Public Environment admission stays disabled. The operator-selected
+  `AGENTS_API_ENGINE` is separate from the requested model.
   Public execution currently supports Codex and Claude SDK text inputs with environment `none`;
   reject unsupported input/environment/agent options explicitly.
 - `packages/agents-client/v1` configures the pinned official `openai-go` Session

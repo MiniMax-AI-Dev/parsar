@@ -174,7 +174,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 
 | Capability | Current state |
 | --- | --- |
-| Independent deployment | Isolated API/migrator/device binaries and Linux amd64 container; own PostgreSQL database/account/migrations and tenant-key authentication; daemon/harness installed separately |
+| Independent deployment | Isolated API/migrator/device binaries and Linux amd64 container; own PostgreSQL database/account/migrations and project/principal key authentication; daemon/harness installed separately |
 | Saved Agents and Sessions | Saved Agent routes, immutable inline/referenced Session configuration, metadata updates, root-Agent filtering and scoped cursor pagination |
 | Public execution | Initial or later text, active input, function success/error and cancellation through a registered same-tenant Codex or Claude SDK host; profile limits below |
 | Pending function actions | Persisted calls/results/application receipts, `required_actions`, Session `requires_action`, Turn `waiting`, and live state snapshots; other interactions remain incomplete |
@@ -513,3 +513,16 @@ open. Claude SDK raw usage is retained internally; public usage stays null witho
 a complete token breakdown. Neither successful cold continuation nor database
 writer fencing proves recovery of interrupted native side effects. Full protocol
 compatibility, other harnesses/platforms and Parsar cutover are not established.
+
+### Caller principal foundation
+
+Caller keys now resolve an explicitly configured organization/project and typed
+user/service-account identity. An immutable project-to-tenant mapping is verified
+against PostgreSQL before startup. Optional official organization/project headers
+must match the key's authorized scope; ambiguous or conflicting headers use the
+existing `401 invalid_api_key` response. This error policy is an implementation
+choice, not verified hosted error parity. Project resource access remains shared
+within the authorized project. Session creator persistence and principal-owned
+executor credentials are still pending, so this foundation does not open public
+Environment admission or establish complete ownership compatibility. See the
+[standalone configuration](../../services/agents-api/README.md#standalone-http-service).

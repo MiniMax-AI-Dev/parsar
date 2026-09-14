@@ -82,7 +82,7 @@ func nativePublicFunctionServer(t *testing.T, h *dispatchHarness, ctx context.Co
 		}
 	})
 	token := uuid.NewString()
-	auth, err := api.NewAuthenticator([]api.APIKey{{TokenSHA256: device.HashCredential(token), TenantID: h.tenant}})
+	auth, err := api.NewAuthenticator([]api.APIKey{{OrganizationID: "test-org", ProjectID: uuid.NewString(), SubjectKind: "service_account", SubjectID: "test-runner", TokenSHA256: device.HashCredential(token), TenantID: h.tenant}})
 	if err != nil {
 		t.Fatal(err)
 	}

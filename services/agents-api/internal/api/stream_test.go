@@ -53,7 +53,7 @@ func (f *streamFixture) ListSessionEvents(_ context.Context, _, _ string, cursor
 func TestLiveStreamAuthDisconnectRecoveryAndServerDeadline(t *testing.T) {
 	f := &streamFixture{session: store.Session{ID: uuid.NewString(), TenantID: uuid.NewString(), CreatedAt: time.Now(), Metadata: map[string]string{},
 		Configuration: json.RawMessage(`{"agent":{"id":"agent_test","model":"model","tools":[]},"environment":{"type":"none"}}`)}}
-	auth, err := NewAuthenticator([]APIKey{{TokenSHA256: device.HashCredential("key"), TenantID: f.session.TenantID}, {TokenSHA256: device.HashCredential("foreign"), TenantID: uuid.NewString()}})
+	auth, err := NewAuthenticator([]APIKey{{OrganizationID: "test-org", ProjectID: uuid.NewString(), SubjectKind: "service_account", SubjectID: "test-runner", TokenSHA256: device.HashCredential("key"), TenantID: f.session.TenantID}, {OrganizationID: "test-org", ProjectID: uuid.NewString(), SubjectKind: "service_account", SubjectID: "test-runner", TokenSHA256: device.HashCredential("foreign"), TenantID: uuid.NewString()}})
 	if err != nil {
 		t.Fatal(err)
 	}

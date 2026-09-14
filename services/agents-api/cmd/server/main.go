@@ -2,7 +2,7 @@
 //
 // @title Agents API
 // @version 1
-// @description Supported single-Agent execution resources from the pinned openai-python beta/agents contract.
+// @description Supported single-Agent execution resources from the pinned openai-python beta/agents contract. Bearer keys bind an execution principal to one project; optional OpenAI-Organization and OpenAI-Project headers must match that binding.
 // @license.name Apache 2.0
 // @license.url https://www.apache.org/licenses/LICENSE-2.0.html
 // @BasePath /v1
@@ -72,6 +72,9 @@ func run() error {
 		engine = "codex"
 	}
 	executionStore := store.New(pool)
+	if err := executionStore.EnsureProjectScopes(ready, auth.ProjectScopes()); err != nil {
+		return err
+	}
 	var workerDone chan error
 	var worker *execution.Worker
 	var options []api.Option

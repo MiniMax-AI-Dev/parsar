@@ -22,8 +22,8 @@ func TestSessionAgentFilterOfficialClient(t *testing.T) {
 	s, pool := store.NewTestStore(t)
 	token, foreign := uuid.NewString(), uuid.NewString()
 	auth, err := api.NewAuthenticator([]api.APIKey{
-		{TokenSHA256: device.HashCredential(token), TenantID: uuid.NewString()},
-		{TokenSHA256: device.HashCredential(foreign), TenantID: uuid.NewString()},
+		{OrganizationID: "test-org", ProjectID: uuid.NewString(), SubjectKind: "service_account", SubjectID: "test-runner", TokenSHA256: device.HashCredential(token), TenantID: uuid.NewString()},
+		{OrganizationID: "test-org", ProjectID: uuid.NewString(), SubjectKind: "service_account", SubjectID: "test-runner", TokenSHA256: device.HashCredential(foreign), TenantID: uuid.NewString()},
 	})
 	if err != nil {
 		t.Fatal(err)

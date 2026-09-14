@@ -119,11 +119,35 @@ incomplete. Durable acceptance is not an exactly-once side-effect guarantee.
 
 Run migrations first, then `go run ./services/agents-api/cmd/server`. The service
 requires `AGENTS_API_DATABASE_URL` and `AGENTS_API_KEYS_FILE`; it does not read the
-product database or accept product login cookies. The key file is a JSON array of
-`{"tenant_id":"<nonzero UUID>","token_sha256":"<SHA-256 hex digest>"}` bindings.
-Provision a random bearer key per execution tenant and give clients the plaintext
-key securely; keep only its digest in the server file. Rotate by replacing the
-bindings and restarting. These identities do not grant product-user rights.
+product database or accept product login cookies. The key file is a JSON array:
+
+```json
+[{
+  "tenant_id": "<canonical nonzero UUID>",
+  "organization_id": "<organization ID>",
+  "project_id": "<project ID>",
+  "subject_kind": "service_account",
+  "subject_id": "<stable service-account ID>",
+  "token_sha256": "<SHA-256 hex digest>"
+}]
+```
+
+Use `subject_kind: "user"` for a user principal. IDs are explicit operator-assigned
+execution identities, not inferred from Parsar users or existing Session records.
+Each key authorizes one project; multiple keys and principals may share that
+project's tenant UUID. Startup atomically verifies the immutable organization/project
+to tenant mapping before serving traffic or starting execution. Conflicts abort
+startup without committing a partial configuration. Removing keys leaves those
+mappings intact. Existing key files must be updated explicitly; incomplete legacy
+bindings are rejected. This does not assign ownership to historical Sessions.
+
+Provision random bearer keys and share plaintext only with authorized callers;
+keep digests in the server file. Rotate or revoke by changing bindings and
+restarting the service. Keep the same principal IDs when rotating a caller's key.
+Optional `OpenAI-Organization` and `OpenAI-Project` headers must match its binding;
+repeated or conflicting values fail authentication. These identities do not grant
+product-user rights. Session creator persistence and principal-scoped Environment
+executor authorization remain separate work; project resource visibility is unchanged.
 
 `AGENTS_API_ADDR` defaults to `127.0.0.1:8091`; use a TLS reverse proxy for remote
 access. `AGENTS_API_ENGINE` defaults to `codex`; set it to `claude_sdk` for the

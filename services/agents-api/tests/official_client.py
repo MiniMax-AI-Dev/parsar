@@ -70,7 +70,13 @@ def main():
         port = address.getsockname()[1]
     base = f"http://127.0.0.1:{port}"
     tokens = [secrets.token_hex(32) for _ in range(4)]
-    bindings = [{"tenant_id": str(uuid.uuid4()), "token_sha256": hashlib.sha256(token.encode()).hexdigest()} for token in tokens]
+    bindings = [{"tenant_id": str(uuid.uuid4()), "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+                 "organization_id": "test-org", "project_id": str(uuid.uuid4()),
+                 "subject_kind": "service_account", "subject_id": "test-runner"} for token in tokens]
+    same_principal, peer_principal = secrets.token_hex(32), secrets.token_hex(32)
+    bindings.extend([{**bindings[0], "token_sha256": hashlib.sha256(same_principal.encode()).hexdigest()},
+                     {**bindings[0], "token_sha256": hashlib.sha256(peer_principal.encode()).hexdigest(),
+                      "subject_kind": "user", "subject_id": "test-peer"}])
     process = None
     with tempfile.TemporaryDirectory(prefix="agents-api-test-") as directory:
         keys = Path(directory) / "keys.json"
@@ -98,8 +104,8 @@ def main():
                     child.wait(timeout=15)
                     raise
 
-            def client(token):
-                return OpenAI(api_key=token, base_url=base + "/v1", max_retries=0, _strict_response_validation=True, http_client=httpx2.Client(trust_env=False, timeout=10, event_hooks={"response": [validate_response]}))
+            def client(token, **scope):
+                return OpenAI(api_key=token, **scope, base_url=base + "/v1", max_retries=0, _strict_response_validation=True, http_client=httpx2.Client(trust_env=False, timeout=10, event_hooks={"response": [validate_response]}))
 
             def expect_error(error, operation):
                 try:
@@ -126,6 +132,8 @@ def main():
                     replay = sessions.create(**spec, metadata={"workspace": "untrusted-reference"}, extra_headers=headers)
                     assert replay == first
                     assert sessions.retrieve(first.id) == first
+                    from official_auth import verify_caller_principals
+                    verify_caller_principals(client, base, bindings[0], tokens[0], same_principal, peer_principal, first)
                     changed = {**spec, "agent": {**spec["agent"], "instructions": "Changed"}}
                     expect_error(ConflictError, lambda: sessions.create(**changed, metadata={"workspace": "untrusted-reference"}, extra_headers=headers))
                     others = [sessions.create(**spec) for _ in range(2)]
@@ -203,6 +211,14 @@ def main():
                 with client(tokens[2]) as go_tenant:
                     go_sessions = list(go_tenant.beta.agents.sessions.list())
                     assert len(go_sessions) == 3 and all(item.agent.model == "go-client-test-model" for item in go_sessions)
+                process.terminate()
+                process.wait(timeout=15)
+                from official_auth import verify_scope_bootstrap
+                verify_scope_bootstrap(binary, env, keys, bindings, log)
+                process = start()
+                with client(tokens[0]) as restored:
+                    assert restored.beta.agents.sessions.retrieve(first.id) == first
+                print("Caller principal: SDK/raw HTTP scope checks, shared project access and persistent startup conflict passed.")
                 print("Official Turn client: lifecycle, Agent identity, safe errors, restart recovery, pagination and tenant/Session isolation passed.")
                 print("Official Go client: creation/retries, retrieval, bidirectional pagination and tenant isolation passed.")
                 print("Official client: upstream and generated response schemas, persistence/restart, retries, pagination, tenant isolation and explicit unsupported options passed.")

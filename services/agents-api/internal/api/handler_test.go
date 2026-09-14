@@ -35,7 +35,7 @@ func testHandler(t *testing.T, options ...Option) (http.Handler, *recordingStore
 	t.Helper()
 	tenant := uuid.NewString()
 	hash := sha256.Sum256([]byte("test-api-key"))
-	auth, err := NewAuthenticator([]APIKey{{TokenSHA256: hex.EncodeToString(hash[:]), TenantID: tenant}})
+	auth, err := NewAuthenticator([]APIKey{{OrganizationID: "test-org", ProjectID: uuid.NewString(), SubjectKind: "service_account", SubjectID: "test-runner", TokenSHA256: hex.EncodeToString(hash[:]), TenantID: tenant}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestHTTPRejectsUntrustedOrUnsupportedRequests(t *testing.T) {
 func TestAuthenticatorRejectsInvalidBindings(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	tenant := uuid.NewString()
-	for _, keys := range [][]APIKey{nil, {{TenantID: tenant, TokenSHA256: "bad"}}, {{TenantID: "not-a-tenant", TokenSHA256: digest}}, {{TenantID: tenant, TokenSHA256: digest}, {TenantID: uuid.NewString(), TokenSHA256: digest}}} {
+	for _, keys := range [][]APIKey{nil, {{OrganizationID: "test-org", ProjectID: uuid.NewString(), SubjectKind: "service_account", SubjectID: "test-runner", TenantID: tenant, TokenSHA256: "bad"}}, {{OrganizationID: "test-org", ProjectID: uuid.NewString(), SubjectKind: "service_account", SubjectID: "test-runner", TenantID: "not-a-tenant", TokenSHA256: digest}}, {{OrganizationID: "test-org", ProjectID: uuid.NewString(), SubjectKind: "service_account", SubjectID: "test-runner", TenantID: tenant, TokenSHA256: digest}, {OrganizationID: "test-org", ProjectID: uuid.NewString(), SubjectKind: "service_account", SubjectID: "test-runner", TenantID: uuid.NewString(), TokenSHA256: digest}}} {
 		if _, err := NewAuthenticator(keys); err == nil {
 			t.Fatal("invalid authentication bindings accepted")
 		}
