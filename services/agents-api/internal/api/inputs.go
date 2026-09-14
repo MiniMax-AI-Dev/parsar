@@ -24,7 +24,7 @@ type Option func(*Handler)
 func WithExecution(s InputSubmitter) Option { return func(h *Handler) { h.inputs = s } }
 
 // @Summary Submit Session input events
-// @Description Atomically accepts text messages, cancellation and function results. Messages steer active work or start a queued Turn. Retry keys identify the whole ordered batch. Function output accepts text or ordered text/image parts subject to engine support; Claude SDK currently accepts text results only. Message images are not supported yet.
+// @Description For environment none, atomically accepts text messages, cancellation and function results. Messages steer active work or start a queued Turn. The self_hosted profile accepts idle text-only batches, waits up to the original five-minute connection/admission deadline and returns 204 only after durable admission. Active steering, cancellation, function results and mixed self_hosted batches remain unsupported. HTTP expiry/cancellation use local 409 environment_input_expired/environment_input_cancelled errors; exact hosted failure mapping is unverified. Losing execution ownership returns 503. Disconnecting the waiting HTTP request does not cancel retained work or restart its deadline. Retry keys identify the whole ordered batch. Function output accepts text or ordered text/image parts subject to engine support; Claude SDK currently accepts text results only. Message images are not supported yet.
 // @Tags Sessions
 // @Accept json
 // @Security BearerAuth
@@ -71,7 +71,12 @@ func (h *Handler) createEvents(w http.ResponseWriter, r *http.Request) {
 	if key == "" {
 		key = uuid.NewString()
 	}
-	if _, err := h.inputs.SubmitInputs(r.Context(), tenantID(r), chi.URLParam(r, "session_id"), key, inputs); err != nil {
+	sessionID := chi.URLParam(r, "session_id")
+	if err := h.setEnvironmentInputWriteDeadline(w, r, sessionID); err != nil {
+		writeStoreError(w, r, err)
+		return
+	}
+	if _, err := h.inputs.SubmitInputs(r.Context(), tenantID(r), sessionID, key, inputs); err != nil {
 		writeStoreError(w, r, err)
 		return
 	}

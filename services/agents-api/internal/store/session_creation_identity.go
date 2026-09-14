@@ -49,7 +49,18 @@ func (s *Store) FindSessionCreation(ctx context.Context, tenantID, key string, r
 	if !hash.Valid {
 		return SessionCreation{}, ErrInvalidInput
 	}
-	row, err := s.queries.FindSessionCreation(ctx, sqlc.FindSessionCreationParams{TenantID: tenant, IdempotencyKey: key})
+	var row sqlc.Session
+	var environment *Environment
+	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		q := s.queries.WithTx(tx)
+		var err error
+		row, err = q.FindSessionCreation(ctx, sqlc.FindSessionCreationParams{TenantID: tenant, IdempotencyKey: key})
+		if err != nil {
+			return err
+		}
+		environment, err = sessionEnvironmentSnapshot(ctx, q, row)
+		return err
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SessionCreation{}, ErrNotFound
 	}
@@ -68,6 +79,7 @@ func (s *Store) FindSessionCreation(ctx context.Context, tenantID, key string, r
 		return SessionCreation{}, ErrIdempotencyConflict
 	}
 	session, err := sessionFromRow(row)
+	session.Environment = environment
 	// The row and cursor share one committed snapshot; later events remain observable.
 	return SessionCreation{Session: session, Cursor: row.EventSequence}, err
 }

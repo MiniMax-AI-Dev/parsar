@@ -7,6 +7,7 @@ import (
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/execution"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
 
@@ -29,6 +30,12 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 
 func writeStoreError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, execution.ErrEnvironmentInputExpired):
+		writeError(w, http.StatusConflict, "environment_input_expired", "The environment input deadline elapsed before admission.")
+	case errors.Is(err, execution.ErrEnvironmentInputCancelled):
+		writeError(w, http.StatusConflict, "environment_input_cancelled", "The environment input was cancelled before admission.")
+	case errors.Is(err, execution.ErrExecutionUnavailable):
+		writeError(w, http.StatusServiceUnavailable, "execution_unavailable", "Execution is not available on this service.")
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "Resource not found.")
 	case errors.Is(err, store.ErrTurnConflict):

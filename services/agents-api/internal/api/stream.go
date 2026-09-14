@@ -21,7 +21,7 @@ type eventStore interface {
 }
 
 // @Summary Stream live Session events
-// @Description Live-only events. Reconnect through Session, Turn and Items reads; missed events are not replayed. A lagging stream closes with an error when its bounded buffer is exceeded. Session activity includes immutable pending-input connection actions before Turn creation; privately provisioned self_hosted environments use the same safe output as Session retrieval.
+// @Description Live-only events. Reconnect through Session, Turn and Items reads; missed events are not replayed. A lagging stream closes with an error when its bounded buffer is exceeded. Session activity includes immutable pending-input connection actions before Turn creation; self_hosted environments use the same safe output as Session retrieval.
 // @Tags Events
 // @Produce text/event-stream
 // @Security BearerAuth

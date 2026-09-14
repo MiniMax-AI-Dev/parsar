@@ -213,13 +213,17 @@ without duplicated JSON, tenant columns or generated IDs in the creation hash.
 Environment reads join that Session and exclude deleted Sessions; deletion retains
 ownership for later settlement/cleanup. Existing `none` and legacy missing
 configuration create no Environment, and historical internal snapshots are not
-backfilled. Initial state is `pending`; authenticated connection observations follow
+backfilled. Creation and recorded-intent retry snapshots load the Environment with
+the Session row/cursor in the same transaction, without borrowing subsequent
+activity or Turn state. Initial state is `pending`; authenticated connection observations follow
 the lifecycle rules below.
-Public admission remains `none` only. Session reads may expose privately provisioned
-`self_hosted` configuration through the output-only projection described below;
-the internal configuration read is not public Environment metadata.
-Registration fencing, readiness before input/Turn admission, native/provider
-integration and real-model Environment acceptance remain separate required work.
+Public creation supports an empty `self_hosted` Session on the Codex profile when
+execution and a validated executor origin are configured. Require an absolute
+POSIX workspace directory without NUL, CR, LF or backslash for the current adapter;
+omitted/null capability directories use the empty default.
+Nonempty capability directories, initial input, function tools and other engine
+placements remain rejected implementation gaps. Session output uses the owned
+Environment association; standalone metadata/file resources remain separate.
 
 
 The private Environment input reservation stores one canonical message batch before
@@ -235,9 +239,12 @@ cancels pending input in the same transaction. A terminal reservation retry must
 affect a later reservation or Turn. Evaluate deadlines after acquiring the Session
 lock, and return terminal storage outcomes without rolling their transaction back.
 
-This is a message-only Store foundation, not public Environment admission or a new
-public concurrency limit. Automatic initial-input integration, initial failure
-policy and mixed inputs remain pending. Promotion requires the current leased execution writer and the caller's
+The public self-hosted input profile accepts idle message-only batches through this
+reservation path, including already-connected environments. Only the Session-locked
+reservation operation decides retry, active-work conflict and new admission; an
+unlocked activity read must never choose direct Turn creation. Automatic initial
+input, active steering/cancellation, mixed inputs and function results remain gaps;
+these restrictions do not narrow the pinned protocol target. Promotion requires the current leased execution writer and the caller's
 retained native preparation; never hold a database lock during external preparation. Only
 the first successful non-replay receipts authorize Start on that same preparation.
 An admitted retry returns the original receipts without reclaiming execution; a
@@ -271,10 +278,25 @@ Session GET/list/metadata responses and live SSE share the safe `self_hosted`
 output projection. Its `remote_url` comes only from the executor registry's
 validated configured origin, never request headers or a daemon address. Include
 the owned Environment ID, workspace and capability directories without exposing
-private configuration. This read path does not open public creation/input or the
-standalone Environment resource. Acceptance must pass that exact URL and ID to the
+private configuration. The standalone Environment resource remains separate.
+Acceptance must pass that exact URL and ID to the
 caller-started executor and observe real remote execution through the existing
 Worker, daemon and harness, with fixed SDK and raw HTTP/SSE checks.
+
+A self-hosted input HTTP request returns 204 only after durable admission. Its
+wait uses bounded pooled operations, outside transactions and execution lease
+ownership; it cannot prepare or start native work. Only that route extends its
+response write deadline to six minutes for the original five-minute database
+admission deadline plus response grace. Request/observer disconnect stops waiting,
+not the durable reservation or execution; retries keep the original identity and
+deadline. The Worker remains the readiness, promotion and Start owner. Local failure
+mapping uses 409 `environment_input_expired` / `environment_input_cancelled`, 503
+`execution_unavailable` for ownership loss, and existing 404 for deletion. Exact
+hosted failure status/body and pending-input crash recovery remain unverified.
+Principal acceptance must use public Session creation and input against the built
+standalone service, including a wait exceeding its ordinary 30-second write timeout,
+real remote commands/files and a second native-history Turn. Private provisioning
+or injected API handlers cannot substitute for that workflow.
 
 
 The opt-in native Codex executor registry lives in
@@ -342,8 +364,8 @@ peers. Either peer disconnecting closes both physical sockets and invalidates th
 pair's grants; this lets native Session/process recovery run in the executor.
 Never forward queued ciphertext to a replacement or invent transport replay.
 Concurrent native commands and files share one connection; additional independent
-harnesses are rejected without eviction. Public Environment admission and typed
-daemon dispatch integration remain separate work. Native transport annotations are excluded from the
+harnesses are rejected without eviction. Full public Environment conformance and other engine
+placements remain separate work. Native transport annotations are excluded from the
 pinned public SDK OpenAPI output; their routes are documented in the service guide.
 
 Connection observations use the existing execution lease and Session lock. A
@@ -369,8 +391,7 @@ or continuous connectivity is inferred after a failed write. Before starting
 connection producers, a new Worker clears old generations and records disconnected
 state for old connected observations in batches of 32. Deleted resources stay
 hidden. Stop old writers before migrating/deploying this lifecycle; downgrade
-refuses to discard retained generation fencing. Public admission, metadata reads,
-full lifecycle events and pending-input projection remain separate requirements.
+refuses to discard retained generation fencing. Metadata reads and full lifecycle conformance remain separate requirements.
 
 The optional [Codex executor launcher](packages/codex-executor/README.md) is a
 separate Cargo package. Pin its native git revisions, transport patches, toolchain
@@ -717,11 +738,11 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   records. Retire older API writers before serving the creator-enforced deployment;
   mixed-version writers are not supported. Tests must supply explicit synthetic
   creators; only controlled historical fixtures may seed unknown ownership.
-  Public Environment admission and readiness remain pending.
   The operator-selected
   `AGENTS_API_ENGINE` is separate from the requested model.
-  Public execution currently supports Codex and Claude SDK text inputs with environment `none`;
-  reject unsupported input/environment/agent options explicitly.
+  Public execution supports Codex and Claude SDK with environment `none`, plus
+  the initial Codex self-hosted text profile defined above; reject unsupported
+  input/environment/agent options explicitly.
 - `packages/agents-client/v1` configures the pinned official `openai-go` Session
   service. Use SDK request/response types, pagination and errors directly rather
   than reimplementing transport or copying wire types. Supply an explicit service
@@ -775,7 +796,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   same counters again when Done also includes them.
 - The dispatcher is an internal entry point used by the standalone service worker.
   Its private `daemon` configuration is neither `environment:none` nor the official
-  self-hosted executor protocol. Public self-hosted environments, pending interactions and provider allocation
+  self-hosted executor protocol. Further pending interactions and provider allocation
   remain separate slices. Unexpected interaction requests fail explicitly until supported.
 - `environment_none` advertises an adapter's explicit environment-disable
   path. Execution snapshots with public `environment.type=none` require that

@@ -3,9 +3,44 @@
 These fixtures exercise pinned native execution against the actual Agents API
 registry/relay and a dedicated execution PostgreSQL database. They are opt-in;
 ordinary CI skips native binaries and paid model calls when prerequisites are absent.
-They do not admit public `self_hosted` or establish complete Agents API
-compatibility. The registered-daemon probe below exercises the private adapter
-boundary; public Environment dispatch remains separate. Use the protocol coverage ledger for those gaps.
+The standalone public fixture below exercises the initial `self_hosted` text
+profile. The other probes exercise private adapter boundaries. None establishes
+complete Agents API compatibility; use the protocol coverage ledger for those gaps.
+
+## Public standalone self-hosted execution
+
+Build the standalone service with `make build-agents-api`. Supply the pinned SDK,
+native daemon, Codex 0.153.4, executor launcher, private proof directory, dedicated
+execution test database, local Docker image and real MiniMax credential described
+below, then run:
+
+```sh
+export PARSAR_AGENTS_API_SERVER_BIN="$HOME/.parsar/build/agents-api/agents-api"
+export PARSAR_OFFICIAL_SDK_PYTHON='<absolute Python from the pinned SDK environment>'
+go test ./services/agents-api/internal/store \
+  -run '^TestNativePublicSelfHostedStandalone$' -count=1 -v -timeout=12m
+```
+
+`official_self_hosted.py` creates empty Sessions through ordinary and streamed
+official-client requests, then submits both text inputs through the built server.
+The first request must remain open beyond the ordinary HTTP write timeout while
+there is no executor or daemon. No Turn or Item may exist during that wait. The
+caller starts the executor using the returned Environment ID and `remote_url`
+unchanged; the registered daemon and Worker perform preparation and admission.
+The second input starts with a connected executor and retained native history.
+Both real model Turns must execute the exact remote command with observed cwd,
+stdout/stderr, exit 7, retained files and remembered first-Turn context. SDK and
+independent raw SSE observers verify activity ordering, responses, query recovery,
+tenant isolation and retries without additional Turns or commands.
+
+Private fixture writes provision only operator identity/device credentials, never
+Sessions or input reservations. Store reads independently check execution identity
+and native command evidence. Unsupported initial input, functions and mixed input
+must fail before persistence. This fixture does not cover all Environment resources,
+hosted providers, public cancellation, process isolation or unknown-effect recovery.
+It incurs real provider usage and must run serially with other execution-lease
+tests on Linux. Passing evidence is produced only by an actual successful run,
+under `PARSAR_NATIVE_PROOF_DIR/public-self-hosted-*`.
 
 `relay_probe.rs` is compiled as an example of the pinned `codex-exec-server` crate.
 `TestNativeHarnessRelayPostgreSQLAndProcessRecovery` runs it against the Go registry.
@@ -104,8 +139,9 @@ that offline snapshot and initial connection; native readiness, promotion and bo
 Runs remain Worker-owned. The observers verify action clearing before the first
 Turn, both completed Turns/Items, tenant isolation and recovery through a new
 client. Private evidence includes `public-environment/public-environment-proof.json`.
-Session provisioning and input reservation stay private; public creation/input
-remain gated and complete Environment lifecycle is separate work.
+Session provisioning and input reservation stay private in this fixture; the
+standalone fixture above owns public creation/input acceptance. Complete
+Environment lifecycle remains separate work.
 The current daemon's pending-start cancellation acknowledgment may omit Outcome;
 controlled coverage verifies conservative failure without final Done as well
 as cancellation with a supplied outcome. It does not claim complete native

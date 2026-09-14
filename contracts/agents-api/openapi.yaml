@@ -151,9 +151,17 @@ definitions:
     type: object
   v1.Environment:
     properties:
+      capability_directories:
+        items:
+          type: string
+        type: array
+        x-nullable: true
       type:
         enum:
         - none
+        - self_hosted
+        type: string
+      workspace_directory:
         type: string
     required:
     - type
@@ -1133,8 +1141,7 @@ paths:
         Optional agent_id matches the immutable root Agent ID, including inline Agents
         and historical Sessions whose saved source was updated or deleted. Omission
         lists all Agents. Returns the same Environment and pending-input activity
-        projection as Session retrieval, including privately provisioned self_hosted
-        Sessions.
+        projection as Session retrieval, including self_hosted Sessions.
       parameters:
       - description: agents=v1
         in: header
@@ -1199,19 +1206,23 @@ paths:
         with per-Session field replacements. Execution supports model/instructions,
         text verbosity, non-deferred function tools, disabled multi_agent, implicit
         reasoning, service tier auto and environment type none, subject to the configured
-        engine. Claude SDK currently requires medium verbosity and object-root function
-        schemas. Omitted stream defaults to false; stream and agent_id cannot be null.
-        Metadata may be null, but its values must be strings. Initial input accepts
-        a string or user-message array containing text and atomically starts a Turn;
-        omitted or null input creates an idle Session. With stream=true, returns live
-        Session events starting at creation; disconnect does not cancel execution.
-        New Sessions retain their authenticated creator; all creation retries require
-        the same typed subject, including across key rotation. Saved-Agent retries
-        retain request intent independently of later Agent changes. Unknown historical
-        creators reject retries; known creators without recorded intent retain resolved-snapshot
-        retry rules. These conflict policies are local and not verified hosted parity.
-        Creation retries observe future events without replay; retry with stream=false
-        to retrieve the Session. Non-text initial input remains unsupported.
+        engine. The initial self_hosted profile requires Codex, an absolute workspace_directory,
+        empty capability_directories and no function tools. Omitted/null capability_directories
+        use the empty-list default; self_hosted requires omitted/null initial input
+        and configured execution plus executor registry. Claude SDK currently requires
+        medium verbosity and object-root function schemas. Omitted stream defaults
+        to false; stream and agent_id cannot be null. Metadata may be null, but its
+        values must be strings. Initial input accepts a string or user-message array
+        containing text and atomically starts a Turn; omitted or null input creates
+        an idle Session. With stream=true, returns live Session events starting at
+        creation; disconnect does not cancel execution. New Sessions retain their
+        authenticated creator; all creation retries require the same typed subject,
+        including across key rotation. Saved-Agent retries retain request intent independently
+        of later Agent changes. Unknown historical creators reject retries; known
+        creators without recorded intent retain resolved-snapshot retry rules. These
+        conflict policies are local and not verified hosted parity. Creation retries
+        observe future events without replay; retry with stream=false to retrieve
+        the Session. Non-text initial input remains unsupported.
       parameters:
       - description: agents=v1
         in: header
@@ -1320,10 +1331,9 @@ paths:
       tags:
       - Sessions
     get:
-      description: Returns supported none and privately provisioned self_hosted Session
-        environments. Pending input can require an Environment connection before a
-        Turn exists; connection observations are not native execution readiness. Public
-        self_hosted creation and input remain unsupported.
+      description: Returns supported none and self_hosted Session environments. Pending
+        input can require an Environment connection before a Turn exists; connection
+        observations are not native execution readiness.
       parameters:
       - description: agents=v1
         in: header
@@ -1425,8 +1435,8 @@ paths:
       description: Live-only events. Reconnect through Session, Turn and Items reads;
         missed events are not replayed. A lagging stream closes with an error when
         its bounded buffer is exceeded. Session activity includes immutable pending-input
-        connection actions before Turn creation; privately provisioned self_hosted
-        environments use the same safe output as Session retrieval.
+        connection actions before Turn creation; self_hosted environments use the
+        same safe output as Session retrieval.
       parameters:
       - description: agents=v1
         in: header
@@ -1473,11 +1483,18 @@ paths:
     post:
       consumes:
       - application/json
-      description: Atomically accepts text messages, cancellation and function results.
-        Messages steer active work or start a queued Turn. Retry keys identify the
-        whole ordered batch. Function output accepts text or ordered text/image parts
-        subject to engine support; Claude SDK currently accepts text results only.
-        Message images are not supported yet.
+      description: For environment none, atomically accepts text messages, cancellation
+        and function results. Messages steer active work or start a queued Turn. The
+        self_hosted profile accepts idle text-only batches, waits up to the original
+        five-minute connection/admission deadline and returns 204 only after durable
+        admission. Active steering, cancellation, function results and mixed self_hosted
+        batches remain unsupported. HTTP expiry/cancellation use local 409 environment_input_expired/environment_input_cancelled
+        errors; exact hosted failure mapping is unverified. Losing execution ownership
+        returns 503. Disconnecting the waiting HTTP request does not cancel retained
+        work or restart its deadline. Retry keys identify the whole ordered batch.
+        Function output accepts text or ordered text/image parts subject to engine
+        support; Claude SDK currently accepts text results only. Message images are
+        not supported yet.
       parameters:
       - description: agents=v1
         in: header

@@ -1,19 +1,16 @@
 # Environment contract and implementation path
 
 This assessment covers the fixed [Python SDK contract](upstream.json). It is an
-implementation plan, not an announcement of Environment support. Public execution
-currently admits `environment.type=none` on the verified Codex and Claude SDK
-profiles. No public Environment, template or file resource is implemented. An opt-in native
-executor/harness authorization and native encrypted relay adapter exists; public
-Environment execution remains unimplemented. See [current coverage](README.md#public-semantics).
+implementation plan with partial current coverage. Public execution admits
+`environment.type=none` on Codex and Claude SDK, plus the initial Codex self-hosted
+text profile. No standalone Environment, template or file resource is implemented. See [current coverage](README.md#public-semantics).
 
 The internal Store now owns a durable Environment association for newly created
 `self_hosted` and `openai_hosted` snapshots, atomically with Session creation.
 It derives configuration and tenant ownership from the Session; retries preserve
 the existing identity. Scoped reads hide associations after Session deletion while
-retaining the underlying record. This is a persistence primitive, with no public
-admission. Authenticated connection observations are integrated below; readiness
-gating and complete public/native/provider integration remain separate work.
+retaining the underlying record. The public text profile reuses this association
+and the preparation/admission path below; full provider integration remains open.
 Missing/`none` configurations and historical internal snapshots gain no backfill.
 
 
@@ -26,8 +23,8 @@ connection. Current socket observations now commit `connected`/`disconnected` an
 immutable pinned Environment-event snapshots through the leased Store. Replacement
 and revision fencing prevent late observations from overwriting successors; startup
 reconciliation removes the previous process's connection evidence. Registration
-alone is not connection, and connection is not native readiness. No public
-Environment admission or read route is enabled by this bridge. The canonical
+alone is not connection, and connection is not native readiness. The public text
+profile uses this bridge; standalone Environment reads remain unimplemented. The canonical
 [observation and shutdown rules](../../CONTRIBUTING.md#environment-ownership-and-placement)
 cover write failures and recovery. Deleting the owning Session rejects new requests and closes
 existing sockets on the next ownership heartbeat. A previous holder of a still-valid
@@ -41,6 +38,33 @@ The relay pairs one harness with the current executor socket and forwards native
 binary frames unchanged. Either peer loss closes both physical connections and
 invalidates grants; no queued frames or commands move to a successor. Refresh does
 not disturb a healthy pair. See the [operator prerequisite](../../services/agents-api/README.md#native-executor-transport-prerequisite).
+
+## Initial public self-hosted profile
+
+Create a Session with `environment.type=self_hosted`, an absolute
+`workspace_directory` and omitted/null/empty `capability_directories`. Creation
+must omit initial input or use null; ordinary and streamed creation produce no
+Turn or connection action. Configured execution, a validated registry origin,
+Codex and no function tools are required before persistence.
+
+Later idle text batches reserve under the Session lock and wait for the existing
+Worker to retain native preparation, admit and claim. Return 204 only after that
+transaction commits. Connection actions precede a Turn and clear on connection;
+connection alone is not readiness. Retries preserve identity and the five-minute
+database deadline. HTTP disconnect retains the reservation. Local expired/cancelled
+outcomes return 409, lost ownership 503, and deletion 404; exact hosted error
+status/body and pending-input crash recovery are unverified. See the
+[canonical wait rules](../../CONTRIBUTING.md#environment-ownership-and-placement).
+
+Nonempty initial input, active steering/cancellation, mixed events, function
+configuration/results, non-text input, nonempty capability directories and other
+engine placements are rejected temporary gaps. The current adapter also rejects
+workspace paths containing NUL, CR, LF or backslash; broader path/platform support
+remains open. Native execution still uses the
+scoped upstream-library launcher; arbitrary-domain stock CLI support is not proven.
+The built-service acceptance must publicly create and submit, keep a request open
+past 30 seconds, and verify two real remote command/file/history Turns through
+fixed SDK, raw HTTP and live SSE. Private setup alone is insufficient.
 
 ## Contract inventory
 
@@ -241,8 +265,8 @@ default-policy exposure without printing values. The Noise harness bearer is
 non-inheritable, but that rule does not cover every executor launch credential.
 No environment-variable policy isolates same-user process memory, `/proc` or files.
 Scoped credentials, placement trust and long-Turn reconnect lifetime remain explicit
-dispatch prerequisites. Public admission stays disabled until those boundaries,
-readiness, lifecycle and real API/daemon execution are accepted together.
+dispatch prerequisites. Public acceptance must verify those boundaries, readiness
+and real API/daemon execution together.
 
 ## Private daemon adapter
 
@@ -267,10 +291,8 @@ revision and cleanup rules.
 
 Cancellation still uses the existing best-effort interrupt and harness release.
 The fixture measures remote PID exit and stopped side effects independently;
-native detached cleanup may delay that exit. This slice does not implement public
-public admission or complete resource lifecycle. Public `self_hosted` creation and
-input remain disabled until those dependencies
-are accepted together.
+native detached cleanup may delay that exit. Complete resource lifecycle and
+public active cancellation remain separate from the initial idle-text profile.
 
 
 ## Pending input storage prerequisite
@@ -285,9 +307,9 @@ reconciliation settles a committed claim interrupted before Start, without repla
 Expiration, targeted cancellation and Session deletion retain their existing
 pre-admission or claimed-Turn semantics.
 
-This primitive does not connect an executor or change public admission. Its
-message-only scope and single pending reservation are internal limits, not claims
-about the final public protocol. Initial creation and mixed inputs remain required.
+The initial public idle-text profile uses this primitive. Its message-only scope
+and single pending reservation are implementation limits, not claims about the
+final protocol. Initial creation and mixed/active/function inputs remain required.
 The Worker settles due reservations in bounded batches even without
 devices or available execution slots, skipping contended Session locks and retaining
 its current execution ownership. Restart does not reset stored deadlines. This
@@ -312,13 +334,13 @@ at most once per five seconds; failed preparation can retry without extending th
 original deadline, while claimed/uncertain work is not replayed. The opt-in
 real-provider Worker fixture verifies automatic discovery, remote commands, files,
 cold continuation and reservation retries. The standalone service wires the resolver
-when its daemon gateway and executor URL are configured. Public initial input,
-asynchronous failure policy and public admission remain unimplemented.
+when its daemon gateway and executor URL are configured. Public initial input and
+asynchronous initial-failure policy remain unimplemented.
 Caller keys resolve trusted project/subject identities, with persistent project
 bindings verified before startup. New Sessions persist the typed creator and
 require it for creation retries; historical unknown creators cannot be claimed.
-Executor keys match the recorded project and typed creator; public Environment
-connections still require public admission and complete lifecycle validation.
+Executor keys match the recorded project and typed creator. Complete lifecycle
+conformance remains unverified.
 The current daemon can acknowledge pending-start cancellation without a final
 outcome; without an observed final Done, delivery records an unknown failure.
 Preparation failure cannot discard a cancellation receipt already being awaited.
@@ -338,14 +360,15 @@ initial-input asynchronous failure remain unverified; this policy does not claim
 their compatibility.
 
 With the validated executor origin configured, ordinary Session GET/list/metadata
-and live SSE can return privately provisioned `self_hosted` Sessions. Their safe
+and live SSE return `self_hosted` Sessions. Their safe
 output contains the real Environment ID, unchanged configured `remote_url`,
 workspace and capability directories. It excludes private configuration and does
 not infer URLs from request headers. Fixed SDK/raw HTTP/live SSE acceptance uses
 the returned URL and ID to start the real executor, then observes the existing
-Worker's remote first/resumed model workflow. Provisioning and reservation remain
-private in this fixture; public creation/input, Environment GET/metadata/files,
-hosted output and complete public Environment execution remain separate work.
+Worker's remote first/resumed model workflow. The earlier private-provisioning
+fixture remains a separate lower-level regression; the public profile has its own
+built-service creation/input acceptance. Environment GET/metadata/files, hosted
+output and complete Environment conformance remain separate work.
 
 ## Dependency-ordered implementation
 

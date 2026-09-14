@@ -17,8 +17,8 @@ func resolve(input sessionRequest, tenant, key string, saved *v1.SavedAgent) (js
 	if len(input.VaultIDs) > 0 {
 		return nil, errors.New("Vaults are not supported by this service yet.")
 	}
-	if input.Environment == nil || input.Environment.Type != "none" {
-		return nil, errors.New("This service currently requires environment.type=none.")
+	if input.Environment == nil || (input.Environment.Type != "none" && input.Environment.Type != "self_hosted") {
+		return nil, errors.New("This service currently supports environment.type=none or self_hosted.")
 	}
 	if err := validateMetadata(input.Metadata); err != nil {
 		return nil, err
