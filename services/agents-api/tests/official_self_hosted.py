@@ -14,6 +14,7 @@ sys.dont_write_bytecode = True
 
 import httpx2
 from openai import OpenAI
+from official_environment_retrieve import verify_environment
 
 
 def main():
@@ -27,7 +28,7 @@ def main():
     assert distribution.version == pin["sdk_version"]
     assert source.get("vcs_info", {}).get("commit_id") == pin["commit"]
     proof = {"scope": "public Session creation and input admission through a built standalone service; real remote execution",
-             "sdk_version": distribution.version, "sdk_commit": pin["commit"], "snapshots": {}}
+             "sdk_version": distribution.version, "sdk_commit": pin["commit"], "snapshots": {}, "environment_reads": {}}
     observations = {"sdk": [], "raw": []}
     ready = {name: threading.Event() for name in observations}
     done = {name: threading.Event() for name in observations}
@@ -164,7 +165,16 @@ def main():
                 proof["snapshots"][name] = value
                 return value
 
+            def environment_snapshot(name, status=None):
+                environment_id = expected_environment["id"]
+                value = verify_environment(api.beta.agents.environments.retrieve(environment_id).to_dict(), environment_id, status)
+                response = raw.get("/agents/environments/" + environment_id)
+                assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
+                wire = verify_environment(response.json(), environment_id, status)
+                proof["environment_reads"][name] = {"sdk": value, "raw": wire}
+
             snapshot("initial", "idle")
+            environment_snapshot("initial", "pending")
             before = {value.id for value in sessions.list()}
             for change in ({"input": "Not yet supported"}, {"agent": {**agent, "tools": [
                 {"type": "function", "name": "pending", "description": "Unsupported pending action", "parameters": {"type": "object"}}]}},
@@ -226,6 +236,9 @@ def main():
                     assert values[0]["session"] == pending
             write_private("waiting", {"session_id": session_id, "environment_id": expected_environment["id"],
                                       "remote_url": expected_environment["remote_url"]})
+            wait_for(lambda: (directory / "initial-connection-ready.json").exists(), 90, "executor connection before daemon startup")
+            environment_snapshot("connected_before_execution", "connected")
+            write_private("initial-connection-read", {"environment_id": expected_environment["id"]})
             wait_for(submitted.is_set, 150, "first input admission")
             assert submission["elapsed_seconds"] >= 32
             proof["first_input"] = submission
@@ -238,10 +251,12 @@ def main():
 
             first_turn = wait_for(lambda: completed(1), 150, "first real Turn")[0]
             snapshot("after_first", "idle")
+            environment_snapshot("after_first")
             sessions.events.create(session_id, events=[first_event], idempotency_key=first_key)
             assert len(list(sessions.turns.list(session_id))) == 1
             write_private("first-completed", {"turn_id": first_turn.id})
             wait_for(lambda: (directory / "resume-ready.json").exists(), 45, "retained native binding and executor reconnection")
+            environment_snapshot("before_resumed", "connected")
             second_event, second_key = message(prompt("resumed")), str(uuid.uuid4())
             reply = raw.post("/agents/sessions/" + session_id + "/events", json={"events": [second_event]},
                              headers={"Idempotency-Key": second_key})
@@ -249,6 +264,7 @@ def main():
             turns = wait_for(lambda: completed(2), 150, "second real Turn")
             wait_for(lambda: all(value.is_set() for value in done.values()), 30, "both completion streams")
             final = snapshot("final", "idle")
+            environment_snapshot("after_remote_file_and_history")
             items = list(sessions.items.list(session_id, limit=100, order="asc"))
             proof["turns"], proof["items"] = [turn.to_dict() for turn in turns], [item.to_dict() for item in items]
             for turn, phase in zip(turns, ("first", "resumed")):
@@ -303,9 +319,10 @@ def main():
                 assert resource.retrieve(session_id).to_dict() == final
                 assert list(resource.turns.list(session_id, order="asc")) == turns
                 assert list(resource.items.list(session_id, limit=100, order="asc")) == items
+                verify_environment(recovered.beta.agents.environments.retrieve(expected_environment["id"]).to_dict(), expected_environment["id"])
             proof["query_recovery"] = True
             proof["status"] = "public_creation_waiting_admission_and_real_remote_continuation_verified"
-            print("Built service: public self-hosted creation/wait, fixed SDK/raw SSE, two real remote Turns and retry recovery passed.", flush=True)
+            print("Built service: public self-hosted creation/wait, safe Environment GET, fixed SDK/raw SSE, two real remote Turns and retry recovery passed.", flush=True)
     finally:
         with lock:
             proof["sdk_events"], proof["raw_events"] = list(observations["sdk"]), list(observations["raw"])

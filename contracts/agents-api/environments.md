@@ -3,7 +3,8 @@
 This assessment covers the fixed [Python SDK contract](upstream.json). It is an
 implementation plan with partial current coverage. Public execution admits
 `environment.type=none` on Codex and Claude SDK, plus the initial Codex self-hosted
-text profile. No standalone Environment, template or file resource is implemented. See [current coverage](README.md#public-semantics).
+text profile. Environment retrieval supports that profile; populated installation
+metadata, templates and file operations remain missing. See [current coverage](README.md#public-semantics).
 
 The internal Store now owns a durable Environment association for newly created
 `self_hosted` and `openai_hosted` snapshots, atomically with Session creation.
@@ -24,7 +25,7 @@ immutable pinned Environment-event snapshots through the leased Store. Replaceme
 and revision fencing prevent late observations from overwriting successors; startup
 reconciliation removes the previous process's connection evidence. Registration
 alone is not connection, and connection is not native readiness. The public text
-profile uses this bridge; standalone Environment reads remain unimplemented. The canonical
+profile and resource reads use this bridge. The canonical
 [observation and shutdown rules](../../CONTRIBUTING.md#environment-ownership-and-placement)
 cover write failures and recovery. Deleting the owning Session rejects new requests and closes
 existing sockets on the next ownership heartbeat. A previous holder of a still-valid
@@ -367,8 +368,14 @@ not infer URLs from request headers. Fixed SDK/raw HTTP/live SSE acceptance uses
 the returned URL and ID to start the real executor, then observes the existing
 Worker's remote first/resumed model workflow. The earlier private-provisioning
 fixture remains a separate lower-level regression; the public profile has its own
-built-service creation/input acceptance. Environment GET/metadata/files, hosted
-output and complete Environment conformance remain separate work.
+built-service creation/input acceptance. Environment retrieval uses the same durable
+observations through the existing live-Session ownership join. It returns the seven
+required fields and empty installed-resource arrays only for the closed supported
+self-hosted configuration. No API-managed installation resource exists in that
+profile; caller-prepared or model-created workspace files are not this inventory.
+Unsupported installation fields/capabilities fail closed. This read does not require
+execution/registry configuration or invoke native work. Populated metadata, file
+operations, hosted output and complete Environment conformance remain separate work.
 
 ## Dependency-ordered implementation
 
@@ -422,4 +429,5 @@ Existing sockets are checked on heartbeats; disconnection does not establish
 process quiescence. Harness keys and five-minute connection grants have separate
 purposes and lifetimes. This implements the executor-specific principal prerequisite;
 it does not establish a general creator-only Session ACL, hosted key lifecycle/error
-parity, public `self_hosted` admission or stock-command support on arbitrary domains.
+parity or stock-command support on arbitrary domains. Public idle-text admission
+has separate built-service acceptance.

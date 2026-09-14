@@ -32,6 +32,11 @@ Both real model Turns must execute the exact remote command with observed cwd,
 stdout/stderr, exit 7, retained files and remembered first-Turn context. SDK and
 independent raw SSE observers verify activity ordering, responses, query recovery,
 tenant isolation and retries without additional Turns or commands.
+SDK/raw Environment reads verify pending and connected observations before daemon
+startup and safe metadata around both Turns. Actual workspace files must not appear
+as API-installed resources. The connect-only executor key must fail public retrieval.
+Post-Turn reads may observe reconnection; they do not assert immediate quiescence or
+a fixed disconnection deadline.
 
 Private fixture writes provision only operator identity/device credentials, never
 Sessions or input reservations. Store reads independently check execution identity

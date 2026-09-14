@@ -170,9 +170,11 @@ The SDK base URL is `http://127.0.0.1:8091/v1`. Requests require a bearer key an
   configuration or a saved `agent_id`, field replacements, optional initial text
   and ordinary or streaming responses.
 - Session event submission and live streaming, Turn retrieve/list and Items list.
+- Environment retrieve for the supported self-hosted profile.
 
-Execution currently requires `environment: {"type":"none"}` and the selected
-[engine profile](../../contracts/agents-api/README.md#public-engine-profiles).
+Execution uses the selected
+[engine profile](../../contracts/agents-api/README.md#public-engine-profiles),
+including `none` and the Codex self-hosted idle-text profile described below.
 Requests have a 1 MiB body limit. Session lists support `after`, `limit` (1..100),
 `order` (`asc`/`desc`) and optional immutable root `agent_id`. The local defaults
 are 20 and descending order; exact hosted limits/error semantics remain unverified.
@@ -187,8 +189,8 @@ and native history are retained for execution settlement; physical cleanup remai
 unimplemented. Local repeated deletion returns 404 and creation-key reuse returns
 409; exact hosted errors and overlapping stream timing are unverified.
 
-Non-text message input, Vaults, Subagents and environment/file
-resources remain unsupported. Saving optional Agent configuration does not make
+Non-text message input, Vaults, Subagents, Environment files/templates and populated
+installation metadata remain unsupported. Saving optional Agent configuration does not make
 it executable. Unsupported requests fail explicitly. `/healthz` reports liveness only.
 
 ## Internal execution device connection
@@ -283,6 +285,8 @@ PARSAR_AGENTS_API_TEST_DATABASE_URL='postgres://.../parsar_agents_api_local_test
 
 Set `PARSAR_OFFICIAL_SDK_PYTHON` to the fixed SDK interpreter for the Store client
 fixtures, and run the separate official-client command above as well.
+`TestEnvironmentRetrievalOfficialClient` verifies public creation, scoped safe
+Environment reads and retrieval after reopening without execution configuration.
 The test database must be named `parsar_agents_api_*_tests` and contain no product
 workspace tables. Tests apply only this service's migrations and use new tenant
 IDs without truncating tables. Missing test configuration skips DB tests locally;
@@ -456,8 +460,8 @@ allowed only on loopback for development. Production TLS termination remains an
 operator responsibility and requires deployment validation.
 
 Authenticated socket observations now persist connection state and immutable
-Environment event snapshots. These observations do not establish native readiness
-or implement standalone Environment metadata reads. Registration replacement
+Environment event snapshots. These observations also back resource status reads,
+without establishing native readiness. Registration replacement
 and numbered callbacks fence old observations; a new Worker reconciles previous
 process state before opening connections. Shutdown drains observations before
 releasing execution ownership. Persistence failures close the registry and require
@@ -478,8 +482,19 @@ HTTP observer does not cancel the reservation. Local expiry/cancellation errors 
 409 `environment_input_expired` / `environment_input_cancelled`; ownership loss is
 503 `execution_unavailable`. Exact hosted status/body parity remains unverified.
 Initial input, active steering/cancellation, mixed events, function tools/results,
-nonempty capability directories, other placements and standalone Environment
-metadata/file routes remain unavailable. These are implementation gaps.
+nonempty capability directories, other placements, populated installation metadata
+and Environment file/template routes remain unavailable. These are implementation gaps.
+
+Retrieve the returned Environment with
+`client.beta.agents.environments.retrieve(session.environment.id)`. This read uses
+durable status and the owning live Session's project authorization, even when
+execution/registry configuration is disabled. Its required `files`, `plugins` and
+`skills` arrays are empty for the supported configuration, which has no API-managed
+installations. They do not list caller-prepared or model-created workspace files,
+or report native capability discovery. Unsupported stored installation configurations
+are rejected rather than reported as empty. The response contains no credentials,
+private configuration or file contents. See the
+[resource boundary](../../CONTRIBUTING.md#environment-ownership-and-placement).
 
 The adapter checks its execution lease and visible Environment on requests and
 five-second heartbeats; deleted ownership, shutdown or lost ownership closes
