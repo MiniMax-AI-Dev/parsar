@@ -16,9 +16,10 @@ const executionTransactionTimeout = 5 * time.Second
 // ExecutionLease owns the connection used for execution writes, not just election.
 // Its gate serializes pgx operations; no daemon or model work holds this gate.
 type ExecutionLease struct {
-	conn   *pgxpool.Conn
-	gate   chan struct{}
-	writer Store
+	conn        *pgxpool.Conn
+	gate        chan struct{}
+	writer      Store
+	cleanupDone <-chan struct{}
 }
 
 // AcquireExecutionLease enforces the gateway's single-service ownership per database.
@@ -96,10 +97,23 @@ func (l *ExecutionLease) Close(ctx context.Context) error {
 		return err
 	}
 	defer l.unlock()
-	if l.conn == nil {
+	if l.conn != nil {
+		conn := l.conn.Hijack()
+		l.conn = nil
+		l.cleanupDone = conn.PgConn().CleanupDone()
+		if err := conn.Close(ctx); err != nil {
+			return err
+		}
+	}
+	if l.cleanupDone == nil {
 		return nil
 	}
-	conn := l.conn.Hijack()
-	l.conn = nil
-	return conn.Close(ctx)
+	// A cancelled pgx connection can be unusable before its asynchronous cleanup ends.
+	// Retain the channel so a later Close can continue waiting after this deadline.
+	select {
+	case <-l.cleanupDone:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

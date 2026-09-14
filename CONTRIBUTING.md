@@ -958,6 +958,10 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   At startup, reconcile previously claimed work as failed, preserve queued inputs
   and never replay uncertain execution. Shutdown cancels active dispatch and attempts
   terminal persistence before releasing the lease; a lost owner cannot commit it.
+  Lease Close invalidates its writer and waits for pgx connection cleanup within
+  the caller deadline. A later Close can resume that wait after a timeout. This
+  drains client resources; it does not acknowledge remote advisory-lock release.
+  Worker shutdown retains its existing bounded best-effort close policy.
   This fences database writes, not already queued daemon commands or native effects.
   Native quiescence/reconnect and recovery of unreported outcomes remain separate
   gaps; this is not distributed exactly-once side-effect execution.
