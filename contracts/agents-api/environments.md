@@ -254,14 +254,14 @@ normal Session. The existing Factory uses that path. Private daemon controls now
 retain it through asynchronous preparation and one start, using a connection-owned
 handle, bounded lifetime/capacity and separate gateway response correlation.
 Preparation creates no Run subscription; only Start supplies the actual RunID.
-Worker admission/start integration remains pending, and this private primitive
+Worker scheduling integration remains pending, and this private primitive
 does not expose public readiness. See the contributor guide for ownership, retry,
 revision and cleanup rules.
 
 Cancellation still uses the existing best-effort interrupt and harness release.
 The fixture measures remote PID exit and stopped side effects independently;
 native detached cleanup may delay that exit. This slice does not implement public
-`environment_connection`, admission/readiness-before-claim, credential renewal or
+`environment_connection`, public admission, credential renewal or
 resource lifecycle. Public `self_hosted` remains disabled until those dependencies
 are accepted together.
 
@@ -288,6 +288,22 @@ its current execution ownership. Restart does not reset stored deadlines. This
 private expiry creates no public failure event or Turn. See the
 [contributor boundary](../../CONTRIBUTING.md) for the prepared connection, expiry
 and transaction rules.
+
+The private Dispatcher now connects these prerequisites for an already bound
+Session. It retains one capable daemon peer and preparation, checks the pending
+deadline/ownership, then promotes and starts only fresh admission receipts. The
+same delivery path journals events, applies later input/cancellation receipts and
+persists terminal state and native continuation. A transient connection callback
+keeps native registry code outside the execution core. Its credential owner spans
+the complete Run; a pending-input deadline does not limit an admitted Turn.
+Controlled database/gateway tests cover pre-ready settlement and pending-start
+cancellation. The opt-in real-provider Dispatcher fixture verifies remote commands,
+files, cold continuation and reservation retries. Worker selection, public initial
+input, lifecycle/actions and caller principal identity remain unimplemented.
+The current daemon can acknowledge pending-start cancellation without a final
+outcome; without an observed final Done, delivery records an unknown failure.
+Preparation failure cannot discard a cancellation receipt already being awaited.
+Complete cancellation output/Usage and native cleanup remain required work.
 
 ## Dependency-ordered implementation
 

@@ -45,6 +45,16 @@ func (s *Store) AcquireExecutionLease(ctx context.Context) (*ExecutionLease, err
 // Losing or closing the lease never falls back to a pooled writer connection.
 func (l *ExecutionLease) Store() *Store { return &l.writer }
 
+// CheckExecutionOwnership validates the current writer before external preparation.
+func (s *Store) CheckExecutionOwnership(ctx context.Context) error {
+	if s.executionLease == nil {
+		return errors.New("execution operation requires a leased Store")
+	}
+	ctx, cancel := context.WithTimeout(ctx, executionTransactionTimeout)
+	defer cancel()
+	return s.executionLease.Ping(ctx)
+}
+
 func (l *ExecutionLease) lock(ctx context.Context) error {
 	select {
 	case l.gate <- struct{}{}:

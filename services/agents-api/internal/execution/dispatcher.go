@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"maps"
 	"strings"
 	"time"
 
@@ -30,7 +29,8 @@ type Dispatcher struct {
 	Store    *store.Store
 	Registry *gateway.Registry
 	// Options resolves transient engine credentials; they are never stored here.
-	Options func(context.Context, store.Session) (map[string]any, error)
+	Options               func(context.Context, store.Session) (map[string]any, error)
+	EnvironmentConnection func(context.Context, store.Session, store.Environment) (EnvironmentConnection, error)
 }
 
 type Result struct {
@@ -62,10 +62,6 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if err != nil {
 		return store.Turn{}, err
 	}
-	functions, err := functionTools(snapshot.Agent.Tools)
-	if err != nil {
-		return store.Turn{}, err
-	}
 	workDir, noEnvironment, err := resolveExecutionEnvironment(snapshot)
 	if err != nil {
 		return store.Turn{}, err
@@ -74,31 +70,22 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if err != nil {
 		return store.Turn{}, err
 	}
-	options := map[string]any{}
-	if d.Options != nil {
-		options, err = d.Options(ctx, session)
-		if err != nil {
-			return store.Turn{}, err
-		}
-		options = maps.Clone(options)
-		if options == nil {
-			options = map[string]any{}
-		}
+	req, err := d.executionRequest(ctx, session, snapshot, caps, bound.NativeSessionID)
+	if err != nil {
+		return store.Turn{}, err
 	}
-	options["model"], options["system_prompt"] = snapshot.Agent.Model, snapshot.Agent.Instructions
-	delete(options, "override_system_prompt")
-	verbosity := snapshot.Agent.Text.Verbosity
-	if verbosity == "" {
-		verbosity = "medium"
-	}
-	controls := &proto.ExecutionControls{WebSearch: "disabled", TextVerbosity: verbosity}
 	if _, err := d.Store.TransitionTurn(ctx, tenantID, sessionID, turnID, store.TurnTransition{ExpectedStatus: store.TurnQueued, Status: store.TurnInProgress}); err != nil {
 		return store.Turn{}, err
 	}
-	req := proto.PromptRequestPayload{AgentKind: session.Engine, ConversationID: sessionID, RunID: turnID, Prompt: text, WorkDir: workDir, FunctionTools: functions, AgentOptions: options, ExecutionControls: controls, AgentStateKey: "agents-api-" + sessionID, AgentSessionID: bound.NativeSessionID, ReleaseOnCompletion: true, StrictResume: true, ObserveMessages: caps.MessageItems, ObserveToolObservations: true, DisableExecutionEnvironment: noEnvironment, DisableSubagents: !snapshot.Agent.MultiAgent.Enabled}
-	result, status := d.deliver(ctx, tenantID, sessionID, peer, req, through)
+	req.ConversationID, req.RunID, req.Prompt = sessionID, turnID, text
+	req.WorkDir, req.DisableExecutionEnvironment = workDir, noEnvironment
+	result, status := d.deliver(ctx, tenantID, sessionID, peer, req, through, nil)
+	return d.finishRun(tenantID, sessionID, turnID, snapshot.Agent.Model, result, status)
+}
+
+func (d *Dispatcher) finishRun(tenantID, sessionID, turnID, model string, result Result, status string) (store.Turn, error) {
 	if result.Done.Usage.Model == "" {
-		result.Done.Usage.Model = snapshot.Agent.Model
+		result.Done.Usage.Model = model
 	}
 	nativeID, _ := result.Done.Metadata[proto.DoneMetaAgentSessionID].(string)
 	finishCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -49,7 +49,7 @@ func abort(peer *gateway.Session, runID string) {
 	_ = send(context.Background(), peer, proto.TypePromptCancel, runID, proto.PromptCancelPayload{})
 }
 
-func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, peer *gateway.Session, request proto.PromptRequestPayload, first int64) (result Result, status string) {
+func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, peer *gateway.Session, request proto.PromptRequestPayload, first int64, prepared *preparedStart) (result Result, status string) {
 	status = store.TurnFailed
 	result.AppliedThrough = first
 	subscription, err := peer.SubscribeDurable(request.RunID)
@@ -78,7 +78,14 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 			result.ErrorCode, status = "event_stream_incomplete", store.TurnFailed
 		}
 	}()
-	if err := send(ctx, peer, proto.TypePromptRequest, request.RunID, request); err != nil {
+	var preparationEvents <-chan proto.Envelope
+	if prepared != nil {
+		preparationEvents = prepared.sub.Events
+		err = prepared.start(ctx, request)
+	} else {
+		err = send(ctx, peer, proto.TypePromptRequest, request.RunID, request)
+	}
+	if err != nil {
 		result.ErrorCode = "delivery_unknown"
 		return
 	}
@@ -94,11 +101,33 @@ func (d *Dispatcher) deliver(ctx context.Context, tenantID, sessionID string, pe
 	cancelCtx, stopCancellation := context.WithCancel(ctx)
 	defer stopCancellation()
 	for {
-		if done && functions.reply == nil {
+		if done && functions.reply == nil && preparationEvents == nil {
 			status = finishDelivery(ctx, journal, &result, cancelReply, pending != nil, functions)
 			return
 		}
 		select {
+		case env, ok := <-preparationEvents:
+			if !ok {
+				if cancelReply != nil {
+					preparationEvents = nil
+					continue
+				}
+				result.ErrorCode = "preparation_interrupted"
+				return
+			}
+			started, err := prepared.started(env, request.RunID)
+			if err != nil {
+				// Cancellation owns the receipt even when it interrupts native Start.
+				if cancelReply != nil {
+					preparationEvents = nil
+					continue
+				}
+				result.ErrorCode = "preparation_start_failed"
+				return
+			}
+			if started {
+				preparationEvents = nil
+			}
 		case reply := <-functions.reply:
 			// Once cancellation is sent, its receipt owns the terminal outcome.
 			if err := functions.confirm(ctx, reply); err != nil && cancelReply == nil {
