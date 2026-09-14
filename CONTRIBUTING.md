@@ -213,7 +213,9 @@ without duplicated JSON, tenant columns or generated IDs in the creation hash.
 Environment reads join that Session and exclude deleted Sessions; deletion retains
 ownership for later settlement/cleanup. Existing `none` and legacy missing
 configuration create no Environment, and historical internal snapshots are not
-backfilled. Initial state is `pending`; authenticated connection observations follow
+backfilled. Creation and recorded-intent retry snapshots load the Environment with
+the Session row/cursor in the same transaction, without borrowing subsequent
+activity or Turn state. Initial state is `pending`; authenticated connection observations follow
 the lifecycle rules below.
 Public creation supports an empty `self_hosted` Session on the Codex profile when
 execution and a validated executor origin are configured. Require an absolute

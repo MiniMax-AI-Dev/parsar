@@ -25,7 +25,7 @@ from official_agent_references import verify_agent_references
 from official_session_requests import verify_session_create_requests
 from official_session_metadata import verify_session_metadata, verify_active_session_metadata
 from official_session_creators import verify_session_creators, verify_creator_recovery
-from openai import AuthenticationError, BadRequestError, ConflictError, NotFoundError, OpenAI
+from openai import AuthenticationError, BadRequestError, ConflictError, InternalServerError, NotFoundError, OpenAI
 import yaml
 
 
@@ -115,6 +115,7 @@ def main():
                     operation()
                 except error as result:
                     assert isinstance(result.body, dict) and result.body.get("code")
+                    return result
                 else:
                     raise AssertionError(f"Expected {error.__name__}")
 
@@ -154,7 +155,8 @@ def main():
                     expect_error(AuthenticationError, lambda: invalid.beta.agents.sessions.retrieve(first.id))
                     expect_error(BadRequestError, lambda: sessions.retrieve(first.id, extra_headers={"OpenAI-Beta": ""}))
                     expect_error(BadRequestError, lambda: sessions.create(**spec, input=[{"role": "user", "content": [{"type": "input_image", "image_url": "https://example.com/image.png"}]}]))
-                    expect_error(BadRequestError, lambda: sessions.create(agent=spec["agent"], environment={"type": "self_hosted", "workspace_directory": "/workspace"}))
+                    unavailable = expect_error(InternalServerError, lambda: sessions.create(agent=spec["agent"], environment={"type": "self_hosted", "workspace_directory": "/workspace"}))
+                    assert unavailable.status_code == 503 and unavailable.body["code"] == "execution_unavailable"
                     expect_error(BadRequestError, lambda: sessions.create(**spec, extra_body={"tenant_id": bindings[1]["tenant_id"]}))
                     assert list(sessions.list(agent_id="unknown-agent")) == []
                     assert list(sessions.list(agent_id=first.agent.id)) == [first]

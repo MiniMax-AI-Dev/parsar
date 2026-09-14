@@ -21,19 +21,26 @@ func validateInitialInputs(inputs []Input) ([]Input, json.RawMessage, error) {
 
 // The Session upsert locks retries. Only the new row admits initial work, so a
 // retry after completion or later Turns cannot submit the original input again.
-func (s *Store) createSessionResources(ctx context.Context, tenant string, params sqlc.CreateSessionParams, inputs []Input) (sqlc.Session, error) {
+func (s *Store) createSessionResources(ctx context.Context, tenant string, params sqlc.CreateSessionParams, inputs []Input) (sqlc.Session, *Environment, error) {
 	var row sqlc.Session
+	var environment *Environment
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.queries.WithTx(tx)
 		var err error
 		row, err = q.CreateSession(ctx, params)
-		if err != nil || row.ID != params.ID {
+		if err != nil {
 			return err
 		}
-		if err := createSessionEnvironment(ctx, q, row); err != nil {
+		if row.ID == params.ID {
+			if err := createSessionEnvironment(ctx, q, row); err != nil {
+				return err
+			}
+		}
+		environment, err = sessionEnvironmentSnapshot(ctx, q, row)
+		if err != nil {
 			return err
 		}
-		if len(inputs) == 0 {
+		if row.ID != params.ID || len(inputs) == 0 {
 			return nil
 		}
 		// Creation retries use the Session request hash. Keep the internal input key
@@ -46,5 +53,5 @@ func (s *Store) createSessionResources(ctx context.Context, tenant string, param
 		}
 		return q.PruneSessionEvents(ctx, row.ID)
 	})
-	return row, err
+	return row, environment, err
 }
