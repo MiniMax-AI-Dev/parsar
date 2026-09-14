@@ -3,6 +3,7 @@ package execution
 import (
 	"encoding/json"
 	"errors"
+	"path"
 	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
@@ -10,16 +11,20 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
 
-// ValidateSessionConfiguration applies additional engine restrictions after public
-// configuration resolution, including idle creation. Other persistence-only engine
-// names retain their existing behavior; this does not admit execution for them.
+// ValidateSessionConfiguration checks engine placement and configuration before persistence.
 func ValidateSessionConfiguration(engine string, configuration json.RawMessage) error {
-	if engine != "claude_sdk" {
-		return nil
-	}
 	var snapshot Snapshot
 	if json.Unmarshal(configuration, &snapshot) != nil {
 		return store.ErrInvalidInput
+	}
+	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" {
+		if engine != "codex" || snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" || !path.IsAbs(snapshot.Environment.WorkspaceDirectory) || strings.ContainsAny(snapshot.Environment.WorkspaceDirectory, "\x00\r\n\\") || len(snapshot.Environment.CapabilityDirectories) != 0 || len(snapshot.Agent.Tools) != 0 {
+			return store.ErrInvalidInput
+		}
+		return nil
+	}
+	if engine != "claude_sdk" {
+		return nil
 	}
 	return validateClaudeConfiguration(snapshot)
 }

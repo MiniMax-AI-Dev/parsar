@@ -33,9 +33,11 @@ type InlineAgent struct {
 	Tools        []json.RawMessage    `json:"tools,omitempty" swaggertype:"array,object" extensions:"x-nullable"`
 }
 
-// Environment currently supports the upstream environment-free configuration.
+// Environment contains supported request variants; self-hosted creation requires a workspace directory.
 type Environment struct {
-	Type string `json:"type" enums:"none" binding:"required"`
+	Type                  string   `json:"type" enums:"none,self_hosted" binding:"required"`
+	WorkspaceDirectory    string   `json:"workspace_directory,omitempty"`
+	CapabilityDirectories []string `json:"capability_directories,omitempty" extensions:"x-nullable"`
 }
 
 type Agent struct {

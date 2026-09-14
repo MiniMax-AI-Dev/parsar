@@ -12,11 +12,12 @@ import (
 // otherwise erase it. The embedded wire type retains strict nested decoding.
 type decodedSessionRequest struct {
 	v1.CreateSessionRequest
-	Input    json.RawMessage    `json:"input"`
-	Agent    json.RawMessage    `json:"agent"`
-	AgentID  json.RawMessage    `json:"agent_id"`
-	Stream   json.RawMessage    `json:"stream"`
-	Metadata map[string]*string `json:"metadata"`
+	Input       json.RawMessage    `json:"input"`
+	Agent       json.RawMessage    `json:"agent"`
+	AgentID     json.RawMessage    `json:"agent_id"`
+	Environment json.RawMessage    `json:"environment"`
+	Stream      json.RawMessage    `json:"stream"`
+	Metadata    map[string]*string `json:"metadata"`
 }
 
 type sessionRequest struct {
@@ -27,6 +28,11 @@ type sessionRequest struct {
 
 func (request decodedSessionRequest) validated() (sessionRequest, error) {
 	input := sessionRequest{CreateSessionRequest: request.CreateSessionRequest, Input: request.Input}
+	var err error
+	input.Environment, err = decodeSessionEnvironment(request.Environment)
+	if err != nil {
+		return input, err
+	}
 	if len(request.Agent) > 0 {
 		if decodeInputObject(request.Agent, &input.Agent, "model", "instructions", "multi_agent", "reasoning", "service_tier", "text", "tools") != nil {
 			return input, store.ErrInvalidInput
@@ -50,7 +56,6 @@ func (request decodedSessionRequest) validated() (sessionRequest, error) {
 			return input, store.ErrInvalidInput
 		}
 	}
-	var err error
 	input.Metadata, err = stringMetadata(request.Metadata)
 	return input, err
 }

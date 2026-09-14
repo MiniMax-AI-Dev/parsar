@@ -31,7 +31,7 @@ def main():
         "remote_url": settings["remote_url"], "workspace_directory": settings["workspace_directory"],
     }
     action = {"type": "environment_connection", "environment_id": expected_environment["id"]}
-    proof = {"scope": "private Session provisioning/input reservation; public read/SSE acceptance; public create/input remain gated",
+    proof = {"scope": "private Session provisioning/input reservation; public read/SSE acceptance; initial and mixed self-hosted input remain gated",
              "sdk_commit": pin["commit"], "sdk_version": distribution.version, "snapshots": {}}
     observations = {"sdk": [], "raw": []}
     ready = {name: threading.Event() for name in observations}
@@ -152,15 +152,16 @@ def main():
             for suffix in ("", "/events", "/turns", "/items"):
                 assert raw.get("/agents/sessions/" + session_id + suffix,
                                headers={"Authorization": "Bearer " + foreign}).status_code == 404
-            create = raw.post("/agents/sessions", json={"agent": {"model": "MiniMax-M3"},
+            create = raw.post("/agents/sessions", json={"agent": {"model": "MiniMax-M3"}, "input": "Unsupported initial input.",
                               "environment": {"type": "self_hosted", "workspace_directory": settings["workspace_directory"]}})
             assert create.status_code == 400
             submit = raw.post("/agents/sessions/" + session_id + "/events", json={"events": [{
                 "type": "agent.session.input.message", "input": [{"role": "user", "content": [
-                    {"type": "input_text", "text": "Public admission must remain disabled."}]}]}]})
+                    {"type": "input_text", "text": "Mixed public input must remain disabled."}]}]},
+                {"type": "agent.session.input.cancel"}]})
             assert submit.status_code == 400
             proof["tenant_isolation"] = True
-            proof["public_create_and_input_rejected"] = True
+            proof["unsupported_initial_and_mixed_input_rejected"] = True
 
             for name in observations:
                 threading.Thread(target=observe, args=(name,), daemon=True).start()

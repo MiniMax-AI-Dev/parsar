@@ -45,6 +45,9 @@ func (w *Worker) SubmitInputs(ctx context.Context, tenant, session, key string, 
 	if err != nil {
 		return nil, err
 	}
+	if selfHostedConfiguration(value.Configuration) {
+		return w.submitEnvironmentInputs(ctx, value, key, inputs)
+	}
 	if !canAdmitInputs(value.Engine, value.Configuration) {
 		return nil, store.ErrInvalidInput
 	}
@@ -56,16 +59,16 @@ func (w *Worker) SubmitInputs(ctx context.Context, tenant, session, key string, 
 
 // CreateSession validates execution support before atomically admitting initial work.
 func (w *Worker) CreateSession(ctx context.Context, tenant string, input store.CreateSessionInput) (store.Session, error) {
-	if !canAdmitInputs(input.Engine, input.Configuration) {
-		return store.Session{}, store.ErrInvalidInput
+	if err := w.validateCreation(input); err != nil {
+		return store.Session{}, err
 	}
 	return w.admission.CreateSession(ctx, tenant, input)
 }
 
 // CreateSessionStream applies the same execution admission before creating a stream.
 func (w *Worker) CreateSessionStream(ctx context.Context, tenant string, input store.CreateSessionInput) (store.SessionCreation, error) {
-	if !canAdmitInputs(input.Engine, input.Configuration) {
-		return store.SessionCreation{}, store.ErrInvalidInput
+	if err := w.validateCreation(input); err != nil {
+		return store.SessionCreation{}, err
 	}
 	return w.admission.CreateSessionStream(ctx, tenant, input)
 }

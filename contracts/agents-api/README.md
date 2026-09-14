@@ -30,8 +30,10 @@ describe values the adapter never applied.
 The private native registry persists fenced connection observations and pinned
 Environment-event snapshots through the existing execution owner. Session reads
 and live SSE also expose safe `self_hosted` output and reservation-owned connection
-actions for privately provisioned Sessions. Public Environment admission, resource
-metadata and full lifecycle conformance remain unimplemented.
+actions. The initial public self-hosted profile creates empty Codex Sessions and
+waits for preparation/admission of later idle text batches. Resource metadata,
+initial input, mixed/active/function input and full lifecycle conformance remain
+unimplemented; see the [Environment scope](environments.md).
 
 Remaining work includes physical Session cleanup/content variants, broader configuration
 and tools, execution recovery, environments/files, Vaults and protocol Subagents.
@@ -194,8 +196,9 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 
 `AGENTS_API_ENGINE` chooses the engine for new Sessions; existing Sessions keep
 that immutable choice. The public request supplies a model, not a harness selector.
-Both profiles currently require `environment:none`, disabled `multi_agent`, implicit
-reasoning, service tier `auto`, ordinary text and non-deferred functions.
+Both no-environment profiles require disabled `multi_agent`, implicit reasoning,
+service tier `auto`, ordinary text and non-deferred functions. Codex additionally
+supports the initial self-hosted text profile described below.
 
 | Profile | Current limits |
 | --- | --- |
@@ -298,8 +301,8 @@ its restrictive profile with no built-in tools and only declared function callba
 A missing capability or unsupported native method fails rather than silently
 allocating a local execution environment. Native state still lives on the host;
 function callbacks may access their own resources. This is not filesystem isolation.
-Private `daemon` snapshots and the pending public self-hosted registry/Noise
-transport are distinct from this mode.
+Private `daemon` snapshots and the self-hosted registry/Noise transport are
+distinct from this mode.
 
 The native reference is Codex `rust-v0.153.4`, commit
 `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`, especially

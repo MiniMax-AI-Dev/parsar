@@ -105,7 +105,7 @@ func sessionCreator(r *http.Request) identity.Subject {
 
 // createSession optionally admits initial text in the same transaction as the Session.
 // @Summary Create an execution Session
-// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none, subject to the configured engine. Claude SDK currently requires medium verbosity and object-root function schemas. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text and atomically starts a Turn; omitted or null input creates an idle Session. With stream=true, returns live Session events starting at creation; disconnect does not cancel execution. New Sessions retain their authenticated creator; all creation retries require the same typed subject, including across key rotation. Saved-Agent retries retain request intent independently of later Agent changes. Unknown historical creators reject retries; known creators without recorded intent retain resolved-snapshot retry rules. These conflict policies are local and not verified hosted parity. Creation retries observe future events without replay; retry with stream=false to retrieve the Session. Non-text initial input remains unsupported.
+// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none, subject to the configured engine. The initial self_hosted profile requires Codex, an absolute workspace_directory, empty capability_directories and no function tools. Omitted/null capability_directories use the empty-list default; self_hosted requires omitted/null initial input and configured execution plus executor registry. Claude SDK currently requires medium verbosity and object-root function schemas. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text and atomically starts a Turn; omitted or null input creates an idle Session. With stream=true, returns live Session events starting at creation; disconnect does not cancel execution. New Sessions retain their authenticated creator; all creation retries require the same typed subject, including across key rotation. Saved-Agent retries retain request intent independently of later Agent changes. Unknown historical creators reject retries; known creators without recorded intent retain resolved-snapshot retry rules. These conflict policies are local and not verified hosted parity. Creation retries observe future events without replay; retry with stream=false to retrieve the Session. Non-text initial input remains unsupported.
 // @Tags Sessions
 // @Accept json
 // @Produce json,text/event-stream
@@ -151,6 +151,10 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, r, err)
 		return
 	}
+	if input.Environment.Type == "self_hosted" && len(initialInputs) > 0 {
+		writeError(w, http.StatusBadRequest, "unsupported_or_invalid_configuration", "Self-hosted Sessions currently require omitted or null initial input.")
+		return
+	}
 	creationRequest, err := sessionCreationRequest(input, initialInputs)
 	if err != nil {
 		writeStoreError(w, r, err)
@@ -186,6 +190,10 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported_or_invalid_configuration", err.Error())
 		return
 	}
+	if input.Environment.Type == "self_hosted" && (h.inputs == nil || h.executorURL == "") {
+		writeError(w, http.StatusServiceUnavailable, "execution_unavailable", "Self-hosted execution is not configured on this service.")
+		return
+	}
 	createInput := store.CreateSessionInput{
 		Creator: sessionCreator(r),
 		Engine:  h.engine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs, CreationRequest: creationRequest,
@@ -211,7 +219,7 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Retrieve an execution Session
-// @Description Returns supported none and privately provisioned self_hosted Session environments. Pending input can require an Environment connection before a Turn exists; connection observations are not native execution readiness. Public self_hosted creation and input remain unsupported.
+// @Description Returns supported none and self_hosted Session environments. Pending input can require an Environment connection before a Turn exists; connection observations are not native execution readiness.
 // @Tags Sessions
 // @Produce json
 // @Security BearerAuth
@@ -243,7 +251,7 @@ func (h *Handler) respondSession(w http.ResponseWriter, r *http.Request, session
 }
 
 // @Summary List execution Sessions
-// @Description Cursor and results are scoped to the authenticated execution tenant. Optional agent_id matches the immutable root Agent ID, including inline Agents and historical Sessions whose saved source was updated or deleted. Omission lists all Agents. Returns the same Environment and pending-input activity projection as Session retrieval, including privately provisioned self_hosted Sessions.
+// @Description Cursor and results are scoped to the authenticated execution tenant. Optional agent_id matches the immutable root Agent ID, including inline Agents and historical Sessions whose saved source was updated or deleted. Omission lists all Agents. Returns the same Environment and pending-input activity projection as Session retrieval, including self_hosted Sessions.
 // @Tags Sessions
 // @Produce json
 // @Security BearerAuth

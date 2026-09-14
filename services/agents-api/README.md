@@ -371,9 +371,10 @@ an official SSE replay mechanism.
 ## Native executor transport prerequisite
 
 The disabled-by-default Codex adapter supports executor registration, harness key
-authorization and an opaque native Noise relay. Public Session creation still admits `environment.type=none`
-only; this prerequisite is for internally created Environment fixtures until the
-public admission/readiness workflow is implemented.
+authorization and an opaque native Noise relay. Configured execution and an
+executor origin enable empty public `self_hosted` Sessions on Codex. The current
+profile requires an absolute `workspace_directory`, empty/default
+`capability_directories`, no initial input and no function tools.
 
 To enable it alongside the existing daemon worker, set
 `AGENTS_API_EXECUTOR_URL` to the externally reachable HTTPS origin. Apply the
@@ -442,8 +443,7 @@ See the [canonical ownership rules](../../CONTRIBUTING.md#environment-ownership-
 now fails startup rather than retaining a static fallback. With the daemon gateway
 and executor URL configured, the service Worker issues and releases these credentials
 for pending Environment inputs, selecting a capable tenant device once for an
-unbound Session and retaining existing bindings. Public Environment admission
-remains pending. There is no public harness-key endpoint or user/service-account
+unbound Session and retaining existing bindings. There is no public harness-key endpoint or user/service-account
 identity equivalence. Caller, device, executor and harness credentials stay separate.
 
 Native routes live outside `/v1/agents`: `POST /cloud/environment/{id}/register`
@@ -456,8 +456,8 @@ allowed only on loopback for development. Production TLS termination remains an
 operator responsibility and requires deployment validation.
 
 Authenticated socket observations now persist connection state and immutable
-Environment event snapshots. They do not enable public Environment admission or
-metadata reads, and do not establish native readiness. Registration replacement
+Environment event snapshots. These observations do not establish native readiness
+or implement standalone Environment metadata reads. Registration replacement
 and numbered callbacks fence old observations; a new Worker reconciles previous
 process state before opening connections. Shutdown drains observations before
 releasing execution ownership. Persistence failures close the registry and require
@@ -465,12 +465,21 @@ a service restart; review its lifecycle error logs rather than treating closure 
 a successful write. See the [lifecycle rules](../../CONTRIBUTING.md#environment-ownership-and-placement).
 
 When the executor origin is configured, Session GET/list/metadata and live SSE can
-expose privately provisioned `self_hosted` Sessions through a safe output-only
-projection. Waiting input requests `environment_connection` before any Turn;
+expose `self_hosted` Sessions through a safe output projection. Waiting input requests `environment_connection` before any Turn;
 connection arrival clears the action, and the existing Worker still verifies
 native readiness before admission. No waiting input means no connection request.
-The returned `remote_url` is the configured executor origin. Public self-hosted
-creation/input and standalone Environment metadata/file routes remain unavailable.
+The returned `remote_url` is the configured executor origin. Use that exact URL and
+Environment ID with the [pinned caller-started launcher](../../packages/codex-executor/README.md).
+Later idle text-message batches wait for durable preparation/admission before the
+input endpoint returns 204, even if the executor is already connected. Set client
+and proxy timeouts above five minutes; the service gives this response six minutes.
+Explicit retry keys preserve the original input identity and deadline. A disconnected
+HTTP observer does not cancel the reservation. Local expiry/cancellation errors are
+409 `environment_input_expired` / `environment_input_cancelled`; ownership loss is
+503 `execution_unavailable`. Exact hosted status/body parity remains unverified.
+Initial input, active steering/cancellation, mixed events, function tools/results,
+nonempty capability directories, other placements and standalone Environment
+metadata/file routes remain unavailable. These are implementation gaps.
 
 The adapter checks its execution lease and visible Environment on requests and
 five-second heartbeats; deleted ownership, shutdown or lost ownership closes
