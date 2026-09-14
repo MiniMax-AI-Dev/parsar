@@ -55,7 +55,7 @@ The default output is `${PARSAR_HOME:-$HOME/.parsar}/build/agents-api`:
 - `agents-api`: HTTP service and execution worker.
 - `agents-api-migrate`: this service's embedded database migrations.
 - `agents-api-device`: operator device provisioning and revocation.
-- `agents-api-environment-key`: exact-Environment executor credential issuance, rotation and revocation.
+- `agents-api-environment-key`: principal executor key issuance, rotation and revocation.
 
 Use these executables in place of the corresponding `go run` commands below.
 The build needs Go and access to its pinned module dependencies; it does not need
@@ -154,8 +154,8 @@ atomically and never change them on retry. Project resource visibility and mutat
 authorization are unchanged. Historical Sessions keep unknown creators and remain
 readable; no key, metadata or product record can assign their ownership through a
 retry. Retire older API writers before starting this deployment; mixed-version
-creation is unsupported. Principal-scoped Environment executor authorization
-remains separate work.
+creation is unsupported. Executor keys separately match this recorded creator before authorizing an
+Environment connection; they do not inherit general caller API permissions.
 
 `AGENTS_API_ADDR` defaults to `127.0.0.1:8091`; use a TLS reverse proxy for remote
 access. `AGENTS_API_ENGINE` defaults to `codex`; set it to `claude_sdk` for the
@@ -377,44 +377,57 @@ public admission/readiness workflow is implemented.
 
 To enable it alongside the existing daemon worker, set
 `AGENTS_API_EXECUTOR_URL` to the externally reachable HTTPS origin. Apply the
-execution migrations first, then use operator database authority to issue a key
-for an existing tenant-owned Environment:
+execution migrations first and start the service once with configured caller
+principals to establish its immutable project mappings. Operator database authority
+can then issue a connect-only principal key before any Session exists:
 
 ```bash
 umask 077
-agents-api-environment-key --tenant "$TENANT_ID" --environment "$ENVIRONMENT_ID" \
+agents-api-environment-key --tenant "$TENANT_ID" \
+  --organization "$ORGANIZATION_ID" --project "$PROJECT_ID" \
+  --subject-kind service_account --subject-id "$SUBJECT_ID" --key-id "$KEY_ID" \
   > "$HOME/.parsar/executor-key.json"
 ```
 
-`AGENTS_API_DATABASE_URL` must point to the execution database. The JSON output
-contains `environment_id` and `executor_token`; stdout is its only delivery.
-The [separate native launcher](../../packages/codex-executor/README.md) consumes
-that private JSON file directly. Stock loopback development instead supplies its
-`executor_token` as the executor's private `CODEX_API_KEY`. The CLI never
-imports a chosen token or reads one back. Lost output requires explicit rotation;
-ordinary issuance fails when a credential already exists, including a revoked one.
-Use `--rotate` with the same identifiers to replace it and deliver a new secret,
-or `--revoke` to invalidate it without emitting a secret. Restart/reconfigure
-executors with the rotated key: the pinned native auth provider does not refresh
-its startup token. Credentials remain valid until rotation/revocation or deletion
-of the owning Session; the five-minute URL-grant lifetime does not apply to them.
+`KEY_ID` is a new canonical nonzero UUID chosen for management and retained by the
+operator. Use `--subject-kind user` for a user principal. All identities must be
+explicit and match an existing verified project mapping; issuance never creates
+or remaps that association. `AGENTS_API_DATABASE_URL` points to the execution DB.
+Optionally add `--environment "$ENVIRONMENT_ID"` at issuance to restrict this key
+to one existing live Environment with the same recorded Session creator.
 
-The database stores only the current digest, issue time and revocation marker.
-Tenant identity is derived from Environment/Session ownership, with no product
-user/workspace tables or daemon-device authority. A service restart preserves the
-credential but discards registrations and URL grants, requiring re-registration.
-Rotation/revocation takes effect without service restart: requests and upgrades
-check the current digest; existing pairs close on authorization heartbeats (every
-five seconds, with a four-second check budget). This is bounded connection
-observation, not a promise that native processes have stopped.
+JSON output contains `key_id`, `executor_token`, and `environment_id` only for a
+restricted key. Stdout is its only delivery; the
+[separate native launcher](../../packages/codex-executor/README.md) consumes this
+private file directly. There is no chosen-token import or secret read-back.
+Ordinary issuance rejects any existing management ID, including revoked IDs.
+Lost output requires explicit `--rotate` with the same full principal and key ID;
+`--revoke` invalidates the key without output. Neither operation accepts an
+Environment override or changes the key's principal/restriction. Rotation of a
+restricted key requires its live owning Session; revocation remains possible after
+deletion. Replace the private file and restart executors after rotation.
 
-**Transition from static executor keys:** stop the old registry, apply migration
-21, issue new credentials, update executor configuration, remove
-`AGENTS_API_EXECUTOR_KEYS_FILE`, and restart the service. That setting now fails
-startup with an operator instruction; there is no static/durable fallback or raw
-key import. Do not overlap old and new registries. Retire the previous executor
-secret and its file. Rollback of migration 21 discards these credentials; it is not
-a way to recover old secrets or grants.
+The database stores the current digest, immutable typed subject/project partition,
+optional restriction, creation/issuance times and revocation marker. Authorization
+requires the target Session's project and recorded creator to match. A principal
+key can serve multiple matching Sessions; deleting one denies that target without
+revoking access to the others. Unknown historical creators never authorize an
+executor. Caller, daemon, harness and executor keys have distinct purposes.
+Executor keys have no five-minute grant expiry. A restart preserves keys but
+invalidates registrations and URL grants, requiring re-registration. Current-key
+checks apply to requests and upgrades; authorization heartbeats close existing
+pairs every five seconds with a four-second check budget. Connection closure does
+not establish native process quiescence.
+
+**Principal-key cutover:** stop older registries and operator writers, apply
+migration 26, and deploy the updated service, issuer and launcher together. Legacy
+digests, Environment restrictions and issuance times remain, but keys are revoked
+and their principals remain unknown. Their Environment UUIDs remain reserved as
+management IDs; they cannot be claimed or rotated into principal keys. Explicitly
+issue new keys with new IDs, replace old files and restart executors. Never infer
+ownership from old keys or product data. Downgrade refuses to discard principal-key
+identities and never undoes legacy revocation. The retired static executor-key
+setting remains rejected; there is no old/new authentication fallback.
 
 Harness credentials are issued internally for an execution owner after checking
 the current execution lease and exact tenant/Environment ownership. The registry

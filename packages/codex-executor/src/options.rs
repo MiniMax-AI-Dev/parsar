@@ -30,7 +30,8 @@ pub struct Options {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Credential {
-    environment_id: String,
+    key_id: String,
+    environment_id: Option<String>,
     executor_token: String,
 }
 
@@ -90,10 +91,23 @@ fn validate_remote(remote: &str) -> Result<(), &'static str> {
 }
 
 fn credential_header(json: &str, environment: &str) -> Result<HeaderValue, &'static str> {
-    let credential: Credential =
-        serde_json::from_str(json).map_err(|_| "invalid executor credential JSON")?;
-    if credential.environment_id != environment {
-        return Err("executor credential belongs to a different Environment");
+    let credential: Credential = serde_json::from_str(json).map_err(|_| {
+        "invalid executor credential JSON; expected key_id, executor_token and optional environment_id"
+    })?;
+    let key_id = Uuid::parse_str(&credential.key_id)
+        .map_err(|_| "executor credential key ID must be a canonical nonzero UUID")?;
+    if key_id.is_nil() || key_id.to_string() != credential.key_id {
+        return Err("executor credential key ID must be a canonical nonzero UUID");
+    }
+    if let Some(environment_id) = credential.environment_id {
+        let id = Uuid::parse_str(&environment_id)
+            .map_err(|_| "executor credential Environment ID must be a canonical UUID")?;
+        if id.to_string() != environment_id {
+            return Err("executor credential Environment ID must be a canonical UUID");
+        }
+        if environment_id != environment {
+            return Err("executor credential belongs to a different Environment");
+        }
     }
     if credential.executor_token.len() != 43
         || !credential

@@ -14,6 +14,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/google/uuid"
 )
 
@@ -61,10 +62,10 @@ while :; do date +%s > "$1.heartbeat"; sleep 1; done
 	return workspace
 }
 
-func startDaemonRemoteExecutor(t *testing.T, ctx context.Context, root, local, remote, binary, image, registryURL, environment, token string) string {
+func startDaemonRemoteExecutor(t *testing.T, ctx context.Context, root, local, remote, binary, image, registryURL, environment string, credential store.IssuedExecutorCredential) string {
 	t.Helper()
 	if launcher := os.Getenv("PARSAR_EXECUTOR_LAUNCHER"); launcher != "" {
-		return startDaemonLauncherExecutor(t, ctx, root, local, remote, binary, image, registryURL, environment, token, launcher)
+		return startDaemonLauncherExecutor(t, ctx, root, local, remote, binary, image, registryURL, environment, credential, launcher)
 	}
 	container := "parsar-daemon-environment-" + uuid.NewString()
 	t.Cleanup(func() {
@@ -77,7 +78,7 @@ func startDaemonRemoteExecutor(t *testing.T, ctx context.Context, root, local, r
 		"--mount", "type=bind,src=" + binary + ",dst=/usr/local/bin/codex,readonly", "--mount", "type=bind,src=" + filepath.Join(root, "executor") + ",dst=/executor", "--mount", "type=bind,src=" + local + ",dst=" + remote,
 		"--entrypoint", "/usr/local/bin/codex", image, "exec-server", "--remote", registryURL, "--environment-id", environment}
 	command := exec.CommandContext(ctx, "docker", args...)
-	command.Env = append(os.Environ(), "CODEX_API_KEY="+token)
+	command.Env = append(os.Environ(), "CODEX_API_KEY="+credential.Token)
 	if err := command.Run(); err != nil {
 		t.Fatal("native executor container failed to start", err)
 	}

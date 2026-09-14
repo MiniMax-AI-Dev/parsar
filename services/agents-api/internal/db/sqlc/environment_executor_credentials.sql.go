@@ -14,10 +14,12 @@ import (
 const authenticateEnvironmentExecutor = `-- name: AuthenticateEnvironmentExecutor :one
 SELECT s.tenant_id
 FROM environment_executor_credentials c
-JOIN environments e ON e.id = c.environment_id
+JOIN execution_project_scopes p ON p.tenant_id = c.tenant_id
+JOIN environments e ON e.id = $1
 JOIN sessions s ON s.id = e.session_id
-WHERE c.environment_id = $1 AND c.token_sha256 = $2
-    AND c.revoked_at IS NULL AND s.deleted_at IS NULL
+WHERE c.token_sha256 = $2 AND c.revoked_at IS NULL
+    AND c.tenant_id = s.tenant_id AND c.subject_kind = s.creator_kind AND c.subject_id = s.creator_id
+    AND (c.environment_id IS NULL OR c.environment_id = e.id) AND s.deleted_at IS NULL
 `
 
 type AuthenticateEnvironmentExecutorParams struct {
@@ -32,52 +34,164 @@ func (q *Queries) AuthenticateEnvironmentExecutor(ctx context.Context, arg Authe
 	return tenant_id, err
 }
 
-const issueEnvironmentExecutorCredential = `-- name: IssueEnvironmentExecutorCredential :execrows
-INSERT INTO environment_executor_credentials (environment_id, token_sha256)
-VALUES ($1, $2) ON CONFLICT (environment_id) DO NOTHING
+const executorProjectScopeExists = `-- name: ExecutorProjectScopeExists :one
+SELECT EXISTS (
+    SELECT 1 FROM execution_project_scopes
+    WHERE tenant_id = $1 AND organization_id = $2 AND project_id = $3
+)
 `
 
-type IssueEnvironmentExecutorCredentialParams struct {
+type ExecutorProjectScopeExistsParams struct {
+	TenantID       pgtype.UUID `json:"tenant_id"`
+	OrganizationID string      `json:"organization_id"`
+	ProjectID      string      `json:"project_id"`
+}
+
+func (q *Queries) ExecutorProjectScopeExists(ctx context.Context, arg ExecutorProjectScopeExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, executorProjectScopeExists, arg.TenantID, arg.OrganizationID, arg.ProjectID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const getExecutorCredentialForPrincipal = `-- name: GetExecutorCredentialForPrincipal :one
+SELECT c.environment_id
+FROM environment_executor_credentials c
+JOIN execution_project_scopes p ON p.tenant_id = c.tenant_id
+WHERE c.key_id = $1 AND c.tenant_id = $2
+    AND c.subject_kind = $3 AND c.subject_id = $4
+    AND p.organization_id = $5 AND p.project_id = $6
+`
+
+type GetExecutorCredentialForPrincipalParams struct {
+	KeyID          pgtype.UUID `json:"key_id"`
+	TenantID       pgtype.UUID `json:"tenant_id"`
+	SubjectKind    pgtype.Text `json:"subject_kind"`
+	SubjectID      pgtype.Text `json:"subject_id"`
+	OrganizationID string      `json:"organization_id"`
+	ProjectID      string      `json:"project_id"`
+}
+
+func (q *Queries) GetExecutorCredentialForPrincipal(ctx context.Context, arg GetExecutorCredentialForPrincipalParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getExecutorCredentialForPrincipal,
+		arg.KeyID,
+		arg.TenantID,
+		arg.SubjectKind,
+		arg.SubjectID,
+		arg.OrganizationID,
+		arg.ProjectID,
+	)
+	var environment_id pgtype.UUID
+	err := row.Scan(&environment_id)
+	return environment_id, err
+}
+
+const issueExecutorCredential = `-- name: IssueExecutorCredential :one
+WITH issued AS (SELECT clock_timestamp() AS at)
+INSERT INTO environment_executor_credentials
+    (key_id, tenant_id, subject_kind, subject_id, environment_id, token_sha256, created_at, issued_at)
+SELECT $1, p.tenant_id, $2, $3,
+    $4::uuid, $5, issued.at, issued.at
+FROM execution_project_scopes p CROSS JOIN issued
+WHERE p.tenant_id = $6 AND p.organization_id = $7
+    AND p.project_id = $8
+    AND ($4::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM environments e JOIN sessions s ON s.id = e.session_id
+        WHERE e.id = $4 AND s.tenant_id = p.tenant_id AND s.deleted_at IS NULL
+            AND s.creator_kind = $2 AND s.creator_id = $3
+    ))
+ON CONFLICT (key_id) DO NOTHING
+RETURNING key_id, environment_id
+`
+
+type IssueExecutorCredentialParams struct {
+	KeyID          pgtype.UUID `json:"key_id"`
+	SubjectKind    pgtype.Text `json:"subject_kind"`
+	SubjectID      pgtype.Text `json:"subject_id"`
+	EnvironmentID  pgtype.UUID `json:"environment_id"`
+	TokenSha256    string      `json:"token_sha256"`
+	TenantID       pgtype.UUID `json:"tenant_id"`
+	OrganizationID string      `json:"organization_id"`
+	ProjectID      string      `json:"project_id"`
+}
+
+type IssueExecutorCredentialRow struct {
+	KeyID         pgtype.UUID `json:"key_id"`
 	EnvironmentID pgtype.UUID `json:"environment_id"`
-	TokenSha256   string      `json:"token_sha256"`
 }
 
-func (q *Queries) IssueEnvironmentExecutorCredential(ctx context.Context, arg IssueEnvironmentExecutorCredentialParams) (int64, error) {
-	result, err := q.db.Exec(ctx, issueEnvironmentExecutorCredential, arg.EnvironmentID, arg.TokenSha256)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) IssueExecutorCredential(ctx context.Context, arg IssueExecutorCredentialParams) (IssueExecutorCredentialRow, error) {
+	row := q.db.QueryRow(ctx, issueExecutorCredential,
+		arg.KeyID,
+		arg.SubjectKind,
+		arg.SubjectID,
+		arg.EnvironmentID,
+		arg.TokenSha256,
+		arg.TenantID,
+		arg.OrganizationID,
+		arg.ProjectID,
+	)
+	var i IssueExecutorCredentialRow
+	err := row.Scan(&i.KeyID, &i.EnvironmentID)
+	return i, err
 }
 
-const revokeEnvironmentExecutorCredential = `-- name: RevokeEnvironmentExecutorCredential :execrows
+const revokeExecutorCredential = `-- name: RevokeExecutorCredential :execrows
 UPDATE environment_executor_credentials SET revoked_at = COALESCE(revoked_at, clock_timestamp())
-WHERE environment_id = $1
+WHERE key_id = $1 AND tenant_id = $2
+    AND subject_kind = $3 AND subject_id = $4
 `
 
-func (q *Queries) RevokeEnvironmentExecutorCredential(ctx context.Context, environmentID pgtype.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, revokeEnvironmentExecutorCredential, environmentID)
+type RevokeExecutorCredentialParams struct {
+	KeyID       pgtype.UUID `json:"key_id"`
+	TenantID    pgtype.UUID `json:"tenant_id"`
+	SubjectKind pgtype.Text `json:"subject_kind"`
+	SubjectID   pgtype.Text `json:"subject_id"`
+}
+
+func (q *Queries) RevokeExecutorCredential(ctx context.Context, arg RevokeExecutorCredentialParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeExecutorCredential,
+		arg.KeyID,
+		arg.TenantID,
+		arg.SubjectKind,
+		arg.SubjectID,
+	)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
 }
 
-const rotateEnvironmentExecutorCredential = `-- name: RotateEnvironmentExecutorCredential :execrows
+const rotateExecutorCredential = `-- name: RotateExecutorCredential :one
 UPDATE environment_executor_credentials
-SET token_sha256 = $2, issued_at = clock_timestamp(), revoked_at = NULL
-WHERE environment_id = $1
+SET token_sha256 = $1, issued_at = clock_timestamp(), revoked_at = NULL
+WHERE key_id = $2 AND tenant_id = $3
+    AND subject_kind = $4 AND subject_id = $5
+RETURNING key_id, environment_id
 `
 
-type RotateEnvironmentExecutorCredentialParams struct {
-	EnvironmentID pgtype.UUID `json:"environment_id"`
-	TokenSha256   string      `json:"token_sha256"`
+type RotateExecutorCredentialParams struct {
+	TokenSha256 string      `json:"token_sha256"`
+	KeyID       pgtype.UUID `json:"key_id"`
+	TenantID    pgtype.UUID `json:"tenant_id"`
+	SubjectKind pgtype.Text `json:"subject_kind"`
+	SubjectID   pgtype.Text `json:"subject_id"`
 }
 
-func (q *Queries) RotateEnvironmentExecutorCredential(ctx context.Context, arg RotateEnvironmentExecutorCredentialParams) (int64, error) {
-	result, err := q.db.Exec(ctx, rotateEnvironmentExecutorCredential, arg.EnvironmentID, arg.TokenSha256)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+type RotateExecutorCredentialRow struct {
+	KeyID         pgtype.UUID `json:"key_id"`
+	EnvironmentID pgtype.UUID `json:"environment_id"`
+}
+
+func (q *Queries) RotateExecutorCredential(ctx context.Context, arg RotateExecutorCredentialParams) (RotateExecutorCredentialRow, error) {
+	row := q.db.QueryRow(ctx, rotateExecutorCredential,
+		arg.TokenSha256,
+		arg.KeyID,
+		arg.TenantID,
+		arg.SubjectKind,
+		arg.SubjectID,
+	)
+	var i RotateExecutorCredentialRow
+	err := row.Scan(&i.KeyID, &i.EnvironmentID)
+	return i, err
 }

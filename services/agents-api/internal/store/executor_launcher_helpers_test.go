@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/google/uuid"
 )
 
@@ -127,9 +128,9 @@ func startLauncherProbe(t *testing.T, ctx context.Context, root, image, binary, 
 	return startRelayProcess(t, ctx, root, append(os.Environ(), "CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN="+token), "docker", args...)
 }
 
-func writeLauncherCredential(t *testing.T, path, environment, token string) {
+func writeLauncherCredential(t *testing.T, path string, credential store.IssuedExecutorCredential) {
 	t.Helper()
-	data, err := json.Marshal(map[string]string{"environment_id": environment, "executor_token": token})
+	data, err := json.Marshal(credential)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,18 +139,18 @@ func writeLauncherCredential(t *testing.T, path, environment, token string) {
 	}
 }
 
-func startDaemonLauncherExecutor(t *testing.T, ctx context.Context, root, local, remote, binary, image, registryURL, environment, token, launcher string) string {
+func startDaemonLauncherExecutor(t *testing.T, ctx context.Context, root, local, remote, binary, image, registryURL, environment string, credential store.IssuedExecutorCredential, launcher string) string {
 	t.Helper()
-	writeLauncherCredential(t, filepath.Join(root, "executor", "credential.json"), environment, token)
+	writeLauncherCredential(t, filepath.Join(root, "executor", "credential.json"), credential)
 	args, name := launcherContainerArgs(t, binary)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		logs, _ := exec.CommandContext(ctx, "docker", "logs", name).CombinedOutput()
 		text := string(logs)
-		if strings.Contains(text, token) {
+		if strings.Contains(text, credential.Token) {
 			t.Error("executor credential appeared in launcher diagnostics")
-			text = strings.ReplaceAll(text, token, "[redacted]")
+			text = strings.ReplaceAll(text, credential.Token, "[redacted]")
 		}
 		_ = os.WriteFile(filepath.Join(root, "launcher.stderr"), []byte(text), 0600)
 	})

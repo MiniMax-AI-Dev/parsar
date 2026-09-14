@@ -146,3 +146,10 @@ only permitted persistence of that executor credential; harness credentials stay
 transient. This second fixture uses loopback HTTP and separately verifies the
 authenticated daemon, cold history/files and cancellation. Neither fixture enables
 public `self_hosted` admission or proves complete Environment compatibility.
+
+The prepared Worker fixture (`TestNativePreparedWorkerRemoteEnvironment`) requires
+the built launcher and issues a principal key before creating its Environment
+Session. It verifies the serialized key ID and absent exact restriction before
+real-provider commands/files and cold continuation. PostgreSQL/HTTP fixtures cover
+same-principal multiple Sessions, cross-principal rejection, rotation/revocation,
+restart and deletion. These checks do not enable public Environment admission.

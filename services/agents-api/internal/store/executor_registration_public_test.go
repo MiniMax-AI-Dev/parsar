@@ -33,7 +33,13 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer lease.Close(context.Background())
-	tenant, foreign, token, wrongTenantToken := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
+	tenant, foreign := uuid.NewString(), uuid.NewString()
+	principal := store.FixtureExecutorPrincipal(t, s, tenant)
+	foreignPrincipal := store.FixtureExecutorPrincipal(t, s, foreign)
+	credential, err := s.IssueExecutorCredential(ctx, principal, uuid.NewString(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	config := json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace","capability_directories":[]}}`)
 	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "native-registry", Configuration: config})
 	if err != nil {
@@ -51,11 +57,26 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err = s.IssueEnvironmentExecutorCredential(ctx, tenant, environment.ID)
+	foreignCredential, err := s.IssueExecutorCredential(ctx, foreignPrincipal, otherEnvironment.ID, otherEnvironment.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrongTenantToken, err = s.IssueEnvironmentExecutorCredential(ctx, foreign, otherEnvironment.ID)
+	token, wrongTenantToken := credential.Token, foreignCredential.Token
+	sibling, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "same-principal", Configuration: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	siblingEnvironment, err := s.GetSessionEnvironment(ctx, tenant, sibling.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherCreator := store.FixtureCreator()
+	otherCreator.Kind = "user"
+	otherSubject, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: otherCreator, Engine: "codex", IdempotencyKey: "different-kind", Configuration: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherSubjectEnvironment, err := s.GetSessionEnvironment(ctx, tenant, otherSubject.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,6 +122,9 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 		}
 		return result
 	}
+	register(siblingEnvironment.ID, token, 200)
+	register(otherSubjectEnvironment.ID, token, 401)
+	register(environment.ID, "caller/device/harness/grant", 401)
 	register(otherEnvironment.ID, token, 401)
 	register(environment.ID, wrongTenantToken, 401)
 	for _, alias := range []string{strings.ToUpper(environment.ID), "{" + environment.ID + "}", "urn:uuid:" + environment.ID, strings.ReplaceAll(environment.ID, "-", "")} {
@@ -187,10 +211,11 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 			t.Fatal("native executor did not re-register after registry restart")
 		}
 		previous := token
-		token, err = s.RotateEnvironmentExecutorCredential(ctx, tenant, environment.ID)
+		credential, err = s.RotateExecutorCredential(ctx, principal, credential.KeyID)
 		if err != nil {
 			t.Fatal(err)
 		}
+		token = credential.Token
 		connected(false)
 		register(environment.ID, previous, 401)
 		before = attempts.Load()
@@ -207,7 +232,7 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 		t.Log("native CLI verification not requested; real PostgreSQL/socket checks remain active")
 	}
 	stale := register(environment.ID, token, 200)
-	rotated, err := s.RotateEnvironmentExecutorCredential(ctx, tenant, environment.ID)
+	rotated, err := s.RotateExecutorCredential(ctx, principal, credential.KeyID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,14 +247,14 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 	if e == nil || resp == nil || resp.StatusCode != 401 {
 		t.Fatal("retired credential's ticket accepted")
 	}
-	token = rotated
+	token = rotated.Token
 	current := register(environment.ID, token, 200)
 	socket, response, err = websocket.DefaultDialer.DialContext(ctx, current.URL, nil)
 	if err != nil {
 		t.Fatal("rotated key could not connect")
 	}
 	defer socket.Close()
-	if err := s.RevokeEnvironmentExecutorCredential(ctx, tenant, environment.ID); err != nil {
+	if err := s.RevokeExecutorCredential(ctx, principal, credential.KeyID); err != nil {
 		t.Fatal(err)
 	}
 	register(environment.ID, token, 401)
@@ -243,6 +268,13 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 	register(environment.ID, token, 401)
+	restored, err := s.RotateExecutorCredential(ctx, principal, credential.KeyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	register(environment.ID, restored.Token, 401)
+	register(siblingEnvironment.ID, restored.Token, 200)
+	register(otherSubjectEnvironment.ID, restored.Token, 401)
 	_, response, err = websocket.DefaultDialer.DialContext(ctx, valid.URL, nil)
 	if err == nil {
 		t.Fatal("deleted Environment accepted old connection")

@@ -19,6 +19,7 @@ func TestEnvironmentExecutorCredentialLifecycle(t *testing.T) {
 	s, pool := testStore(t)
 	tenant, foreign := uuid.NewString(), uuid.NewString()
 	ctx := t.Context()
+	principal := FixtureExecutorPrincipal(t, s, tenant)
 	session, err := s.CreateSession(ctx, tenant, environmentInput("credential", "self_hosted", "/workspace"))
 	if err != nil {
 		t.Fatal(err)
@@ -27,13 +28,14 @@ func TestEnvironmentExecutorCredentialLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.IssueEnvironmentExecutorCredential(ctx, foreign, environment.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.IssueExecutorCredential(ctx, FixtureExecutorPrincipal(t, s, foreign), environment.ID, environment.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("foreign issue", err)
 	}
-	if _, err := s.RotateEnvironmentExecutorCredential(ctx, tenant, environment.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.RotateExecutorCredential(ctx, principal, environment.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("rotate manufactured a credential", err)
 	}
-	token, err := s.IssueEnvironmentExecutorCredential(ctx, tenant, environment.ID)
+	issued, err := s.IssueExecutorCredential(ctx, principal, environment.ID, environment.ID)
+	token := issued.Token
 	if err != nil || len(token) != 43 {
 		t.Fatal("issue failed", err)
 	}
@@ -53,13 +55,13 @@ func TestEnvironmentExecutorCredentialLifecycle(t *testing.T) {
 	if _, err := s.AuthenticateEnvironmentExecutor(ctx, uuid.NewString(), executorDigest(token)); !errors.Is(err, ErrNotFound) {
 		t.Fatal("foreign Environment accepted", err)
 	}
-	if _, err := s.IssueEnvironmentExecutorCredential(ctx, tenant, environment.ID); !errors.Is(err, ErrEnvironmentCredentialExists) {
+	if _, err := s.IssueExecutorCredential(ctx, principal, environment.ID, environment.ID); !errors.Is(err, ErrExecutorCredentialExists) {
 		t.Fatal("issue silently replaced credential", err)
 	}
-	if err := s.RevokeEnvironmentExecutorCredential(ctx, foreign, environment.ID); !errors.Is(err, ErrNotFound) {
+	if err := s.RevokeExecutorCredential(ctx, FixtureExecutorPrincipal(t, s, foreign), environment.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("foreign revoke", err)
 	}
-	if _, err := s.RotateEnvironmentExecutorCredential(ctx, foreign, environment.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.RotateExecutorCredential(ctx, FixtureExecutorPrincipal(t, s, foreign), environment.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("foreign rotate", err)
 	}
 	var stored string
@@ -72,35 +74,35 @@ func TestEnvironmentExecutorCredentialLifecycle(t *testing.T) {
 	}
 	restarted, _ := testStore(t)
 	check(restarted, token, true)
-	next, err := restarted.RotateEnvironmentExecutorCredential(ctx, tenant, environment.ID)
-	if err != nil || next == token {
+	next, err := restarted.RotateExecutorCredential(ctx, principal, environment.ID)
+	if err != nil || next.Token == token {
 		t.Fatal("rotation failed", err)
 	}
 	check(s, token, false)
-	check(s, next, true)
+	check(s, next.Token, true)
 	for range 2 {
-		if err := s.RevokeEnvironmentExecutorCredential(ctx, tenant, environment.ID); err != nil {
+		if err := s.RevokeExecutorCredential(ctx, principal, environment.ID); err != nil {
 			t.Fatal(err)
 		}
 	}
-	check(restarted, next, false)
-	if _, err := s.IssueEnvironmentExecutorCredential(ctx, tenant, environment.ID); !errors.Is(err, ErrEnvironmentCredentialExists) {
+	check(restarted, next.Token, false)
+	if _, err := s.IssueExecutorCredential(ctx, principal, environment.ID, environment.ID); !errors.Is(err, ErrExecutorCredentialExists) {
 		t.Fatal("ordinary issue resurrected revoked authority", err)
 	}
-	restored, err := s.RotateEnvironmentExecutorCredential(ctx, tenant, environment.ID)
+	restored, err := s.RotateExecutorCredential(ctx, principal, environment.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(restarted, next, false)
-	check(restarted, restored, true)
+	check(restarted, next.Token, false)
+	check(restarted, restored.Token, true)
 	if err := s.DeleteSession(ctx, tenant, session.ID); err != nil {
 		t.Fatal(err)
 	}
-	check(restarted, restored, false)
-	if _, err := s.RotateEnvironmentExecutorCredential(ctx, tenant, environment.ID); !errors.Is(err, ErrNotFound) {
+	check(restarted, restored.Token, false)
+	if _, err := s.RotateExecutorCredential(ctx, principal, environment.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("deleted Session authority resurrected", err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT token_sha256 FROM environment_executor_credentials WHERE environment_id=$1", environment.ID).Scan(&stored); err != nil || stored != executorDigest(restored) {
+	if err := pool.QueryRow(ctx, "SELECT token_sha256 FROM environment_executor_credentials WHERE environment_id=$1", environment.ID).Scan(&stored); err != nil || stored != executorDigest(restored.Token) {
 		t.Fatal("deleted ownership was destroyed", err)
 	}
 }
@@ -110,6 +112,7 @@ func TestEnvironmentExecutorConcurrentIssueAndDeletion(t *testing.T) {
 	other, _ := testStore(t)
 	ctx := t.Context()
 	tenant := uuid.NewString()
+	principal := FixtureExecutorPrincipal(t, s, tenant)
 	session, err := s.CreateSession(ctx, tenant, environmentInput("concurrent-key", "self_hosted", "/workspace"))
 	if err != nil {
 		t.Fatal(err)
@@ -135,10 +138,10 @@ func TestEnvironmentExecutorConcurrentIssueAndDeletion(t *testing.T) {
 			if i%2 != 0 {
 				st = other
 			}
-			token, err := st.IssueEnvironmentExecutorCredential(ctx, tenant, environment.ID)
+			token, err := st.IssueExecutorCredential(ctx, principal, environment.ID, environment.ID)
 			if err == nil {
-				tokens <- token
-			} else if !errors.Is(err, ErrEnvironmentCredentialExists) {
+				tokens <- token.Token
+			} else if !errors.Is(err, ErrExecutorCredentialExists) {
 				t.Error(err)
 			}
 		}()
@@ -153,9 +156,9 @@ func TestEnvironmentExecutorConcurrentIssueAndDeletion(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		token, err := other.RotateEnvironmentExecutorCredential(ctx, tenant, environment.ID)
+		token, err := other.RotateExecutorCredential(ctx, principal, environment.ID)
 		if err == nil {
-			rotated <- token
+			rotated <- token.Token
 		} else if !errors.Is(err, ErrNotFound) {
 			t.Error(err)
 		}
