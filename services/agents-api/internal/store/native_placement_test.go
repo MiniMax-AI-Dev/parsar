@@ -29,7 +29,8 @@ func TestNativeAppServerRemoteModelPlacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer lease.Close(context.Background())
-	tenant, executorToken := uuid.NewString(), uuid.NewString()
+	tenant := uuid.NewString()
+	principal := store.FixtureExecutorPrincipal(t, s, tenant)
 	workspace := "/parsar-remote-" + uuid.NewString()
 	configuration, err := json.Marshal(map[string]any{"environment": map[string]any{"type": "self_hosted", "workspace_directory": workspace, "capability_directories": []string{}}})
 	if err != nil {
@@ -43,10 +44,11 @@ func TestNativeAppServerRemoteModelPlacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	executorToken, err = s.IssueEnvironmentExecutorCredential(t.Context(), tenant, environment.ID)
+	credential, err := s.IssueExecutorCredential(t.Context(), principal, environment.ID, environment.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
+	executorToken := credential.Token
 	server := httptest.NewUnstartedServer(nil)
 	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String()})
 	if err != nil {

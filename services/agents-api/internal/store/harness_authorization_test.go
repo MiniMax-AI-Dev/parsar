@@ -37,10 +37,12 @@ func TestHarnessGrantsCheckPostgreSQLTenantOwnership(t *testing.T) {
 		sessions = append(sessions, session.ID)
 		environments = append(environments, environment.ID)
 	}
-	executorToken, err := s.IssueEnvironmentExecutorCredential(t.Context(), tenants[0], environments[0])
+	principal := store.FixtureExecutorPrincipal(t, s, tenants[0])
+	credential, err := s.IssueExecutorCredential(t.Context(), principal, environments[0], environments[0])
 	if err != nil {
 		t.Fatal(err)
 	}
+	executorToken := credential.Token
 	server := httptest.NewUnstartedServer(nil)
 	registry, err := codex.New(codex.Config{Store: s, CheckOwnership: lease.Ping, PublicURL: "http://" + server.Listener.Addr().String()})
 	if err != nil {

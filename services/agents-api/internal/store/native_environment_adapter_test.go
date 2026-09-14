@@ -59,7 +59,7 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 		prompt = daemonPreparedRemotePrompt
 	}
 	// These credentials do not exist when the authenticated daemon starts.
-	executorToken := uuid.NewString()
+	principal := store.FixtureExecutorPrincipal(t, h.s, h.tenant)
 	workspace := "/parsar-daemon-remote-" + uuid.NewString()
 	configuration, err := json.Marshal(map[string]any{"environment": map[string]any{"type": "self_hosted", "workspace_directory": workspace, "capability_directories": []string{}}})
 	if err != nil {
@@ -78,7 +78,7 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 		t.Fatal(err)
 	}
 	defer lease.Close(context.Background())
-	executorToken, err = h.s.IssueEnvironmentExecutorCredential(t.Context(), h.tenant, environment.ID)
+	credential, err := h.s.IssueExecutorCredential(t.Context(), principal, environment.ID, environment.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 	defer func() { registry.Close(); server.Close() }()
 	memory, instruction := uuid.NewString(), "REMOTE_"+uuid.NewString()
 	local := prepareDaemonRemoteWorkspace(t, root, instruction)
-	container := startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, server.URL, environment.ID, executorToken)
+	container := startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, server.URL, environment.ID, credential)
 	awaitDaemonRemoteCondition(t, ctx, 30*time.Second, "executor registration", func() bool {
 		connected, e := registry.Connected(ctx, h.tenant, environment.ID)
 		return e == nil && connected
@@ -112,7 +112,7 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 		RemoteEnvironment: &proto.RemoteEnvironment{ID: environment.ID, WorkspaceDirectory: workspace, ConnectionURL: server.URL, ConnectionToken: harnessToken}}
 	proof := map[string]any{"scope": "authenticated daemon adapter; public Environment admission and dispatcher remain pending", "native_version": string(version), "environment_id": environment.ID, "remote_workspace": workspace, "events": []proto.Envelope{}}
 	proof["prepared_execution"] = prepared
-	defer persistDaemonRemoteProof(t, root, proof, []string{key, executorToken, harnessToken, h.credential})
+	defer persistDaemonRemoteProof(t, root, proof, []string{key, credential.Token, harnessToken, h.credential})
 	bad := req
 	bad.AgentStateKey += "-rejected"
 	badBinding := *req.RemoteEnvironment
@@ -194,7 +194,7 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 	if _, err := os.Stat(filepath.Join(local, "credential-failure")); !os.IsNotExist(err) {
 		t.Fatal("command inherited credential variables")
 	}
-	assertDaemonRemoteSecrets(t, root, req.AgentStateKey, key, executorToken, harnessToken, h.credential)
+	assertDaemonRemoteSecrets(t, root, req.AgentStateKey, key, credential.Token, harnessToken, h.credential)
 	if strings.Contains(string(session.Configuration), harnessToken) {
 		t.Fatal("connection credential reached stored configuration")
 	}

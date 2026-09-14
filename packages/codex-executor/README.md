@@ -38,11 +38,12 @@ native policy. Do not interpret an unsandboxed command test as sandbox validatio
 
 ## Connect an executor
 
-An operator first provisions one existing Environment with
+An operator creates an executor principal key with
 [`agents-api-environment-key`](../../services/agents-api/README.md#native-executor-transport-prerequisite).
-Redirect its JSON output to a mode-0600 regular file under `~/.parsar/` and transfer
-only that Environment credential to its executor. Keep caller, database, daemon
-and model-provider credentials outside this compute.
+The key may be issued before a Session exists, or optionally restricted to one
+existing Environment. Redirect its JSON output to a mode-0600 regular file under
+`~/.parsar/` and transfer that credential to its executor. Keep caller, database,
+daemon and model-provider credentials outside this compute.
 
 ```sh
 ~/.parsar/build/agents-executor/agents-api-codex-executor \
@@ -58,11 +59,18 @@ Userinfo, query strings and fragments are rejected. Native custom CA support use
 `CODEX_CA_CERTIFICATE` or `SSL_CERT_FILE`; no certificate verification bypass is
 provided. Native HTTP(S) proxy behavior is retained.
 
-The credential must match the requested canonical Environment UUID. It is read
-once at startup, without ambient OpenAI login/API-key fallback or raw secret
-command-line arguments. Rotate the key through the operator command, replace the
-private file, and restart this launcher. Revocation closes the authorized
-connection through registry checks; it is not immediate process quiescence.
+The JSON requires a canonical nonzero UUID `key_id` and the issued 43-character
+base64url `executor_token`. The optional `environment_id` may be omitted or null
+for a principal key. If present, it must be a canonical UUID equal to the requested
+Environment. The server authorizes the key's stored principal and restrictions;
+file metadata supplies local validation only.
+
+The credential is read once at startup, without ambient OpenAI login/API-key
+fallback or raw secret command-line arguments. At the cutover, update the launcher
+and replace old credential files together; files without `key_id` are rejected.
+Rotate the key through the operator command, replace the private file, and restart
+this launcher. Revocation closes the authorized connection through registry
+checks; it is not immediate process quiescence.
 
 Executor state and helper aliases live under
 `~/.parsar/codex-executor/<environment-id>/` (or the absolute `PARSAR_HOME`).

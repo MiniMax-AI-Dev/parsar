@@ -39,6 +39,11 @@ type EnvironmentExecutorCredential struct {
 	TokenSha256   string             `json:"token_sha256"`
 	IssuedAt      pgtype.Timestamptz `json:"issued_at"`
 	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
+	KeyID         pgtype.UUID        `json:"key_id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	SubjectKind   pgtype.Text        `json:"subject_kind"`
+	SubjectID     pgtype.Text        `json:"subject_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type EnvironmentInputReservation struct {

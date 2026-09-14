@@ -16,8 +16,8 @@ admission, lifecycle transitions, readiness gating or native/provider integratio
 Missing/`none` configurations and historical internal snapshots gain no backfill.
 
 
-The native Codex registry uses exact-Environment executor digest bindings, the
-existing execution owner and tenant-scoped Store reads. Registration and current
+The native Codex registry uses principal executor digest bindings with optional exact-Environment
+restrictions, the existing execution owner and scoped Store reads. Registration and current
 socket identity are process-local; the returned WebSocket capability expires for
 new connections after five minutes. Restart invalidates registrations, causing the
 native executor to register again. Replaced socket callbacks cannot clear a newer
@@ -307,11 +307,12 @@ original deadline, while claimed/uncertain work is not replayed. The opt-in
 real-provider Worker fixture verifies automatic discovery, remote commands, files,
 cold continuation and reservation retries. The standalone service wires the resolver
 when its daemon gateway and executor URL are configured. Public initial input,
-lifecycle/actions and principal-scoped executor authorization remain unimplemented.
+lifecycle/actions and public admission remain unimplemented.
 Caller keys resolve trusted project/subject identities, with persistent project
 bindings verified before startup. New Sessions persist the typed creator and
 require it for creation retries; historical unknown creators cannot be claimed.
-Executor principal matching is still required for public Environment connections.
+Executor keys match the recorded project and typed creator; public Environment
+connections still require admission/readiness and lifecycle implementation.
 The current daemon can acknowledge pending-start cancellation without a final
 outcome; without an observed final Done, delivery records an unknown failure.
 Preparation failure cannot discard a cancellation receipt already being awaited.
@@ -356,12 +357,17 @@ parse or synthetic execution test establishes this roadmap as implemented.
 
 ### Durable executor credential prerequisite
 
-The native registry now authenticates exact-Environment executor credentials from
-the execution database. Operator issuance returns a random secret once; explicit
-rotation/revocation replaces or invalidates its digest without restarting the
-registry. Owning Session deletion also removes authority. Existing sockets are
-checked on heartbeats; disconnection does not establish process quiescence.
-Harness keys and five-minute connection grants retain separate lifetimes. See the
-[operator transition](../../services/agents-api/README.md#native-executor-transport-prerequisite).
-This does not implement public caller/user/service-account identity equivalence,
-public `self_hosted` admission or the stock command on arbitrary production domains.
+The native registry authenticates connect-only executor keys against the target
+Session's verified project partition and immutable typed creator. Keys may be
+issued before Session creation or restricted to one live Environment. Their stable
+management IDs, principal/restriction and digest survive restart. Explicit rotation
+or revocation changes current authorization without restarting the registry.
+Deleting one Session denies that target without revoking a key shared by other
+matching Sessions. Legacy keys remain revoked with unknown principals; no identity
+is inferred. See the [operator cutover](../../services/agents-api/README.md#native-executor-transport-prerequisite).
+
+Existing sockets are checked on heartbeats; disconnection does not establish
+process quiescence. Harness keys and five-minute connection grants have separate
+purposes and lifetimes. This implements the executor-specific principal prerequisite;
+it does not establish a general creator-only Session ACL, hosted key lifecycle/error
+parity, public `self_hosted` admission or stock-command support on arbitrary domains.

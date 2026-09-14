@@ -38,6 +38,7 @@ func TestNativeExecutorLauncherTLSAndHelpers(t *testing.T) {
 	}
 	defer lease.Close(context.Background())
 	tenant := uuid.NewString()
+	principal := store.FixtureExecutorPrincipal(t, s, tenant)
 	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "launcher", Configuration: json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace","capability_directories":[]}}`)})
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +47,7 @@ func TestNativeExecutorLauncherTLSAndHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := s.IssueEnvironmentExecutorCredential(ctx, tenant, environment.ID)
+	credential, err := s.IssueExecutorCredential(ctx, principal, environment.ID, environment.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +60,7 @@ func TestNativeExecutorLauncherTLSAndHelpers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	writeLauncherCredential(t, filepath.Join(root, "executor", "credential.json"), environment.ID, token)
+	writeLauncherCredential(t, filepath.Join(root, "executor", "credential.json"), credential)
 	server := httptest.NewUnstartedServer(nil)
 	_, port, err := net.SplitHostPort(server.Listener.Addr().String())
 	if err != nil {
@@ -136,7 +137,7 @@ func TestNativeExecutorLauncherTLSAndHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(logs), token) || strings.Contains(string(logs), harnessToken) {
+	if strings.Contains(string(logs), credential.Token) || strings.Contains(string(logs), harnessToken) {
 		t.Fatal("credential appeared in launcher logs")
 	}
 	if err := os.WriteFile(filepath.Join(root, "launcher.log"), logs, 0600); err != nil {

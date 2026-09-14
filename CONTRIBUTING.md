@@ -259,18 +259,29 @@ pre-Turn connection failure.
 The opt-in native Codex executor registry lives in
 `services/agents-api/internal/executor/codex`, outside public API handlers and the
 daemon device gateway. It reuses the worker's execution lease and Store ownership
-reads. The operator issues one random executor credential per Environment; only
-its digest and revocation state live in the execution database. Ordinary issuance
-refuses an existing record; explicit rotation replaces it, including revoked
-credentials. Tenant ownership is derived from Environment → Session and provisioning
-shares the Session deletion lock. No raw-token import or read-back is provided.
-Executor credentials have no connection-ticket expiry: they remain valid until
-rotation, revocation or Session deletion. Keep caller/device/harness credentials
-independent; never reuse the executor secret for another purpose. Registry request authentication
-and WebSocket URL capabilities have separate purposes; never log either secret.
-Caller keys identify a configured project and user/service account; durable Session
-creators are persisted at Session creation. Matching executor principals remains
-a separate prerequisite for public executor authorization.
+reads. The operator issues connect-only executor keys for a complete typed principal
+within an already verified project-to-tenant mapping. A key has a stable explicit
+management UUID, immutable principal and optional exact-Environment restriction;
+a principal key needs no Session at issuance. Only its digest, creation/issuance
+times and revocation state are persisted. Ordinary issuance never replaces an ID;
+rotation and revocation require that ID and full principal. Exact-target issuance
+and rotation share the Session deletion lock and require its recorded creator.
+
+Every authorization checks the current digest, non-revocation, project partition,
+Session creator kind/ID, optional restriction and live Session in one database
+snapshot. Unknown historical creators cannot authorize an executor. Deleting one
+Session denies that target without revoking a principal key serving other Sessions.
+Keys have no connection-ticket expiry; their validity ends through explicit
+rotation/revocation, while each target remains subject to current ownership checks.
+Keep caller, device, harness and executor credentials independent; no raw-token
+import or read-back is provided. Never log registry bearer or URL capabilities.
+
+Migration 26 retains legacy key digests/restrictions under their Environment UUIDs
+but revokes them with unknown principals. Do not infer historical identities or
+project mappings. Stop older registry and operator writers before migration;
+deploy the issuer, registry and launcher together, explicitly reissue keys and
+restart executors. Reserved legacy IDs cannot be claimed or rotated into principal
+keys. Downgrade cannot discard new principal-key identities or undo revocation.
 
 Registration IDs, five-minute connection capabilities and socket generations are
 process-local. Re-registration replaces the current socket; late close callbacks
@@ -300,9 +311,8 @@ queries in connect, attach and validation. Old cleanup cannot revoke a successor
 The five-minute connection-ticket lifetime does not expire an active execution
 owner or impose a Turn deadline. Pair closure is not proof of OS quiescence.
 Static harness-key files are retired explicitly, without a fallback or public
-issuance endpoint. Executor principal matching remains
-separate required work; tenant ownership alone cannot authorize public executor
-connections. No credential bearer belongs in snapshots, events, logs or the database.
+issuance endpoint. Executor authorization also requires the recorded Session
+creator; tenant ownership alone cannot authorize executor connections. No credential bearer belongs in snapshots, events, logs or the database.
 
 One independent harness connection pairs with each executor connection. Native
 binary messages pass unchanged, up to the pinned 256 KiB limit, with one data
@@ -318,7 +328,7 @@ pinned public SDK OpenAPI output; their routes are documented in the service gui
 The optional [Codex executor launcher](packages/codex-executor/README.md) is a
 separate Cargo package. Pin its native git revisions, transport patches, toolchain
 and lock; use the upstream executor/auth/runtime APIs without changing stock CLI
-credential protection. It reads only an explicit exact-Environment credential file
+credential protection. It reads only an explicit principal-key credential file with an optional exact-Environment restriction
 and uses the matching installed native binary/resources for hidden filesystem and
 sandbox helper modes. Keep its state below `~/.parsar/`; do not load ambient
 OpenAI login credentials. HTTPS certificate/hostname verification remains enabled.
@@ -659,7 +669,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   records. Retire older API writers before serving the creator-enforced deployment;
   mixed-version writers are not supported. Tests must supply explicit synthetic
   creators; only controlled historical fixtures may seed unknown ownership.
-  Public Environment admission and executor principal matching remain pending.
+  Public Environment admission and readiness remain pending.
   The operator-selected
   `AGENTS_API_ENGINE` is separate from the requested model.
   Public execution currently supports Codex and Claude SDK text inputs with environment `none`;

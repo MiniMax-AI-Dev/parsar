@@ -1,7 +1,13 @@
 use super::*;
 
 const ENVIRONMENT: &str = "20cc9e86-39a0-42ca-a2cd-218c7cd2eced";
+const OTHER_ENVIRONMENT: &str = "1eb47f85-842d-43f2-bbca-42b54cf127cc";
+const KEY_ID: &str = "b626f2e2-4678-434c-a40b-f7be962bc4ea";
 const TOKEN: &str = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG";
+
+fn credential() -> serde_json::Value {
+    serde_json::json!({"key_id": KEY_ID, "executor_token": TOKEN})
+}
 
 fn options() -> Options {
     Options {
@@ -45,19 +51,81 @@ fn ambiguous_environment_and_relative_paths_are_rejected() {
 }
 
 #[test]
-fn credential_is_exact_environment_and_does_not_expose_secret_in_errors_or_debug() {
-    let json = serde_json::json!({
-        "environment_id": ENVIRONMENT,
-        "executor_token": TOKEN,
-    })
-    .to_string();
+fn principal_credential_accepts_omitted_or_null_environment_without_exposing_secret_in_debug() {
+    let unrestricted = credential();
+    let mut null_restriction = credential();
+    null_restriction["environment_id"] = serde_json::Value::Null;
+    for json in [unrestricted, null_restriction] {
+        for environment in [ENVIRONMENT, OTHER_ENVIRONMENT] {
+            let header = credential_header(&json.to_string(), environment).unwrap();
+            assert_eq!(header.to_str().unwrap(), format!("Bearer {TOKEN}"));
+            assert!(header.is_sensitive());
+            assert!(!format!("{header:?}").contains(TOKEN));
+        }
+    }
+}
+
+#[test]
+fn exact_credential_requires_its_canonical_environment() {
+    let mut json = credential();
+    json["environment_id"] = ENVIRONMENT.into();
+    let json = json.to_string();
     let header = credential_header(&json, ENVIRONMENT).unwrap();
     assert_eq!(header.to_str().unwrap(), format!("Bearer {TOKEN}"));
+    assert!(header.is_sensitive());
     assert!(!format!("{header:?}").contains(TOKEN));
-    assert!(credential_header(&json, "another-environment").is_err());
+    let error = credential_header(&json, OTHER_ENVIRONMENT).unwrap_err();
+    assert_eq!(
+        error,
+        "executor credential belongs to a different Environment"
+    );
+    assert!(!error.contains(TOKEN));
+    for environment in ["invalid".to_owned(), ENVIRONMENT.to_uppercase()] {
+        let mut json = credential();
+        json["environment_id"] = environment.clone().into();
+        let error = credential_header(&json.to_string(), &environment).unwrap_err();
+        assert!(!error.contains(TOKEN));
+    }
+}
+
+#[test]
+fn old_credential_without_key_id_fails_clearly() {
+    let json = serde_json::json!({"environment_id": ENVIRONMENT, "executor_token": TOKEN});
+    let error = credential_header(&json.to_string(), ENVIRONMENT).unwrap_err();
+    assert!(error.contains("key_id"));
+    assert!(!error.contains(TOKEN));
+}
+
+#[test]
+fn key_id_requires_a_canonical_nonzero_uuid_without_exposing_invalid_values() {
+    for key_id in [
+        serde_json::Value::Null,
+        serde_json::json!(123),
+        "".into(),
+        "00000000-0000-0000-0000-000000000000".into(),
+        KEY_ID.to_uppercase().into(),
+        KEY_ID.replace('-', "").into(),
+        TOKEN.into(),
+    ] {
+        let mut json = credential();
+        json["key_id"] = key_id;
+        let error = credential_header(&json.to_string(), ENVIRONMENT).unwrap_err();
+        assert!(!error.contains(TOKEN));
+    }
+}
+
+#[test]
+fn malformed_json_unknown_fields_and_invalid_tokens_do_not_expose_secrets() {
+    let mut unknown_field = credential();
+    unknown_field[TOKEN] = TOKEN.into();
+    let json = credential().to_string();
     for invalid in [
-        "{ not json".to_owned(),
+        format!("{{ not json {TOKEN}"),
+        unknown_field.to_string(),
         json.replace(TOKEN, "sk-not-an-issued-executor-key"),
+        json.replace(TOKEN, &"a".repeat(42)),
+        json.replace(TOKEN, &"a".repeat(44)),
+        json.replace(TOKEN, &format!("{}+", "a".repeat(42))),
         json.replace("executor_token", "api_key"),
     ] {
         let error = credential_header(&invalid, ENVIRONMENT).unwrap_err();
@@ -76,11 +144,9 @@ async fn only_private_regular_credential_files_are_accepted() {
     std::fs::create_dir_all(&base).unwrap();
     let mut opts = options();
     opts.credentials = base.join("credential.json");
-    std::fs::write(
-        &opts.credentials,
-        serde_json::json!({"environment_id": ENVIRONMENT, "executor_token": TOKEN}).to_string(),
-    )
-    .unwrap();
+    assert!(opts.authorization().await.is_err());
+    let json = credential().to_string();
+    std::fs::write(&opts.credentials, &json).unwrap();
     std::fs::set_permissions(&opts.credentials, std::fs::Permissions::from_mode(0o644)).unwrap();
     assert!(opts.authorization().await.is_err());
     std::fs::set_permissions(&opts.credentials, std::fs::Permissions::from_mode(0o600)).unwrap();
@@ -89,5 +155,17 @@ async fn only_private_regular_credential_files_are_accepted() {
     symlink(&opts.credentials, &link).unwrap();
     opts.credentials = link;
     assert!(opts.authorization().await.is_err());
+    opts.credentials = base.clone();
+    assert!(opts.authorization().await.is_err());
+    opts.credentials = base.join("credential.json");
+    let mut padded_json = json;
+    padded_json.push_str(&" ".repeat(65536 - padded_json.len()));
+    std::fs::write(&opts.credentials, &padded_json).unwrap();
+    assert!(opts.authorization().await.is_ok());
+    padded_json.push(' ');
+    std::fs::write(&opts.credentials, &padded_json).unwrap();
+    let error = opts.authorization().await.unwrap_err();
+    assert!(!error.contains(TOKEN));
+    assert!(error.contains("64 KiB"));
     std::fs::remove_dir_all(base).unwrap();
 }

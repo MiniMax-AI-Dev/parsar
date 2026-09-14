@@ -12,3 +12,13 @@ func NewTestStore(t *testing.T) (*Store, *pgxpool.Pool) { return testStore(t) }
 func FixtureCreator() identity.Subject {
 	return identity.Subject{Kind: "service_account", ID: "test-runner"}
 }
+
+// FixtureExecutorPrincipal explicitly provisions a synthetic project for executor fixtures.
+func FixtureExecutorPrincipal(t *testing.T, s *Store, tenant string) identity.Principal {
+	t.Helper()
+	p := identity.Principal{ProjectScope: identity.ProjectScope{TenantID: tenant, OrganizationID: "test-org", ProjectID: tenant}, SubjectKind: FixtureCreator().Kind, SubjectID: FixtureCreator().ID}
+	if err := s.EnsureProjectScopes(t.Context(), []identity.ProjectScope{p.ProjectScope}); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}

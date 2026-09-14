@@ -529,6 +529,10 @@ same typed subject, including when recovering before saved-Agent lookup. Rotated
 keys for that subject share retry identity. Unknown historical creators cannot be
 claimed by retry. This local 409 policy is not verified hosted retry parity.
 Creator fields remain internal and do not extend the public Session schema.
-Principal-owned executor credentials are still pending, so this foundation does not open public
-Environment admission or establish complete ownership compatibility. See the
+Executor keys now require the target Session's verified project and typed creator,
+with optional exact-Environment restriction. Key issuance can precede Session
+creation; rotation/revocation and current authorization reuse the durable ledger
+and existing native registry. Historical keys remain revoked and unclaimed. This
+executor-specific prerequisite does not open public Environment admission or
+establish complete ownership, hosted key lifecycle or error compatibility. See the
 [standalone configuration](../../services/agents-api/README.md#standalone-http-service).

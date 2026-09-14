@@ -2,88 +2,129 @@ package store
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
 
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/db/sqlc"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/identity"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-var ErrEnvironmentCredentialExists = errors.New("environment executor credential already exists; rotate explicitly")
+var ErrExecutorCredentialExists = errors.New("executor key ID already exists; rotate explicitly")
 
-// IssueEnvironmentExecutorCredential returns a new secret once; it never replaces an existing credential.
-func (s *Store) IssueEnvironmentExecutorCredential(ctx context.Context, tenant, environment string) (string, error) {
-	return s.writeEnvironmentExecutorCredential(ctx, tenant, environment, false)
+type IssuedExecutorCredential struct {
+	KeyID         string `json:"key_id"`
+	EnvironmentID string `json:"environment_id,omitempty"`
+	Token         string `json:"executor_token"`
 }
 
-func (s *Store) RotateEnvironmentExecutorCredential(ctx context.Context, tenant, environment string) (string, error) {
-	return s.writeEnvironmentExecutorCredential(ctx, tenant, environment, true)
-}
-
-func (s *Store) writeEnvironmentExecutorCredential(ctx context.Context, tenant, environment string, rotate bool) (string, error) {
-	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
-		return "", err
+// IssueExecutorCredential returns a new connect-only secret once, without replacing an existing ID.
+func (s *Store) IssueExecutorCredential(ctx context.Context, principal identity.Principal, keyID, environment string) (IssuedExecutorCredential, error) {
+	tenant, id, err := executorCredentialIdentity(principal, keyID)
+	if err != nil {
+		return IssuedExecutorCredential{}, err
 	}
-	token := base64.RawURLEncoding.EncodeToString(secret)
-	hash := sha256.Sum256([]byte(token))
-	err := s.withEnvironmentCredential(ctx, tenant, environment, func(ctx context.Context, q *sqlc.Queries, id pgtype.UUID) error {
-		var n int64
-		var err error
-		if rotate {
-			n, err = q.RotateEnvironmentExecutorCredential(ctx, sqlc.RotateEnvironmentExecutorCredentialParams{EnvironmentID: id, TokenSha256: hex.EncodeToString(hash[:])})
-		} else {
-			n, err = q.IssueEnvironmentExecutorCredential(ctx, sqlc.IssueEnvironmentExecutorCredentialParams{EnvironmentID: id, TokenSha256: hex.EncodeToString(hash[:])})
+	exists, err := s.queries.ExecutorProjectScopeExists(ctx, sqlc.ExecutorProjectScopeExistsParams{TenantID: tenant, OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID})
+	if err != nil {
+		return IssuedExecutorCredential{}, err
+	}
+	if !exists {
+		return IssuedExecutorCredential{}, ErrNotFound
+	}
+	var restriction pgtype.UUID
+	if environment != "" {
+		restriction, err = parseID(environment)
+		if err != nil {
+			return IssuedExecutorCredential{}, err
+		}
+	}
+	token, digest, err := newExecutorSecret()
+	if err != nil {
+		return IssuedExecutorCredential{}, err
+	}
+	var result IssuedExecutorCredential
+	err = s.withExecutorCredentialTarget(ctx, principal, restriction, func(ctx context.Context, q *sqlc.Queries) error {
+		row, err := q.IssueExecutorCredential(ctx, sqlc.IssueExecutorCredentialParams{
+			KeyID: id, TenantID: tenant, SubjectKind: pgtype.Text{String: principal.SubjectKind, Valid: true}, SubjectID: pgtype.Text{String: principal.SubjectID, Valid: true},
+			OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID, EnvironmentID: restriction, TokenSha256: digest,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrExecutorCredentialExists
 		}
 		if err != nil {
 			return err
 		}
-		if n == 0 {
-			if rotate {
-				return ErrNotFound
-			}
-			return ErrEnvironmentCredentialExists
-		}
+		result = issuedExecutorCredential(row.KeyID, row.EnvironmentID, token)
 		return nil
 	})
 	if err != nil {
-		return "", err
+		return IssuedExecutorCredential{}, err
 	}
-	return token, nil
+	return result, nil
 }
 
-func (s *Store) RevokeEnvironmentExecutorCredential(ctx context.Context, tenant, environment string) error {
-	return s.withEnvironmentCredential(ctx, tenant, environment, func(ctx context.Context, q *sqlc.Queries, id pgtype.UUID) error {
-		n, err := q.RevokeEnvironmentExecutorCredential(ctx, id)
-		if err == nil && n == 0 {
+func (s *Store) RotateExecutorCredential(ctx context.Context, principal identity.Principal, keyID string) (IssuedExecutorCredential, error) {
+	tenant, id, err := executorCredentialIdentity(principal, keyID)
+	if err != nil {
+		return IssuedExecutorCredential{}, err
+	}
+	restriction, err := s.executorCredentialRestriction(ctx, principal, tenant, id)
+	if err != nil {
+		return IssuedExecutorCredential{}, err
+	}
+	token, digest, err := newExecutorSecret()
+	if err != nil {
+		return IssuedExecutorCredential{}, err
+	}
+	var result IssuedExecutorCredential
+	err = s.withExecutorCredentialTarget(ctx, principal, restriction, func(ctx context.Context, q *sqlc.Queries) error {
+		row, err := q.RotateExecutorCredential(ctx, sqlc.RotateExecutorCredentialParams{KeyID: id, TenantID: tenant, SubjectKind: pgtype.Text{String: principal.SubjectKind, Valid: true}, SubjectID: pgtype.Text{String: principal.SubjectID, Valid: true}, TokenSha256: digest})
+		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		result = issuedExecutorCredential(row.KeyID, row.EnvironmentID, token)
+		return nil
 	})
+	if err != nil {
+		return IssuedExecutorCredential{}, err
+	}
+	return result, nil
 }
 
-func (s *Store) withEnvironmentCredential(ctx context.Context, tenant, environment string, apply func(context.Context, *sqlc.Queries, pgtype.UUID) error) error {
-	owned, err := s.GetEnvironment(ctx, tenant, environment)
+func (s *Store) RevokeExecutorCredential(ctx context.Context, principal identity.Principal, keyID string) error {
+	tenant, id, err := executorCredentialIdentity(principal, keyID)
 	if err != nil {
 		return err
 	}
-	id, err := parseID(owned.ID)
-	if err != nil {
+	if _, err := s.executorCredentialRestriction(ctx, principal, tenant, id); err != nil {
 		return err
 	}
-	// The Session lock orders provisioning against deletion without a worker lease.
-	return s.withPublicSession(ctx, tenant, owned.SessionID, func(ctx context.Context, q *sqlc.Queries, _ pgtype.UUID) error {
-		return apply(ctx, q, id)
-	})
+	n, err := s.queries.RevokeExecutorCredential(ctx, sqlc.RevokeExecutorCredentialParams{KeyID: id, TenantID: tenant, SubjectKind: pgtype.Text{String: principal.SubjectKind, Valid: true}, SubjectID: pgtype.Text{String: principal.SubjectID, Valid: true}})
+	if err == nil && n == 0 {
+		return ErrNotFound
+	}
+	return err
 }
 
-// AuthenticateEnvironmentExecutor derives the tenant from live Environment ownership and the current digest.
+func (s *Store) executorCredentialRestriction(ctx context.Context, principal identity.Principal, tenant, id pgtype.UUID) (pgtype.UUID, error) {
+	restriction, err := s.queries.GetExecutorCredentialForPrincipal(ctx, sqlc.GetExecutorCredentialForPrincipalParams{
+		KeyID: id, TenantID: tenant, SubjectKind: pgtype.Text{String: principal.SubjectKind, Valid: true}, SubjectID: pgtype.Text{String: principal.SubjectID, Valid: true},
+		OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return pgtype.UUID{}, ErrNotFound
+	}
+	return restriction, err
+}
+
+// AuthenticateEnvironmentExecutor checks the current key and recorded Session creator in one database snapshot.
 func (s *Store) AuthenticateEnvironmentExecutor(ctx context.Context, environment, digest string) (string, error) {
 	id, err := parseID(environment)
 	if err != nil {
