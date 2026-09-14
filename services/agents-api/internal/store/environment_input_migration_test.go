@@ -46,9 +46,18 @@ func TestEnvironmentInputMigrationRetainsHistoryAndRetryIdentity(t *testing.T) {
 	}
 	t.Cleanup(migrated.Close)
 	s := New(migrated)
-	tenant, session := environmentInputSession(t, s)
-	before, err := s.GetSession(ctx, tenant, session.ID)
-	if err != nil {
+	tenant, session := uuid.NewString(), uuid.NewString()
+	// Historical schemas must be seeded without the current Store's creation contract.
+	input := environmentInput("session", "self_hosted", "/workspace")
+	if _, err := db.ExecContext(ctx, `INSERT INTO sessions(id,tenant_id,engine,idempotency_key,request_hash,configuration)
+		VALUES ($1,$2,'codex','session','historical',$3)`, session, tenant, input.Configuration); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO environments(id,session_id) VALUES ($1,$2)", uuid.NewString(), session); err != nil {
+		t.Fatal(err)
+	}
+	var before, after string
+	if err := db.QueryRowContext(ctx, "SELECT to_jsonb(s)::text FROM sessions s WHERE id=$1", session).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := provider.UpTo(ctx, 22); err != nil {
@@ -64,17 +73,19 @@ func TestEnvironmentInputMigrationRetainsHistoryAndRetryIdentity(t *testing.T) {
 	if _, err := provider.UpTo(ctx, 22); err != nil {
 		t.Fatal(err)
 	}
-	pending := reserveEnvironmentInput(t, s, tenant, session.ID, "pending")
+	pending := reserveEnvironmentInput(t, s, tenant, session, "pending")
 	if _, err := provider.DownTo(ctx, 21); err == nil || !strings.Contains(err.Error(), "Cannot remove durable Environment input identities") {
 		t.Fatal("downgrade discarded retry identity", err)
 	}
-	retained, err := s.GetEnvironmentInputReservation(ctx, tenant, session.ID, pending.ID)
+	retained, err := s.GetEnvironmentInputReservation(ctx, tenant, session, pending.ID)
 	if err != nil || retained.ID != pending.ID || !retained.Deadline.Equal(pending.Deadline) {
 		t.Fatal("downgrade lost reservation", retained, err)
 	}
-	after, err := s.GetSession(ctx, tenant, session.ID)
-	if err != nil || before.ID != after.ID || !before.CreatedAt.Equal(after.CreatedAt) || string(before.Configuration) != string(after.Configuration) || after.LastTurn != nil {
-		t.Fatal("migration changed Session", after, err)
+	if err := db.QueryRowContext(ctx, "SELECT to_jsonb(s)::text FROM sessions s WHERE id=$1", session).Scan(&after); err != nil || before != after {
+		t.Fatal("migration changed Session", err)
+	}
+	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM turns WHERE session_id=$1", session).Scan(&count); err != nil || count != 0 {
+		t.Fatal("migration manufactured a Turn", count, err)
 	}
 }
 

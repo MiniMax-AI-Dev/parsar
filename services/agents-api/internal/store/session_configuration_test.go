@@ -31,7 +31,7 @@ func TestConfigurationSizeLimitSurvivesJSONBRoundTrip(t *testing.T) {
 	tenant := uuid.NewString()
 	empty := `{"agent":{"model":"example","instructions":""},"environment":{"type":"none"}}`
 	raw := strings.Replace(empty, `"instructions":""`, `"instructions":"`+strings.Repeat("x", 512*1024-len(empty))+`"`, 1)
-	input := CreateSessionInput{Engine: "codex", IdempotencyKey: "size-limit", Configuration: []byte(raw)}
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "size-limit", Configuration: []byte(raw)}
 	first, err := s.CreateSession(ctx, tenant, input)
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestConfigurationIsPartOfSessionIdentity(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
 	tenant := uuid.NewString()
-	input := CreateSessionInput{Engine: "codex", IdempotencyKey: "configured",
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "configured",
 		Configuration: []byte(`{"agent":{"model":"example","instructions":"First"},"environment":{"type":"none"}}`)}
 	first, err := s.CreateSession(ctx, tenant, input)
 	if err != nil {
@@ -81,20 +81,35 @@ func TestConfigurationIsPartOfSessionIdentity(t *testing.T) {
 	}
 }
 
-func TestLegacySessionIdempotencySurvivesConfigurationMigration(t *testing.T) {
+func TestOriginalSessionHashRespectsRecordedCreator(t *testing.T) {
 	s, pool := testStore(t)
 	ctx := context.Background()
-	tenant, id := uuid.NewString(), uuid.NewString()
 	legacyHash := sha256.Sum256([]byte(`{"Engine":"codex","Metadata":{}}`))
-	_, err := pool.Exec(ctx, `INSERT INTO sessions (id, tenant_id, engine, metadata, idempotency_key, request_hash)
-		VALUES ($1, $2, 'codex', '{}', 'legacy', $3)`, id, tenant, hex.EncodeToString(legacyHash[:]))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, configuration := range [][]byte{nil, []byte(`{}`), []byte(` { } `)} {
-		got, err := s.CreateSession(ctx, tenant, CreateSessionInput{Engine: "codex", IdempotencyKey: "legacy", Configuration: configuration})
-		if err != nil || got.ID != id || string(got.Configuration) != "{}" {
-			t.Fatalf("legacy retry = %+v, %v", got, err)
+	for _, known := range []bool{false, true} {
+		tenant, id := uuid.NewString(), uuid.NewString()
+		var kind, creatorID any
+		if known {
+			kind, creatorID = FixtureCreator().Kind, FixtureCreator().ID
+		}
+		// Seed each ownership state explicitly; neither the migration nor a retry assigns it.
+		_, err := pool.Exec(ctx, `INSERT INTO sessions (id, tenant_id, engine, metadata, idempotency_key, request_hash, creator_kind, creator_id)
+   VALUES ($1, $2, 'codex', '{}', 'legacy', $3, $4, $5)`, id, tenant, hex.EncodeToString(legacyHash[:]), kind, creatorID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, configuration := range [][]byte{nil, []byte(`{}`), []byte(` { } `)} {
+			got, err := s.CreateSession(ctx, tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "legacy", Configuration: configuration})
+			if !known {
+				if !errors.Is(err, ErrIdempotencyConflict) {
+					t.Fatal("unknown historical creator was claimed", err)
+				}
+			} else if err != nil || got.ID != id || string(got.Configuration) != "{}" || got.Creator == nil || *got.Creator != FixtureCreator() {
+				t.Fatalf("original hash retry = %+v, %v", got, err)
+			}
+		}
+		read, err := s.GetSession(ctx, tenant, id)
+		if err != nil || (read.Creator != nil) != known {
+			t.Fatal("retry changed recorded creator", read, err)
 		}
 	}
 }

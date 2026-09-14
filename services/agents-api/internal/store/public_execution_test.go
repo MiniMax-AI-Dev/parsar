@@ -14,7 +14,7 @@ import (
 
 func publicSession(t *testing.T, h *dispatchHarness, key string) store.Session {
 	t.Helper()
-	value, err := h.s.CreateSession(context.Background(), h.tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: key, Configuration: json.RawMessage(`{"agent":{"id":"agent_test","model":"test-model","instructions":"Keep this."},"environment":{"type":"none"}}`)})
+	value, err := h.s.CreateSession(context.Background(), h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: key, Configuration: json.RawMessage(`{"agent":{"id":"agent_test","model":"test-model","instructions":"Keep this."},"environment":{"type":"none"}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

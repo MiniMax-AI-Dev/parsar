@@ -13,7 +13,7 @@ func TestCreationStreamStartsBeforeOwnInputsAndRetriesAtUpsertCursor(t *testing.
 	other, _ := testStore(t)
 	ctx := context.Background()
 	tenant := uuid.NewString()
-	input := CreateSessionInput{Engine: "codex", IdempotencyKey: "stream", InitialInputs: []Input{messageInput("first")}}
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "stream", InitialInputs: []Input{messageInput("first")}}
 	var wg sync.WaitGroup
 	results := make(chan SessionCreation, 8)
 	for i := range 8 {
@@ -97,7 +97,7 @@ func TestCreationStreamIdleAndNonstreamRetry(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
 	tenant := uuid.NewString()
-	input := CreateSessionInput{Engine: "codex", IdempotencyKey: "idle"}
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "idle"}
 	first, err := s.CreateSessionStream(ctx, tenant, input)
 	if err != nil || !first.Created || first.Cursor != 0 || first.Session.LastTurn != nil {
 		t.Fatal(first, err)

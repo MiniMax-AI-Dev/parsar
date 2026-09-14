@@ -19,6 +19,7 @@ import (
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/db/sqlc"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/identity"
 )
 
 var (
@@ -33,6 +34,7 @@ var (
 type Session struct {
 	ID              string
 	TenantID        string
+	Creator         *identity.Subject
 	Engine          string
 	Metadata        map[string]string
 	CreatedAt       time.Time
@@ -43,6 +45,7 @@ type Session struct {
 }
 
 type CreateSessionInput struct {
+	Creator         identity.Subject
 	CreationRequest json.RawMessage
 	Engine          string
 	Metadata        map[string]string
@@ -66,14 +69,17 @@ func New(pool *pgxpool.Pool) *Store { return &Store{queries: sqlc.New(pool), poo
 
 func ValidEngine(engine string) bool { return enginePattern.MatchString(engine) }
 
-// CreateSession uses a caller-scoped key to make retries safe, including
-// concurrent submissions. Different input with the same key is a conflict.
+// CreateSession uses a project-scoped key to make retries safe, including
+// concurrent submissions. Different input or creator with the same key conflicts.
 func (s *Store) CreateSession(ctx context.Context, tenantID string, input CreateSessionInput) (Session, error) {
 	result, err := s.createSession(ctx, tenantID, input)
 	return s.sessionActivity(ctx, result.Session, err)
 }
 
 func (s *Store) createSession(ctx context.Context, tenantID string, input CreateSessionInput) (SessionCreation, error) {
+	if err := input.Creator.Validate(); err != nil {
+		return SessionCreation{}, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
 	tenant, err := parseID(tenantID)
 	if err != nil {
 		return SessionCreation{}, err
@@ -128,6 +134,7 @@ func (s *Store) createSession(ctx context.Context, tenantID string, input Create
 		ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, TenantID: tenant, Engine: input.Engine,
 		Metadata: metadata, IdempotencyKey: input.IdempotencyKey, RequestHash: hex.EncodeToString(hash[:]),
 		Configuration: configuration, CreationRequestHash: creationHash,
+		CreatorKind: pgtype.Text{String: input.Creator.Kind, Valid: true}, CreatorID: pgtype.Text{String: input.Creator.ID, Valid: true},
 	}
 	row, err := s.createSessionResources(ctx, tenantID, params, batch)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -213,6 +220,11 @@ func parseID(value string) (pgtype.UUID, error) {
 
 func sessionFromRow(row sqlc.Session) (Session, error) {
 	session := Session{ID: uuid.UUID(row.ID.Bytes).String(), TenantID: uuid.UUID(row.TenantID.Bytes).String(), Engine: row.Engine, CreatedAt: row.CreatedAt.Time, RequiredActions: []v1.FunctionCallAction{}}
+	creator, err := sessionCreator(row.CreatorKind, row.CreatorID)
+	if err != nil {
+		return Session{}, err
+	}
+	session.Creator = creator
 	configuration, err := canonicalJSONObject(row.Configuration)
 	if err != nil {
 		return Session{}, fmt.Errorf("decode session configuration: %w", err)

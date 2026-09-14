@@ -15,7 +15,7 @@ func TestTurnEventBatchesAreOrderedIsolatedAndDurable(t *testing.T) {
 	ctx := context.Background()
 	s, _ := store.NewTestStore(t)
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "events"})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "events"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestTurnEventBatchesAreOrderedIsolatedAndDurable(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	other, _ := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "other"})
+	other, _ := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "other"})
 	if _, err := s.ListTurnEvents(ctx, tenant, other.ID, input.TurnID, 0, 100); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal(err)
 	}

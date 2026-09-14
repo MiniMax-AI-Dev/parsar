@@ -12,7 +12,7 @@ import (
 func TestNativeFunctionExecutionPersistsCallsResultsAndContinuity(t *testing.T) {
 	h, ctx, home := nativeDispatchHarness(t)
 	var err error
-	h.session, err = h.s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "native-functions", Configuration: json.RawMessage(functionConfiguration)})
+	h.session, err = h.s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "native-functions", Configuration: json.RawMessage(functionConfiguration)})
 	if err != nil {
 		t.Fatal(err)
 	}

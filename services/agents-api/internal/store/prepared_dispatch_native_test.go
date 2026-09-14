@@ -45,7 +45,7 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.session, err = h.s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "remote-dispatch", Configuration: configuration})
+	h.session, err = h.s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "remote-dispatch", Configuration: configuration})
 	if err != nil {
 		t.Fatal(err)
 	}

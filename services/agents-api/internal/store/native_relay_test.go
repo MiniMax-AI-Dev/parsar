@@ -120,7 +120,7 @@ func TestNativeHarnessRelayPostgreSQLAndProcessRecovery(t *testing.T) {
 	}
 	defer lease.Close(context.Background())
 	tenant, executorToken := uuid.NewString(), uuid.NewString()
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "native-relay", Configuration: json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace","capability_directories":[]}}`)})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "native-relay", Configuration: json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace","capability_directories":[]}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,7 +20,7 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 	h, ctx, home := nativeDispatchHarness(t)
 	var err error
 	config, _ := json.Marshal(map[string]any{"agent": map[string]string{"model": "gpt-5.5", "instructions": "Keep this instruction."}, "environment": map[string]string{"type": "none"}})
-	h.session, err = h.s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "native-session", Configuration: config})
+	h.session, err = h.s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "native-session", Configuration: config})
 	if err != nil {
 		t.Fatal(err)
 	}

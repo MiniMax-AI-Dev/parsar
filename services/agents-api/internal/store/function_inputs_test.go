@@ -115,7 +115,7 @@ func TestFunctionInputBatchFailureRollsBackEveryWrite(t *testing.T) {
 				if mode == "foreign-turn" {
 					otherTenant = uuid.NewString()
 				}
-				other, err := s.CreateSession(t.Context(), otherTenant, CreateSessionInput{Engine: "codex", IdempotencyKey: "other"})
+				other, err := s.CreateSession(t.Context(), otherTenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "other"})
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -24,6 +24,7 @@ from official_agent_list import verify_agent_list
 from official_agent_references import verify_agent_references
 from official_session_requests import verify_session_create_requests
 from official_session_metadata import verify_session_metadata, verify_active_session_metadata
+from official_session_creators import verify_session_creators, verify_creator_recovery
 from openai import AuthenticationError, BadRequestError, ConflictError, NotFoundError, OpenAI
 import yaml
 
@@ -73,10 +74,12 @@ def main():
     bindings = [{"tenant_id": str(uuid.uuid4()), "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
                  "organization_id": "test-org", "project_id": str(uuid.uuid4()),
                  "subject_kind": "service_account", "subject_id": "test-runner"} for token in tokens]
-    same_principal, peer_principal = secrets.token_hex(32), secrets.token_hex(32)
+    same_principal, peer_principal, same_subject_id = [secrets.token_hex(32) for _ in range(3)]
     bindings.extend([{**bindings[0], "token_sha256": hashlib.sha256(same_principal.encode()).hexdigest()},
                      {**bindings[0], "token_sha256": hashlib.sha256(peer_principal.encode()).hexdigest(),
-                      "subject_kind": "user", "subject_id": "test-peer"}])
+                      "subject_kind": "user", "subject_id": "test-peer"},
+                     {**bindings[0], "token_sha256": hashlib.sha256(same_subject_id.encode()).hexdigest(),
+                      "subject_kind": "user"}])
     process = None
     with tempfile.TemporaryDirectory(prefix="agents-api-test-") as directory:
         keys = Path(directory) / "keys.json"
@@ -192,6 +195,9 @@ def main():
                     request_sessions.append(verify_active_session_metadata(a, turn_session.id))
                     referenced, reference_retry = verify_agent_references(a, b, expect_error)
                     request_sessions.extend(referenced)
+                    creator_retries = verify_session_creators(
+                        client, a, b, same_principal, peer_principal, same_subject_id, spec, expect_error)
+                    request_sessions.extend(result for _, _, result in creator_retries)
                     process.terminate()
                     process.wait(timeout=15)
                     process = start()
@@ -204,6 +210,8 @@ def main():
                     assert list(turns.list(turn_session.id, order="asc")) == recovered
                     assert sessions.retrieve(first.id) == first
                     assert sessions.create(**spec, metadata={"workspace": "untrusted-reference"}, extra_headers=headers) == first
+                    verify_creator_recovery(client, same_principal, peer_principal, same_subject_id,
+                                            creator_retries, expect_error)
                 go_env = dict(os.environ, AGENTS_API_CLIENT_TEST_BASE_URL=base + "/v1",
                               AGENTS_API_CLIENT_TEST_KEY=tokens[2], AGENTS_API_CLIENT_TEST_OTHER_KEY=tokens[3])
                 subprocess.run(["go", "test", "./packages/agents-client/v1", "-run", "^TestService$", "-count=1"],

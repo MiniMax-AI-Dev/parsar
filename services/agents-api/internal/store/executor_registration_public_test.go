@@ -35,7 +35,7 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 	defer lease.Close(context.Background())
 	tenant, foreign, token, wrongTenantToken := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
 	config := json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace","capability_directories":[]}}`)
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "native-registry", Configuration: config})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "native-registry", Configuration: config})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestExecutorRegistrationPostgreSQLAndNativeReconnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := s.CreateSession(ctx, foreign, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "native-registry", Configuration: config})
+	other, err := s.CreateSession(ctx, foreign, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "native-registry", Configuration: config})
 	if err != nil {
 		t.Fatal(err)
 	}

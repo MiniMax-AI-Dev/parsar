@@ -65,7 +65,7 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := h.s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "remote-adapter", Configuration: configuration})
+	session, err := h.s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "remote-adapter", Configuration: configuration})
 	if err != nil {
 		t.Fatal(err)
 	}

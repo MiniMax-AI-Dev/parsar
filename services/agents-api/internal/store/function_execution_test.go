@@ -19,7 +19,7 @@ func newFunctionHarness(t *testing.T) *dispatchHarness {
 	t.Helper()
 	h := newDispatchHarness(t)
 	var err error
-	h.session, err = h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "functions", Configuration: json.RawMessage(functionConfiguration)})
+	h.session, err = h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "functions", Configuration: json.RawMessage(functionConfiguration)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestExecutionFunctionsRejectUndeclaredCallsAndPrematureDone(t *testing.T) {
 
 func TestExecutionFunctionsRequireAdvertisedCapability(t *testing.T) {
 	h := newDispatchHarness(t)
-	session, err := h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "functions", Configuration: json.RawMessage(functionConfiguration)})
+	session, err := h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "functions", Configuration: json.RawMessage(functionConfiguration)})
 	if err != nil {
 		t.Fatal(err)
 	}

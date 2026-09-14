@@ -48,7 +48,7 @@ func TestTurnPaginationRetainsScopeAndOrder(t *testing.T) {
 		}
 	}
 	otherTenant, otherSession := newTurnSession(t, s)
-	sameTenantSession, err := s.CreateSession(ctx, tenant, CreateSessionInput{Engine: "codex", IdempotencyKey: uuid.NewString()})
+	sameTenantSession, err := s.CreateSession(ctx, tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: uuid.NewString()})
 	if err != nil {
 		t.Fatal(err)
 	}

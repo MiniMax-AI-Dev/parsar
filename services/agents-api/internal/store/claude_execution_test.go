@@ -17,7 +17,7 @@ import (
 func claudeSession(t *testing.T, h *dispatchHarness, configuration string, prebound bool) {
 	t.Helper()
 	var err error
-	h.session, err = h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Engine: "claude_sdk", IdempotencyKey: "claude", Configuration: json.RawMessage(configuration)})
+	h.session, err = h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "claude_sdk", IdempotencyKey: "claude", Configuration: json.RawMessage(configuration)})
 	if err != nil {
 		t.Fatal(err)
 	}

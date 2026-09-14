@@ -18,7 +18,7 @@ import (
 func newEnvironmentExpiryReservation(t *testing.T, s *store.Store) (string, store.EnvironmentInputReservation) {
 	t.Helper()
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(t.Context(), tenant, store.CreateSessionInput{
+	session, err := s.CreateSession(t.Context(), tenant, store.CreateSessionInput{Creator: store.FixtureCreator(),
 		Engine: "codex", IdempotencyKey: "environment",
 		Configuration: json.RawMessage(`{"agent":{"model":"fixture-model"},"environment":{"type":"self_hosted","workspace_directory":"/workspace"}}`),
 	})

@@ -27,7 +27,7 @@ func (h *Handler) recoverSessionCreation(w http.ResponseWriter, r *http.Request,
 	if len(request) == 0 {
 		return false
 	}
-	result, err := h.store.FindSessionCreation(r.Context(), tenantID(r), key, request)
+	result, err := h.store.FindSessionCreation(r.Context(), tenantID(r), key, request, sessionCreator(r))
 	if errors.Is(err, store.ErrNotFound) {
 		return false
 	}

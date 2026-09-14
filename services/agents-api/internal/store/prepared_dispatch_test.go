@@ -24,7 +24,7 @@ func preparedDispatchHarness(t *testing.T) (*dispatchHarness, store.EnvironmentI
 	t.Helper()
 	h := newDispatchHarness(t)
 	var err error
-	h.session, err = h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "prepared", Configuration: json.RawMessage(`{"agent":{"model":"test-model","instructions":"Keep this instruction."},"environment":{"type":"self_hosted","workspace_directory":"/executor-workspace"}}`)})
+	h.session, err = h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "prepared", Configuration: json.RawMessage(`{"agent":{"model":"test-model","instructions":"Keep this instruction."},"environment":{"type":"self_hosted","workspace_directory":"/executor-workspace"}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,7 +25,7 @@ func TestSessionCreationIdentityConvergesOnFrozenSnapshot(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			input := CreateSessionInput{Engine: "codex", IdempotencyKey: "same", CreationRequest: request, Configuration: json.RawMessage(fmt.Sprintf(`{"resolved":%d}`, i)), InitialInputs: []Input{messageInput("one")}}
+			input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "same", CreationRequest: request, Configuration: json.RawMessage(fmt.Sprintf(`{"resolved":%d}`, i)), InitialInputs: []Input{messageInput("one")}}
 			result, err := s.CreateSessionStream(ctx, tenant, input)
 			results <- result
 			errs <- err
@@ -66,17 +66,17 @@ func TestSessionCreationIdentityConvergesOnFrozenSnapshot(t *testing.T) {
 		t.Fatal(created, turns, inputs)
 	}
 	restarted := New(pool)
-	retry, err := restarted.FindSessionCreation(ctx, tenant, "same", json.RawMessage(`{"agent":{"tools":[{"parameters":{"const":9007199254740993}}]},"agent_id":"source"}`))
+	retry, err := restarted.FindSessionCreation(ctx, tenant, "same", json.RawMessage(`{"agent":{"tools":[{"parameters":{"const":9007199254740993}}]},"agent_id":"source"}`), FixtureCreator())
 	if err != nil || retry.Created || retry.Session.ID != first.Session.ID || retry.Cursor == 0 {
 		t.Fatal(retry, err)
 	}
-	if _, err := restarted.FindSessionCreation(ctx, tenant, "same", json.RawMessage(`{"agent_id":"source","agent":{"tools":[{"parameters":{"const":9007199254740992}}]}}`)); !errors.Is(err, ErrIdempotencyConflict) {
+	if _, err := restarted.FindSessionCreation(ctx, tenant, "same", json.RawMessage(`{"agent_id":"source","agent":{"tools":[{"parameters":{"const":9007199254740992}}]}}`), FixtureCreator()); !errors.Is(err, ErrIdempotencyConflict) {
 		t.Fatal("numeric identity collapsed", err)
 	}
-	if _, err := restarted.FindSessionCreation(ctx, uuid.NewString(), "same", request); !errors.Is(err, ErrNotFound) {
+	if _, err := restarted.FindSessionCreation(ctx, uuid.NewString(), "same", request, FixtureCreator()); !errors.Is(err, ErrNotFound) {
 		t.Fatal("foreign lookup", err)
 	}
-	if _, err := restarted.CreateSession(ctx, tenant, CreateSessionInput{Engine: "codex", IdempotencyKey: "same", CreationRequest: json.RawMessage(`{"agent_id":"changed"}`), Configuration: first.Session.Configuration}); !errors.Is(err, ErrIdempotencyConflict) {
+	if _, err := restarted.CreateSession(ctx, tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "same", CreationRequest: json.RawMessage(`{"agent_id":"changed"}`), Configuration: first.Session.Configuration}); !errors.Is(err, ErrIdempotencyConflict) {
 		t.Fatal("changed caller admitted", err)
 	}
 }
@@ -85,13 +85,13 @@ func TestSessionCreationIdentityDoesNotInventHistoricalIntent(t *testing.T) {
 	s, pool := testStore(t)
 	ctx := context.Background()
 	tenant := uuid.NewString()
-	input := CreateSessionInput{Engine: "codex", IdempotencyKey: "historical", Configuration: json.RawMessage(`{"agent":{"id":"source","instructions":"original"}}`)}
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "historical", Configuration: json.RawMessage(`{"agent":{"id":"source","instructions":"original"}}`)}
 	first, err := s.CreateSession(ctx, tenant, input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	input.CreationRequest = json.RawMessage(`{"agent_id":"source"}`)
-	if _, err := s.FindSessionCreation(ctx, tenant, input.IdempotencyKey, input.CreationRequest); !errors.Is(err, ErrNotFound) {
+	if _, err := s.FindSessionCreation(ctx, tenant, input.IdempotencyKey, input.CreationRequest, FixtureCreator()); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 	retry, err := s.CreateSession(ctx, tenant, input)

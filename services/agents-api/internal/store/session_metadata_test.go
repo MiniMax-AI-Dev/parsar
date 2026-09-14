@@ -16,7 +16,7 @@ func TestSessionMetadataPreservesCreationAndExecutionData(t *testing.T) {
 	s, pool := testStore(t)
 	ctx := context.Background()
 	tenant := uuid.NewString()
-	input := CreateSessionInput{Engine: "codex", IdempotencyKey: "metadata-update", Metadata: map[string]string{"old": "value"}, Configuration: []byte(`{"agent":{"model":"test-model"},"environment":{"type":"none"}}`)}
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "metadata-update", Metadata: map[string]string{"old": "value"}, Configuration: []byte(`{"agent":{"model":"test-model"},"environment":{"type":"none"}}`)}
 	first, err := s.CreateSession(ctx, tenant, input)
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +80,7 @@ func TestSessionMetadataConcurrentReplacement(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
 	tenant := uuid.NewString()
-	first, err := s.CreateSession(ctx, tenant, CreateSessionInput{Engine: "codex", IdempotencyKey: "concurrent-metadata"})
+	first, err := s.CreateSession(ctx, tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "concurrent-metadata"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestSessionMetadataPreservesTerminalActivity(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(ctx, tenant, CreateSessionInput{Engine: "codex", IdempotencyKey: "terminal-metadata"})
+	session, err := s.CreateSession(ctx, tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", IdempotencyKey: "terminal-metadata"})
 	if err != nil {
 		t.Fatal(err)
 	}

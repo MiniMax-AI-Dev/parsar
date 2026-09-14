@@ -17,7 +17,7 @@ func TestItemObservationOrderSurvivesTiesUpdatesRetriesAndRecovery(t *testing.T)
 	ctx := context.Background()
 	s, pool := store.NewTestStore(t)
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "ordered"})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "ordered"})
 	if err != nil {
 		t.Fatal(err)
 	}

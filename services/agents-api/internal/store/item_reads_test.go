@@ -17,7 +17,7 @@ func TestItemsRecoverSnapshotsPartialResultsPaginationAndIsolation(t *testing.T)
 	ctx := context.Background()
 	s, pool := store.NewTestStore(t)
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "items"})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "items"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestItemsRecoverSnapshotsPartialResultsPaginationAndIsolation(t *testing.T)
 			}
 		}
 	}
-	other, _ := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "other"})
+	other, _ := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "other"})
 	for _, scope := range []struct{ tenant, session, cursor string }{{uuid.NewString(), session.ID, ""}, {tenant, other.ID, page.Items[0].ID}} {
 		if _, err = s.ListItems(ctx, scope.tenant, scope.session, scope.cursor, 20, true); !errors.Is(err, store.ErrNotFound) {
 			t.Fatal(err)
@@ -113,7 +113,7 @@ func TestItemProjectionFailureRollsBackJournalAndAggregateRecovers(t *testing.T)
 	ctx := context.Background()
 	s, _ := store.NewTestStore(t)
 	tenant := uuid.NewString()
-	session, _ := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "legacy"})
+	session, _ := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "legacy"})
 	input, err := s.SubmitMessage(ctx, tenant, session.ID, "input", json.RawMessage(`{"text":"test"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +149,7 @@ func TestReceiptOnlyTextRecoversWithoutInventingCompletion(t *testing.T) {
 	s, pool := store.NewTestStore(t)
 	tenant := uuid.NewString()
 	for _, receiptOnly := range []bool{true, false} {
-		session, _ := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: uuid.NewString()})
+		session, _ := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: uuid.NewString()})
 		input, err := s.SubmitMessage(ctx, tenant, session.ID, "first", json.RawMessage(`{"text":"test"}`))
 		if err != nil {
 			t.Fatal(err)
@@ -179,7 +179,7 @@ func TestLegacyFailureRetainsPartialAnswerAcrossRecovery(t *testing.T) {
 	ctx := context.Background()
 	s, pool := store.NewTestStore(t)
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "failed-items"})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "failed-items"})
 	if err != nil {
 		t.Fatal(err)
 	}

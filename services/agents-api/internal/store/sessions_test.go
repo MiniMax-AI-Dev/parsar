@@ -76,7 +76,7 @@ func TestSessionsPersistAndStayTenantScoped(t *testing.T) {
 	s, pool := testStore(t)
 	ctx := context.Background()
 	tenantA, tenantB := uuid.NewString(), uuid.NewString()
-	input := CreateSessionInput{Engine: "codex", Metadata: map[string]string{"source": "standalone"}, IdempotencyKey: "first",
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "codex", Metadata: map[string]string{"source": "standalone"}, IdempotencyKey: "first",
 		Configuration: []byte(`{"agent":{"model":"test-model","instructions":"Keep the snapshot."},"environment":{"type":"none"}}`)}
 	first, err := s.CreateSession(ctx, tenantA, input)
 	if err != nil {
@@ -142,7 +142,7 @@ func TestConcurrentSessionCreationIsIdempotent(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
 	tenant := uuid.NewString()
-	input := CreateSessionInput{Engine: "claude_code", Metadata: map[string]string{"b": "2", "a": "1"}, IdempotencyKey: "repeated"}
+	input := CreateSessionInput{Creator: FixtureCreator(), Engine: "claude_code", Metadata: map[string]string{"b": "2", "a": "1"}, IdempotencyKey: "repeated"}
 	const count = 8
 	ids := make(chan string, count)
 	errs := make(chan error, count)
@@ -171,13 +171,13 @@ func TestConcurrentSessionCreationIsIdempotent(t *testing.T) {
 	if len(unique) != 1 {
 		t.Fatalf("duplicate sessions: %+v", unique)
 	}
-	replay, err := s.CreateSession(ctx, tenant, CreateSessionInput{Engine: "claude_code", Metadata: map[string]string{"a": "1", "b": "2"}, IdempotencyKey: "repeated"})
+	replay, err := s.CreateSession(ctx, tenant, CreateSessionInput{Creator: FixtureCreator(), Engine: "claude_code", Metadata: map[string]string{"a": "1", "b": "2"}, IdempotencyKey: "repeated"})
 	if err != nil || !unique[replay.ID] {
 		t.Fatalf("reordered metadata was not replayed: %+v %v", replay, err)
 	}
 	for _, changed := range []CreateSessionInput{
-		{Engine: "codex", Metadata: input.Metadata, IdempotencyKey: input.IdempotencyKey},
-		{Engine: input.Engine, Metadata: map[string]string{"a": "changed"}, IdempotencyKey: input.IdempotencyKey},
+		{Creator: FixtureCreator(), Engine: "codex", Metadata: input.Metadata, IdempotencyKey: input.IdempotencyKey},
+		{Creator: FixtureCreator(), Engine: input.Engine, Metadata: map[string]string{"a": "changed"}, IdempotencyKey: input.IdempotencyKey},
 	} {
 		if _, err := s.CreateSession(ctx, tenant, changed); !errors.Is(err, ErrIdempotencyConflict) {
 			t.Fatalf("changed request = %v", err)

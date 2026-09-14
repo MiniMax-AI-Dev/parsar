@@ -38,7 +38,7 @@ func TestNativeExecutorLauncherTLSAndHelpers(t *testing.T) {
 	}
 	defer lease.Close(context.Background())
 	tenant := uuid.NewString()
-	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Engine: "codex", IdempotencyKey: "launcher", Configuration: json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace","capability_directories":[]}}`)})
+	session, err := s.CreateSession(ctx, tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "launcher", Configuration: json.RawMessage(`{"environment":{"type":"self_hosted","workspace_directory":"/workspace","capability_directories":[]}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

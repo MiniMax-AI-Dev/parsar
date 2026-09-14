@@ -269,7 +269,8 @@ rotation, revocation or Session deletion. Keep caller/device/harness credentials
 independent; never reuse the executor secret for another purpose. Registry request authentication
 and WebSocket URL capabilities have separate purposes; never log either secret.
 Caller keys identify a configured project and user/service account; durable Session
-creator matching remains a separate prerequisite for public executor authorization.
+creators are persisted at Session creation. Matching executor principals remains
+a separate prerequisite for public executor authorization.
 
 Registration IDs, five-minute connection capabilities and socket generations are
 process-local. Re-registration replaces the current socket; late close callbacks
@@ -299,7 +300,7 @@ queries in connect, attach and validation. Old cleanup cannot revoke a successor
 The five-minute connection-ticket lifetime does not expire an active execution
 owner or impose a Turn deadline. Pair closure is not proof of OS quiescence.
 Static harness-key files are retired explicitly, without a fallback or public
-issuance endpoint. Durable Session creator identity remains
+issuance endpoint. Executor principal matching remains
 separate required work; tenant ownership alone cannot authorize public executor
 connections. No credential bearer belongs in snapshots, events, logs or the database.
 
@@ -583,9 +584,9 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   event cursor and emit no created event. Recheck after source resolution failure
   for a concurrently committed creator; do not hold a lock across resolution.
   The unique creation upsert remains authoritative when concurrent resolutions differ.
-  Inline requests keep their existing resolved/default equivalences. Historical rows
-  without caller identity retain the old resolved-hash behavior; original overrides
-  cannot be reconstructed, so no backfill or automatic upgrade is permitted. Source
+  Inline requests keep their existing resolved/default equivalences. Rows with a
+  known creator but without recorded request intent retain resolved-hash behavior;
+  original overrides cannot be reconstructed, so no backfill is permitted. Source
   mutation-independent retries apply only to recorded identities. Exact hosted
   retry/error semantics remain separate work.
 - Tenant scope must come from authenticated service identity before calling the
@@ -642,9 +643,24 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   repeated/conflicting values fail authentication. Metadata, forwarded identities
   and product session cookies grant no access. Keys can rotate under the same
   principal; changing or removing caller bindings requires a service restart.
-  This establishes caller identity only: Session creators remain unrecorded until
-  the separate creation-ownership change, and project-scoped resource access is
-  unchanged. Public Environment admission stays disabled. The operator-selected
+  Every new Session requires an explicit typed creator at the Store boundary,
+  including internal callers. Public creation derives it only from the authenticated
+  principal. Persist creator kind/ID in the creation transaction and never rewrite
+  them on retry, update or source mutation. The tenant remains the project partition;
+  do not duplicate project identifiers or create a product identity dependency.
+  Both early saved-reference recovery and the authoritative creation upsert require
+  matching creator kind/ID before returning a Session or event cursor. Different
+  credentials for the same principal can retry; another principal using the same
+  project/key receives the local idempotency conflict. This does not introduce
+  creator-only resource reads or mutations, or claim verified hosted retry parity.
+  Pre-migration Sessions retain null creator columns and remain project-readable;
+  creation retries cannot claim them. Missing creator and missing request intent
+  are distinct. Never infer historical ownership from keys, metadata or product
+  records. Retire older API writers before serving the creator-enforced deployment;
+  mixed-version writers are not supported. Tests must supply explicit synthetic
+  creators; only controlled historical fixtures may seed unknown ownership.
+  Public Environment admission and executor principal matching remain pending.
+  The operator-selected
   `AGENTS_API_ENGINE` is separate from the requested model.
   Public execution currently supports Codex and Claude SDK text inputs with environment `none`;
   reject unsupported input/environment/agent options explicitly.
