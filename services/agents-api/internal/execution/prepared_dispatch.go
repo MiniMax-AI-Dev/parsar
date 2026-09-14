@@ -58,9 +58,6 @@ func (d *Dispatcher) RunEnvironmentInput(ctx context.Context, tenantID, sessionI
 	if err != nil {
 		return run, err
 	}
-	if !caps.Preparation || !caps.RemoteEnvironment {
-		return run, errors.New("device must advertise preparation and remote_environment")
-	}
 	if d.EnvironmentConnection == nil {
 		return run, errors.New("environment connection resolver is not configured")
 	}

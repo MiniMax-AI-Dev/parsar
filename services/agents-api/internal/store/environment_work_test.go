@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestEnvironmentInputWorkFiltersAndPagesBoundDevices(t *testing.T) {
+func TestEnvironmentInputWorkFiltersAndPagesDevices(t *testing.T) {
 	h := newDispatchHarness(t)
 	_, pool := store.NewTestStore(t)
 	wanted := map[string]string{}
@@ -30,6 +30,7 @@ func TestEnvironmentInputWorkFiltersAndPagesBoundDevices(t *testing.T) {
 				t.Fatal(err)
 			}
 		case "unbound":
+			wanted[pending.ID] = pending.SessionID
 			if _, err := pool.Exec(t.Context(), "DELETE FROM session_devices WHERE session_id=$1", pending.SessionID); err != nil {
 				t.Fatal(err)
 			}
@@ -58,11 +59,14 @@ func TestEnvironmentInputWorkFiltersAndPagesBoundDevices(t *testing.T) {
 			t.Fatal("unconnected work selected", work, err)
 		}
 	}
+	foreign := *h
+	foreign.tenant = uuid.NewString()
+	unboundWorkerEnvironmentReservation(t, &foreign)
 	seen, cursor := 0, ""
-	for _, count := range []int{100, 3, 0} {
+	for _, count := range []int{100, 4, 0} {
 		work, err := h.s.ListEnvironmentInputWork(t.Context(), cursor, []string{h.device.ID})
 		if err != nil || len(work) != count {
-			t.Fatal("bound work page", len(work), count, err)
+			t.Fatal("environment work page", len(work), count, err)
 		}
 		for _, item := range work {
 			if item.TenantID != h.tenant || item.SessionID != wanted[item.ReservationID] || item.ReservationID <= cursor {

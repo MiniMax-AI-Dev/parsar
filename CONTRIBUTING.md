@@ -425,18 +425,22 @@ Do not fabricate an empty cancellation outcome or infer native quiescence.
 The connection owner spans preparation and the transferred Run without a reservation-derived Run
 deadline; every exit releases it.
 
-The existing Worker discovers pending input only for already bound, connected,
-non-revoked devices when its Dispatcher has a connection resolver. Preparation,
-claim, Run and cleanup occupy one of the same four slots as ordinary Turns, keyed
+The existing Worker discovers pending input with a connected, non-revoked device
+in the same tenant when its Dispatcher has a connection resolver. An unbound
+Session selects a device using the same engine capability checks as ordinary
+work, including remote preparation support, then uses the existing immutable
+binding before preparation. Existing bindings never move, including when their
+device is offline, revoked or lacks a required capability. A missing device or
+binding conflict leaves pending input and its deadline intact without a Turn;
+other database/ownership errors stop the Worker. Preparation, claim, Run and cleanup occupy one of the same four slots as ordinary Turns, keyed
 by Session. Both queues advance bounded ID cursors and alternate candidates; the
 pending queue is scanned at most once every five seconds on the existing tick.
 A preparation failure may retry while still pending, without extending its stored
 deadline. This is private scheduling policy, not an upstream timing guarantee.
 Unknown promotion results and errors after admission stop scheduling; existing
 claimed-Turn reconciliation handles restart without another Start. Expiry retains
-its ordinary cadence even at capacity. Device selection,
-public admission/initial inputs, principal identity and public Environment
-lifecycle remain separate work.
+its ordinary cadence even at capacity. Public admission/initial inputs, principal
+identity and public Environment lifecycle remain separate work.
 
 The standalone service wires this resolver when its daemon gateway and
 `AGENTS_API_EXECUTOR_URL` are configured. Construct the gateway and native registry,
@@ -446,7 +450,7 @@ its Worker reference is assigned once before either consumer starts. Invalid
 registry configuration therefore fails before acquiring the execution lease.
 Shutdown waits for Worker cleanup before closing the registry and gateway.
 The Codex resolver issues a fresh exact-Environment credential for the supplied
-execution owner; it does not select devices, admit public Environment input or
+execution owner; it does not admit public Environment input or
 define a transport for other engines.
 
 #### Independent build artifacts
