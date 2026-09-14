@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/api"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/execution"
@@ -75,15 +76,33 @@ func run() error {
 	var worker *execution.Worker
 	var options []api.Option
 	var daemonHandler http.Handler
+	var registry *gateway.Registry
+	var checkOwnership func(context.Context) error
 	if wsURL := os.Getenv("AGENTS_API_DAEMON_WS_URL"); wsURL != "" {
-		var registryHandler http.Handler
-		registryHandler, registry, err := runtime.NewGateway(executionStore, wsURL)
+		daemonHandler, registry, err = runtime.NewGateway(executionStore, wsURL)
 		if err != nil {
 			return err
 		}
-		daemonHandler = registryHandler
 		defer runtime.CloseConnections(registry)
-		worker, err = execution.StartWorker(ctx, &execution.Dispatcher{Store: executionStore, Registry: registry})
+		// Constructors do not invoke ownership checks; publish only after setup.
+		checkOwnership = func(ctx context.Context) error {
+			if worker == nil {
+				return errors.New("execution worker is not initialized")
+			}
+			return worker.CheckOwnership(ctx)
+		}
+	}
+	executor, err := executorRegistry(executionStore, checkOwnership)
+	if err != nil {
+		return err
+	}
+	if executor != nil {
+		defer executor.Close()
+	}
+	if registry != nil {
+		dispatcher := &execution.Dispatcher{Store: executionStore, Registry: registry,
+			EnvironmentConnection: environmentConnection(executor, os.Getenv("AGENTS_API_EXECUTOR_URL"))}
+		worker, err = execution.StartWorker(ctx, dispatcher)
 		if err != nil {
 			return err
 		}
@@ -96,13 +115,6 @@ func run() error {
 			}
 		}()
 		options = append(options, api.WithExecution(worker))
-	}
-	executor, err := executorRegistry(executionStore, worker)
-	if err != nil {
-		return err
-	}
-	if executor != nil {
-		defer executor.Close()
 	}
 	handler, err := api.NewHandler(executionStore, auth, engine, options...)
 	if err != nil {

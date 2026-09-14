@@ -1,9 +1,9 @@
 package main
 
 import (
+	"context"
 	"testing"
 
-	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/execution"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
 
@@ -18,15 +18,19 @@ func TestExecutorRegistryIsExplicitAndRetiresStaticKeys(t *testing.T) {
 	if _, err := executorRegistry(nil, nil); err == nil {
 		t.Fatal("registry enabled without execution owner")
 	}
-	s, worker := store.New(nil), &execution.Worker{}
+	s := store.New(nil)
+	checkOwnership := func(context.Context) error {
+		t.Fatal("constructor invoked ownership before the worker was initialized")
+		return nil
+	}
 	for _, setting := range []string{"AGENTS_API_EXECUTOR_KEYS_FILE", "AGENTS_API_HARNESS_KEYS_FILE"} {
 		t.Setenv(setting, "retired-private-file")
-		if _, err := executorRegistry(s, worker); err == nil {
+		if _, err := executorRegistry(s, checkOwnership); err == nil {
 			t.Fatal("retired key setting accepted", setting)
 		}
 		t.Setenv(setting, "")
 	}
-	registry, err := executorRegistry(s, worker)
+	registry, err := executorRegistry(s, checkOwnership)
 	if err != nil {
 		t.Fatal(err)
 	}

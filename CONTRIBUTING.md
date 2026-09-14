@@ -298,7 +298,7 @@ queries in connect, attach and validation. Old cleanup cannot revoke a successor
 The five-minute connection-ticket lifetime does not expire an active execution
 owner or impose a Turn deadline. Pair closure is not proof of OS quiescence.
 Static harness-key files are retired explicitly, without a fallback or public
-issuance endpoint. Production resolver wiring and public caller principal identity remain
+issuance endpoint. Public caller principal identity remains
 separate required work; tenant ownership is not upstream user/service-account
 identity. No credential bearer belongs in snapshots, events, logs or the database.
 
@@ -434,9 +434,20 @@ A preparation failure may retry while still pending, without extending its store
 deadline. This is private scheduling policy, not an upstream timing guarantee.
 Unknown promotion results and errors after admission stop scheduling; existing
 claimed-Turn reconciliation handles restart without another Start. Expiry retains
-its ordinary cadence even at capacity. Device selection, production resolver
-wiring, public admission/initial inputs, principal identity and public Environment
+its ordinary cadence even at capacity. Device selection,
+public admission/initial inputs, principal identity and public Environment
 lifecycle remain separate work.
+
+The standalone service wires this resolver when its daemon gateway and
+`AGENTS_API_EXECUTOR_URL` are configured. Construct the gateway and native registry,
+configure the Dispatcher, then acquire Worker ownership before starting scheduling
+or HTTP consumers. Registry construction does not call the ownership callback;
+its Worker reference is assigned once before either consumer starts. Invalid
+registry configuration therefore fails before acquiring the execution lease.
+Shutdown waits for Worker cleanup before closing the registry and gateway.
+The Codex resolver issues a fresh exact-Environment credential for the supplied
+execution owner; it does not select devices, admit public Environment input or
+define a transport for other engines.
 
 #### Independent build artifacts
 
