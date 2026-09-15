@@ -18,5 +18,5 @@ func validateExecutionEnvironment(req proto.PromptRequestPayload, caps proto.Age
 	if req.DisableExecutionEnvironment && !caps.EnvironmentNone {
 		return errors.New("engine does not support execution environment none")
 	}
-	return validateMCPHTTPBearer(req, caps)
+	return validateMCPHTTP(req, caps)
 }

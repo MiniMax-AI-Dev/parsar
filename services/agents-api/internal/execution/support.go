@@ -17,14 +17,18 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 	if json.Unmarshal(configuration, &snapshot) != nil {
 		return store.ErrInvalidInput
 	}
-	if _, err := selectedMCPCredentials(snapshot); err != nil {
+	selected, err := selectedMCPCredentials(snapshot)
+	if err != nil {
 		return err
 	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" {
 		if engine != "codex" || snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" || !path.IsAbs(snapshot.Environment.WorkspaceDirectory) || strings.ContainsAny(snapshot.Environment.WorkspaceDirectory, "\x00\r\n\\") || len(snapshot.Environment.CapabilityDirectories) != 0 {
 			return store.ErrInvalidInput
 		}
-		_, err := functionTools(snapshot.Agent.Tools)
+		if len(selected) != 0 {
+			return errors.New("authenticated MCP with a self-hosted environment is not supported")
+		}
+		_, _, err := executionTools(snapshot.Agent.Tools)
 		return err
 	}
 	if engine != "claude_sdk" {
@@ -135,12 +139,17 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	if len(functions) > 0 && !caps.FunctionTools {
 		return fail("device must advertise function_tools")
 	}
-	if len(mcp) > 0 && (!caps.MCPHTTPTools || engine != "codex" || snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil) {
+	if len(mcp) > 0 && (!caps.MCPHTTPTools || engine != "codex" || snapshot.Environment == nil || (snapshot.Environment.Type != "none" && snapshot.Environment.Type != "self_hosted") || snapshot.Daemon != nil) {
 		return fail("device must support the service-side HTTP MCP profile")
 	}
 	selected, err := selectedMCPCredentials(snapshot)
 	if err != nil {
 		return device.KindCapabilities{}, err
+	}
+	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" && len(mcp) > 0 {
+		if !caps.MCPHTTPRemoteEnvironment || len(selected) != 0 {
+			return fail("device must support credential-free service-side HTTP MCP with a remote environment")
+		}
 	}
 	if len(selected) > 0 && !caps.MCPHTTPBearerAuth {
 		return fail("device must advertise mcp_http_bearer_auth")

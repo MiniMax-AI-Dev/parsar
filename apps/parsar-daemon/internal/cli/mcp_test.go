@@ -27,3 +27,20 @@ func TestMCPHTTPBearerDiscoveryIsCodexOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoteMCPDiscoveryRequiresPinnedNative(t *testing.T) {
+	for _, version := range []string{"codex-cli 0.153.4", "codex-cli 0.153.3", "codex-cli 0.154.0"} {
+		checks := unavailableCLIChecks()
+		checks.Codex = func(context.Context, string) (string, error) { return version, nil }
+		got, err := discoverAgentCLIs(&runContext{stdout: &strings.Builder{}, stderr: &strings.Builder{}}, "test", checks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Codex.Capabilities.MCPHTTPRemoteEnvironment != (version == "codex-cli 0.153.4") {
+			t.Fatal("unverified native combination advertised")
+		}
+		if got.ClaudeCode.Capabilities.MCPHTTPRemoteEnvironment || got.OpenCode.Capabilities.MCPHTTPRemoteEnvironment || got.Pi.Capabilities.MCPHTTPRemoteEnvironment {
+			t.Fatal("other engine advertised combination")
+		}
+	}
+}

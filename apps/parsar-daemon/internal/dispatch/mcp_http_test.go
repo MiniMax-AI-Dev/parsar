@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -61,6 +62,67 @@ func TestMCPHTTPBearerRejectsUnsupportedRequestsBeforeFactory(t *testing.T) {
 			raw, _ := json.Marshal(frames)
 			if err == nil || strings.Contains(err.Error(), token) || strings.Contains(string(raw), token) || len(frames) != 2 || frames[0].Type != proto.TypeError || frames[1].Type != proto.TypeDone {
 				t.Fatal("terminal rejection missing or exposed credential")
+			}
+		})
+	}
+}
+
+func TestRemoteMCPRejectsBeforePreparationFactory(t *testing.T) {
+	for _, mode := range []string{"supported", "old peer", "no MCP", "no remote", "bearer", "other engine", "empty declaration", "no declaration"} {
+		t.Run(mode, func(t *testing.T) {
+			h := newHarness(t)
+			defer h.router.Shutdown(context.Background())
+			servers := []proto.MCPHTTPServer{{ServerLabel: "tools", ServerURL: "https://tools.example/mcp"}}
+			req := preparationRequest()
+			req.Configuration.AgentKind = "codex"
+			req.Configuration.MCPHTTPServers = &servers
+			caps := proto.AgentKindCapabilities{RemoteEnvironment: true, MCPHTTPTools: true, MCPHTTPRemoteEnvironment: true, EnvironmentNone: true, MCPHTTPBearerAuth: true}
+			switch mode {
+			case "old peer":
+				caps.MCPHTTPRemoteEnvironment = false
+			case "no MCP":
+				caps.MCPHTTPTools = false
+			case "no remote":
+				caps.RemoteEnvironment = false
+			case "other engine":
+				req.Configuration.AgentKind = "other"
+			case "bearer":
+				token := "synthetic-private-token"
+				servers[0].BearerToken = &token
+			case "empty declaration":
+				servers = []proto.MCPHTTPServer{}
+				caps.MCPHTTPRemoteEnvironment = false
+			case "no declaration":
+				req.Configuration.MCPHTTPServers = nil
+				caps.MCPHTTPRemoteEnvironment = false
+			}
+			entered := make(chan struct{}, 1)
+			h.reg.RegisterKind(proto.SupportedAgentKind{Kind: req.Configuration.AgentKind, Available: true, Capabilities: caps}, func(context.Context, proto.PromptRequestPayload, chan<- proto.Envelope) (agent.Session, error) {
+				t.Error("ordinary factory called")
+				return nil, errors.New("unexpected")
+			})
+			h.reg.RegisterPreparation(req.Configuration.AgentKind, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) {
+				entered <- struct{}{}
+				return nil, errors.New("controlled stop")
+			})
+			err := h.router.Handle(t.Context(), mustEnv(t, proto.TypeExecutionPrepare, "remote-mcp", req))
+			allowed := mode == "supported" || mode == "no declaration"
+			if (err == nil) != allowed {
+				t.Fatal("wrong preparation admission", err)
+			}
+			if allowed {
+				select {
+				case <-entered:
+				case <-time.After(time.Second):
+					t.Fatal("factory not called")
+				}
+				waitPreparationStatus(t, h.sender, "remote-mcp", "failed", "")
+			} else {
+				select {
+				case <-entered:
+					t.Fatal("rejected request reached factory")
+				default:
+				}
 			}
 		})
 	}

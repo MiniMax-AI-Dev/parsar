@@ -108,11 +108,15 @@ func TestPublicMCPHTTPPreflightRedactsNativeErrors(t *testing.T) {
 }
 
 func TestPublicMCPHTTPPreparationChecksBeforeNewAndResumedThread(t *testing.T) {
-	for _, mode := range []string{"new", "resume", "reject", "reject bearer reference"} {
+	for _, mode := range []string{"new", "resume", "reject", "reject bearer reference", "remote new", "remote resume", "remote reject"} {
 		t.Run(mode, func(t *testing.T) {
 			req, cfg, root := preparationFixture(t)
-			req.RemoteEnvironment = nil
-			req.DisableExecutionEnvironment = true
+			remote := strings.HasPrefix(mode, "remote ")
+			mode = strings.TrimPrefix(mode, "remote ")
+			if !remote {
+				req.RemoteEnvironment = nil
+				req.DisableExecutionEnvironment = true
+			}
 			req.AgentOptions = map[string]any{"model": "fixture-model"}
 			servers := []proto.MCPHTTPServer{{ServerLabel: "docs", ServerURL: "https://docs.example/mcp"}}
 			if mode == "reject bearer reference" {
@@ -123,7 +127,9 @@ func TestPublicMCPHTTPPreparationChecksBeforeNewAndResumedThread(t *testing.T) {
 			if mode == "resume" {
 				req.AgentSessionID = "fixture-native-thread"
 			}
-			t.Setenv("PARSAR_PREPARATION_STATUS", filepath.Join(root, "unknown-status"))
+			if !remote {
+				t.Setenv("PARSAR_PREPARATION_STATUS", filepath.Join(root, "unknown-status"))
+			}
 			if err := os.WriteFile(filepath.Join(root, "unknown-status"), []byte("unknown"), 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -161,9 +167,15 @@ func TestPublicMCPHTTPPreparationChecksBeforeNewAndResumedThread(t *testing.T) {
 			}
 			defer s.Cancel(context.Background())
 			frames := waitPreparationMethod(t, root, "turn/start")
-			checked := false
+			checked, ready := false, !remote
 			for _, frame := range frames {
+				if frame.Method == "environment/info" {
+					ready = true
+				}
 				if frame.Method == "config/read" {
+					if !ready {
+						t.Fatal("MCP check preceded remote readiness")
+					}
 					checked = true
 				}
 				if strings.HasPrefix(frame.Method, "thread/") {

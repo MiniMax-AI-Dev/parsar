@@ -400,7 +400,8 @@ The disabled-by-default Codex adapter supports executor registration, harness ke
 authorization and an opaque native Noise relay. Configured execution and an
 executor origin enable public `self_hosted` Sessions on Codex. The current
 profile requires an absolute `workspace_directory`, empty/default
-`capability_directories` and optional supported non-deferred functions. Initial text is optional.
+`capability_directories`, with optional supported non-deferred functions and
+credential-free service-origin HTTP MCP. Initial text is optional.
 
 To enable it alongside the existing daemon worker, set
 `AGENTS_API_EXECUTOR_URL` to the externally reachable HTTPS origin. Apply the
@@ -579,8 +580,8 @@ See [Environment contracts and remaining work](../../contracts/agents-api/enviro
 
 ### HTTP MCP execution
 
-The initial MCP profile uses Codex on trusted service-side compute with
-`environment:{"type":"none"}`. Inline or saved Agent tools may declare:
+MCP uses Codex on trusted service-side compute with `environment:{"type":"none"}`
+or a `self_hosted` Environment. Inline or saved Agent tools may declare:
 
 ```json
 {
@@ -599,7 +600,7 @@ advertise `mcp_http_tools`; selection waits for a capable device. The native
 harness owns MCP discovery, calls and results. Public `mcp_call` Items use original
 server/tool names; recover missed live events through Session, Turn and Items reads.
 
-Attach tenant-owned `vault_ids` for static bearer authentication. An explicit
+For `environment:none`, attach tenant-owned `vault_ids` for static bearer authentication. An explicit
 `credential_id` selects an attached credential for the exact HTTPS URL; omission/null
 selects a unique matching credential, or stays anonymous if none matches. Ambiguity
 fails before Session creation. Selection is frozen privately; the public tool keeps
@@ -607,9 +608,18 @@ the caller's original credential field. See [credential setup and limits](creden
 Authenticated execution additionally requires `mcp_http_bearer_auth`; missing keys
 or failed authorization/decryption never fall back to anonymous execution.
 
+With `self_hosted`, commands use the registered executor while MCP connections
+remain on the trusted service harness. This credential-free combination additionally
+requires `mcp_http_remote_environment` and the existing remote preparation
+capabilities; separate MCP/remote support on an older daemon does not imply this
+combination. Any explicitly or implicitly selected Vault credential is rejected
+before Session creation; it is never silently discarded. Unmatched attached Vaults
+may retain an anonymous selection. Both native remote readiness and MCP configuration
+checks run before thread creation/resume.
+
 The current subset rejects OAuth, inline authorization, nonempty headers or
 request metadata, URL userinfo/query/fragment, implicit/other origins, stdio,
-`required:true`, other engines and self-hosted execution. The Codex adapter also
+`required:true` and other engines. The Codex adapter also
 rejects reserved native labels and stored native MCP credentials. It verifies
 exact effective MCP configuration before starting/resuming a native thread,
 excludes undeclared servers and disables native apps/plugins. This runs on trusted
