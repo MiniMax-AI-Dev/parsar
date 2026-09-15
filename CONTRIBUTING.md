@@ -797,13 +797,20 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   the selected harness. Omitted/null service tier currently uses `auto`; complete
   upstream default/error/retry conformance and remaining MCP/web-search variants
   remain gaps. Unknown/unsupported variants fail explicitly. No product lookup is permitted.
-- Public HTTP MCP uses the native harness client and tool loop. The initial
-  execution profile is Codex with `environment:none`, an explicit `service`
+- Public HTTP MCP uses the native harness client and tool loop. The supported
+  execution profiles are Codex with `environment:none` or `self_hosted`, an explicit `service`
   connection origin and a trusted service-side harness. The execution device is
   part of the service deployment; an arbitrary caller executor cannot be relabeled
   service-origin. Admission requires the advertised `mcp_http_tools` capability
-  during selection and again before claiming work. Other engines and placements
-  remain implementation gaps.
+  during selection and again before claiming work. The `self_hosted` combination
+  additionally requires `mcp_http_remote_environment` plus existing remote preparation
+  capabilities, including at the daemon before the factory; individual MCP/remote
+  capabilities on old peers do not imply the combination. MCP stays in the trusted
+  service harness while workspace commands use the executor. This combination
+  admits credential-free declarations only: explicitly or implicitly selected Vault
+  credentials are rejected before Session/input/event persistence, never downgraded
+  to anonymous access. Native remote readiness and exact MCP preflight both precede
+  thread creation/resume. Other engines and placements remain implementation gaps.
 - The shared MCP resolver preserves omitted/null `allowed_tools` as unrestricted
   and an explicit empty list as deny-all. Saved HTTP transport output includes
   `headers:{}`; the effective Session transport omits headers, matching the two

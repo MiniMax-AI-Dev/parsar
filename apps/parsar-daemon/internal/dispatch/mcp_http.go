@@ -7,11 +7,13 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
-// Reject authenticated declarations before factory selection, including peers
-// that support credential-free MCP but cannot safely inject credentials.
-func validateMCPHTTPBearer(req proto.PromptRequestPayload, caps proto.AgentKindCapabilities) error {
+// Validate combined placement and authentication before factory selection.
+func validateMCPHTTP(req proto.PromptRequestPayload, caps proto.AgentKindCapabilities) error {
 	if req.MCPHTTPServers == nil {
 		return nil
+	}
+	if req.RemoteEnvironment != nil && (req.AgentKind != "codex" || !caps.MCPHTTPTools || !caps.MCPHTTPRemoteEnvironment) {
+		return errors.New("engine does not support service-side HTTP MCP with a remote environment")
 	}
 	for _, server := range *req.MCPHTTPServers {
 		if server.BearerToken == nil {

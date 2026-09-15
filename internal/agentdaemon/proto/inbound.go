@@ -268,10 +268,11 @@ type AgentKindCapabilities struct {
 	SubagentControl      bool `json:"subagent_control,omitempty"`
 	DurableInputReceipts bool `json:"durable_input_receipts,omitempty"`
 	// DurableTurns includes strict resume, completion release and cancellation snapshots.
-	DurableTurns      bool `json:"durable_turns,omitempty"`
-	FunctionTools     bool `json:"function_tools,omitempty"`
-	MCPHTTPTools      bool `json:"mcp_http_tools,omitempty"`
-	MCPHTTPBearerAuth bool `json:"mcp_http_bearer_auth,omitempty"`
+	DurableTurns             bool `json:"durable_turns,omitempty"`
+	FunctionTools            bool `json:"function_tools,omitempty"`
+	MCPHTTPTools             bool `json:"mcp_http_tools,omitempty"`
+	MCPHTTPRemoteEnvironment bool `json:"mcp_http_remote_environment,omitempty"`
+	MCPHTTPBearerAuth        bool `json:"mcp_http_bearer_auth,omitempty"`
 }
 
 // SupportedAgentKind is one daemon-advertised agent engine. Daemons

@@ -17,8 +17,8 @@ func publicMCPHTTPServers(req proto.PromptRequestPayload) (map[string]mcpServerC
 	if req.MCPHTTPServers == nil {
 		return nil, nil
 	}
-	if !req.DisableExecutionEnvironment || req.RemoteEnvironment != nil {
-		return nil, errors.New("codex: public HTTP MCP requires the service-side environment:none profile")
+	if req.DisableExecutionEnvironment == (req.RemoteEnvironment != nil) {
+		return nil, errors.New("codex: public HTTP MCP requires environment:none or a remote environment")
 	}
 	servers := make(map[string]mcpServerConfig, len(*req.MCPHTTPServers))
 	for _, declaration := range *req.MCPHTTPServers {
@@ -33,7 +33,7 @@ func publicMCPHTTPServers(req proto.PromptRequestPayload) (map[string]mcpServerC
 		if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" || endpoint.Opaque != "" {
 			return nil, errors.New("codex: unsupported public MCP server URL")
 		}
-		if declaration.BearerToken != nil && (endpoint.Scheme != "https" || !validMCPHTTPBearerToken(*declaration.BearerToken)) {
+		if declaration.BearerToken != nil && (req.RemoteEnvironment != nil || endpoint.Scheme != "https" || !validMCPHTTPBearerToken(*declaration.BearerToken)) {
 			return nil, errors.New("codex: unsupported HTTPS MCP bearer credential")
 		}
 		server := mcpServerConfig{Name: name, URL: declaration.ServerURL}
