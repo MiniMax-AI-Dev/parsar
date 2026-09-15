@@ -66,6 +66,13 @@ configuration and a separately installed execution daemon are still required;
 these binaries do not establish full protocol coverage. For a standalone Linux
 container, see [Container deployment](CONTAINER.md).
 
+`make build-agents-api-release` packages the same four commands in a versioned
+Linux amd64 archive, with source/protocol identity, checksums, a license and
+[operator instructions](RELEASE.md). Build from a clean Git worktree with Go and
+Python 3.9+; output defaults to `~/.parsar/build/agents-api-release` (or
+`AGENTS_API_RELEASE_DIR`). The extracted API needs no source checkout or compiler.
+Database setup, daemon/native installation and publication remain separate.
+
 ## Database ownership
 
 Use a dedicated PostgreSQL database and account, separate from the Parsar product.
