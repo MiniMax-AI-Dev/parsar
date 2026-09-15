@@ -48,6 +48,12 @@ func matchesMCPHTTPConfig(raw json.RawMessage, declared map[string]mcpServerConf
 		delete(server, "url")
 		delete(server, "environment_id")
 		delete(server, "enabled")
+		if expected.BearerTokenEnvVar != "" {
+			if server["bearer_token_env_var"] != expected.BearerTokenEnvVar {
+				return false
+			}
+			delete(server, "bearer_token_env_var")
+		}
 		if expected.EnabledTools != nil {
 			// Compare sets: native enabled_tools is an allowlist, not an ordered program.
 			actual, ok := server["enabled_tools"].([]any)

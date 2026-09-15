@@ -108,13 +108,17 @@ func TestPublicMCPHTTPPreflightRedactsNativeErrors(t *testing.T) {
 }
 
 func TestPublicMCPHTTPPreparationChecksBeforeNewAndResumedThread(t *testing.T) {
-	for _, mode := range []string{"new", "resume", "reject"} {
+	for _, mode := range []string{"new", "resume", "reject", "reject bearer reference"} {
 		t.Run(mode, func(t *testing.T) {
 			req, cfg, root := preparationFixture(t)
 			req.RemoteEnvironment = nil
 			req.DisableExecutionEnvironment = true
 			req.AgentOptions = map[string]any{"model": "fixture-model"}
 			servers := []proto.MCPHTTPServer{{ServerLabel: "docs", ServerURL: "https://docs.example/mcp"}}
+			if mode == "reject bearer reference" {
+				token := "synthetic-private-bearer"
+				servers[0].BearerToken = &token
+			}
 			req.MCPHTTPServers = &servers
 			if mode == "resume" {
 				req.AgentSessionID = "fixture-native-thread"
@@ -131,11 +135,14 @@ func TestPublicMCPHTTPPreparationChecksBeforeNewAndResumedThread(t *testing.T) {
 			if mode == "reject" {
 				response["config"].(map[string]any)["mcp_servers"].(map[string]any)["operator"] = map[string]any{"url": "https://operator.example/private"}
 			}
+			if mode == "reject bearer reference" {
+				response["config"].(map[string]any)["mcp_servers"].(map[string]any)["docs"].(map[string]any)["bearer_token_env_var"] = "OPERATOR_SECRET"
+			}
 			path := filepath.Join(root, "native-config.json")
 			writeMCPHTTPConfigResponse(t, path, response)
 			t.Setenv("PARSAR_PREPARATION_MCP_CONFIG", path)
 			p, err := newPreparation(t.Context(), req, cfg)
-			if mode == "reject" {
+			if strings.HasPrefix(mode, "reject") {
 				if err == nil || p != nil {
 					t.Fatal("ambient MCP configuration admitted")
 				}

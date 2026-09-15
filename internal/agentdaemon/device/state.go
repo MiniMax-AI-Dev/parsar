@@ -78,6 +78,7 @@ type KindCapabilities struct {
 	SubagentControl      bool `json:"subagent_control,omitempty"`
 	FunctionTools        bool `json:"function_tools,omitempty"`
 	MCPHTTPTools         bool `json:"mcp_http_tools,omitempty"`
+	MCPHTTPBearerAuth    bool `json:"mcp_http_bearer_auth,omitempty"`
 	DurableInputReceipts bool `json:"durable_input_receipts,omitempty"`
 	DurableTurns         bool `json:"durable_turns,omitempty"`
 	WorkspaceAuthoring   bool `json:"workspace_authoring,omitempty"`

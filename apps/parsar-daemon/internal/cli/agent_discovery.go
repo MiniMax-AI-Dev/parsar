@@ -89,6 +89,7 @@ func discoverAgentCLIs(rc *runContext, profile string, checks agentCLIChecks) (a
 				DurableInputReceipts: true,
 				FunctionTools:        true,
 				MCPHTTPTools:         true,
+				MCPHTTPBearerAuth:    true,
 				MessageItems:         true,
 				ToolItems:            true,
 				ToolObservations:     true,

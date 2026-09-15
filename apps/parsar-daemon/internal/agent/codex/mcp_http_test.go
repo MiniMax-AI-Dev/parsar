@@ -128,6 +128,9 @@ func mcpHTTPConfigResponse(servers map[string]mcpServerConfig) map[string]any {
 		if server.EnabledTools != nil {
 			entry["enabled_tools"] = append([]string{}, (*server.EnabledTools)...)
 		}
+		if server.BearerTokenEnvVar != "" {
+			entry["bearer_token_env_var"] = server.BearerTokenEnvVar
+		}
 		entries[name] = entry
 	}
 	return map[string]any{"config": map[string]any{"mcp_servers": entries, "features": map[string]any{"plugins": false, "apps": false}, "mcp_oauth_credentials_store": "file"}}
