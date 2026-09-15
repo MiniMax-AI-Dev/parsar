@@ -517,8 +517,21 @@ existing Session cancellation path. `Close` remains inert after transfer.
 an unstarted resource has no measured Usage or observed resume identity. This is
 best-effort cancellation and an observed snapshot, not immutable final output,
 notification drain, caller-deadline compliance or remote process quiescence.
-Daemon cancellation receipt ordering and late-Session output forwarding remain
-separate integration work.
+During a pending Start, the Router invokes that cancellation capability once outside
+its receive loop and retains native preparation capacity until Start, cancellation,
+output forwarding and cleanup finish. A late Session is used only for teardown and
+forwarding; it never becomes available for input or publishes successful Start.
+The ordinary output pump forwards accepted frames before the observed cancellation
+outcome receipt. Missing capability, failed cancellation or failed forwarding cannot
+produce an applied receipt. An unused resource may supply an empty observed outcome;
+the Router never fabricates one.
+
+Receipt settlement waits at most ten seconds, with a separate five-second send
+budget and the existing gateway settlement deadline. A timeout does not free the
+resource or stop tracking late cleanup. Shutdown cancels receipt waits while owned
+Start/cleanup work remains tracked. This ordering covers cancellation received while
+Start is pending; ordinary post-transfer cancellation, complete native output and
+remote process exit retain their separate limitations.
 
 The private daemon preparation controls reuse execution configuration but reject
 input, RunID, Conversation, attachments and product authoring. The initial profile
@@ -574,8 +587,9 @@ During Start, consume preparation controls alongside the ordinary Run stream so 
 control-only rejection or pending-start cancellation can settle promptly. Reuse
 ordinary journal, receipt and completion/native-history persistence. Once cancellation
 is sent, preparation errors/closure cannot replace its receipt or timeout path.
-The daemon may acknowledge cancellation before a native Session provides an outcome;
-without an observed final Done, delivery conservatively fails as outcome unavailable.
+Pending-start cancellation uses the adapter's observed outcome after daemon handoff
+and output forwarding. Missing or unconfirmed outcomes still fail conservatively;
+preparation control errors cannot substitute for the cancellation receipt.
 Do not fabricate an empty cancellation outcome or infer native quiescence.
 The connection owner spans preparation and the transferred Run without a reservation-derived Run
 deadline; every exit releases it.

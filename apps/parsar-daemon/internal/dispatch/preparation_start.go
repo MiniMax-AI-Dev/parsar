@@ -52,7 +52,8 @@ func (r *Router) handleExecutionStart(_ context.Context, env proto.Envelope) err
 	p.status.State, p.status.RunID, p.status.Revision = "starting", input.RunID, p.status.Revision+1
 	p.startFingerprint, p.busy = fingerprint, true
 	state := &sessionState{runID: input.RunID, stateKey: p.stateKey, out: make(chan proto.Envelope, 64), ctx: p.ctx, ctxCancel: p.cancel,
-		pendingIDs: make(map[string]struct{}), pendingAsks: make(map[string]struct{}), traceparent: env.Trace, releaseOnCompletion: true, preparationStart: true}
+		pendingIDs: make(map[string]struct{}), pendingAsks: make(map[string]struct{}), traceparent: env.Trace, releaseOnCompletion: true,
+		preparationStart: &preparedStartCancellation{prepared: p.prepared, settled: make(chan struct{})}}
 	r.sessions[input.RunID] = state
 	status := p.status
 	r.shutdownWG.Add(1)
@@ -67,14 +68,17 @@ func (r *Router) startPreparedExecution(p *preparationState, state *sessionState
 	}
 	session, err := p.prepared.Start(p.ctx, input.RunID, input.Prompt, state.out)
 	r.mu.Lock()
+	cancellation := state.preparationStart
 	started := err == nil && session != nil && p.status.State == "starting" && p.ctx.Err() == nil && !r.closed
 	if started {
-		state.session, state.preparationStart = session, false
+		state.session, state.preparationStart = session, nil
 		p.prepared, p.owns, p.busy = nil, false, false
 		p.status.State, p.status.Revision = "started", p.status.Revision+1
 		p.timer.Stop()
 	} else {
-		delete(r.sessions, state.runID)
+		if cancellation.cancelDone == nil {
+			delete(r.sessions, state.runID)
+		}
 		p.cancel()
 		p.timer.Stop()
 		if p.status.State == "starting" {
@@ -85,6 +89,11 @@ func (r *Router) startPreparedExecution(p *preparationState, state *sessionState
 	r.mu.Unlock()
 	if !started {
 		defer r.shutdownWG.Done()
+		if cancellation.cancelDone != nil {
+			r.finishPreparedCancellation(p, state, session, cancellation)
+			r.sendPreparation(p.requestID, p.trace, status)
+			return
+		}
 		if session != nil {
 			_ = session.Cancel(context.Background())
 			r.drain(state.out)

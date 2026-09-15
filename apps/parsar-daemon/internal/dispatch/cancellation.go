@@ -27,21 +27,26 @@ func (r *Router) handlePromptCancel(ctx context.Context, env proto.Envelope) err
 		return err
 	}
 	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return ErrRouterClosed
+	}
 	state := r.sessions[env.ID]
 	if state != nil {
 		state.retain = false
 	}
 	var cancelSession func(context.Context) error
-	preparationStart := state != nil && state.preparationStart
+	if state != nil && state.preparationStart != nil {
+		r.cancelPreparedStartLocked(state, env, request.DeliveryID)
+		r.mu.Unlock()
+		return nil
+	}
 	if state != nil && state.session != nil {
 		cancelSession = state.session.Cancel
 	}
 	r.mu.Unlock()
 	ack := proto.InteractionDecisionAckPayload{DeliveryID: request.DeliveryID, ErrorCode: "run_inactive"}
-	if preparationStart && cancelSession == nil {
-		state.ctxCancel()
-		ack.Applied, ack.ErrorCode = true, ""
-	} else if state != nil && cancelSession == nil {
+	if state != nil && cancelSession == nil {
 		ack.ErrorCode = "not_ready"
 	} else if cancelSession != nil {
 		if err := cancelSession(ctx); err != nil {
@@ -56,7 +61,11 @@ func (r *Router) handlePromptCancel(ctx context.Context, env proto.Envelope) err
 		}
 		state.ctxCancel()
 	}
-	if request.DeliveryID == "" {
+	return r.sendCancellationAck(ctx, env, ack)
+}
+
+func (r *Router) sendCancellationAck(ctx context.Context, env proto.Envelope, ack proto.InteractionDecisionAckPayload) error {
+	if ack.DeliveryID == "" {
 		return nil
 	}
 	reply, err := proto.NewEnvelopeWithTrace(proto.TypeInteractionDecisionAck, env.ID, ack, env.Trace)
