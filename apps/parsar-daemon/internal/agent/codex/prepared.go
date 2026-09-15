@@ -27,6 +27,8 @@ type Prepared struct {
 	transferred  chan struct{}
 }
 
+var _ agent.PreparedCancellation = (*Prepared)(nil)
+
 // Start consumes the preparation once. ctx bounds only this start operation;
 // cancellation after return does not cancel the transferred Session. The original
 // owner context remains its lifetime context. On success the Session owns out.
@@ -98,6 +100,23 @@ func (p *Prepared) Close() error {
 	err := p.session.rpc.Close()
 	p.plan.Cleanup()
 	return err
+}
+
+// Cancel fences Start and cancels the resource even after transfer.
+func (p *Prepared) Cancel(ctx context.Context) error {
+	p.mu.Lock()
+	p.closed = true
+	started := p.started
+	p.mu.Unlock()
+	if started {
+		return p.session.Cancel(ctx)
+	}
+	return p.Close()
+}
+
+// CancellationOutcome returns observed state, not a guarantee of final output or quiescence.
+func (p *Prepared) CancellationOutcome() proto.DonePayload {
+	return p.session.CancellationOutcome()
 }
 
 func (p *Prepared) watchOwner() {

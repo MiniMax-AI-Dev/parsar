@@ -15,6 +15,13 @@ type Prepared interface {
 	Close() error
 }
 
+// PreparedCancellation optionally follows cancellation across Start's resource transfer.
+type PreparedCancellation interface {
+	Prepared
+	Cancel(context.Context) error
+	CancellationOutcome() proto.DonePayload
+}
+
 type PreparationFactory func(context.Context, proto.PromptRequestPayload) (Prepared, error)
 
 // RegisterPreparation installs a separate execution-only path. Product factory
