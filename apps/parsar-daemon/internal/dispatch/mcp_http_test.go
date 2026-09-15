@@ -68,7 +68,7 @@ func TestMCPHTTPBearerRejectsUnsupportedRequestsBeforeFactory(t *testing.T) {
 }
 
 func TestRemoteMCPRejectsBeforePreparationFactory(t *testing.T) {
-	for _, mode := range []string{"supported", "old peer", "no MCP", "no remote", "bearer", "other engine", "empty declaration", "no declaration"} {
+	for _, mode := range []string{"supported", "old peer", "no MCP", "no remote", "bearer old peer", "bearer supported", "bearer no general auth", "bearer none conflict", "bearer HTTP", "other engine", "empty declaration", "no declaration"} {
 		t.Run(mode, func(t *testing.T) {
 			h := newHarness(t)
 			defer h.router.Shutdown(context.Background())
@@ -86,9 +86,20 @@ func TestRemoteMCPRejectsBeforePreparationFactory(t *testing.T) {
 				caps.RemoteEnvironment = false
 			case "other engine":
 				req.Configuration.AgentKind = "other"
-			case "bearer":
+			case "bearer old peer", "bearer supported", "bearer no general auth", "bearer none conflict", "bearer HTTP":
 				token := "synthetic-private-token"
 				servers[0].BearerToken = &token
+				caps.MCPHTTPRemoteBearerAuth = mode != "bearer old peer"
+				caps.EnvironmentNone = false
+				if mode == "bearer no general auth" {
+					caps.MCPHTTPBearerAuth = false
+				}
+				if mode == "bearer none conflict" {
+					req.Configuration.DisableExecutionEnvironment = true
+				}
+				if mode == "bearer HTTP" {
+					servers[0].ServerURL = "http://tools.example/mcp"
+				}
 			case "empty declaration":
 				servers = []proto.MCPHTTPServer{}
 				caps.MCPHTTPRemoteEnvironment = false
@@ -101,12 +112,15 @@ func TestRemoteMCPRejectsBeforePreparationFactory(t *testing.T) {
 				t.Error("ordinary factory called")
 				return nil, errors.New("unexpected")
 			})
-			h.reg.RegisterPreparation(req.Configuration.AgentKind, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) {
+			h.reg.RegisterPreparation(req.Configuration.AgentKind, func(_ context.Context, got proto.PromptRequestPayload) (agent.Prepared, error) {
+				if mode == "bearer supported" && (got.MCPHTTPServers == nil || (*got.MCPHTTPServers)[0].BearerToken == nil || *(*got.MCPHTTPServers)[0].BearerToken != "synthetic-private-token") {
+					t.Error("remote bearer lost before preparation")
+				}
 				entered <- struct{}{}
 				return nil, errors.New("controlled stop")
 			})
 			err := h.router.Handle(t.Context(), mustEnv(t, proto.TypeExecutionPrepare, "remote-mcp", req))
-			allowed := mode == "supported" || mode == "no declaration"
+			allowed := mode == "supported" || mode == "no declaration" || mode == "bearer supported"
 			if (err == nil) != allowed {
 				t.Fatal("wrong preparation admission", err)
 			}

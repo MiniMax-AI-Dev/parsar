@@ -17,16 +17,13 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 	if json.Unmarshal(configuration, &snapshot) != nil {
 		return store.ErrInvalidInput
 	}
-	selected, err := selectedMCPCredentials(snapshot)
+	_, err := selectedMCPCredentials(snapshot)
 	if err != nil {
 		return err
 	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" {
 		if engine != "codex" || snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" || !path.IsAbs(snapshot.Environment.WorkspaceDirectory) || strings.ContainsAny(snapshot.Environment.WorkspaceDirectory, "\x00\r\n\\") || len(snapshot.Environment.CapabilityDirectories) != 0 {
 			return store.ErrInvalidInput
-		}
-		if len(selected) != 0 {
-			return errors.New("authenticated MCP with a self-hosted environment is not supported")
 		}
 		_, _, err := executionTools(snapshot.Agent.Tools)
 		return err
@@ -147,8 +144,11 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 		return device.KindCapabilities{}, err
 	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" && len(mcp) > 0 {
-		if !caps.MCPHTTPRemoteEnvironment || len(selected) != 0 {
-			return fail("device must support credential-free service-side HTTP MCP with a remote environment")
+		if !caps.MCPHTTPRemoteEnvironment {
+			return fail("device must support service-side HTTP MCP with a remote environment")
+		}
+		if len(selected) > 0 && !caps.MCPHTTPRemoteBearerAuth {
+			return fail("device must advertise mcp_http_remote_bearer_auth")
 		}
 	}
 	if len(selected) > 0 && !caps.MCPHTTPBearerAuth {

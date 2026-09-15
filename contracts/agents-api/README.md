@@ -204,8 +204,9 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   the service's `auto` policy; complete upstream-default/error/retry conformance is
   unverified. HTTP MCP with explicit `service` origin and
   `required` omitted/false supports saved configuration and Codex `none` execution,
-  plus credential-free `self_hosted` execution behind the explicit combination
-  capability. Selected credentials on `self_hosted` fail before creation.
+  plus `self_hosted` execution behind explicit combination capabilities. Remote
+  static Bearer authentication additionally requires `mcp_http_remote_bearer_auth`;
+  it keeps the secret in the trusted service native process.
   The saved HTTP transport includes `headers:{}`; effective Session transport omits
   headers. Omitted/null `allowed_tools` is unrestricted; `[]` denies all tools.
   Session `vault_ids` attaches tenant-owned Vaults. Explicit `credential_id` must
@@ -297,8 +298,8 @@ that immutable choice. The public request supplies a model, not a harness select
 Both no-environment profiles require disabled `multi_agent`, implicit reasoning,
 service tier `auto`, ordinary text and non-deferred functions. Codex additionally
 supports anonymous or attached static-bearer service-origin HTTP MCP on `none`.
-The self-hosted profile supports text/functions and credential-free service-origin
-HTTP MCP as described in the Environment contract. See the
+The self-hosted profile supports text/functions and anonymous or attached
+static-bearer service-origin HTTP MCP as described in the Environment contract. See the
 [HTTP MCP profile and limits](../../services/agents-api/README.md#http-mcp-execution).
 
 | Profile | Current limits |

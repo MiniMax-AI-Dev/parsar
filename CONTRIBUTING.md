@@ -806,10 +806,11 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   additionally requires `mcp_http_remote_environment` plus existing remote preparation
   capabilities, including at the daemon before the factory; individual MCP/remote
   capabilities on old peers do not imply the combination. MCP stays in the trusted
-  service harness while workspace commands use the executor. This combination
-  admits credential-free declarations only: explicitly or implicitly selected Vault
-  credentials are rejected before Session/input/event persistence, never downgraded
-  to anonymous access. Native remote readiness and exact MCP preflight both precede
+  service harness while workspace commands use the executor. Static Vault Bearer
+  authentication additionally requires `mcp_http_remote_bearer_auth`; an older peer
+  supporting anonymous remote MCP and environment:none authentication separately
+  cannot execute the authenticated combination. Native remote readiness and exact
+  MCP preflight both precede
   thread creation/resume. Other engines and placements remain implementation gaps.
 - The shared MCP resolver preserves omitted/null `allowed_tools` as unrestricted
   and an explicit empty list as deny-all. Saved HTTP transport output includes
@@ -835,14 +836,17 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   the existing public `mcp_call` projection, never add a second MCP/model loop.
 - Private daemon HTTPS MCP bearer authentication additionally requires
   `mcp_http_bearer_auth` and the existing MCP/environment capabilities, checked
-  before the factory. It is restricted to trusted service-side Codex
-  `environment:none`. A transient
+  before the factory. It is restricted to trusted service-side Codex with
+  `environment:none` or the explicitly supported authenticated remote combination. A transient
   per-server `bearer_token` becomes a fresh daemon-owned `bearer_token_env_var`
   reference for each native process. Put the exact secret only in that app-server
   child's environment, after auxiliary launch probes; never in global environment,
   arguments, configuration/history, public snapshots or logs. Preflight accepts
   only the expected server/reference pairing and retains the existing rejection
-  of ambient credential sources. Use the native HTTP client with TLS verification.
+  of ambient credential sources. Remote commands use the existing core-only native
+  environment policy; service-side bearer variables must not enter executor
+  environments, commands, files or native history/snapshots. Use the native HTTP
+  client with TLS verification.
   This execution profile rejects empty values and bytes outside RFC 6750 b64token
   syntax with generic errors; it never trims tokens or narrows opaque Credential
   storage. OAuth and hosted redirect/error equivalence

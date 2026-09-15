@@ -46,7 +46,7 @@ func TestMCPFrozenCredentialAdmission(t *testing.T) {
 			rawTool, _ := json.Marshal(tool)
 			snapshot.Agent.Tools = []json.RawMessage{rawTool}
 			raw, _ := json.Marshal(snapshot)
-			valid := mode == "implicit" || mode == "explicit" || mode == "anonymous" || mode == "self-hosted anonymous"
+			valid := mode == "implicit" || mode == "explicit" || mode == "anonymous" || mode == "self-hosted anonymous" || mode == "self-hosted implicit" || mode == "self-hosted explicit"
 			if err := ValidateSessionConfiguration("codex", raw); (err == nil) != valid {
 				t.Fatal("frozen binding profile decision differs", err)
 			}

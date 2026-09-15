@@ -147,16 +147,16 @@ func writeMCPHTTPConfigResponse(t *testing.T, path string, response any) {
 	}
 }
 
-func TestRemoteMCPRejectsBearerBeforeNativeSetup(t *testing.T) {
+func TestRemoteMCPBearerRequiresHTTPS(t *testing.T) {
 	req := remoteEnvironmentRequest()
 	token := "synthetic-private-token"
-	servers := []proto.MCPHTTPServer{{ServerLabel: "tools", ServerURL: "https://tools.example/mcp", BearerToken: &token}}
+	servers := []proto.MCPHTTPServer{{ServerLabel: "tools", ServerURL: "http://tools.example/mcp", BearerToken: &token}}
 	req.MCPHTTPServers = &servers
 	if _, err := publicMCPHTTPServers(req); err == nil || strings.Contains(err.Error(), token) {
-		t.Fatal("remote bearer accepted or exposed")
+		t.Fatal("plaintext bearer accepted or exposed")
 	}
-	servers[0].BearerToken = nil
+	servers[0].ServerURL = "https://tools.example/mcp"
 	if _, err := publicMCPHTTPServers(req); err != nil {
-		t.Fatal("credential-free remote declaration rejected", err)
+		t.Fatal("remote HTTPS bearer declaration rejected", err)
 	}
 }

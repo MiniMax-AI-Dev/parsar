@@ -19,11 +19,18 @@ func validateMCPHTTP(req proto.PromptRequestPayload, caps proto.AgentKindCapabil
 		if server.BearerToken == nil {
 			continue
 		}
-		if !caps.MCPHTTPTools || !caps.MCPHTTPBearerAuth || !caps.EnvironmentNone {
+		if !caps.MCPHTTPTools || !caps.MCPHTTPBearerAuth {
 			return errors.New("engine does not support authenticated HTTP MCP")
 		}
-		if req.AgentKind != "codex" || !req.DisableExecutionEnvironment || req.RemoteEnvironment != nil {
-			return errors.New("authenticated HTTP MCP requires service-side Codex environment:none")
+		if req.AgentKind != "codex" || req.DisableExecutionEnvironment == (req.RemoteEnvironment != nil) {
+			return errors.New("authenticated HTTP MCP requires service-side Codex environment:none or a remote environment")
+		}
+		if req.RemoteEnvironment != nil {
+			if !caps.RemoteEnvironment || !caps.MCPHTTPRemoteBearerAuth {
+				return errors.New("engine does not support authenticated HTTP MCP with a remote environment")
+			}
+		} else if !caps.EnvironmentNone {
+			return errors.New("engine does not support authenticated HTTP MCP with environment:none")
 		}
 		endpoint, err := url.Parse(server.ServerURL)
 		if err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" {

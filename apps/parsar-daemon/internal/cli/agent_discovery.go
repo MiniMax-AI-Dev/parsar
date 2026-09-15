@@ -150,6 +150,7 @@ func discoverAgentCLIs(rc *runContext, profile string, checks agentCLIChecks) (a
 		out.Codex.Version = codexVersion
 		out.Codex.Capabilities.RemoteEnvironment = codex.SupportsRemoteEnvironment(codexVersion)
 		out.Codex.Capabilities.MCPHTTPRemoteEnvironment = out.Codex.Capabilities.RemoteEnvironment
+		out.Codex.Capabilities.MCPHTTPRemoteBearerAuth = out.Codex.Capabilities.RemoteEnvironment
 		fmt.Fprintf(rc.stdout, "Codex preflight ok (%s)\n", codexVersion)
 	} else if errors.Is(codexErr, codex.ErrCLINotFound) {
 		fmt.Fprintln(rc.stderr, "parsar-daemon: Codex CLI not found on PATH; codex unavailable.")
