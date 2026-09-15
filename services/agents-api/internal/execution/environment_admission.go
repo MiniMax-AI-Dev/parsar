@@ -47,8 +47,12 @@ func (w *Worker) submitEnvironmentInputs(ctx context.Context, session store.Sess
 	if err := w.checkAdmissionOwnership(ctx); err != nil {
 		return nil, err
 	}
-	if len(inputs) > 0 && !slices.ContainsFunc(inputs, func(input store.Input) bool { return input.Kind != "cancel" }) {
-		// Cancellation cannot create a Turn. The Session lock binds its target and retry identity.
+	kind := ""
+	if len(inputs) > 0 {
+		kind = inputs[0].Kind
+	}
+	if (kind == "cancel" || kind == "tool_result") && !slices.ContainsFunc(inputs, func(input store.Input) bool { return input.Kind != kind }) {
+		// Neither kind creates a Turn. The Session lock preserves target and retry identity.
 		return w.admission.SubmitInputs(ctx, session.TenantID, session.ID, key, inputs)
 	}
 	reserve, cancel := context.WithTimeout(ctx, 5*time.Second)

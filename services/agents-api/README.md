@@ -384,7 +384,7 @@ The disabled-by-default Codex adapter supports executor registration, harness ke
 authorization and an opaque native Noise relay. Configured execution and an
 executor origin enable public `self_hosted` Sessions on Codex. The current
 profile requires an absolute `workspace_directory`, empty/default
-`capability_directories` and no function tools. Initial text is optional.
+`capability_directories` and optional supported non-deferred functions. Initial text is optional.
 
 To enable it alongside the existing daemon worker, set
 `AGENTS_API_EXECUTOR_URL` to the externally reachable HTTPS origin. Apply the
@@ -496,7 +496,12 @@ Cancellation-only events use the existing durable receipt path, including idle
 no-Turn requests and retries that never retarget later work. A new cancellation
 still conflicts with pending pre-Turn input. HTTP 204 acknowledges admission;
 observe completion through events/queries and process cessation separately.
-Active steering, mixed events, function tools/results,
+Function definitions use the existing callback bridge. Submit result-only batches
+with explicit Turn/call identities; they create no Turn or preparation and retain
+the same identities on retries after completion or during later work. Pending
+reservations still block new results. Observe native application through the
+existing actions, Items and events; admission alone does not acknowledge application.
+Active steering, mixed events, deferred functions,
 nonempty capability directories, other placements, populated installation metadata
 and Environment file/template routes remain unavailable. These are implementation gaps.
 
