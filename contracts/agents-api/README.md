@@ -79,7 +79,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | environments | retrieve | Supported self-hosted profile: durable status and safe empty installation metadata; hosted/populated inventory remains missing |
 | environments.files | create, list | Missing |
 | environments.templates | create, retrieve, update, list, delete | Missing |
-| vaults | create, retrieve, list, delete | Create/retrieve/list with independent tenant persistence, stored status filtering and Session attachments; archive/delete lifecycle remains missing |
+| vaults | create, retrieve, list, delete | Create/retrieve/list/delete with independent tenant persistence, stored status filtering, atomic Credential cascade and frozen Session attachments; archive semantics and full hosted lifecycle parity remain missing |
 | vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve/list/token replacement/deletion with scoped encrypted storage; Session attachment and exact-URL HTTPS MCP binding; OAuth, archive semantics and full hosted lifecycle parity remain missing |
 
 For each resource, verify the referenced request/response unions and observable
@@ -143,7 +143,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   64 KiB encoded metadata and 1 MiB HTTP body bounds are local implementation
   limits. Creation does not start execution. Retrieval maps missing, malformed and
   foreign IDs to the same local not-found response. Exact hosted error/retry semantics,
-  restricted-key scopes and archive/delete lifecycle remain unverified or unimplemented;
+  restricted-key scopes and archive lifecycle remain unverified or unimplemented;
   this is not complete Vault compatibility. Listing accepts `after`, creation order
   (default `desc`), a default limit of 20 clamped to 1–100, and scalar or SDK bracket-array
   `status` filters. Both `active` and `archived` are included by default. The private
@@ -152,6 +152,14 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   writer or delete-to-archive mapping is implemented. Equal creation times use ID
   order locally; repeated scalars and mixed status encodings are rejected. Exact
   hosted query errors and pagination over changing data remain unverified.
+- `DELETE /vaults/{vault_id}` returns `id`, `deleted: true` and `object: vault.deleted`
+  after project-scoped parent removal and atomic cascade of all stored Credentials.
+  It needs no encryption key or execution connection. Local parent/child reads,
+  repeated deletion and new references return 404; lists omit the removed resources.
+  Existing Session snapshots and recorded retries retain their IDs and selections.
+  Subsequent secret lookup fails without reselection; already-dispatched tokens are
+  not withdrawn. Archive relationships, exact hosted visibility/concurrent errors,
+  provider revocation and physical erasure remain separate gaps.
 - Reusable Agents use `POST /agents` and `GET /agents/{agent_id}`. Keep their own
   identity, timestamps and metadata separate from Session effective configuration.
   On creation, omitted/null name and instructions resolve to null, metadata to `{}`, tools to
