@@ -22,6 +22,9 @@ type vaultResourceFixture struct {
 	err        error
 	tenant, id string
 	calls      int
+	page       store.VaultPage
+	options    pageOptions
+	statuses   []string
 }
 
 func (f *vaultResourceFixture) CreateVault(_ context.Context, tenant string, input store.CreateVaultInput) (store.Vault, error) {

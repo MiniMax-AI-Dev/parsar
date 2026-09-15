@@ -22,6 +22,7 @@ from jsonschema import Draft4Validator
 from official_items import verify_items
 from official_agents import verify_agents
 from official_vaults import verify_vaults, verify_vault_recovery
+from official_vault_list import verify_vault_list, verify_vault_list_recovery
 from official_credentials import verify_credentials, verify_credential_recovery, verify_credential_storage_disabled
 from official_mcp_credentials import verify_mcp_credentials, verify_mcp_credential_recovery
 from official_credential_rotation import verify_credential_rotation, verify_rotation_recovery
@@ -141,6 +142,8 @@ def main():
                                 project=bindings[0]["project_id"]) as peer:
                         saved_vaults = verify_vaults(a, b, invalid, peer, bindings[0], expect_error)
                         saved_credentials = verify_credentials(a, b, invalid, peer, saved_vaults, credential_canary, expect_error)
+                        listed_vaults = verify_vault_list(a, b, invalid, peer, bindings[0], saved_vaults,
+                                                          root, directory, expect_error)
                     saved_agents = verify_agents(a, b, invalid, expect_error)
                     listed_agents = verify_agent_list(a, b, invalid, saved_agents, expect_error)
                     sessions = a.beta.agents.sessions
@@ -232,6 +235,7 @@ def main():
                     process = start()
                     with client(peer_principal) as peer:
                         verify_vault_recovery(a, b, peer, saved_vaults)
+                        verify_vault_list_recovery(a, b, peer, listed_vaults)
                         verify_credential_recovery(a, b, peer, saved_credentials)
                         verify_mcp_credential_recovery(a, mcp_credentials)
                         verify_rotation_recovery(a, peer, credential_rotation)

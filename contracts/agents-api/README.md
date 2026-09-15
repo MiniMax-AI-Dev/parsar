@@ -79,7 +79,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | environments | retrieve | Supported self-hosted profile: durable status and safe empty installation metadata; hosted/populated inventory remains missing |
 | environments.files | create, list | Missing |
 | environments.templates | create, retrieve, update, list, delete | Missing |
-| vaults | create, retrieve, list, delete | Create/retrieve with independent tenant persistence and Session attachments; list/delete remain missing |
+| vaults | create, retrieve, list, delete | Create/retrieve/list with independent tenant persistence, stored status filtering and Session attachments; archive/delete lifecycle remains missing |
 | vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve/token replacement with encrypted storage and safe metadata; Session attachment and exact-URL HTTPS MCP binding; OAuth and list/delete remain missing |
 
 For each resource, verify the referenced request/response unions and observable
@@ -116,16 +116,24 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   replacement; already-resolved requests may retain the old token. OAuth replacement,
   storage-key rotation, hot reload/revocation and exact hosted concurrent-update,
   timestamp and retry semantics remain gaps.
-- Vaults use `POST /vaults` and `GET /vaults/{vault_id}` with the same project/tenant
+- Vaults use `POST /vaults`, `GET /vaults` and `GET /vaults/{vault_id}` with the same project/tenant
   authentication and Beta header as other resources. The response contains only
   `id`, `object: vault`, `created_at`, `name` and `metadata`. Omitted name stays null;
   explicit null is rejected. Supplied strings are trimmed and must contain 1–256
   UTF-8 bytes. Omitted/null metadata becomes `{}` and values must be strings.
   Session-specific metadata pair/character limits do not apply. The existing
   64 KiB encoded metadata and 1 MiB HTTP body bounds are local implementation
-  limits. Creation does not start execution. Missing, malformed and foreign IDs
-  return the same local not-found response. Exact hosted error/retry semantics,
-  restricted-key scopes and list/delete lifecycle remain unverified or unimplemented; this is not complete Vault compatibility.
+  limits. Creation does not start execution. Retrieval maps missing, malformed and
+  foreign IDs to the same local not-found response. Exact hosted error/retry semantics,
+  restricted-key scopes and archive/delete lifecycle remain unverified or unimplemented;
+  this is not complete Vault compatibility. Listing accepts `after`, creation order
+  (default `desc`), a default limit of 20 clamped to 1–100, and scalar or SDK bracket-array
+  `status` filters. Both `active` and `archived` are included by default. The private
+  classification is stored, never returned; existing/new Vaults default active.
+  Synthetic archived fixtures prove read/filter behavior only. No public archive
+  writer or delete-to-archive mapping is implemented. Equal creation times use ID
+  order locally; repeated scalars and mixed status encodings are rejected. Exact
+  hosted query errors and pagination over changing data remain unverified.
 - Reusable Agents use `POST /agents` and `GET /agents/{agent_id}`. Keep their own
   identity, timestamps and metadata separate from Session effective configuration.
   On creation, omitted/null name and instructions resolve to null, metadata to `{}`, tools to

@@ -685,9 +685,20 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   null; a supplied non-null string is trimmed and limited to 1–256 UTF-8 bytes.
   Omitted/null metadata becomes an empty object. Reuse the 64 KiB encoded metadata
   storage bound, without applying Session-specific pair/character limits. This is
-  a local bound, not hosted parity. List/delete lifecycle remains a separate gap;
-  do not introduce product roles or speculative
-  credential/lifecycle fields into this resource slice.
+  a local bound, not hosted parity. `GET /v1/vaults` lists the authenticated project's
+  records using creation-time/ID keysets, default descending order and a default
+  limit of 20 clamped to 1–100. Other resource limit policies are unchanged.
+  Status accepts `active`/`archived` as a scalar or SDK `status[]` array, with both
+  included by default. Private stored classification defaults existing/new rows
+  to active; it is never exposed in the Vault response. Listing reads no Credentials
+  and needs no encryption key or execution service connection. Mixed status encodings
+  and repeated scalar parameters are rejected locally. Exact hosted errors, equal-time
+  ordering and changes between pages remain unverified. Private archived fixtures
+  prove filtering only: there is no public archive writer, archive timestamp or
+  inferred delete-to-archive behavior. Retrieval, Session binding and dispatch retain
+  their existing rules. Archive/delete/revocation lifecycle remains a separate gap;
+  do not introduce product roles or speculative lifecycle fields. Migration rollback
+  refuses to discard classification while archived rows exist.
 - Static-bearer Credentials are children of tenant-owned Vaults in the execution
   database. Creation admits the owner in the same SQL statement as the insert;
   retrieval joins the owning Vault and selects public metadata only. No public

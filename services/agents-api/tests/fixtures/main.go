@@ -1,4 +1,4 @@
-// Command fixtures seeds internal Turns for official-client recovery tests.
+// Command fixtures seeds internal records for official-client recovery tests.
 package main
 
 import (
@@ -21,12 +21,15 @@ type fixture struct {
 
 func main() {
 	if err := seed(); err != nil {
-		os.Stderr.WriteString("Turn fixture setup failed.\n")
+		os.Stderr.WriteString("Internal fixture setup failed.\n")
 		os.Exit(1)
 	}
 }
 
 func seed() error {
+	if path := os.Getenv("AGENTS_API_VAULT_LIST_FIXTURE"); path != "" {
+		return seedVaultList(path)
+	}
 	path := os.Getenv("AGENTS_API_TURN_FIXTURE")
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -36,15 +39,8 @@ func seed() error {
 	if err = json.Unmarshal(raw, &f); err != nil {
 		return err
 	}
-	cfg, err := pgxpool.ParseConfig(os.Getenv("PARSAR_AGENTS_API_TEST_DATABASE_URL"))
-	if err != nil {
-		return err
-	}
-	if !strings.HasPrefix(cfg.ConnConfig.Database, "parsar_agents_api_") || !strings.HasSuffix(cfg.ConnConfig.Database, "_tests") {
-		return errors.New("dedicated test database required")
-	}
 	ctx := context.Background()
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	pool, err := fixturePool(ctx)
 	if err != nil {
 		return err
 	}
@@ -74,4 +70,15 @@ func seed() error {
 		return err
 	}
 	return os.WriteFile(path, raw, 0600)
+}
+
+func fixturePool(ctx context.Context) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(os.Getenv("PARSAR_AGENTS_API_TEST_DATABASE_URL"))
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasPrefix(cfg.ConnConfig.Database, "parsar_agents_api_") || !strings.HasSuffix(cfg.ConnConfig.Database, "_tests") {
+		return nil, errors.New("dedicated test database required")
+	}
+	return pgxpool.NewWithConfig(ctx, cfg)
 }

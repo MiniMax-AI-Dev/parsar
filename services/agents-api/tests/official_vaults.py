@@ -102,9 +102,8 @@ def verify_vaults(client, other, invalid, peer, binding, expect_error):
         assert raw.get(alias, headers=headers).status_code == 404
 
     assert [list(api.beta.agents.sessions.list()) for api in (client, other)] == sessions_before
-    # Rejected-request no-write evidence belongs to the real PostgreSQL tests;
-    # no Vault listing or private database query is substituted into this client.
-    print("Vault resources: fixed SDK/raw create/retrieve, exact fields, UTF-8 name boundary, metadata, project user/service access and validation passed; credentials and full lifecycle remain gaps.")
+    # Rejected-request no-write evidence belongs to the real PostgreSQL tests.
+    print("Vault resources: fixed SDK/raw create/retrieve, exact fields, UTF-8 name boundary, metadata, project user/service access and validation passed; full lifecycle remains a gap.")
     return saved, foreign
 
 

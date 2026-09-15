@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,7 +19,10 @@ func readPage(w http.ResponseWriter, r *http.Request, extraKeys ...string) (page
 }
 
 func readPageSize(w http.ResponseWriter, r *http.Request, rejectLarger bool, extraKeys ...string) (pageOptions, bool) {
-	q := r.URL.Query()
+	return readPageQuery(w, r.URL.Query(), rejectLarger, extraKeys...)
+}
+
+func readPageQuery(w http.ResponseWriter, q url.Values, rejectLarger bool, extraKeys ...string) (pageOptions, bool) {
 	keys := append([]string{"after", "limit", "order"}, extraKeys...)
 	for key, values := range q {
 		if !slices.Contains(keys, key) || len(values) != 1 {

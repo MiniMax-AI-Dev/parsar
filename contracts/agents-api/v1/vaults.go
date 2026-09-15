@@ -14,3 +14,11 @@ type Vault struct {
 	Name      *string           `json:"name" extensions:"x-nullable"`
 	Metadata  map[string]string `json:"metadata" binding:"required"`
 }
+
+type VaultList struct {
+	Object  string  `json:"object" binding:"required" enums:"list"`
+	Data    []Vault `json:"data" binding:"required"`
+	HasMore bool    `json:"has_more" binding:"required"`
+	FirstID *string `json:"first_id" extensions:"x-nullable"`
+	LastID  *string `json:"last_id" extensions:"x-nullable"`
+}
