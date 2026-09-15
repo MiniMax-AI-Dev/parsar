@@ -185,6 +185,52 @@ func TestPreparedCancelTransferredPreservesObservedOutcome(t *testing.T) {
 	}
 }
 
+func TestPreparedCancelTransferredWaitsForCleanup(t *testing.T) {
+	req, cfg, root := preparationFixture(t)
+	p, err := newPreparation(t.Context(), req, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Cancel(context.Background())
+	entered, release := make(chan struct{}), make(chan struct{})
+	allowCleanup := sync.OnceFunc(func() { close(release) })
+	defer allowCleanup()
+	cleanup := p.session.cleanup
+	p.session.cleanup = sync.OnceFunc(func() { close(entered); <-release; cleanup() })
+	p.plan.Cleanup = p.session.cleanup
+	out := make(chan proto.Envelope, 16)
+	if _, err := p.Start(t.Context(), "run", "prompt", out); err != nil {
+		t.Fatal(err)
+	}
+	waitPreparationMethod(t, root, "turn/start")
+	finished := make(chan error, 1)
+	go func() { finished <- p.Cancel(context.Background()) }()
+	select {
+	case <-entered:
+	case <-time.After(4 * time.Second):
+		t.Fatal("transferred cancellation did not begin cleanup")
+	}
+	for range out {
+	}
+	select {
+	case <-finished:
+		t.Fatal("cancellation returned after output closure but before local cleanup")
+	case <-p.session.waitDone:
+		t.Fatal("Session finished before local cleanup")
+	default:
+	}
+	allowCleanup()
+	select {
+	case err := <-finished:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("cancellation did not finish after local cleanup")
+	}
+	waitPreparedRelease(t, p, root)
+}
+
 func TestPreparedCancelRacingTransfer(t *testing.T) {
 	for range 8 {
 		req, cfg, root := preparationFixture(t)

@@ -210,6 +210,7 @@ func TestPreparationCancelDuringStartClosesLateSession(t *testing.T) {
 	}
 	close(allowReturn)
 	waitPreparationClosed(t, p)
+	waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "late cancelled Session cleanup")
 	if (<-lateSession).cancels() != 1 || r.ActiveRuns() != 0 {
 		t.Fatal("late session resurrected cancelled run")
 	}

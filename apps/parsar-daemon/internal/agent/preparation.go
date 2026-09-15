@@ -18,6 +18,7 @@ type Prepared interface {
 // PreparedCancellation optionally follows cancellation across Start's resource transfer.
 type PreparedCancellation interface {
 	Prepared
+	// Cancel returns after owned local cleanup; callers retain ownership on timeout.
 	Cancel(context.Context) error
 	CancellationOutcome() proto.DonePayload
 }
