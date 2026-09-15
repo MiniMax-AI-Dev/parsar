@@ -121,6 +121,18 @@ type SessionItem struct {
 	OutputIndex pgtype.Int4        `json:"output_index"`
 }
 
+type SubagentIdentity struct {
+	ID                pgtype.UUID `json:"id"`
+	SessionID         pgtype.UUID `json:"session_id"`
+	DeviceID          pgtype.UUID `json:"device_id"`
+	Engine            string      `json:"engine"`
+	NativeID          string      `json:"native_id"`
+	ParentNativeID    string      `json:"parent_native_id"`
+	NativeCreatedAt   int64       `json:"native_created_at"`
+	FirstTurnID       pgtype.UUID `json:"first_turn_id"`
+	FirstEventOrdinal int32       `json:"first_event_ordinal"`
+}
+
 type Turn struct {
 	ID                pgtype.UUID        `json:"id"`
 	SessionID         pgtype.UUID        `json:"session_id"`

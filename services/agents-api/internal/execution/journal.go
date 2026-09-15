@@ -16,6 +16,7 @@ type journal struct {
 	batch                 []store.ExecutionEvent
 	bytes                 int
 	pendingCount          int
+	observeSubagents      bool
 }
 
 type eventWriter interface {
@@ -53,9 +54,12 @@ func (j *journal) observe(ctx context.Context, env proto.Envelope) error {
 }
 
 func (j *journal) enqueue(env proto.Envelope) error {
+	if env.Type == proto.TypeSubagentIdentity && !j.observeSubagents {
+		return store.ErrInvalidInput
+	}
 	switch env.Type {
 	case proto.TypeDelta, proto.TypeOutputMessage, proto.TypeThinking, proto.TypeToolCall, proto.TypeUsage,
-		proto.TypeError, proto.TypeDone, proto.TypePromptSteerAck, "cancel_receipt":
+		proto.TypeError, proto.TypeDone, proto.TypePromptSteerAck, proto.TypeSubagentIdentity, "cancel_receipt":
 	default:
 		return nil
 	}

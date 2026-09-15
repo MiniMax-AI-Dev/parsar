@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/db/sqlc"
 	"github.com/jackc/pgx/v5/pgtype"
 	"math"
@@ -11,6 +12,9 @@ import (
 )
 
 func projectSource(ctx context.Context, q *sqlc.Queries, session, turn pgtype.UUID, kind string, sequence int64, raw json.RawMessage, created pgtype.Timestamptz) error {
+	if kind == proto.TypeSubagentIdentity {
+		return projectSubagentIdentity(ctx, q, session, turn, int32(sequence), raw)
+	}
 	if usage := measuredUsage(kind, raw); usage != nil {
 		payload, err := json.Marshal(usage)
 		if err != nil {

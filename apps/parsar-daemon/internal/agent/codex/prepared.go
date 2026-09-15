@@ -71,6 +71,9 @@ func (p *Prepared) start(ctx context.Context, runID, prompt string, out chan<- p
 	}
 	s := p.session
 	s.runID, s.out = runID, out
+	if s.observeSubagentIdentities {
+		s.startSubagentObservations()
+	}
 	s.registerHandlers()
 	p.started = true
 	close(p.transferred)

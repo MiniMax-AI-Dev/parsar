@@ -1041,6 +1041,26 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   retain their defaults. Enabled multi-agent execution and public Subagent
   resources remain separate implementation gaps; the Agent tools list is not
   proven to enumerate every harness-internal utility.
+- Private `observe_subagent_identities` requests discover direct root children
+  from completed native spawn/resume Items. The Codex adapter verifies exact child
+  identity, persisted parent and original spawn-source parent against its RPC-bound
+  root. Use parent-filtered persisted `thread/list`; `thread/read` can synthesize
+  creation time before persistence. Native fields stay in the adapter. One worker
+  allows 64 candidates and 64 metadata RPCs per dispatch, four 100-row pages per
+  lookup pass, and three seconds per lookup. Root terminal content and Usage freeze
+  before a separate, three-second settlement wait; keep the reader free for RPC
+  replies and deliver successful observations before Done. Owner cancellation,
+  missing persistence, overflow, failed spawn and late discovery remain explicit
+  gaps, never invented identities or public closure. Child lifetime is unchanged.
+  The leased execution journal projects neutral identity facts in its existing
+  Session transaction; unrequested observations are rejected. Device and engine
+  come from the authorized Session binding, not daemon-supplied project ownership.
+  The service assigns a stable ID unique within device/engine/native identity and
+  freezes Session, parent, native creation and first-event provenance. Conflicts
+  roll back the whole event batch; identical or later continuation observations
+  preserve the original binding. Internal reads enforce project and visible Session
+  scope. This is a private consumer prerequisite, not public Subagent admission,
+  lifecycle, child output reconstruction or complete discovery/recovery.
 - `function_tools` advertises the optional native function-call bridge. Explicit
   prompt definitions become Codex dynamic tools; unchanged prompts carry none.
   Requests and ordered text/image results are scoped by Run and native call ID.

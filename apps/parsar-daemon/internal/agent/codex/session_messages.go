@@ -45,6 +45,7 @@ func (s *Session) onItemStarted(raw json.RawMessage) {
 }
 
 func (s *Session) onItemCompleted(raw json.RawMessage) {
+	s.observeSubagentIdentity(raw)
 	var p ItemCompletedNotification
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
