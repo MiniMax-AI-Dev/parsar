@@ -273,11 +273,13 @@ recover before fresh execution admission or source resolution; inline retries ke
 their existing resolved-snapshot validation.
 Later live subscribers observe only future events and recover history through queries.
 
-The public self-hosted input profile accepts idle message-only batches through this
-reservation path, including already-connected environments. Only the Session-locked
-reservation operation decides retry, active-work conflict and new admission; an
-unlocked activity read must never choose direct Turn creation. Active
-steering and mixed inputs remain gaps;
+The public self-hosted input profile accepts message-only batches. Under the same
+Session lock, recover the original reservation or direct receipt before choosing
+current active input or idle reservation. Active messages use existing ordered input
+receipts without a new Turn, preparation or reservation; idle messages retain the
+readiness and promotion path, including already-connected environments. Pending
+reservations keep their gate and deadline. An unlocked activity read or retry after
+a conflict must never choose a different admission path. Mixed inputs remain gaps;
 these restrictions do not narrow the pinned protocol target. Cancellation-only batches
 use the existing direct admission after configuration and execution-ownership checks.
 Only the Session-locked transaction chooses the active Turn or an idle receipt;

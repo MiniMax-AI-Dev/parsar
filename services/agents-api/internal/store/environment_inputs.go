@@ -34,12 +34,13 @@ type EnvironmentInputReservation struct {
 	Receipts  []InputReceipt
 }
 
-// ReserveEnvironmentInput retains one message batch without creating a Turn or history.
+// ReserveEnvironmentInput appends to active work or reserves an idle message batch.
+// The Session lock decides both paths; only promotion can create a new Turn.
 func (s *Store) ReserveEnvironmentInput(ctx context.Context, tenantID, sessionID, key string, inputs []Input) (EnvironmentInputReservation, error) {
 	if err := validateInputKey(key); err != nil {
 		return EnvironmentInputReservation{}, err
 	}
-	_, encoded, err := validateInitialInputs(inputs)
+	batch, encoded, err := validateInitialInputs(inputs)
 	if err != nil {
 		return EnvironmentInputReservation{}, err
 	}
@@ -76,10 +77,20 @@ func (s *Store) ReserveEnvironmentInput(ctx context.Context, tenantID, sessionID
 		} else if err != nil {
 			return err
 		}
-		if err := environmentInputMayStart(ctx, q, session); err != nil {
+		if err := checkEnvironmentInputGate(ctx, q, session, key, encoded); err != nil {
 			return err
 		}
-		if err := checkEnvironmentInputGate(ctx, q, session, key, encoded); err != nil {
+		if _, err := q.GetActiveTurn(ctx, session); err == nil {
+			result = EnvironmentInputReservation{SessionID: sessionID, State: EnvironmentInputAdmitted}
+			for position, input := range batch {
+				receipt, err := admitInput(ctx, q, tenantID, session, key, int32(position), input)
+				if err != nil {
+					return err
+				}
+				result.Receipts = append(result.Receipts, receipt)
+			}
+			return nil
+		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		row, err := q.CreateEnvironmentInputReservation(ctx, sqlc.CreateEnvironmentInputReservationParams{

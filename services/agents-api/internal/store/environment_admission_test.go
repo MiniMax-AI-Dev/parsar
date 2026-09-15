@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -134,10 +135,22 @@ func TestEnvironmentAdmissionWaitsForPreparedClaimAndRetainsRetry(t *testing.T) 
 			t.Fatal("admission result", got)
 		}
 	}
-	if _, err = worker.SubmitInputs(t.Context(), h.tenant, h.session.ID, "active", inputs); !errors.Is(err, store.ErrTurnConflict) {
-		t.Fatal("active steering accepted", err)
+	steered, err := worker.SubmitInputs(t.Context(), h.tenant, h.session.ID, "active", inputs)
+	if err != nil || len(steered) != 2 || steered[0].TurnID != start.RunID || steered[0].Replayed {
+		t.Fatal("active steering did not retain the prepared Turn", steered, err)
+	}
+	if replay, err := worker.SubmitInputs(t.Context(), h.tenant, h.session.ID, "wait", inputs); err != nil || len(replay) != 2 || !replay[0].Replayed || replay[0].TurnID != start.RunID {
+		t.Fatal("active reservation retry lost its original receipt", replay, err)
 	}
 	h.write(frame.ID, proto.TypePreparationStatus, proto.PreparationStatusPayload{Handle: handle, Revision: 3, State: "started", RunID: start.RunID})
+	for index, receipt := range steered {
+		frame := h.read(proto.TypePromptSteer)
+		var steer proto.PromptSteerPayload
+		if err := frame.DecodePayload(&steer); err != nil || steer.InputID != strconv.FormatInt(receipt.Sequence, 10) || steer.Text != []string{"first", "second"}[index] {
+			t.Fatal("active delivery changed order or identity", steer, err)
+		}
+		h.write(start.RunID, proto.TypePromptSteerAck, proto.PromptSteerAckPayload{InputID: steer.InputID, Accepted: true})
+	}
 	h.write(start.RunID, proto.TypeDone, proto.DonePayload{Content: "done", Metadata: map[string]any{proto.DoneMetaAgentSessionID: "admitted-native"}})
 	run := awaitWorkerEnvironmentRun(t, t.Context(), h.s, h.tenant, pending)
 	if run.Turn.Status != store.TurnCompleted {

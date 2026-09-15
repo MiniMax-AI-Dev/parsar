@@ -264,8 +264,9 @@ func TestEnvironmentInputReservationRejectsUnsupportedOrForeignState(t *testing.
 		t.Fatal("none reservation", err)
 	}
 	activeTenant, active := environmentInputSession(t, s)
-	submitMessage(t, s, activeTenant, active.ID, "active")
-	if _, err := s.ReserveEnvironmentInput(ctx, activeTenant, active.ID, "new", pending.Inputs); !errors.Is(err, ErrTurnConflict) {
-		t.Fatal("active Turn reservation", err)
+	activeInput := submitMessage(t, s, activeTenant, active.ID, "active")
+	steer, err := s.ReserveEnvironmentInput(ctx, activeTenant, active.ID, "new", pending.Inputs)
+	if err != nil || steer.State != EnvironmentInputAdmitted || steer.ID != "" || !steer.Deadline.IsZero() || len(steer.Receipts) != len(pending.Inputs) || steer.Receipts[0].TurnID != activeInput.TurnID {
+		t.Fatal("active input did not retain the existing Turn", steer, err)
 	}
 }
