@@ -722,7 +722,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Synthetic archived fixtures prove filtering only. There is no public archive writer,
   timestamp or delete-to-archive inference; existing create/retrieve/token replacement,
   Session bindings and dispatch keep their rules. Migration rollback refuses to lose
-  archived classification. Archive/delete/revocation lifecycle, OAuth and hosted
+  archived classification. Archive/revocation lifecycle, OAuth and hosted
   query/concurrency semantics remain gaps.
 - Credential `POST /v1/vaults/{vault_id}/credentials/{credential_id}` replaces only
   the static-bearer token and update time. Require `auth.type=static_bearer` and a
@@ -736,6 +736,16 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   replacement through existing scoped lookup; already-resolved requests may retain
   the old token. This is not storage-key rotation, in-flight revocation or hot reload.
   OAuth and exact hosted concurrent-update/retry/timestamp semantics remain gaps.
+- Credential `DELETE /v1/vaults/{vault_id}/credentials/{credential_id}` removes one
+  owned row, including ciphertext, with tenant/Vault/ID checked in the same SQL
+  mutation. It needs no encryption key, secret read or network call. Local reads,
+  updates, listings and subsequent dispatch lookups cannot use that ID; missing
+  and repeated deletion return not-found. Preserve frozen Session choices, retry
+  identities and history without fallback to another credential or anonymous MCP.
+  A token already read before deletion may remain in a dispatched request. Deletion
+  does not revoke provider tokens, cancel Sessions or prove physical erasure from
+  native history, WAL or backups. Do not infer a delete-to-archive mapping; exact
+  hosted archive, post-delete visibility and repeat/error semantics remain unverified.
 - Public reusable Agent create/retrieve uses `/v1/agents` and the same authenticated
   tenant/Beta-header boundary as Sessions. The resource envelope owns identity,
   timestamps and metadata, separately from saved configuration and Session state.

@@ -1,7 +1,7 @@
 # Vault credential storage
 
-The standalone service supports static-bearer Credential creation, token replacement
-and safe metadata retrieval through the pinned official SDK. It stores tokens as authenticated
+The standalone service supports static-bearer Credential creation, token replacement,
+deletion and safe metadata retrieval through the pinned official SDK. It stores tokens as authenticated
 ciphertext in its own PostgreSQL database. There is no product-service dependency,
 public secret-read endpoint. Resource creation, replacement and retrieval do not contact the
 configured MCP destination; an attached Session can use it during execution.
@@ -68,7 +68,7 @@ Listing supports `after`, creation order (default `desc`), a limit defaulting to
 both by default). Credential classification is private and independent of Vault
 classification. Listing requires no encryption key and reads only safe metadata;
 the parent and cursor must belong to the requested project and Vault. Synthetic
-archived fixtures verify filtering, not a public archive operation. Archive/delete
+archived fixtures verify filtering, not a public archive operation. Archive behavior
 and exact hosted query/concurrent-page semantics remain separate gaps.
 
 Required name is trimmed to 1–256 UTF-8 bytes. Required `auth` accepts
@@ -95,7 +95,7 @@ authentication. Names are public mutable metadata and are not part of this bindi
 Resource SQL reads select no secret ciphertext. The key and request token exist in
 trusted service memory; this protects stored secrets, not a compromised service host.
 
-Credential archive/delete, OAuth refresh, restricted-key scopes and revocation
+Credential archive behavior, OAuth refresh, restricted-key scopes and revocation
 semantics remain separate gaps. The foreign key preserves Vault ownership and
 defines dependent-row removal for a future Vault deletion operation; no public
 Vault deletion is added here. The full protocol target is unchanged.
@@ -169,3 +169,28 @@ and provides no in-flight revocation, hot reload or cancellation. Coordinate the
 destination's token change operationally. Replacing this token does not rotate the
 storage encryption key or reset its encryption budget. OAuth replacement and exact
 hosted overlapping-update, replay and timestamp semantics remain unverified.
+
+## Delete a stored credential
+
+```python
+deleted = client.beta.agents.vaults.credentials.delete(
+    credential.id,
+    vault_id=vault.id,
+)
+```
+
+The response confirms the ID, `deleted: true` and `object: vault.credential.deleted`.
+This operation removes the owned database row and encrypted token without loading
+the storage key. Local retrieval, update and repeated deletion return 404 afterward;
+listings omit the row. The parent Vault and other credentials remain available.
+
+Existing Session snapshots and history keep their frozen credential identity. A
+subsequent secret lookup fails without selecting another credential or switching
+to anonymous MCP. A token already read before deletion may remain available to
+dispatched work. Deletion does not stop running Sessions or revoke tokens at their
+providers; use Session cancellation and provider management for those operations.
+
+The relationship between deletion and archived status, exact hosted metadata
+visibility and duplicate-deletion errors remain unverified. This implementation
+does not infer an archive transition. Row removal is not evidence of physical
+erasure from PostgreSQL pages, WAL, backups or native history.

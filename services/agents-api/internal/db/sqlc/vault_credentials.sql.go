@@ -60,6 +60,27 @@ func (q *Queries) CreateStaticCredential(ctx context.Context, arg CreateStaticCr
 	return i, err
 }
 
+const deleteCredential = `-- name: DeleteCredential :one
+DELETE FROM vault_credentials c
+USING vaults v
+WHERE v.id = c.vault_id AND v.tenant_id = $1
+  AND v.id = $2 AND c.id = $3
+RETURNING c.id
+`
+
+type DeleteCredentialParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	VaultID  pgtype.UUID `json:"vault_id"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) DeleteCredential(ctx context.Context, arg DeleteCredentialParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, deleteCredential, arg.TenantID, arg.VaultID, arg.ID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getCredential = `-- name: GetCredential :one
 SELECT c.id, c.vault_id, c.name, c.auth_type, c.mcp_server_url, c.created_at, c.updated_at
 FROM vault_credentials c

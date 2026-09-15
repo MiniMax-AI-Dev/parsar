@@ -196,6 +196,21 @@ definitions:
     - updated_at
     - vault_id
     type: object
+  v1.CredentialDeleted:
+    properties:
+      deleted:
+        type: boolean
+      id:
+        type: string
+      object:
+        enum:
+        - vault.credential.deleted
+        type: string
+    required:
+    - deleted
+    - id
+    - object
+    type: object
   v1.CredentialList:
     properties:
       data:
@@ -2316,6 +2331,64 @@ paths:
       tags:
       - Credentials
   /vaults/{vault_id}/credentials/{credential_id}:
+    delete:
+      description: Removes one Credential and its encrypted token within the authenticated
+        project and owning Vault, without an encryption key or secret decryption.
+        Subsequent metadata reads, updates and dispatch lookups cannot use it. Existing
+        Session snapshots and history retain their frozen identities; already-resolved
+        tokens and running Sessions are not revoked or cancelled. This local policy
+        removes the row rather than defining archived lifecycle; missing/repeated
+        deletion returns 404. Exact hosted archive, post-delete visibility and retry/error
+        semantics remain unverified. Provider revocation and physical erasure from
+        native history, WAL or backups are separate concerns.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Vault ID
+        in: path
+        name: vault_id
+        required: true
+        type: string
+      - description: Credential ID
+        in: path
+        name: credential_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.CredentialDeleted'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a Vault Credential
+      tags:
+      - Credentials
     get:
       description: Reads only non-secret metadata scoped to the authenticated project
         and owning Vault. No token decryption, network request or execution is performed.
