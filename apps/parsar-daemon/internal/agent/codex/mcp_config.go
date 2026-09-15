@@ -13,13 +13,14 @@ import (
 // claudecode's mcpServers JSON shape). Written into <CODEX_HOME>/config.toml
 // before spawning the app-server child.
 type mcpServerConfig struct {
-	Name         string
-	URL          string
-	Headers      map[string]string
-	Command      string
-	Args         []string
-	Env          map[string]string
-	EnabledTools *[]string
+	Name              string
+	URL               string
+	Headers           map[string]string
+	Command           string
+	Args              []string
+	Env               map[string]string
+	EnabledTools      *[]string
+	BearerTokenEnvVar string
 }
 
 // writeCodexMCPConfig writes a `[mcp_servers.<name>]` TOML table per
@@ -51,6 +52,11 @@ func writeCodexMCPConfig(codexHome string, servers map[string]mcpServerConfig) e
 			b.WriteString(`url = `)
 			b.WriteString(tomlQuoteString(srv.URL))
 			b.WriteByte('\n')
+			if srv.BearerTokenEnvVar != "" {
+				b.WriteString("bearer_token_env_var = ")
+				b.WriteString(tomlQuoteString(srv.BearerTokenEnvVar))
+				b.WriteByte('\n')
+			}
 			if srv.EnabledTools != nil {
 				b.WriteString("enabled_tools = [")
 				for i, name := range *srv.EnabledTools {

@@ -37,7 +37,7 @@ type SessionPlan struct {
 	EnableFeatures  []string
 	DisableFeatures []string
 
-	// Non-nil only for the public credential-free HTTP MCP profile.
+	// Non-nil for typed service-side HTTP MCP, including private bearer references.
 	mcpHTTPServers map[string]mcpServerConfig
 
 	// Model is the slug to request on thread/start. Empty inherits the

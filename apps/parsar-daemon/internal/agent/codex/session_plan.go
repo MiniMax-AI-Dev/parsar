@@ -20,6 +20,7 @@ func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg
 	if req.DisableSubagents {
 		disableSubagents(&plan)
 	}
+	mcpBearerEnv := prepareMCPHTTPBearer(mcpServers, req.MCPHTTPServers)
 	if mcpServers != nil {
 		if err := configureMCPHTTP(&plan, mcpServers); err != nil {
 			plan.Cleanup()
@@ -49,5 +50,6 @@ func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg
 	if req.RemoteEnvironment != nil {
 		configureRemoteEnvironment(&plan, *req.RemoteEnvironment)
 	}
+	plan.Env = append(plan.Env, mcpBearerEnv...)
 	return plan, skillRoot, nil
 }

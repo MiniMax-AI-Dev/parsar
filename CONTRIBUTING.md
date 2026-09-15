@@ -741,6 +741,20 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   operator configuration changes. Discovery of a declared deny-all server can still
   contact it; deny-all governs tool exposure. Reuse neutral tool observations and
   the existing public `mcp_call` projection, never add a second MCP/model loop.
+- Private daemon HTTPS MCP bearer authentication additionally requires
+  `mcp_http_bearer_auth` and the existing MCP/environment capabilities, checked
+  before the factory. It is restricted to trusted service-side Codex
+  `environment:none`; public MCP admission remains credential-free. A transient
+  per-server `bearer_token` becomes a fresh daemon-owned `bearer_token_env_var`
+  reference for each native process. Put the exact secret only in that app-server
+  child's environment, after auxiliary launch probes; never in global environment,
+  arguments, configuration/history, public snapshots or logs. Preflight accepts
+  only the expected server/reference pairing and retains the existing rejection
+  of ambient credential sources. Use the native HTTP client with TLS verification.
+  This execution profile rejects empty values and bytes outside RFC 6750 b64token
+  syntax with generic errors; it never trims tokens or narrows opaque Credential
+  storage. Vault selection/admission, OAuth and hosted redirect/error equivalence
+  remain separate work.
 - Public Agent updates use `POST /v1/agents/{agent_id}` with the same tenant/Beta
   boundary and shared saved-field validation. Preserve omission separately from
   null; only supplied fields replace saved values. Metadata is a separate whole-map
