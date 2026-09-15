@@ -96,6 +96,7 @@ func discoverAgentCLIs(rc *runContext, profile string, checks agentCLIChecks) (a
 				EnvironmentNone:      true,
 				WebSearchControl:     true,
 				TextVerbosity:        codex.SupportsTextVerbosity,
+				OutputSchema:         true,
 				ExecutionControls:    codex.SupportsTextVerbosity,
 				SubagentControl:      true,
 			},

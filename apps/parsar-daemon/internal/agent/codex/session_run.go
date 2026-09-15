@@ -27,6 +27,7 @@ func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 		return
 	}
 	turnParams := TurnStartParams{
+		OutputSchema: s.outputSchema,
 		ThreadID:     s.currentThreadID(),
 		Input:        input,
 		Environments: plan.Environments,

@@ -177,6 +177,10 @@ func TestPreparationFakeCodexProcess(t *testing.T) {
 		case "thread/start", "thread/resume":
 			result = map[string]any{"thread": map[string]string{"id": "fixture-native-thread"}, "model": "fixture-model"}
 		case "turn/start":
+			if os.Getenv("PARSAR_PREPARATION_SCHEMA_ERROR") == "rpc" {
+				_ = output.Encode(map[string]any{"id": frame.ID, "error": map[string]any{"code": -32602, "message": "schema rejected"}})
+				continue
+			}
 			result = map[string]any{"turn": map[string]string{"id": "fixture-native-turn"}}
 		}
 		if output.Encode(map[string]any{"jsonrpc": "2.0", "id": frame.ID, "result": result}) != nil {
@@ -184,6 +188,9 @@ func TestPreparationFakeCodexProcess(t *testing.T) {
 		}
 		if frame.Method == "turn/start" {
 			_ = output.Encode(map[string]any{"jsonrpc": "2.0", "method": "turn/started", "params": map[string]any{"threadId": "fixture-native-thread", "turn": map[string]string{"id": "fixture-native-turn"}}})
+			if os.Getenv("PARSAR_PREPARATION_SCHEMA_ERROR") == "provider" {
+				_ = output.Encode(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": "fixture-native-thread", "turn": map[string]any{"id": "fixture-native-turn", "status": "failed", "error": map[string]string{"message": "schema rejected"}}}})
+			}
 		}
 	}
 	_ = log.Close()

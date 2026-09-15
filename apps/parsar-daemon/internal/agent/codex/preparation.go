@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -55,6 +56,10 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	if err := validateRemoteEnvironmentRequest(req); err != nil {
 		return nil, err
 	}
+	if err := proto.ValidateOutputSchema(req.OutputSchema); err != nil {
+		return nil, err
+	}
+	outputSchema := bytes.Clone(req.OutputSchema)
 	req.AgentStateKey = effectiveAgentStateKey(req)
 
 	req.AgentOptions = executionOptions(req)
@@ -81,6 +86,7 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	rpc := NewJSONRPCClient(rpcCfg)
 
 	s := &Session{
+		outputSchema:              outputSchema,
 		functions:                 functions,
 		observeMessages:           req.ObserveMessages,
 		observeTools:              req.ObserveTools,

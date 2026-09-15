@@ -29,6 +29,7 @@ func TestSteeringUsesNativeActiveTurnAndReceipt(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			s := &Session{runID: "daemon-run", rpc: client.JSONRPCClient, cancelCtx: ctx}
+			s.outputSchema = json.RawMessage(`{"const":"result"}`)
 			s.setThreadID("native-thread")
 			s.onTurnStarted(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"native-turn"}}`))
 			done := make(chan error, 1)
@@ -36,9 +37,12 @@ func TestSteeringUsesNativeActiveTurnAndReceipt(t *testing.T) {
 				done <- s.Steer(ctx, proto.PromptSteerPayload{InputID: "input-1", Text: "追加输入"})
 			}()
 			var request struct {
-				ID     string          `json:"id"`
-				Method string          `json:"method"`
-				Params TurnSteerParams `json:"params"`
+				ID     string `json:"id"`
+				Method string `json:"method"`
+				Params struct {
+					TurnSteerParams
+					OutputSchema json.RawMessage `json:"outputSchema"`
+				} `json:"params"`
 			}
 			if err := json.NewDecoder(server.FromClient).Decode(&request); err != nil {
 				t.Fatal(err)
@@ -58,6 +62,9 @@ func TestSteeringUsesNativeActiveTurnAndReceipt(t *testing.T) {
 				t.Fatal(err)
 			}
 			err := <-done
+			if request.Params.OutputSchema != nil || string(s.outputSchema) != `{"const":"result"}` {
+				t.Fatal("steering replaced the active output schema")
+			}
 			if (err == nil) != test.wantOK {
 				t.Fatalf("want success=%v: %v", test.wantOK, err)
 			}

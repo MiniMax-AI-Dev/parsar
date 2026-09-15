@@ -174,6 +174,9 @@ func TestDiscoverAgentCLIsBothAvailable(t *testing.T) {
 	if !got.Codex.Available || got.Codex.Version != "codex 0.141.0" {
 		t.Fatalf("Codex descriptor = %#v", got.Codex)
 	}
+	if !got.Codex.Capabilities.OutputSchema || got.ClaudeCode.Capabilities.OutputSchema || got.OpenCode.Capabilities.OutputSchema || got.Pi.Capabilities.OutputSchema || got.MCode.Capabilities.OutputSchema {
+		t.Fatal("only the Codex adapter supports output schemas")
+	}
 	if !got.ClaudeCode.Capabilities.Permissions || !got.ClaudeCode.Capabilities.Resume {
 		t.Fatalf("ClaudeCode capabilities = %#v", got.ClaudeCode.Capabilities)
 	}

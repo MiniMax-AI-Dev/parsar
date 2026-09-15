@@ -405,7 +405,7 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 			{
 				Kind:         "codex",
 				Available:    true,
-				Capabilities: proto.AgentKindCapabilities{MCPHTTPTools: true, Steering: true, MessageItems: true, ToolItems: true, ToolObservations: true, EnvironmentNone: true, RemoteEnvironment: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: true, SubagentControl: true},
+				Capabilities: proto.AgentKindCapabilities{OutputSchema: true, MCPHTTPTools: true, Steering: true, MessageItems: true, ToolItems: true, ToolObservations: true, EnvironmentNone: true, RemoteEnvironment: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: true, SubagentControl: true},
 			},
 		},
 	})
@@ -438,6 +438,9 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 		t.Fatalf("HTTP MCP capability not preserved: %#v", byKind)
 	}
 	codex, found, known := sess.AgentKindStatus("codex")
+	if !codex.Capabilities.OutputSchema || claude.Capabilities.OutputSchema || opencode.Capabilities.OutputSchema {
+		t.Fatal("output schema capability changed during heartbeat normalization")
+	}
 	if !found || !known || !codex.Capabilities.Steering || !codex.Capabilities.MCPHTTPTools {
 		t.Fatalf("steering capability absent from live session: %#v", codex)
 	}
