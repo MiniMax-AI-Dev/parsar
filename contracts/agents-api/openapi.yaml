@@ -1578,21 +1578,23 @@ paths:
       - application/json
       description: For environment none, atomically accepts text messages, cancellation
         and function results. Messages steer active work or start a queued Turn. The
-        self_hosted profile accepts idle text-only batches, waits up to the original
-        five-minute connection/admission deadline and returns 204 only after durable
-        admission. Cancellation-only self_hosted batches use existing durable cancellation
-        admission and return 204 without waiting for native exit; a new cancellation
-        conflicts while a pre-Turn reservation is pending. Homogeneous tool_result-only
-        self_hosted batches reuse existing scoped result admission and application
-        receipts without creating a Turn or bypassing a pending reservation. Active
-        steering and mixed self_hosted batches remain unsupported. HTTP expiry/cancellation
-        use local 409 environment_input_expired/environment_input_cancelled errors;
-        exact hosted failure mapping is unverified. Losing execution ownership returns
-        503. Disconnecting the waiting HTTP request does not cancel retained work
-        or restart its deadline. Retry keys identify the whole ordered batch. Function
-        output accepts text or ordered text/image parts subject to engine support;
-        Claude SDK currently accepts text results only. Message images are not supported
-        yet.
+        self_hosted profile accepts text-only batches. Under the Session lock, matching
+        retries retain their original target; new active messages append to the current
+        Turn, while idle messages reserve work and wait up to the original five-minute
+        connection/admission deadline. Return 204 only after durable admission, without
+        claiming native application; active messages create no Turn or reservation.
+        Cancellation-only self_hosted batches use existing durable cancellation admission
+        and return 204 without waiting for native exit; a new cancellation conflicts
+        while a pre-Turn reservation is pending. Homogeneous tool_result-only self_hosted
+        batches reuse existing scoped result admission and application receipts without
+        creating a Turn or bypassing a pending reservation. Mixed self_hosted batches
+        remain unsupported. HTTP expiry/cancellation use local 409 environment_input_expired/environment_input_cancelled
+        errors; exact hosted failure mapping is unverified. Losing execution ownership
+        returns 503. Disconnecting the waiting HTTP request does not cancel retained
+        work or restart its deadline. Retry keys identify the whole ordered batch.
+        Function output accepts text or ordered text/image parts subject to engine
+        support; Claude SDK currently accepts text results only. Message images are
+        not supported yet.
       parameters:
       - description: agents=v1
         in: header

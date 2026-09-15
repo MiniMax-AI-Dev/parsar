@@ -40,7 +40,9 @@ exposes durable status and safe empty installation metadata for that profile.
 Non-deferred functions and homogeneous result-only batches reuse the existing
 callback/application path, with explicit call identity and no new Turn on results.
 These callbacks are not installed Environment resources.
-Populated installation metadata, mixed/active input and full lifecycle conformance remain
+Message-only batches append to an active Turn under the same Session lock that
+reserves idle work; retries retain their original target through completion and later work.
+Populated installation metadata, mixed input and full lifecycle conformance remain
 unimplemented; see the [Environment scope](environments.md).
 Initial messages commit with creation and a connection action; an initial deadline
 failure is queryable before a Turn exists. Ordinary and streamed creation share this path.

@@ -56,8 +56,11 @@ Initial expiry leaves a failed Session, safe error and empty actions without a
 Turn or an Environment failure. Creation retries preserve the original identity,
 deadline and input. Later live observers do not replay creation events.
 
-Later idle text batches reserve under the Session lock and wait for the existing
-Worker to retain native preparation, admit and claim. Return 204 only after that
+Later text-only batches recover their original reservation or direct receipt under
+the Session lock. New active messages append to the current Turn through existing
+ordered admission and native delivery; they create no Turn, preparation or reservation.
+If no Turn is active, reserve and wait for the existing Worker to retain native
+preparation, admit and claim. Return 204 only after that
 transaction commits. Connection actions precede a Turn and clear on connection;
 connection alone is not readiness. Retries preserve identity and the five-minute
 database deadline. HTTP disconnect retains the reservation. Local expired/cancelled
@@ -77,7 +80,7 @@ existing function parser and remain fixed through native preparation and continu
 output/error field presence and ordered content keep their existing semantics.
 Retries retain the original call, including during later work. New results cannot
 bypass pending input. Function callbacks do not populate Environment installations.
-Active steering, mixed events, non-text input, nonempty capability directories and other
+Mixed events, non-text input, nonempty capability directories and other
 engine placements are rejected temporary gaps. The current adapter also rejects
 workspace paths containing NUL, CR, LF or backslash; broader path/platform support
 remains open. Native execution still uses the
@@ -330,7 +333,8 @@ pre-admission or claimed-Turn semantics.
 The initial public idle-text profile uses this primitive. Its message-only scope
 and single pending reservation are implementation limits, not claims about the
 final protocol. Homogeneous results use the separate existing call-admission path;
-mixed and active-message inputs remain required.
+active messages use existing input receipts in the same locked admission decision.
+Mixed inputs remain required.
 The Store reserves initial messages atomically with a new
 Environment-bearing Session, preserving the creation cursor and retry identity.
 Initial expiry emits a failed Session snapshot with a safe error and no Turn;

@@ -501,7 +501,11 @@ with explicit Turn/call identities; they create no Turn or preparation and retai
 the same identities on retries after completion or during later work. Pending
 reservations still block new results. Observe native application through the
 existing actions, Items and events; admission alone does not acknowledge application.
-Active steering, mixed events, deferred functions,
+Message-only batches append to an existing active Turn or reserve idle work under
+the same Session lock. Active input returns after durable admission and uses the
+existing native steering receipts; retries keep their original Turn after completion
+or during later work. No unlocked activity check can bypass idle preparation.
+Mixed events, deferred functions,
 nonempty capability directories, other placements, populated installation metadata
 and Environment file/template routes remain unavailable. These are implementation gaps.
 
