@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"errors"
 	"maps"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
@@ -38,6 +39,22 @@ func (d *Dispatcher) executionRequest(ctx context.Context, session store.Session
 		ObserveMessages: caps.MessageItems, ObserveToolObservations: true,
 		DisableSubagents: !snapshot.Agent.MultiAgent.Enabled}
 	if len(mcp) != 0 {
+		selected, err := selectedMCPCredentials(snapshot)
+		if err != nil {
+			return proto.PromptRequestPayload{}, err
+		}
+		if len(selected) > 0 && (d.Store == nil || !caps.MCPHTTPBearerAuth || !caps.MCPHTTPTools || !caps.EnvironmentNone || session.Engine != "codex" || snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil) {
+			return proto.PromptRequestPayload{}, errors.New("authenticated MCP execution is unavailable")
+		}
+		for i := range mcp {
+			if binding, ok := selected[mcp[i].ServerLabel]; ok {
+				token, err := d.Store.MCPBearerToken(ctx, session.TenantID, snapshot.VaultIDs, binding)
+				if err != nil {
+					return proto.PromptRequestPayload{}, err
+				}
+				mcp[i].BearerToken = &token
+			}
+		}
 		request.MCPHTTPServers = &mcp
 	}
 	return request, nil

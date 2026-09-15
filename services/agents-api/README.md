@@ -183,6 +183,8 @@ The SDK base URL is `http://127.0.0.1:8091/v1`. Requests require a bearer key an
   and ordinary or streaming responses.
 - Session event submission and live streaming, Turn retrieve/list and Items list.
 - Environment retrieve for the supported self-hosted profile.
+- Vault and static-bearer Credential create/retrieve, with Session attachments for
+  [authenticated HTTPS MCP](credentials.md#use-a-credential-in-a-session).
 
 Execution uses the selected
 [engine profile](../../contracts/agents-api/README.md#public-engine-profiles),
@@ -201,7 +203,7 @@ and native history are retained for execution settlement; physical cleanup remai
 unimplemented. Local repeated deletion returns 404 and creation-key reuse returns
 409; exact hosted errors and overlapping stream timing are unverified.
 
-Non-text message input, Vaults, Subagents, Environment files/templates and populated
+Non-text message input, Subagents, Environment files/templates and populated
 installation metadata remain unsupported. Saving optional Agent configuration does not make
 it executable. Unsupported requests fail explicitly. `/healthz` reports liveness only.
 
@@ -595,7 +597,15 @@ advertise `mcp_http_tools`; selection waits for a capable device. The native
 harness owns MCP discovery, calls and results. Public `mcp_call` Items use original
 server/tool names; recover missed live events through Session, Turn and Items reads.
 
-The current subset rejects credentials, inline authorization, nonempty headers or
+Attach tenant-owned `vault_ids` for static bearer authentication. An explicit
+`credential_id` selects an attached credential for the exact HTTPS URL; omission/null
+selects a unique matching credential, or stays anonymous if none matches. Ambiguity
+fails before Session creation. Selection is frozen privately; the public tool keeps
+the caller's original credential field. See [credential setup and limits](credentials.md).
+Authenticated execution additionally requires `mcp_http_bearer_auth`; missing keys
+or failed authorization/decryption never fall back to anonymous execution.
+
+The current subset rejects OAuth, inline authorization, nonempty headers or
 request metadata, URL userinfo/query/fragment, implicit/other origins, stdio,
 `required:true`, other engines and self-hosted execution. The Codex adapter also
 rejects reserved native labels and stored native MCP credentials. It verifies

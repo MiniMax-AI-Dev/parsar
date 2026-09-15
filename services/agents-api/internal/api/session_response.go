@@ -26,7 +26,7 @@ func sessionResponse(session store.Session, executorURL string) (v1.Session, err
 		ID: session.ID, Agent: cfg.Agent, Environment: environment, Usage: tokenUsage(session.Usage),
 		CreatedAt: session.CreatedAt.Unix(), LastActiveAt: session.CreatedAt.Unix(),
 		Metadata: session.Metadata, Object: "agent.session", Status: "idle",
-		RequiredActions: []v1.RequiredAction{}, VaultIDs: []string{},
+		RequiredActions: []v1.RequiredAction{}, VaultIDs: append([]string{}, cfg.VaultIDs...),
 	}
 	if turn := session.LastTurn; turn != nil {
 		active := turn.CreatedAt

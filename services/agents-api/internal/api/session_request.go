@@ -18,6 +18,7 @@ type decodedSessionRequest struct {
 	Environment json.RawMessage    `json:"environment"`
 	Stream      json.RawMessage    `json:"stream"`
 	Metadata    map[string]*string `json:"metadata"`
+	VaultIDs    json.RawMessage    `json:"vault_ids"`
 }
 
 type sessionRequest struct {
@@ -28,6 +29,17 @@ type sessionRequest struct {
 
 func (request decodedSessionRequest) validated() (sessionRequest, error) {
 	input := sessionRequest{CreateSessionRequest: request.CreateSessionRequest, Input: request.Input}
+	var vaultIDs []*string
+	if len(request.VaultIDs) != 0 && json.Unmarshal(request.VaultIDs, &vaultIDs) != nil {
+		return input, store.ErrInvalidInput
+	}
+	input.VaultIDs = make([]string, 0, len(vaultIDs))
+	for _, id := range vaultIDs {
+		if id == nil {
+			return input, store.ErrInvalidInput
+		}
+		input.VaultIDs = append(input.VaultIDs, *id)
+	}
 	var err error
 	input.Environment, err = decodeSessionEnvironment(request.Environment)
 	if err != nil {

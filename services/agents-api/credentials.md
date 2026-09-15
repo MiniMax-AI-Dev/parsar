@@ -3,7 +3,8 @@
 The standalone service supports static-bearer Credential creation and safe metadata
 retrieval through the pinned official SDK. It stores tokens as authenticated
 ciphertext in its own PostgreSQL database. There is no product-service dependency,
-public secret-read endpoint or contact with the configured MCP destination.
+public secret-read endpoint. Resource creation and retrieval do not contact the
+configured MCP destination; an attached Session can use it during execution.
 
 ## Configure the storage key
 
@@ -27,6 +28,9 @@ replacement or falls back to `PARSAR_MASTER_KEY`. Invalid configured files fail
 startup with a safe error. If the setting is absent, other resources and Credential
 metadata reads continue working, but Credential creation returns local
 `503 credential_storage_unavailable` before writing.
+Session attachment/selection also uses safe metadata. If a selected credential
+cannot be decrypted at dispatch, execution fails without contacting its MCP server
+or falling back to anonymous authentication.
 
 Losing or replacing the key prevents decryption of existing credentials. Metadata
 reads do not decrypt tokens and therefore do not prove that a key can recover them.
@@ -81,8 +85,47 @@ authentication. Names are public mutable metadata and are not part of this bindi
 Resource SQL reads select no secret ciphertext. The key and request token exist in
 trusted service memory; this protects stored secrets, not a compromised service host.
 
-Credential update/list/delete, OAuth refresh, restricted-key scopes, Session
-`vault_ids`, MCP `credential_id` use, secret forwarding, execution and revocation
+Credential update/list/delete, OAuth refresh, restricted-key scopes and revocation
 semantics remain separate gaps. The foreign key preserves Vault ownership and
 defines dependent-row removal for a future Vault deletion operation; no public
 Vault deletion is added here. The full protocol target is unchanged.
+
+## Use a credential in a Session
+
+Attach the owning Vault and declare the same exact HTTPS destination:
+
+```python
+session = client.beta.agents.sessions.create(
+    agent={
+        "model": model,
+        "tools": [{
+            "type": "mcp",
+            "server_label": "internal",
+            "transport": {"type": "http", "server_url": "https://mcp.example.com/endpoint"},
+            "connection_origin": "service",
+            "credential_id": credential.id,
+        }],
+    },
+    environment={"type": "none"},
+    vault_ids=[vault.id],
+)
+```
+
+The supported placement is trusted service-side Codex `environment:none`; the
+daemon must advertise both `mcp_http_tools` and `mcp_http_bearer_auth`. The usual
+[MCP profile limits](README.md#http-mcp-execution) still apply. Without an explicit
+`credential_id`, one exact-URL static credential among attached Vaults is selected;
+zero matches remains anonymous and multiple matches fail. A foreign, missing,
+unattached or wrong-destination reference returns the same local 404 before Session
+creation. Saving a reference on an Agent does not authorize it for a Session.
+
+The Session freezes its attachment list and private selection, including anonymous
+decisions. Public tools retain the caller's `credential_id` value, including null.
+Identical creation retries recover the accepted Session before selecting again;
+adding another credential does not change an existing binding. Each dispatch
+rechecks the complete scope before decryption. The token goes only through the
+private daemon request and a fresh native child environment variable, never public
+configuration, history, arguments or logs. Native execution requires nonempty RFC
+6750 b64token bytes and rejects other opaque stored strings without trimming them.
+Exact hosted matching, response population, selection timing and error/redirect
+semantics remain unverified.
