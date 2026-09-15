@@ -122,6 +122,14 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 			return nil, err
 		}
 	}
+	if plan.mcpHTTPServers != nil {
+		if err := verifyMCPHTTPConfig(cancelCtx, rpc, plan); err != nil {
+			cancelFn()
+			_ = rpc.Close()
+			plan.Cleanup()
+			return nil, err
+		}
+	}
 	if skillRoot != "" {
 		if err := setSkillExtraRoots(cancelCtx, rpc, []string{skillRoot}); err != nil {
 			cancelFn()

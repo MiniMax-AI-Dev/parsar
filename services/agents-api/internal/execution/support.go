@@ -25,7 +25,11 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 		return err
 	}
 	if engine != "claude_sdk" {
-		return nil
+		_, mcp, err := executionTools(snapshot.Agent.Tools)
+		if len(mcp) != 0 && (engine != "codex" || snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil) {
+			return errors.New("HTTP MCP execution currently requires the Codex service-side environment:none profile")
+		}
+		return err
 	}
 	return validateClaudeConfiguration(snapshot)
 }
@@ -121,8 +125,15 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	if !snapshot.Agent.MultiAgent.Enabled && !caps.SubagentControl {
 		return fail("device must advertise subagent_control")
 	}
-	if len(snapshot.Agent.Tools) > 0 && !caps.FunctionTools {
+	functions, mcp, err := executionTools(snapshot.Agent.Tools)
+	if err != nil {
+		return fail("invalid execution tool configuration")
+	}
+	if len(functions) > 0 && !caps.FunctionTools {
 		return fail("device must advertise function_tools")
+	}
+	if len(mcp) > 0 && (!caps.MCPHTTPTools || engine != "codex" || snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil) {
+		return fail("device must support the service-side HTTP MCP profile")
 	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" && (!caps.Preparation || !caps.RemoteEnvironment) {
 		return fail("device must advertise preparation and remote_environment")

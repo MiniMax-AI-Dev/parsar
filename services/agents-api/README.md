@@ -567,3 +567,35 @@ named [upstream-library launcher](../../packages/codex-executor/README.md) provi
 an explicit service-credential path. It keeps the stock guard intact and does not
 establish the documented stock command on an arbitrary production domain.
 See [Environment contracts and remaining work](../../contracts/agents-api/environments.md).
+
+### HTTP MCP execution
+
+The initial MCP profile uses Codex on trusted service-side compute with
+`environment:{"type":"none"}`. Inline or saved Agent tools may declare:
+
+```json
+{
+  "type": "mcp",
+  "server_label": "tickets",
+  "transport": {"type": "http", "server_url": "https://mcp.example.com/mcp"},
+  "connection_origin": "service",
+  "allowed_tools": ["lookup_ticket"],
+  "required": false
+}
+```
+
+An omitted/null `allowed_tools` permits all tools from that server; `[]` permits
+none. Native discovery may still connect to a declared server. The daemon must
+advertise `mcp_http_tools`; selection waits for a capable device. The native
+harness owns MCP discovery, calls and results. Public `mcp_call` Items use original
+server/tool names; recover missed live events through Session, Turn and Items reads.
+
+The current subset rejects credentials, inline authorization, nonempty headers or
+request metadata, URL userinfo/query/fragment, implicit/other origins, stdio,
+`required:true`, other engines and self-hosted execution. The Codex adapter also
+rejects reserved native labels and stored native MCP credentials. It verifies
+exact effective MCP configuration before starting/resuming a native thread,
+excludes undeclared servers and disables native apps/plugins. This runs on trusted
+service compute; it does not provide filesystem isolation or guard against
+concurrent operator configuration mutation. These limits are implementation gaps,
+not changes to the pinned official protocol.

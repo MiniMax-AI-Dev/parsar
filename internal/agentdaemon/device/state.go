@@ -77,6 +77,7 @@ type KindCapabilities struct {
 	TextVerbosity        bool `json:"text_verbosity,omitempty"`
 	SubagentControl      bool `json:"subagent_control,omitempty"`
 	FunctionTools        bool `json:"function_tools,omitempty"`
+	MCPHTTPTools         bool `json:"mcp_http_tools,omitempty"`
 	DurableInputReceipts bool `json:"durable_input_receipts,omitempty"`
 	DurableTurns         bool `json:"durable_turns,omitempty"`
 	WorkspaceAuthoring   bool `json:"workspace_authoring,omitempty"`

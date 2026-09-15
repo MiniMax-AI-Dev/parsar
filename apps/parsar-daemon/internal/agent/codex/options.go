@@ -37,6 +37,9 @@ type SessionPlan struct {
 	EnableFeatures  []string
 	DisableFeatures []string
 
+	// Non-nil only for the public credential-free HTTP MCP profile.
+	mcpHTTPServers map[string]mcpServerConfig
+
 	// Model is the slug to request on thread/start. Empty inherits the
 	// codex.config.toml default.
 	Model string

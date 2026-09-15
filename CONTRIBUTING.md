@@ -689,8 +689,36 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Reuse function wire validation, keeping Session execution restrictions separate.
   Model-derived reasoning effort is unresolved when omitted; do not infer it from
   the selected harness. Omitted/null service tier currently uses `auto`; complete
-  upstream default/error/retry conformance and persisted MCP/web-search tools remain
-  gaps. Unknown/unsupported variants fail explicitly. No product lookup is permitted.
+  upstream default/error/retry conformance and remaining MCP/web-search variants
+  remain gaps. Unknown/unsupported variants fail explicitly. No product lookup is permitted.
+- Public HTTP MCP uses the native harness client and tool loop. The initial
+  execution profile is Codex with `environment:none`, an explicit `service`
+  connection origin and a trusted service-side harness. The execution device is
+  part of the service deployment; an arbitrary caller executor cannot be relabeled
+  service-origin. Admission requires the advertised `mcp_http_tools` capability
+  during selection and again before claiming work. Other engines and placements
+  remain implementation gaps.
+- The shared MCP resolver preserves omitted/null `allowed_tools` as unrestricted
+  and an explicit empty list as deny-all. Saved HTTP transport output includes
+  `headers:{}`; the effective Session transport omits headers, matching the two
+  pinned resource types. Saved-Agent updates never change existing Session
+  snapshots; per-Session tools replace the whole field. The initial profile admits
+  only credential-free HTTP(S), `required` omitted/false, empty/null metadata and
+  empty/null headers. Credentials, inline authorization, URL userinfo/query/fragment,
+  other origins, stdio and required readiness remain explicitly unsupported.
+- Send MCP declarations through typed daemon fields, independently of function
+  callbacks. A non-nil declaration replaces operator MCP options; use the existing
+  native renderer and original tool names for `enabled_tools`, including `[]`.
+  Before thread creation/resume, query native `config/read` with the exact cwd and
+  reject additional servers or effective configuration differences. Disable native
+  plugins/apps and select file-only MCP credentials; reject existing credentials
+  in the private native home without deleting them or native history. Native
+  reserved labels are an adapter restriction, not a saved-resource schema rule.
+  Requests without this typed field keep the existing product behavior. The check
+  is a snapshot on trusted service compute, not an atomic barrier against concurrent
+  operator configuration changes. Discovery of a declared deny-all server can still
+  contact it; deny-all governs tool exposure. Reuse neutral tool observations and
+  the existing public `mcp_call` projection, never add a second MCP/model loop.
 - Public Agent updates use `POST /v1/agents/{agent_id}` with the same tenant/Beta
   boundary and shared saved-field validation. Preserve omission separately from
   null; only supplied fields replace saved values. Metadata is a separate whole-map

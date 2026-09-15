@@ -136,9 +136,12 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   stays unresolved rather than being populated from a guessed model default. An
   explicit effort/summary is retained. Omitted/null service tier currently follows
   the service's `auto` policy; complete upstream-default/error/retry conformance is
-  unverified. Persisted MCP/web-search variants are explicitly unsupported pending
-  their credential-free transport/schema/default work. These are implementation
-  gaps, not changes to the pinned target or claims of complete resource coverage.
+  unverified. Credential-free HTTP MCP with explicit `service` origin and
+  `required` omitted/false supports saved configuration and Codex `none` execution.
+  The saved HTTP transport includes `headers:{}`; effective Session transport omits
+  headers. Omitted/null `allowed_tools` is unrestricted; `[]` denies all tools.
+  Other MCP variants and web-search remain gaps, not changes to the pinned target
+  or claims of complete resource coverage.
 
 - Use `/agents/sessions` beneath the configured API base URL, bearer authentication
   and `OpenAI-Beta: agents=v1`. Do not introduce a competing `/sessions` surface.
@@ -218,7 +221,9 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 that immutable choice. The public request supplies a model, not a harness selector.
 Both no-environment profiles require disabled `multi_agent`, implicit reasoning,
 service tier `auto`, ordinary text and non-deferred functions. Codex additionally
-supports the self-hosted text/function profile described in the Environment contract.
+supports credential-free service-origin HTTP MCP on `none`, and the self-hosted
+text/function profile described in the Environment contract. See the
+[HTTP MCP profile and limits](../../services/agents-api/README.md#http-mcp-execution).
 
 | Profile | Current limits |
 | --- | --- |

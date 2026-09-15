@@ -12,18 +12,27 @@ import (
 )
 
 func TestWorkerWaitsForToolCapabilities(t *testing.T) {
-	for _, missing := range []string{"durable_input_receipts", "execution_controls", "function_tools", "tool_observations"} {
+	for _, missing := range []string{"durable_input_receipts", "execution_controls", "function_tools", "tool_observations", "mcp_http_tools"} {
 		for _, prebound := range []bool{false, true} {
 			t.Run(missing+"/"+map[bool]string{false: "select", true: "bound"}[prebound], func(t *testing.T) {
 				h := newFunctionHarness(t)
-				if !prebound {
+				configuration := functionConfiguration
+				if missing == "mcp_http_tools" {
+					configuration = mcpWorkerConfiguration
+				}
+				if !prebound || missing == "mcp_http_tools" {
 					var err error
-					h.session, err = h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "unbound", Configuration: []byte(functionConfiguration)})
+					h.session, err = h.s.CreateSession(t.Context(), h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "unbound", Configuration: []byte(configuration)})
 					if err != nil {
 						t.Fatal(err)
 					}
 				}
-				caps := proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, DurableInputReceipts: missing != "durable_input_receipts", EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: missing != "execution_controls", SubagentControl: true, ToolObservations: missing != "tool_observations", FunctionTools: missing != "function_tools"}
+				if prebound && missing == "mcp_http_tools" {
+					if err := h.s.BindSessionDevice(t.Context(), h.tenant, h.session.ID, h.device.ID); err != nil {
+						t.Fatal(err)
+					}
+				}
+				caps := proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, DurableInputReceipts: missing != "durable_input_receipts", EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: missing != "execution_controls", SubagentControl: true, ToolObservations: missing != "tool_observations", MCPHTTPTools: missing != "mcp_http_tools", FunctionTools: missing != "function_tools" && missing != "mcp_http_tools"}
 				heartbeat := func() {
 					h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: caps}}})
 				}
@@ -32,7 +41,7 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 				for {
 					peer, _ := h.registry.LookupDevice(h.device.ID)
 					info, _, _ := peer.AgentKindStatus("codex")
-					if info.Capabilities.ExecutionControls == caps.ExecutionControls && info.Capabilities.FunctionTools == caps.FunctionTools && info.Capabilities.ToolObservations == caps.ToolObservations {
+					if info.Capabilities.ExecutionControls == caps.ExecutionControls && info.Capabilities.FunctionTools == caps.FunctionTools && info.Capabilities.ToolObservations == caps.ToolObservations && info.Capabilities.MCPHTTPTools == caps.MCPHTTPTools {
 						break
 					}
 					if time.Now().After(deadline) {
@@ -67,11 +76,19 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 						t.Fatal("bound an incapable device", err)
 					}
 				}
-				caps.DurableInputReceipts, caps.ExecutionControls, caps.FunctionTools, caps.ToolObservations = true, true, true, true
+				caps.DurableInputReceipts, caps.ExecutionControls, caps.ToolObservations, caps.MCPHTTPTools = true, true, true, true
+				caps.FunctionTools = missing != "mcp_http_tools"
 				heartbeat()
 				request := h.read(proto.TypePromptRequest)
 				var prompt proto.PromptRequestPayload
-				if request.DecodePayload(&prompt) != nil || len(prompt.FunctionTools) != 1 || prompt.FunctionTools[0].Name != "lookup_ticket" {
+				if request.DecodePayload(&prompt) != nil {
+					t.Fatal("invalid prompt")
+				}
+				if missing == "mcp_http_tools" {
+					if prompt.MCPHTTPServers == nil || len(*prompt.MCPHTTPServers) != 1 || (*prompt.MCPHTTPServers)[0].ServerLabel != "tickets" || (*prompt.MCPHTTPServers)[0].AllowedTools == nil || len(*(*prompt.MCPHTTPServers)[0].AllowedTools) != 0 || len(prompt.FunctionTools) != 0 {
+						t.Fatal("MCP declaration lost during dispatch", prompt)
+					}
+				} else if len(prompt.FunctionTools) != 1 || prompt.FunctionTools[0].Name != "lookup_ticket" {
 					t.Fatal(prompt)
 				}
 				h.write(input.TurnID, proto.TypeDone, proto.DonePayload{Content: "done"})
@@ -80,3 +97,5 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 		}
 	}
 }
+
+const mcpWorkerConfiguration = `{"agent":{"model":"gpt-5.5","tools":[{"type":"mcp","server_label":"tickets","transport":{"type":"http","server_url":"http://127.0.0.1:9191/mcp"},"connection_origin":"service","allowed_tools":[],"credential_id":null,"request_metadata":{},"required":false}]},"environment":{"type":"none"}}`

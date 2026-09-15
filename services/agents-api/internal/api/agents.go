@@ -20,7 +20,7 @@ type AgentStore interface {
 }
 
 // @Summary Create a reusable Agent
-// @Description Persists configuration independently of execution. Supports model/name/instructions/metadata, explicit reasoning and service tiers, multi_agent, text/json_schema, function/tool_search/programmatic_tool_calling. Model-derived reasoning defaults, MCP/web_search and public retry conformance remain incomplete. Session execution admits only its supported configuration subset.
+// @Description Persists configuration independently of execution. Supports model/name/instructions/metadata, explicit reasoning and service tiers, multi_agent, text/json_schema, function/tool_search/programmatic_tool_calling and credential-free HTTP MCP with explicit service origin and required omitted/false. MCP allowed_tools preserves null versus empty; saved HTTP transport includes empty headers. Model-derived reasoning defaults, other MCP variants, web_search and public retry conformance remain incomplete. Session execution admits only its supported configuration subset.
 // @Tags Agents
 // @Accept json
 // @Produce json

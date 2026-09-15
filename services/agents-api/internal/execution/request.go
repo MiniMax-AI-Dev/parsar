@@ -10,7 +10,7 @@ import (
 )
 
 func (d *Dispatcher) executionRequest(ctx context.Context, session store.Session, snapshot Snapshot, caps device.KindCapabilities, nativeID string) (proto.PromptRequestPayload, error) {
-	functions, err := functionTools(snapshot.Agent.Tools)
+	functions, mcp, err := executionTools(snapshot.Agent.Tools)
 	if err != nil {
 		return proto.PromptRequestPayload{}, err
 	}
@@ -32,9 +32,13 @@ func (d *Dispatcher) executionRequest(ctx context.Context, session store.Session
 		verbosity = "medium"
 	}
 	controls := &proto.ExecutionControls{WebSearch: "disabled", TextVerbosity: verbosity}
-	return proto.PromptRequestPayload{AgentKind: session.Engine, FunctionTools: functions,
+	request := proto.PromptRequestPayload{AgentKind: session.Engine, FunctionTools: functions,
 		AgentOptions: options, ExecutionControls: controls, AgentStateKey: "agents-api-" + session.ID,
 		AgentSessionID: nativeID, ReleaseOnCompletion: true, StrictResume: true,
 		ObserveMessages: caps.MessageItems, ObserveToolObservations: true,
-		DisableSubagents: !snapshot.Agent.MultiAgent.Enabled}, nil
+		DisableSubagents: !snapshot.Agent.MultiAgent.Enabled}
+	if len(mcp) != 0 {
+		request.MCPHTTPServers = &mcp
+	}
+	return request, nil
 }

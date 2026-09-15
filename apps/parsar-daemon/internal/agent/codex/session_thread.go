@@ -41,10 +41,15 @@ func (s *Session) startThread(plan SessionPlan) error {
 }
 
 func (s *Session) resumeThread(threadID string, plan SessionPlan) error {
-	raw, err := s.rpc.Request(s.cancelCtx, "thread/resume", ThreadResumeParams{
+	params := ThreadResumeParams{
 		ThreadID: threadID, ApprovalPolicy: plan.ApprovalPolicy, Sandbox: plan.Sandbox,
 		DeveloperInstructions: plan.SystemPrompt,
-	})
+	}
+	if plan.mcpHTTPServers != nil {
+		// Resolve the same project configuration checked before native startup.
+		params.Cwd = plan.Cwd
+	}
+	raw, err := s.rpc.Request(s.cancelCtx, "thread/resume", params)
 	if err != nil {
 		return err
 	}
