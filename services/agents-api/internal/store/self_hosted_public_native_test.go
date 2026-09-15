@@ -21,6 +21,19 @@ import (
 )
 
 func TestNativePublicSelfHostedStandalone(t *testing.T) {
+	runNativePublicSelfHosted(t, "empty_later")
+}
+
+func TestNativePublicSelfHostedOrdinaryInitialStandalone(t *testing.T) {
+	runNativePublicSelfHosted(t, "ordinary_initial")
+}
+
+func TestNativePublicSelfHostedStreamedInitialStandalone(t *testing.T) {
+	runNativePublicSelfHosted(t, "streamed_initial")
+}
+
+func runNativePublicSelfHosted(t *testing.T, mode string) {
+	t.Helper()
 	serverBinary, nativeBinary := os.Getenv("PARSAR_AGENTS_API_SERVER_BIN"), os.Getenv("PARSAR_CODEX_BINARY")
 	image, keyFile := os.Getenv("PARSAR_PLACEMENT_EXECUTOR_IMAGE"), os.Getenv("PARSAR_PLACEMENT_MODEL_KEY_FILE")
 	proofRoot, daemonBinary := os.Getenv("PARSAR_NATIVE_PROOF_DIR"), os.Getenv("PARSAR_NATIVE_DAEMON_BIN")
@@ -37,10 +50,10 @@ func TestNativePublicSelfHostedStandalone(t *testing.T) {
 		t.Fatal("real provider credential unavailable")
 	}
 	key := strings.TrimSpace(string(keyBytes))
-	s, _ := store.NewTestStore(t)
+	s, pool := store.NewTestStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	t.Cleanup(cancel)
-	root, err := os.MkdirTemp(proofRoot, "public-self-hosted-")
+	root, err := os.MkdirTemp(proofRoot, "public-self-hosted-"+mode+"-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,13 +100,21 @@ func TestNativePublicSelfHostedStandalone(t *testing.T) {
 	const memory = "walnut heron violet cedar cobalt willow moss iris"
 	observer := startPublicNativeClient(t, ctx, root, map[string]string{
 		"base": base, "token": caller, "foreign_token": foreign, "workspace_directory": workspace,
-		"remote_url": base, "memory": memory, "instruction": instruction,
+		"remote_url": base, "memory": memory, "instruction": instruction, "creation_mode": mode,
 	})
 	waiting := awaitPublicNativeSignal(t, ctx, observer, "waiting", 70*time.Second)
 	sessionID, environmentID := waiting["session_id"], waiting["environment_id"]
 	environment, err := s.GetSessionEnvironment(ctx, tenant, sessionID)
-	if err != nil || environment.ID != environmentID || waiting["remote_url"] != base || environment.Status != "pending" {
+	if err != nil || environment.ID != environmentID || waiting["remote_url"] != base || environment.Status != "pending" || waiting["creation_mode"] != mode {
 		t.Fatal("public Environment differs from owned offline target", err)
+	}
+	var reservationID string
+	if err := pool.QueryRow(ctx, "SELECT id FROM environment_input_reservations WHERE session_id=$1", sessionID).Scan(&reservationID); err != nil {
+		t.Fatal("public first input did not retain its reservation", err)
+	}
+	reservation, err := s.GetEnvironmentInputReservation(ctx, tenant, sessionID, reservationID)
+	if err != nil || reservation.State != store.EnvironmentInputPending || reservation.IsInitial != (mode != "empty_later") {
+		t.Fatal("public first input has incorrect reservation origin/state", err)
 	}
 	startDaemonRemoteExecutor(t, ctx, root, local, workspace, nativeBinary, image, waiting["remote_url"], environmentID, executor)
 	awaitEnvironmentConnectionState(t, ctx, s, tenant, environmentID, "connected")
@@ -161,12 +182,17 @@ func TestNativePublicSelfHostedStandalone(t *testing.T) {
 		t.Fatal(err)
 	}
 	var publicProof struct {
-		Turns []struct {
+		CreationMode string `json:"creation_mode"`
+		Turns        []struct {
 			ID string `json:"id"`
 		} `json:"turns"`
 	}
-	if json.Unmarshal(data, &publicProof) != nil || len(publicProof.Turns) != 2 || publicProof.Turns[0].ID != first["turn_id"] {
+	if json.Unmarshal(data, &publicProof) != nil || publicProof.CreationMode != mode || len(publicProof.Turns) != 2 || publicProof.Turns[0].ID != first["turn_id"] {
 		t.Fatal("public proof does not contain the two accepted Turns")
+	}
+	settled, err := s.GetEnvironmentInputReservation(ctx, tenant, sessionID, reservationID)
+	if err != nil || settled.State != store.EnvironmentInputAdmitted || settled.IsInitial != reservation.IsInitial || !settled.Deadline.Equal(reservation.Deadline) {
+		t.Fatal("public retries changed original reservation origin/deadline", err)
 	}
 	for index, phase := range []string{"first", "resumed"} {
 		var observed []proto.Envelope
@@ -216,6 +242,7 @@ func TestNativePublicSelfHostedStandalone(t *testing.T) {
 	digest := sha256.Sum256(artifact)
 	proof := map[string]any{
 		"status": "built_service_public_self_hosted_real_execution_verified", "session_id": sessionID, "environment_id": environmentID,
+		"creation_mode": mode, "reservation_id": reservationID, "reservation_initial": reservation.IsInitial, "reservation_deadline": reservation.Deadline,
 		"server_binary": serverBinary, "server_sha256": hex.EncodeToString(digest[:]), "native_thread_id": binding.NativeSessionID,
 		"native_version": strings.TrimSpace(string(version)), "completed_turns": 2, "launcher_remote_url": waiting["remote_url"],
 		"launcher_environment_id": environmentID, "executor_key_id": executor.KeyID, "executor_key_issued_before_session": true,

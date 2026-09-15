@@ -44,9 +44,17 @@ not disturb a healthy pair. See the [operator prerequisite](../../services/agent
 
 Create a Session with `environment.type=self_hosted`, an absolute
 `workspace_directory` and omitted/null/empty `capability_directories`. Creation
-must omit initial input or use null; ordinary and streamed creation produce no
-Turn or connection action. Configured execution, a validated registry origin,
+accepts initial text as a string or ordered user-message array. Omitted/null input
+creates no Turn or connection action. Configured execution, a validated registry origin,
 Codex and no function tools are required before persistence.
+
+Initial text commits a reservation and connection action, then returns the Session
+and Environment connection target while offline. Streamed creation sends its
+original `created` snapshot before the connection action. The existing Worker
+prepares and admits the input; closing the stream leaves committed work intact.
+Initial expiry leaves a failed Session, safe error and empty actions without a
+Turn or an Environment failure. Creation retries preserve the original identity,
+deadline and input. Later live observers do not replay creation events.
 
 Later idle text batches reserve under the Session lock and wait for the existing
 Worker to retain native preparation, admit and claim. Return 204 only after that
@@ -57,7 +65,7 @@ outcomes return 409, lost ownership 503, and deletion 404; exact hosted error
 status/body and pending-input crash recovery are unverified. See the
 [canonical wait rules](../../CONTRIBUTING.md#environment-ownership-and-placement).
 
-Nonempty initial input, active steering/cancellation, mixed events, function
+Active steering/cancellation, mixed events, function
 configuration/results, non-text input, nonempty capability directories and other
 engine placements are rejected temporary gaps. The current adapter also rejects
 workspace paths containing NUL, CR, LF or backslash; broader path/platform support
@@ -310,13 +318,14 @@ pre-admission or claimed-Turn semantics.
 
 The initial public idle-text profile uses this primitive. Its message-only scope
 and single pending reservation are implementation limits, not claims about the
-final protocol. Initial creation and mixed/active/function inputs remain required.
-The Store prerequisite now reserves initial messages atomically with a new
+final protocol. Mixed/active/function inputs remain required.
+The Store reserves initial messages atomically with a new
 Environment-bearing Session, preserving the creation cursor and retry identity.
 Initial expiry emits a failed Session snapshot with a safe error and no Turn;
 later expiry retains idle behavior. Historical reservation origins are not inferred.
 The same storage rule covers internal hosted associations without enabling a
-provider. Public initial creation remains gated for its own SDK/native acceptance.
+provider. Public ordinary and streamed creation reuse this transaction through
+the Worker facade, with new-work ownership checks and prompt offline responses.
 The Worker settles due reservations in bounded batches even without
 devices or available execution slots, skipping contended Session locks and retaining
 its current execution ownership. Restart does not reset stored deadlines. This
@@ -342,8 +351,8 @@ at most once per five seconds; failed preparation can retry without extending th
 original deadline, while claimed/uncertain work is not replayed. The opt-in
 real-provider Worker fixture verifies automatic discovery, remote commands, files,
 cold continuation and reservation retries. The standalone service wires the resolver
-when its daemon gateway and executor URL are configured. Public initial input and
-asynchronous initial-failure policy remain unimplemented.
+when its daemon gateway and executor URL are configured. The same scheduling and
+expiry path owns public initial reservations without a separate execution loop.
 Caller keys resolve trusted project/subject identities, with persistent project
 bindings verified before startup. New Sessions persist the typed creator and
 require it for creation retries; historical unknown creators cannot be claimed.
