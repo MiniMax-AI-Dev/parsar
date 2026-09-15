@@ -84,7 +84,7 @@ func writePublicNativeJSON(t *testing.T, path string, value any) {
 	}
 }
 
-func startPublicNativeClient(t *testing.T, ctx context.Context, root string, settings map[string]string) *preparedPublicObserver {
+func startPublicNativeClientScript(t *testing.T, ctx context.Context, root, script string, settings map[string]string) *preparedPublicObserver {
 	t.Helper()
 	directory := filepath.Join(root, "public-environment")
 	if err := os.MkdirAll(directory, 0700); err != nil {
@@ -100,7 +100,7 @@ func startPublicNativeClient(t *testing.T, ctx context.Context, root string, set
 		t.Fatal(err)
 	}
 	owner, cancel := context.WithCancel(ctx)
-	command := exec.CommandContext(owner, os.Getenv("PARSAR_OFFICIAL_SDK_PYTHON"), "../../tests/official_self_hosted.py")
+	command := exec.CommandContext(owner, os.Getenv("PARSAR_OFFICIAL_SDK_PYTHON"), filepath.Join("../../tests", script))
 	command.Stdin, command.Stdout, command.Stderr = bytes.NewReader(input), output, output
 	if err := command.Start(); err != nil {
 		cancel()

@@ -492,7 +492,11 @@ the connection target promptly while offline. Connect using that target; the sam
 Worker prepares and starts the initial Turn. A disconnected creation stream does
 not cancel the reservation. Initial expiry leaves a queryable failed Session with
 a safe error and no Turn; exact hosted error/timing parity remains unverified.
-Active steering/cancellation, mixed events, function tools/results,
+Cancellation-only events use the existing durable receipt path, including idle
+no-Turn requests and retries that never retarget later work. A new cancellation
+still conflicts with pending pre-Turn input. HTTP 204 acknowledges admission;
+observe completion through events/queries and process cessation separately.
+Active steering, mixed events, function tools/results,
 nonempty capability directories, other placements, populated installation metadata
 and Environment file/template routes remain unavailable. These are implementation gaps.
 
