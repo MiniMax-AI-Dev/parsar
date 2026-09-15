@@ -49,8 +49,14 @@ func resolveSavedTools(input []json.RawMessage) ([]json.RawMessage, error) {
 				Type    string `json:"type"`
 				Enabled bool   `json:"enabled"`
 			}{kind.Type, enabled})
-		case "mcp", "web_search":
-			return nil, errors.New("Persisted MCP and web_search configuration is not implemented yet.")
+		case "mcp":
+			resolved, err := resolveMCPTool(raw, true)
+			if err != nil {
+				return nil, err
+			}
+			value = resolved
+		case "web_search":
+			return nil, errors.New("Persisted web_search configuration is not implemented yet.")
 		default:
 			return nil, errors.New("Unknown persisted tool type.")
 		}

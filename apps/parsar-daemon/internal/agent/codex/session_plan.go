@@ -8,6 +8,10 @@ import (
 )
 
 func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg sessionConfig) (SessionPlan, string, error) {
+	mcpServers, err := publicMCPHTTPServers(req)
+	if err != nil {
+		return SessionPlan{}, "", err
+	}
 	plan, err := BuildSessionPlan(req.RunID, req.AgentStateKey, req.WorkDir, req.AgentOptions)
 	if err != nil {
 		return SessionPlan{}, "", fmt.Errorf("codex: build session plan: %w", err)
@@ -15,6 +19,12 @@ func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg
 
 	if req.DisableSubagents {
 		disableSubagents(&plan)
+	}
+	if mcpServers != nil {
+		if err := configureMCPHTTP(&plan, mcpServers); err != nil {
+			plan.Cleanup()
+			return SessionPlan{}, "", err
+		}
 	}
 
 	if stringOpt(req.AgentOptions, "model_verbosity") != "" {

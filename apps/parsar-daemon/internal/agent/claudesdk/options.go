@@ -37,7 +37,7 @@ func prepare(config Config, req proto.PromptRequestPayload) (startRequest, []str
 	if req.RunID == "" || strings.TrimSpace(req.Prompt) == "" {
 		return fail("run id and prompt are required")
 	}
-	if len(req.Attachments) > 0 || req.WorkspaceAuthoring || req.ObserveTools {
+	if len(req.Attachments) > 0 || req.WorkspaceAuthoring || req.ObserveTools || req.MCPHTTPServers != nil {
 		return fail("requested capability is not available in the private SDK adapter")
 	}
 	// Search is disabled by the fixed native tool profile. Medium selects the

@@ -270,6 +270,7 @@ type AgentKindCapabilities struct {
 	// DurableTurns includes strict resume, completion release and cancellation snapshots.
 	DurableTurns  bool `json:"durable_turns,omitempty"`
 	FunctionTools bool `json:"function_tools,omitempty"`
+	MCPHTTPTools  bool `json:"mcp_http_tools,omitempty"`
 }
 
 // SupportedAgentKind is one daemon-advertised agent engine. Daemons

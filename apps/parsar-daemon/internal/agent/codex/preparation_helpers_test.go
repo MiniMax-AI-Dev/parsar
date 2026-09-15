@@ -169,6 +169,11 @@ func TestPreparationFakeCodexProcess(t *testing.T) {
 				}
 			}
 			result = map[string]string{"status": status}
+		case "config/read":
+			data, err := os.ReadFile(os.Getenv("PARSAR_PREPARATION_MCP_CONFIG"))
+			if err != nil || json.Unmarshal(data, &result) != nil {
+				os.Exit(6)
+			}
 		case "thread/start", "thread/resume":
 			result = map[string]any{"thread": map[string]string{"id": "fixture-native-thread"}, "model": "fixture-model"}
 		case "turn/start":

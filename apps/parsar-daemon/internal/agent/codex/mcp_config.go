@@ -13,12 +13,13 @@ import (
 // claudecode's mcpServers JSON shape). Written into <CODEX_HOME>/config.toml
 // before spawning the app-server child.
 type mcpServerConfig struct {
-	Name    string
-	URL     string
-	Headers map[string]string
-	Command string
-	Args    []string
-	Env     map[string]string
+	Name         string
+	URL          string
+	Headers      map[string]string
+	Command      string
+	Args         []string
+	Env          map[string]string
+	EnabledTools *[]string
 }
 
 // writeCodexMCPConfig writes a `[mcp_servers.<name>]` TOML table per
@@ -27,13 +28,8 @@ type mcpServerConfig struct {
 //
 // Appends to the file rather than truncating because
 // writeCodexProviderConfig writes to the same path. Both writers run
-// once per prompt and CODEX_HOME is fresh per-run, so appending stays
-// idempotent.
-//
-// The TOML shape mirrors codex-rs/config/src/mcp_types.rs::McpServerConfig::Stdio
-// — only the stdio transport is emitted today (no streamableHttp). The
-// canonical capability spec doesn't model http MCP yet, so there's
-// nothing to render for that branch.
+// once per prompt after resetGeneratedConfig; native history stays in CODEX_HOME.
+// The transport and enabled_tools fields mirror native McpServerConfig.
 func writeCodexMCPConfig(codexHome string, servers map[string]mcpServerConfig) error {
 	if err := os.MkdirAll(codexHome, 0o700); err != nil {
 		return fmt.Errorf("codex: mkdir CODEX_HOME %s: %w", codexHome, err)
@@ -55,6 +51,16 @@ func writeCodexMCPConfig(codexHome string, servers map[string]mcpServerConfig) e
 			b.WriteString(`url = `)
 			b.WriteString(tomlQuoteString(srv.URL))
 			b.WriteByte('\n')
+			if srv.EnabledTools != nil {
+				b.WriteString("enabled_tools = [")
+				for i, name := range *srv.EnabledTools {
+					if i > 0 {
+						b.WriteString(", ")
+					}
+					b.WriteString(tomlQuoteString(name))
+				}
+				b.WriteString("]\n")
+			}
 			if len(srv.Headers) > 0 {
 				headerKeys := make([]string, 0, len(srv.Headers))
 				for key := range srv.Headers {

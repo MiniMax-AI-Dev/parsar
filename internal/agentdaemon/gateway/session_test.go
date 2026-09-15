@@ -405,7 +405,7 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 			{
 				Kind:         "codex",
 				Available:    true,
-				Capabilities: proto.AgentKindCapabilities{Steering: true, MessageItems: true, ToolItems: true, ToolObservations: true, EnvironmentNone: true, RemoteEnvironment: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: true, SubagentControl: true},
+				Capabilities: proto.AgentKindCapabilities{MCPHTTPTools: true, Steering: true, MessageItems: true, ToolItems: true, ToolObservations: true, EnvironmentNone: true, RemoteEnvironment: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: true, SubagentControl: true},
 			},
 		},
 	})
@@ -434,8 +434,11 @@ func TestSession_HeartbeatPersistsSupportedAgentKinds(t *testing.T) {
 	if !byKind["codex"].Capabilities.RemoteEnvironment || claude.Capabilities.RemoteEnvironment || opencode.Capabilities.RemoteEnvironment || !byKind["codex"].Capabilities.ExecutionControls || claude.Capabilities.ExecutionControls || opencode.Capabilities.ExecutionControls || !byKind["codex"].Capabilities.ToolObservations || claude.Capabilities.ToolObservations || opencode.Capabilities.ToolObservations || !byKind["codex"].Capabilities.SubagentControl || claude.Capabilities.SubagentControl || opencode.Capabilities.SubagentControl || !byKind["codex"].Capabilities.TextVerbosity || claude.Capabilities.TextVerbosity || opencode.Capabilities.TextVerbosity || !byKind["codex"].Capabilities.WebSearchControl || claude.Capabilities.WebSearchControl || opencode.Capabilities.WebSearchControl || !byKind["codex"].Capabilities.EnvironmentNone || claude.Capabilities.EnvironmentNone || opencode.Capabilities.EnvironmentNone || !byKind["codex"].Capabilities.ToolItems || claude.Capabilities.ToolItems || opencode.Capabilities.ToolItems || !byKind["codex"].Capabilities.MessageItems || !byKind["codex"].Capabilities.Steering || claude.Capabilities.Steering || opencode.Capabilities.Steering {
 		t.Fatalf("steering capability not preserved: %#v", byKind)
 	}
+	if !byKind["codex"].Capabilities.MCPHTTPTools || claude.Capabilities.MCPHTTPTools || opencode.Capabilities.MCPHTTPTools {
+		t.Fatalf("HTTP MCP capability not preserved: %#v", byKind)
+	}
 	codex, found, known := sess.AgentKindStatus("codex")
-	if !found || !known || !codex.Capabilities.Steering {
+	if !found || !known || !codex.Capabilities.Steering || !codex.Capabilities.MCPHTTPTools {
 		t.Fatalf("steering capability absent from live session: %#v", codex)
 	}
 }

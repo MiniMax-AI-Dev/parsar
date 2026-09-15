@@ -191,6 +191,7 @@ type ThreadStartResult struct {
 }
 
 type ThreadResumeParams struct {
+	Cwd                   string         `json:"cwd,omitempty"`
 	DeveloperInstructions string         `json:"developerInstructions"`
 	ThreadID              string         `json:"threadId"`
 	ApprovalPolicy        AskForApproval `json:"approvalPolicy"`

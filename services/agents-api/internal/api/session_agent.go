@@ -77,13 +77,7 @@ func admitSessionAgent(cfg v1.SavedAgentConfiguration) (v1.Agent, error) {
 	if err != nil {
 		return v1.Agent{}, err
 	}
-	functions := make([]v1.FunctionToolInput, len(cfg.Tools))
-	for i, raw := range cfg.Tools {
-		if err := decodeInputObject(raw, &functions[i], "type", "name", "description", "parameters", "defer_loading"); err != nil {
-			return v1.Agent{}, errors.New("Execution currently supports non-deferred function tools only.")
-		}
-	}
-	tools, err := resolveFunctions(functions)
+	tools, err := resolveSessionTools(cfg.Tools)
 	if err != nil {
 		return v1.Agent{}, err
 	}

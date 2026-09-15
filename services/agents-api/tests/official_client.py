@@ -200,6 +200,10 @@ def main():
                     creator_retries = verify_session_creators(
                         client, a, b, same_principal, peer_principal, same_subject_id, spec, expect_error)
                     request_sessions.extend(result for _, _, result in creator_retries)
+                    from official_mcp import verify_mcp_configuration
+                    mcp_sessions, mcp_agents = verify_mcp_configuration(a, b, expect_error)
+                    request_sessions.extend(mcp_sessions)
+                    saved_agents.extend(mcp_agents)
                     process.terminate()
                     process.wait(timeout=15)
                     process = start()

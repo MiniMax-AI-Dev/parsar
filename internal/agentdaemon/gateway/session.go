@@ -547,6 +547,7 @@ func deviceKindsFromHeartbeat(p proto.HeartbeatPayload) []device.SupportedAgentK
 				ExecutionControls:    info.Capabilities.ExecutionControls,
 				SubagentControl:      info.Capabilities.SubagentControl,
 				FunctionTools:        info.Capabilities.FunctionTools,
+				MCPHTTPTools:         info.Capabilities.MCPHTTPTools,
 				WorkspaceAuthoring:   info.Capabilities.WorkspaceAuthoring,
 			},
 		})
