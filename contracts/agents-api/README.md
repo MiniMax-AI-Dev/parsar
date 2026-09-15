@@ -80,7 +80,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | environments.files | create, list | Missing |
 | environments.templates | create, retrieve, update, list, delete | Missing |
 | vaults | create, retrieve, list, delete | Create/retrieve/list with independent tenant persistence, stored status filtering and Session attachments; archive/delete lifecycle remains missing |
-| vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve/list/token replacement with encrypted storage and safe metadata; Session attachment and exact-URL HTTPS MCP binding; OAuth and archive/delete lifecycle remain missing |
+| vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve/list/token replacement/deletion with scoped encrypted storage; Session attachment and exact-URL HTTPS MCP binding; OAuth, archive semantics and full hosted lifecycle parity remain missing |
 
 For each resource, verify the referenced request/response unions and observable
 behavior, not just the route. Non-text initial input, configuration
@@ -104,7 +104,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   auth type/destination; it never returns tokens or ciphertext and can be read
   without the encryption key. Missing encryption configuration locally rejects
   creation/replacement with 503. Attached Sessions can use static credentials for
-  exact-URL HTTPS MCP; OAuth, storage-key rotation, archive/delete and key scopes remain gaps. See the [credential storage guide](../../services/agents-api/credentials.md)
+  exact-URL HTTPS MCP; OAuth, storage-key rotation, archive behavior and key scopes remain gaps. See the [credential storage guide](../../services/agents-api/credentials.md)
   for encryption and operational limits; this does not establish complete Credential
   or hosted error/retry compatibility.
 - `GET /vaults/{vault_id}/credentials` lists only safe metadata, with parent and
@@ -126,6 +126,14 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   replacement; already-resolved requests may retain the old token. OAuth replacement,
   storage-key rotation, hot reload/revocation and exact hosted concurrent-update,
   timestamp and retry semantics remain gaps.
+- `DELETE /vaults/{vault_id}/credentials/{credential_id}` returns only `id`,
+  `deleted: true` and `object: vault.credential.deleted`. It removes one owned row
+  and its ciphertext without an encryption key. Local retrieval/update/repeated
+  deletion then return 404; lists omit it. Frozen Session choices and history remain
+  intact, while subsequent secret lookups fail without credential reselection or
+  anonymous fallback. Already-resolved tokens and running Sessions are not revoked.
+  Archive relationships, exact hosted post-delete visibility and repeat/error
+  semantics are unverified; physical storage erasure is not established.
 - Vaults use `POST /vaults`, `GET /vaults` and `GET /vaults/{vault_id}` with the same project/tenant
   authentication and Beta header as other resources. The response contains only
   `id`, `object: vault`, `created_at`, `name` and `metadata`. Omitted name stays null;

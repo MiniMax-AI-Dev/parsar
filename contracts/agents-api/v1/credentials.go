@@ -46,3 +46,9 @@ type CredentialList struct {
 	FirstID *string      `json:"first_id" extensions:"x-nullable"`
 	LastID  *string      `json:"last_id" extensions:"x-nullable"`
 }
+
+type CredentialDeleted struct {
+	ID      string `json:"id" binding:"required"`
+	Deleted bool   `json:"deleted" binding:"required"`
+	Object  string `json:"object" binding:"required" enums:"vault.credential.deleted"`
+}

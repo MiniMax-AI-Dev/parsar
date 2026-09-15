@@ -35,3 +35,10 @@ ORDER BY
   CASE WHEN NOT sqlc.arg(ascending)::boolean THEN c.created_at END DESC,
   CASE WHEN NOT sqlc.arg(ascending)::boolean THEN c.id END DESC
 LIMIT sqlc.arg(page_limit);
+
+-- name: DeleteCredential :one
+DELETE FROM vault_credentials c
+USING vaults v
+WHERE v.id = c.vault_id AND v.tenant_id = sqlc.arg(tenant_id)
+  AND v.id = sqlc.arg(vault_id) AND c.id = sqlc.arg(id)
+RETURNING c.id;
