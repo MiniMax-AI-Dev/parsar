@@ -193,8 +193,11 @@ def main():
                 reply = raw.post("/agents/sessions", json={**creation, **change})
                 assert reply.status_code == 400 and reply.headers["content-type"].startswith("application/json")
             assert {value.id for value in sessions.list()} == before
-            for events in ([{"type": "agent.session.input.cancel"}],
-                           [message("Mixed input must not commit"), {"type": "agent.session.input.cancel"}],
+            cancelled = raw.post("/agents/sessions/" + session_id + "/events",
+                                 json={"events": [{"type": "agent.session.input.cancel"}]})
+            assert cancelled.status_code == (409 if initial_input else 204)
+            proof["pre_execution_cancel_status"] = cancelled.status_code
+            for events in ([message("Mixed input must not commit"), {"type": "agent.session.input.cancel"}],
                            [{"type": "agent.session.input.tool_result", "call_id": "unknown", "output": "unused"}]):
                 assert raw.post("/agents/sessions/" + session_id + "/events", json={"events": events}).status_code == 400
             assert list(sessions.turns.list(session_id)) == [] and list(sessions.items.list(session_id)) == []

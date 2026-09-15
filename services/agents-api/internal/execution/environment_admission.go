@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
@@ -45,6 +46,10 @@ func (w *Worker) submitEnvironmentInputs(ctx context.Context, session store.Sess
 	}
 	if err := w.checkAdmissionOwnership(ctx); err != nil {
 		return nil, err
+	}
+	if len(inputs) > 0 && !slices.ContainsFunc(inputs, func(input store.Input) bool { return input.Kind != "cancel" }) {
+		// Cancellation cannot create a Turn. The Session lock binds its target and retry identity.
+		return w.admission.SubmitInputs(ctx, session.TenantID, session.ID, key, inputs)
 	}
 	reserve, cancel := context.WithTimeout(ctx, 5*time.Second)
 	reservation, err := w.admission.ReserveEnvironmentInput(reserve, session.TenantID, session.ID, key, inputs)

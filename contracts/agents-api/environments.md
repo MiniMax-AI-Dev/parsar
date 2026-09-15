@@ -65,8 +65,13 @@ outcomes return 409, lost ownership 503, and deletion 404; exact hosted error
 status/body and pending-input crash recovery are unverified. See the
 [canonical wait rules](../../CONTRIBUTING.md#environment-ownership-and-placement).
 
-Active steering/cancellation, mixed events, function
-configuration/results, non-text input, nonempty capability directories and other
+Cancellation-only batches use the existing locked admission and native delivery.
+An idle cancellation creates no Turn, and retry identity preserves the original
+target during later work. Pending pre-Turn reservations still block new cancellation.
+HTTP 204 confirms admission, not native completion or OS quiescence. A cancellation
+before native Session transfer can still lack a final Outcome and conservatively
+fail; complete cancellation settlement remains open.
+Active steering, mixed events, function configuration/results, non-text input, nonempty capability directories and other
 engine placements are rejected temporary gaps. The current adapter also rejects
 workspace paths containing NUL, CR, LF or backslash; broader path/platform support
 remains open. Native execution still uses the
@@ -301,7 +306,7 @@ revision and cleanup rules.
 Cancellation still uses the existing best-effort interrupt and harness release.
 The fixture measures remote PID exit and stopped side effects independently;
 native detached cleanup may delay that exit. Complete resource lifecycle and
-public active cancellation remain separate from the initial idle-text profile.
+complete public cancellation settlement remain separate from the initial text profile.
 
 
 ## Pending input storage prerequisite

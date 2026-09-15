@@ -32,7 +32,10 @@ Environment-event snapshots through the existing execution owner. Session reads
 and live SSE also expose safe `self_hosted` output and reservation-owned connection
 actions. Public self-hosted creation accepts initial text or empty Codex Sessions;
 initial input reserves work while returning the connection target promptly.
-Later idle text submissions wait for preparation/admission. Environment retrieval
+Later idle text submissions wait for preparation/admission. Cancellation-only events
+reuse durable admission without creating work or retargeting retries; pending
+pre-Turn input still blocks new cancellation. HTTP acceptance does not establish
+native completion or process quiescence. Environment retrieval
 exposes durable status and safe empty installation metadata for that profile.
 Populated installation metadata, mixed/active/function input and full lifecycle conformance remain
 unimplemented; see the [Environment scope](environments.md).

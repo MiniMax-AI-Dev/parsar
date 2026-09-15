@@ -276,8 +276,15 @@ The public self-hosted input profile accepts idle message-only batches through t
 reservation path, including already-connected environments. Only the Session-locked
 reservation operation decides retry, active-work conflict and new admission; an
 unlocked activity read must never choose direct Turn creation. Active
-steering/cancellation, mixed inputs and function results remain gaps;
-these restrictions do not narrow the pinned protocol target. Promotion requires the current leased execution writer and the caller's
+steering, mixed inputs and function results remain gaps;
+these restrictions do not narrow the pinned protocol target. Cancellation-only batches
+use the existing direct admission after configuration and execution-ownership checks.
+Only the Session-locked transaction chooses the active Turn or an idle receipt;
+matching retries retain that target even during later work. Cancellation cannot
+create a Turn or bypass preparation. A new cancellation still conflicts with a
+pending reservation; it does not cancel pre-Turn input. Its 204 response confirms
+durable admission, not native completion or process exit.
+Promotion requires the current leased execution writer and the caller's
 retained native preparation; never hold a database lock during external preparation. Only
 the first successful non-replay receipts authorize Start on that same preparation.
 An admitted retry returns the original receipts without reclaiming execution; a
