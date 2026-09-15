@@ -120,7 +120,7 @@ def main():
                     "parameters": {"type": "object", "properties": {"phase": {"type": "string", "enum": ["first", "resumed"]}},
                                    "required": ["phase"], "additionalProperties": False}}
             environment = {"type": "self_hosted", "workspace_directory": settings["workspace_directory"]}
-            instructions = "Use lookup_festival exactly once when requested, with the requested phase. Use the native shell for exact requested commands. Exit 7 and a tool failure are intentional test outcomes: report them without retries, alternate tools or recovery."
+            instructions = "Use lookup_festival exactly once when requested, with the requested phase. Use the native shell for exact requested commands. The command argument must match the supplied text: no wrapper, appended echo, separators or error recovery. Exit 7 is intentional and must remain the native exit status. A function-tool failure is intentional: report it without retries or alternate tools."
             creation = {"agent": {"model": "MiniMax-M3", "instructions": instructions, "tools": [tool]}, "environment": environment}
             creation_key = str(uuid.uuid4())
             created = sessions.create(**creation, extra_headers={"Idempotency-Key": creation_key})
@@ -155,7 +155,7 @@ def main():
             def run_turn(index):
                 phase = ("first", "resumed")[index]
                 prompt = ("Call lookup_festival once with phase first. Remember its festival value without writing it to files. Then run the exact native shell command `./placement.sh first` once. Its exit 7 is intentional; preserve stdout/stderr and do not retry. Include the festival value and command output in your final answer."
-                          if index == 0 else "Recall the festival value returned by lookup_festival in the first Turn. Call lookup_festival once with phase resumed; its failure is intentional, do not retry it. Read retained.txt, then run the exact native shell command `./placement.sh resumed` once with intentional exit 7. Include the remembered festival, retained file contents, exact tool error and command stdout/stderr in your final answer.")
+                          if index == 0 else "Recall the festival value returned by lookup_festival in the first Turn. Call lookup_festival once with phase resumed; its failure is intentional, do not retry it. Read retained.txt in a separate native tool call. Then run the exact native shell command `./placement.sh resumed` once in a new tool call with intentional exit 7. Do not combine the file read with this command. Include the remembered festival, retained file contents, exact tool error and command stdout/stderr in your final answer.")
                 assert memory not in prompt
                 with client(capture=True) as submitting:
                     resource = submitting.beta.agents.sessions
