@@ -39,7 +39,7 @@ func resolveSessionTools(input []json.RawMessage) ([]json.RawMessage, error) {
 			functions = append(functions, function)
 			positions = append(positions, i)
 		default:
-			return nil, errors.New("Execution currently supports non-deferred functions and the credential-free HTTP MCP profile only.")
+			return nil, errors.New("Execution currently supports non-deferred functions and the service-origin HTTP MCP profile only.")
 		}
 	}
 	resolved, err := resolveFunctions(functions)

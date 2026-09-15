@@ -401,7 +401,8 @@ authorization and an opaque native Noise relay. Configured execution and an
 executor origin enable public `self_hosted` Sessions on Codex. The current
 profile requires an absolute `workspace_directory`, empty/default
 `capability_directories`, with optional supported non-deferred functions and
-credential-free service-origin HTTP MCP. Initial text is optional.
+service-origin HTTP MCP with optional attached static Bearer credentials. Initial
+text is optional.
 
 To enable it alongside the existing daemon worker, set
 `AGENTS_API_EXECUTOR_URL` to the externally reachable HTTPS origin. Apply the
@@ -600,7 +601,8 @@ advertise `mcp_http_tools`; selection waits for a capable device. The native
 harness owns MCP discovery, calls and results. Public `mcp_call` Items use original
 server/tool names; recover missed live events through Session, Turn and Items reads.
 
-For `environment:none`, attach tenant-owned `vault_ids` for static bearer authentication. An explicit
+For `environment:none` or `self_hosted`, attach tenant-owned `vault_ids` for static
+bearer authentication. An explicit
 `credential_id` selects an attached credential for the exact HTTPS URL; omission/null
 selects a unique matching credential, or stays anonymous if none matches. Ambiguity
 fails before Session creation. Selection is frozen privately; the public tool keeps
@@ -609,12 +611,14 @@ Authenticated execution additionally requires `mcp_http_bearer_auth`; missing ke
 or failed authorization/decryption never fall back to anonymous execution.
 
 With `self_hosted`, commands use the registered executor while MCP connections
-remain on the trusted service harness. This credential-free combination additionally
+remain on the trusted service harness. This combination additionally
 requires `mcp_http_remote_environment` and the existing remote preparation
 capabilities; separate MCP/remote support on an older daemon does not imply this
-combination. Any explicitly or implicitly selected Vault credential is rejected
-before Session creation; it is never silently discarded. Unmatched attached Vaults
-may retain an anonymous selection. Both native remote readiness and MCP configuration
+combination. A selected Vault credential also requires `mcp_http_remote_bearer_auth`;
+older peers with only separate MCP/remote/bearer capabilities cannot receive it.
+Secrets enter only the service native process environment, not the executor or
+public/native history. Unmatched attached Vaults may retain an anonymous selection.
+Both native remote readiness and MCP configuration
 checks run before thread creation/resume.
 
 The current subset rejects OAuth, inline authorization, nonempty headers or
