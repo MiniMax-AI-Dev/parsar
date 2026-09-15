@@ -97,3 +97,52 @@ func (q *Queries) GetCredential(ctx context.Context, arg GetCredentialParams) (G
 	)
 	return i, err
 }
+
+const updateStaticCredential = `-- name: UpdateStaticCredential :one
+UPDATE vault_credentials c
+SET token_ciphertext = $1, updated_at = statement_timestamp()
+FROM vaults v
+WHERE v.id = c.vault_id AND v.tenant_id = $2
+  AND v.id = $3 AND c.id = $4
+  AND c.auth_type = 'static_bearer' AND c.mcp_server_url = $5
+RETURNING c.id, c.vault_id, c.name, c.auth_type, c.mcp_server_url, c.created_at, c.updated_at
+`
+
+type UpdateStaticCredentialParams struct {
+	TokenCiphertext []byte      `json:"token_ciphertext"`
+	TenantID        pgtype.UUID `json:"tenant_id"`
+	VaultID         pgtype.UUID `json:"vault_id"`
+	ID              pgtype.UUID `json:"id"`
+	McpServerUrl    string      `json:"mcp_server_url"`
+}
+
+type UpdateStaticCredentialRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	VaultID      pgtype.UUID        `json:"vault_id"`
+	Name         string             `json:"name"`
+	AuthType     string             `json:"auth_type"`
+	McpServerUrl string             `json:"mcp_server_url"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateStaticCredential(ctx context.Context, arg UpdateStaticCredentialParams) (UpdateStaticCredentialRow, error) {
+	row := q.db.QueryRow(ctx, updateStaticCredential,
+		arg.TokenCiphertext,
+		arg.TenantID,
+		arg.VaultID,
+		arg.ID,
+		arg.McpServerUrl,
+	)
+	var i UpdateStaticCredentialRow
+	err := row.Scan(
+		&i.ID,
+		&i.VaultID,
+		&i.Name,
+		&i.AuthType,
+		&i.McpServerUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
