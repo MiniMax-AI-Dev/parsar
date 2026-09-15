@@ -16,6 +16,8 @@
 //     with that id to graft the prior turn's context back in.
 package codex
 
+import "encoding/json"
+
 import "fmt"
 
 // JsonRpcVersion is the JSON-RPC 2.0 marker carried on every outbound
