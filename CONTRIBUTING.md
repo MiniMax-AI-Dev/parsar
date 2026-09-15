@@ -699,8 +699,20 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   this storage boundary. Missing key configuration disables credential writes;
   malformed explicit configuration fails startup. See
   [`services/agents-api/credentials.md`](services/agents-api/credentials.md) for
-  key persistence and current limits. OAuth and rotation remain
+  key persistence and current limits. OAuth and storage-key rotation remain
   separate gaps; resource creation never contacts the destination.
+- Credential `POST /v1/vaults/{vault_id}/credentials/{credential_id}` replaces only
+  the static-bearer token and update time. Require `auth.type=static_bearer` and a
+  string `auth.token`, preserving opaque bytes; reject extra mutation fields before
+  writing. Reuse safe metadata for the immutable encryption binding, then scope the
+  atomic SQL mutation independently by tenant, Vault, Credential, static auth type
+  and exact destination. Never decrypt the previous token or send plaintext to SQL.
+  Missing encryption configuration or a failed write preserves the old row. Return
+  the existing safe metadata projection; identity, name, destination, creation time
+  and Session snapshots stay unchanged. Subsequent dispatch reads use the committed
+  replacement through existing scoped lookup; already-resolved requests may retain
+  the old token. This is not storage-key rotation, in-flight revocation or hot reload.
+  OAuth and exact hosted concurrent-update/retry/timestamp semantics remain gaps.
 - Public reusable Agent create/retrieve uses `/v1/agents` and the same authenticated
   tenant/Beta-header boundary as Sessions. The resource envelope owns identity,
   timestamps and metadata, separately from saved configuration and Session state.

@@ -19,6 +19,7 @@ type credentialFixture struct {
 	ResourceStore
 	credential        store.Credential
 	input             store.CreateStaticCredentialInput
+	replacement       store.UpdateStaticCredentialInput
 	tenant, vault, id string
 	calls             int
 	err               error

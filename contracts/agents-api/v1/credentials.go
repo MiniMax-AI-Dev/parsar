@@ -13,6 +13,17 @@ type StaticBearerCredentialInput struct {
 	Token        *string `json:"token" binding:"required"`
 }
 
+// UpdateCredentialRequest implements static token replacement. The pinned OAuth
+// replacement variant remains a separate missing union member.
+type UpdateCredentialRequest struct {
+	Auth *StaticBearerCredentialReplacement `json:"auth" binding:"required"`
+}
+
+type StaticBearerCredentialReplacement struct {
+	Type  string  `json:"type" binding:"required" enums:"static_bearer"`
+	Token *string `json:"token" binding:"required"`
+}
+
 type StaticBearerCredentialAuth struct {
 	Type         string `json:"type" binding:"required" enums:"static_bearer"`
 	MCPServerURL string `json:"mcp_server_url" binding:"required"`

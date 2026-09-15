@@ -79,8 +79,8 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | environments | retrieve | Supported self-hosted profile: durable status and safe empty installation metadata; hosted/populated inventory remains missing |
 | environments.files | create, list | Missing |
 | environments.templates | create, retrieve, update, list, delete | Missing |
-| vaults | create, retrieve, list, delete | Create/retrieve with independent tenant persistence; list/delete and Credential use remain missing |
-| vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve with encrypted storage and safe metadata; Session attachment and exact-URL HTTPS MCP binding; OAuth and other lifecycle operations remain missing |
+| vaults | create, retrieve, list, delete | Create/retrieve with independent tenant persistence and Session attachments; list/delete remain missing |
+| vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve/token replacement with encrypted storage and safe metadata; Session attachment and exact-URL HTTPS MCP binding; OAuth and list/delete remain missing |
 
 For each resource, verify the referenced request/response unions and observable
 behavior, not just the route. Non-text initial input, configuration
@@ -103,10 +103,19 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   contact. Public metadata contains identity, owning Vault, name, timestamps and
   auth type/destination; it never returns tokens or ciphertext and can be read
   without the encryption key. Missing encryption configuration locally rejects
-  creation with 503. Attached Sessions can use static credentials for exact-URL HTTPS
-  MCP; OAuth, rotation/list/delete and key scopes remain gaps. See the [credential storage guide](../../services/agents-api/credentials.md)
+  creation/replacement with 503. Attached Sessions can use static credentials for
+  exact-URL HTTPS MCP; OAuth, storage-key rotation, list/delete and key scopes remain gaps. See the [credential storage guide](../../services/agents-api/credentials.md)
   for encryption and operational limits; this does not establish complete Credential
   or hosted error/retry compatibility.
+- `POST /vaults/{vault_id}/credentials/{credential_id}` replaces a static token using
+  only required `auth.type=static_bearer` and string `auth.token`. It preserves opaque
+  strings, rejects missing/null/type/extra-field mutations and returns safe metadata.
+  Ciphertext/update time change atomically within the same tenant/Vault/ID/type/URL;
+  name, destination, identity, creation time and Session bindings are unchanged. No
+  old-token decryption or MCP call occurs. Subsequent dispatch reads use the committed
+  replacement; already-resolved requests may retain the old token. OAuth replacement,
+  storage-key rotation, hot reload/revocation and exact hosted concurrent-update,
+  timestamp and retry semantics remain gaps.
 - Vaults use `POST /vaults` and `GET /vaults/{vault_id}` with the same project/tenant
   authentication and Beta header as other resources. The response contains only
   `id`, `object: vault`, `created_at`, `name` and `metadata`. Omitted name stays null;

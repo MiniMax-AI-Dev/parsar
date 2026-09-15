@@ -1,9 +1,9 @@
 # Vault credential storage
 
-The standalone service supports static-bearer Credential creation and safe metadata
-retrieval through the pinned official SDK. It stores tokens as authenticated
+The standalone service supports static-bearer Credential creation, token replacement
+and safe metadata retrieval through the pinned official SDK. It stores tokens as authenticated
 ciphertext in its own PostgreSQL database. There is no product-service dependency,
-public secret-read endpoint. Resource creation and retrieval do not contact the
+public secret-read endpoint. Resource creation, replacement and retrieval do not contact the
 configured MCP destination; an attached Session can use it during execution.
 
 ## Configure the storage key
@@ -26,7 +26,7 @@ Keep the same key across service restarts and retain a protected backup separate
 from database backups. The service reads it at startup; it never generates a
 replacement or falls back to `PARSAR_MASTER_KEY`. Invalid configured files fail
 startup with a safe error. If the setting is absent, other resources and Credential
-metadata reads continue working, but Credential creation returns local
+metadata reads continue working, but Credential creation and replacement return local
 `503 credential_storage_unavailable` before writing.
 Session attachment/selection also uses safe metadata. If a selected credential
 cannot be decrypted at dispatch, execution fails without contacting its MCP server
@@ -34,9 +34,9 @@ or falling back to anonymous authentication.
 
 Losing or replacing the key prevents decryption of existing credentials. Metadata
 reads do not decrypt tokens and therefore do not prove that a key can recover them.
-This release supports one retained key; rotation and re-encryption are not
+This release supports one retained key; storage-key rotation and re-encryption are not
 implemented. Go's random-nonce GCM requires no more than 2^32 encryptions per key;
-stop new credential writes before that bound until a supported rotation process
+stop new credential writes before that bound until a supported storage-key rotation process
 is available. Never treat editing the key file as rotation.
 
 ## Public resource contract
@@ -85,7 +85,7 @@ authentication. Names are public mutable metadata and are not part of this bindi
 Resource SQL reads select no secret ciphertext. The key and request token exist in
 trusted service memory; this protects stored secrets, not a compromised service host.
 
-Credential update/list/delete, OAuth refresh, restricted-key scopes and revocation
+Credential list/delete, OAuth refresh, restricted-key scopes and revocation
 semantics remain separate gaps. The foreign key preserves Vault ownership and
 defines dependent-row removal for a future Vault deletion operation; no public
 Vault deletion is added here. The full protocol target is unchanged.
@@ -129,3 +129,33 @@ configuration, history, arguments or logs. Native execution requires nonempty RF
 6750 b64token bytes and rejects other opaque stored strings without trimming them.
 Exact hosted matching, response population, selection timing and error/redirect
 semantics remain unverified.
+
+## Replace a stored token
+
+Use the pinned auth-only update operation when the MCP server's bearer token changes:
+
+```python
+updated = client.beta.agents.vaults.credentials.update(
+    credential.id,
+    vault_id=vault.id,
+    auth={"type": "static_bearer", "token": replacement_from_private_configuration},
+)
+```
+
+This calls `POST /v1/vaults/{vault_id}/credentials/{credential_id}`. Both `auth` and
+its `type`/string `token` are required; null, missing fields and extra mutation
+fields are rejected. Empty and whitespace tokens remain opaque stored values,
+subject to the existing native execution syntax limit when used. The response is
+the same safe Credential metadata. ID, Vault, name, auth type, exact destination
+and creation time stay unchanged; only ciphertext and update time are replaced
+atomically. Missing encryption configuration or a failed mutation leaves the old
+row intact. Unknown, foreign, wrong-Vault and malformed references use local 404.
+
+Existing explicit and implicit Session bindings keep the same selected identity
+and creation retry behavior. A later dispatch reads the replacement after commit;
+an already-resolved or running request may still hold the previous token. Updating
+this resource performs no MCP call, changes no server-side token independently,
+and provides no in-flight revocation, hot reload or cancellation. Coordinate the
+destination's token change operationally. Replacing this token does not rotate the
+storage encryption key or reset its encryption budget. OAuth replacement and exact
+hosted overlapping-update, replay and timestamp semantics remain unverified.

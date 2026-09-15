@@ -795,6 +795,18 @@ definitions:
     - token
     - type
     type: object
+  v1.StaticBearerCredentialReplacement:
+    properties:
+      token:
+        type: string
+      type:
+        enum:
+        - static_bearer
+        type: string
+    required:
+    - token
+    - type
+    type: object
   v1.StreamError:
     properties:
       code:
@@ -956,6 +968,13 @@ definitions:
           type: object
         type: array
         x-nullable: true
+    type: object
+  v1.UpdateCredentialRequest:
+    properties:
+      auth:
+        $ref: '#/definitions/v1.StaticBearerCredentialReplacement'
+    required:
+    - auth
     type: object
   v1.UpdateSessionRequest:
     properties:
@@ -2039,7 +2058,8 @@ paths:
         request. Public responses contain only safe metadata. Missing encryption configuration
         returns local 503. Session admission can bind static credentials from attached
         Vaults to exact HTTPS MCP destinations; secret decryption occurs only at dispatch.
-        OAuth, rotation and exact hosted error/retry semantics remain gaps.
+        OAuth, storage-key rotation and exact hosted error/retry semantics remain
+        gaps.
       parameters:
       - description: agents=v1
         in: header
@@ -2141,6 +2161,77 @@ paths:
       security:
       - BearerAuth: []
       summary: Retrieve safe Vault Credential metadata
+      tags:
+      - Credentials
+    post:
+      consumes:
+      - application/json
+      description: Requires auth with type=static_bearer and a string token; empty
+        and opaque token bytes are preserved. Only the write-only secret and updated_at
+        change, atomically within the authenticated project and owning Vault. Identity,
+        name, auth type, exact destination, created_at and Session bindings remain
+        unchanged. Responses contain only safe metadata; no old-token decryption or
+        network call occurs. Missing encryption configuration returns local 503 without
+        modifying the credential. Subsequent dispatch reads use the committed replacement;
+        already-resolved requests may retain the old token. OAuth, storage-key rotation,
+        hot reload/revocation and exact hosted concurrent-update/retry/timestamp semantics
+        remain gaps.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Vault ID
+        in: path
+        name: vault_id
+        required: true
+        type: string
+      - description: Credential ID
+        in: path
+        name: credential_id
+        required: true
+        type: string
+      - description: Write-only static bearer replacement
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v1.UpdateCredentialRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.Credential'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Replace a static-bearer Vault Credential token
       tags:
       - Credentials
 schemes:

@@ -147,6 +147,15 @@ def verify_credential_storage_disabled(client, value, canary, expect_error):
                             headers={"Authorization": f"Bearer {client.api_key}", "OpenAI-Beta": "agents=v1"},
                             json=request)
         assert response.status_code == 503 and canary not in response.text
+        replacement = {"auth": {"type": "static_bearer", "token": canary + "replacement"}}
+        error = expect_error(InternalServerError, lambda: credentials.update(value.id, vault_id=value.vault_id, **replacement))
+        assert error.status_code == 503 and error.body["code"] == "credential_storage_unavailable"
+        assert canary not in error.response.text
+        response = raw.post(str(client.base_url).rstrip("/") + "/vaults/" + value.vault_id + "/credentials/" + value.id,
+                            headers={"Authorization": f"Bearer {client.api_key}", "OpenAI-Beta": "agents=v1"},
+                            json=replacement)
+        assert response.status_code == 503 and canary not in response.text
+        assert credentials.retrieve(value.id, vault_id=value.vault_id) == value
     vault = client.beta.agents.vaults.create(name="Non-secret resource without credential key")
     assert client.beta.agents.vaults.retrieve(vault.id) == vault
     print("Static credentials: absent key rejects SDK/raw writes while safe reads and Vault creation remain available.")
