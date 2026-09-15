@@ -31,6 +31,9 @@ func environmentInputActivity(ctx context.Context, q *sqlc.Queries, session pgty
 	if row.SettledAt.Valid {
 		activity.LastActiveAt = row.SettledAt.Time
 	}
+	if row.IsInitial && row.State == EnvironmentInputExpired {
+		activity.Status = "failed"
+	}
 	if row.State == EnvironmentInputPending && row.ConnectionStatus != "connected" {
 		activity.Status = "requires_action"
 		activity.EnvironmentID = uuid.UUID(row.EnvironmentID.Bytes).String()

@@ -311,10 +311,17 @@ pre-admission or claimed-Turn semantics.
 The initial public idle-text profile uses this primitive. Its message-only scope
 and single pending reservation are implementation limits, not claims about the
 final protocol. Initial creation and mixed/active/function inputs remain required.
+The Store prerequisite now reserves initial messages atomically with a new
+Environment-bearing Session, preserving the creation cursor and retry identity.
+Initial expiry emits a failed Session snapshot with a safe error and no Turn;
+later expiry retains idle behavior. Historical reservation origins are not inferred.
+The same storage rule covers internal hosted associations without enabling a
+provider. Public initial creation remains gated for its own SDK/native acceptance.
 The Worker settles due reservations in bounded batches even without
 devices or available execution slots, skipping contended Session locks and retaining
 its current execution ownership. Restart does not reset stored deadlines. This
-private expiry creates no public failure event or Turn. See the
+expiry creates no Turn; only expired initial reservations emit Session failure.
+Exact hosted error wording, cancellation and crash behavior remain unverified. See the
 [contributor boundary](../../CONTRIBUTING.md) for the prepared connection, expiry
 and transaction rules.
 

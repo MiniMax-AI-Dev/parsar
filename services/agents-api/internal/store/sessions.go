@@ -138,7 +138,7 @@ func (s *Store) createSession(ctx context.Context, tenantID string, input Create
 		Configuration: configuration, CreationRequestHash: creationHash,
 		CreatorKind: pgtype.Text{String: input.Creator.Kind, Valid: true}, CreatorID: pgtype.Text{String: input.Creator.ID, Valid: true},
 	}
-	row, environment, err := s.createSessionResources(ctx, tenantID, params, batch)
+	row, environment, err := s.createSessionResources(ctx, tenantID, params, batch, encodedInput)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SessionCreation{}, ErrIdempotencyConflict
 	}

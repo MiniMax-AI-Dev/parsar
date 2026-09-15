@@ -287,6 +287,10 @@ Set `PARSAR_OFFICIAL_SDK_PYTHON` to the fixed SDK interpreter for the Store clie
 fixtures, and run the separate official-client command above as well.
 `TestEnvironmentRetrievalOfficialClient` verifies public creation, scoped safe
 Environment reads and retrieval after reopening without execution configuration.
+`TestEnvironmentInitialFailureOfficialClient` verifies failed Session reads and
+matching SDK/raw live failure events after privately provisioned initial input
+expires, without fabricating a Turn or changing the Environment status. It is a
+persistence prerequisite test; public self-hosted initial creation remains gated.
 The test database must be named `parsar_agents_api_*_tests` and contain no product
 workspace tables. Tests apply only this service's migrations and use new tenant
 IDs without truncating tables. Missing test configuration skips DB tests locally;

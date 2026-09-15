@@ -61,6 +61,7 @@ type EnvironmentInputReservation struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	Deadline       pgtype.Timestamptz `json:"deadline"`
 	SettledAt      pgtype.Timestamptz `json:"settled_at"`
+	IsInitial      bool               `json:"is_initial"`
 }
 
 type ExecutionProjectScope struct {

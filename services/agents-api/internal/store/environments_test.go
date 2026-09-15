@@ -143,13 +143,14 @@ func TestEnvironmentCreationWinnerOwnsSnapshotAndIdentity(t *testing.T) {
 	if received != count || created != 1 {
 		t.Fatal("creation winners", received, created)
 	}
-	var associations, inputs int
+	var associations, reservations int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM environments WHERE session_id=$1", first.creation.Session.ID).Scan(&associations); err != nil || associations != 1 {
 		t.Fatal(associations, err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT count(*) FROM turn_inputs WHERE session_id=$1", first.creation.Session.ID).Scan(&inputs); err != nil || inputs != 1 {
-		t.Fatal(inputs, err)
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM environment_input_reservations WHERE session_id=$1 AND is_initial", first.creation.Session.ID).Scan(&reservations); err != nil || reservations != 1 {
+		t.Fatal(reservations, err)
 	}
+	environmentInputHistory(t, pool, first.creation.Session.ID, 0, 0)
 	events, err := s.ListSessionEvents(ctx, tenant, first.creation.Session.ID, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -178,7 +179,7 @@ func TestEnvironmentCreationWinnerOwnsSnapshotAndIdentity(t *testing.T) {
 }
 
 func TestEnvironmentCreationFailureRollsBackAllResources(t *testing.T) {
-	for _, phase := range []string{"environment", "input"} {
+	for _, phase := range []string{"environment", "input", "activity"} {
 		t.Run(phase, func(t *testing.T) {
 			s, pool := testStore(t)
 			ctx := context.Background()
@@ -186,7 +187,10 @@ func TestEnvironmentCreationFailureRollsBackAllResources(t *testing.T) {
 			constraint := "environment_failure_" + strings.ReplaceAll(marker, "-", "")
 			table, expression := "environments", "status <> 'pending'"
 			if phase == "input" {
-				table, expression = "turn_inputs", "payload->>'text' <> '"+marker+"'"
+				table, expression = "environment_input_reservations", "NOT (batch @> '[{\"payload\":{\"text\":\""+marker+"\"}}]'::jsonb)"
+			}
+			if phase == "activity" {
+				table, expression = "session_events", "NOT (payload ? 'environment_input_activity')"
 			}
 			var before int
 			if err := pool.QueryRow(ctx, "SELECT count(*) FROM environments").Scan(&before); err != nil {
@@ -212,9 +216,10 @@ func TestEnvironmentCreationFailureRollsBackAllResources(t *testing.T) {
 				t.Fatal(err)
 			}
 			session, err := s.CreateSession(ctx, tenant, input)
-			if err != nil || session.LastTurn == nil {
+			if err != nil || session.LastTurn != nil || session.EnvironmentInputActivity == nil || session.EnvironmentInputActivity.Status != "requires_action" {
 				t.Fatal("retry remained reserved", session, err)
 			}
+			environmentInputHistory(t, pool, session.ID, 0, 0)
 			if environment, err := s.GetSessionEnvironment(ctx, tenant, session.ID); err != nil || environment.ID == "" {
 				t.Fatal(environment, err)
 			}
