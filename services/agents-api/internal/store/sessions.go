@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/credentialcrypto"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/db/sqlc"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/identity"
 )
@@ -62,9 +63,10 @@ type SessionPage struct {
 }
 
 type Store struct {
-	queries        *sqlc.Queries
-	pool           *pgxpool.Pool
-	executionLease *ExecutionLease
+	queries          *sqlc.Queries
+	pool             *pgxpool.Pool
+	executionLease   *ExecutionLease
+	credentialCipher *credentialcrypto.Cipher
 }
 
 func New(pool *pgxpool.Pool) *Store { return &Store{queries: sqlc.New(pool), pool: pool} }

@@ -688,6 +688,19 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   a local bound, not hosted parity. Credentials, list/delete lifecycle and Session
   bindings remain separate gaps; do not introduce product roles or speculative
   credential/lifecycle fields into this resource slice.
+- Static-bearer Credentials are children of tenant-owned Vaults in the execution
+  database. Creation admits the owner in the same SQL statement as the insert;
+  retrieval joins the owning Vault and selects public metadata only. No public
+  operation decrypts or returns a token. Encrypt before passing secret values to
+  SQL, using the execution service's separately configured random 32-byte key and
+  the standard library's random-nonce AES-GCM. The versioned authenticated binding
+  includes tenant, Vault, Credential, authentication purpose and exact destination.
+  Never reuse product master-key conventions or daemon transport encryption for
+  this storage boundary. Missing key configuration disables credential writes;
+  malformed explicit configuration fails startup. See
+  [`services/agents-api/credentials.md`](services/agents-api/credentials.md) for
+  key persistence and current limits. Session/MCP binding, OAuth and rotation remain
+  separate gaps; resource creation never contacts the destination.
 - Public reusable Agent create/retrieve uses `/v1/agents` and the same authenticated
   tenant/Beta-header boundary as Sessions. The resource envelope owns identity,
   timestamps and metadata, separately from saved configuration and Session state.

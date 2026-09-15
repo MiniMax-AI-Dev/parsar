@@ -112,6 +112,16 @@ definitions:
     required:
     - model
     type: object
+  v1.CreateCredentialRequest:
+    properties:
+      auth:
+        $ref: '#/definitions/v1.StaticBearerCredentialInput'
+      name:
+        type: string
+    required:
+    - auth
+    - name
+    type: object
   v1.CreateEventsRequest:
     properties:
       events:
@@ -158,6 +168,33 @@ definitions:
         x-nullable: true
       name:
         type: string
+    type: object
+  v1.Credential:
+    properties:
+      auth:
+        $ref: '#/definitions/v1.StaticBearerCredentialAuth'
+      created_at:
+        type: integer
+      id:
+        type: string
+      name:
+        type: string
+      object:
+        enum:
+        - vault.credential
+        type: string
+      updated_at:
+        type: integer
+      vault_id:
+        type: string
+    required:
+    - auth
+    - created_at
+    - id
+    - name
+    - object
+    - updated_at
+    - vault_id
     type: object
   v1.Environment:
     properties:
@@ -730,6 +767,33 @@ definitions:
     required:
     - data
     - has_more
+    type: object
+  v1.StaticBearerCredentialAuth:
+    properties:
+      mcp_server_url:
+        type: string
+      type:
+        enum:
+        - static_bearer
+        type: string
+    required:
+    - mcp_server_url
+    - type
+    type: object
+  v1.StaticBearerCredentialInput:
+    properties:
+      mcp_server_url:
+        type: string
+      token:
+        type: string
+      type:
+        enum:
+        - static_bearer
+        type: string
+    required:
+    - mcp_server_url
+    - token
+    - type
     type: object
   v1.StreamError:
     properties:
@@ -1955,6 +2019,121 @@ paths:
       summary: Retrieve a Vault
       tags:
       - Vaults
+  /vaults/{vault_id}/credentials:
+    post:
+      consumes:
+      - application/json
+      description: Stores the write-only token as execution-owned authenticated ciphertext.
+        Required name is trimmed to 1–256 UTF-8 bytes; auth requires static_bearer,
+        an HTTPS mcp_server_url and a string token. Token bytes are preserved, including
+        empty strings; hosted token edge validation is unverified. The initial URL
+        profile excludes userinfo and fragments, preserves queries and makes no network
+        request. Public responses contain only safe metadata. Missing encryption configuration
+        returns local 503. OAuth, execution binding, rotation and exact hosted error/retry
+        semantics remain gaps.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Vault ID
+        in: path
+        name: vault_id
+        required: true
+        type: string
+      - description: Write-only static bearer credential
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v1.CreateCredentialRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.Credential'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a static-bearer Vault Credential
+      tags:
+      - Credentials
+  /vaults/{vault_id}/credentials/{credential_id}:
+    get:
+      description: Reads only non-secret metadata scoped to the authenticated project
+        and owning Vault. No token decryption, network request or execution is performed.
+        Unknown, foreign, wrong-Vault and malformed IDs use the same local not-found
+        response; hosted error parity remains unverified.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Vault ID
+        in: path
+        name: vault_id
+        required: true
+        type: string
+      - description: Credential ID
+        in: path
+        name: credential_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.Credential'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve safe Vault Credential metadata
+      tags:
+      - Credentials
 schemes:
 - http
 - https

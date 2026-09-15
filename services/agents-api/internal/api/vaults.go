@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -52,9 +53,9 @@ func (h *Handler) createVault(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_request", "name must be a string.")
 			return
 		}
-		trimmed := strings.TrimSpace(*name)
-		if len(trimmed) == 0 || len(trimmed) > 256 {
-			writeError(w, http.StatusBadRequest, "invalid_request", "name must contain 1 to 256 UTF-8 bytes after trimming.")
+		trimmed, err := normalizedVaultName(*name)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
 			return
 		}
 		input.Name = &trimmed
@@ -103,4 +104,12 @@ func (h *Handler) getVault(w http.ResponseWriter, r *http.Request) {
 
 func vaultResponse(vault store.Vault) v1.Vault {
 	return v1.Vault{ID: vault.ID, Object: "vault", CreatedAt: vault.CreatedAt.Unix(), Name: vault.Name, Metadata: vault.Metadata}
+}
+
+func normalizedVaultName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if len(name) == 0 || len(name) > 256 {
+		return "", errors.New("name must contain 1 to 256 UTF-8 bytes after trimming.")
+	}
+	return name, nil
 }

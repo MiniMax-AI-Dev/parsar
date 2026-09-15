@@ -19,6 +19,7 @@ import (
 type ResourceStore interface {
 	AgentStore
 	VaultStore
+	CredentialStore
 	GetEnvironment(context.Context, string, string) (store.Environment, error)
 	ListItems(context.Context, string, string, string, int, bool) (store.ItemPage, error)
 	GetTurn(context.Context, string, string, string) (store.Turn, error)
@@ -56,6 +57,8 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 		r.Use(h.authenticate)
 		r.Post("/vaults", h.createVault)
 		r.Get("/vaults/{vault_id}", h.getVault)
+		r.Post("/vaults/{vault_id}/credentials", h.createCredential)
+		r.Get("/vaults/{vault_id}/credentials/{credential_id}", h.getCredential)
 		r.Post("/agents", h.createAgent)
 		r.Get("/agents", h.listAgents)
 		r.Get("/agents/{agent_id}", h.getAgent)
