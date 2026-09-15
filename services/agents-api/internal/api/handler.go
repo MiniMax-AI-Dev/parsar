@@ -18,6 +18,7 @@ import (
 
 type ResourceStore interface {
 	AgentStore
+	GetEnvironment(context.Context, string, string) (store.Environment, error)
 	ListItems(context.Context, string, string, string, int, bool) (store.ItemPage, error)
 	GetTurn(context.Context, string, string, string) (store.Turn, error)
 	ListTurns(context.Context, string, string, string, int, bool) (store.TurnPage, error)
@@ -57,6 +58,7 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 		r.Get("/agents/{agent_id}", h.getAgent)
 		r.Post("/agents/{agent_id}", h.updateAgent)
 		r.Delete("/agents/{agent_id}", h.deleteAgent)
+		r.Get("/agents/environments/{environment_id}", h.getEnvironment)
 		r.Post("/agents/sessions", h.createSession)
 		r.Get("/agents/sessions", h.listSessions)
 		r.Get("/agents/sessions/{session_id}", h.getSession)

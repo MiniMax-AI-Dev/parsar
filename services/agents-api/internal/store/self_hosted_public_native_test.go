@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -96,6 +97,27 @@ func TestNativePublicSelfHostedStandalone(t *testing.T) {
 	}
 	startDaemonRemoteExecutor(t, ctx, root, local, workspace, nativeBinary, image, waiting["remote_url"], environmentID, executor)
 	awaitEnvironmentConnectionState(t, ctx, s, tenant, environmentID, "connected")
+	writePublicNativeJSON(t, filepath.Join(observer.directory, "initial-connection-ready.json"), map[string]string{"environment_id": environmentID})
+	connectedRead := awaitPublicNativeSignal(t, ctx, observer, "initial-connection-read", 20*time.Second)
+	if connectedRead["environment_id"] != environmentID {
+		t.Fatal("public connected retrieval observed the wrong Environment")
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/v1/agents/environments/"+environmentID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+executor.Token)
+	request.Header.Set("OpenAI-Beta", "agents=v1")
+	client := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{Proxy: nil}}
+	defer client.CloseIdleConnections()
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal("executor-only credential retrieval request failed", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatal("executor-only credential authorized a public Environment read")
+	}
 	profile := filepath.Join(root, "parsar-daemon", "execution")
 	if err := os.MkdirAll(profile, 0700); err != nil {
 		t.Fatal(err)

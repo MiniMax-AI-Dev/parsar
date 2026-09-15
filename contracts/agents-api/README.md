@@ -31,8 +31,9 @@ The private native registry persists fenced connection observations and pinned
 Environment-event snapshots through the existing execution owner. Session reads
 and live SSE also expose safe `self_hosted` output and reservation-owned connection
 actions. The initial public self-hosted profile creates empty Codex Sessions and
-waits for preparation/admission of later idle text batches. Resource metadata,
-initial input, mixed/active/function input and full lifecycle conformance remain
+waits for preparation/admission of later idle text batches. Environment retrieval
+exposes durable status and safe empty installation metadata for that profile.
+Populated installation metadata, initial input, mixed/active/function input and full lifecycle conformance remain
 unimplemented; see the [Environment scope](environments.md).
 
 Remaining work includes physical Session cleanup/content variants, broader configuration
@@ -45,7 +46,7 @@ dependencies, risk and effort. Parsar cutover and its business Team loop are sep
 
 This inventory is based on the pinned Python source, not our generated OpenAPI.
 It contains 42 distinct HTTP operations in 15 resource classes, excluding async
-duplicates, overloads and client-side helpers. Fifteen operations currently have
+duplicates, overloads and client-side helpers. Sixteen operations currently have
 handlers; that count is not a compatibility score. Even those operations implement
 only part of the upstream input, configuration and event variants.
 
@@ -64,7 +65,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | sessions.subagents.items | list | Missing |
 | sessions.subagents.turns | retrieve, list | Missing |
 | sessions.subagents.turns.items | list | Missing |
-| environments | retrieve | Missing |
+| environments | retrieve | Supported self-hosted profile: durable status and safe empty installation metadata; hosted/populated inventory remains missing |
 | environments.files | create, list | Missing |
 | environments.templates | create, retrieve, update, list, delete | Missing |
 | vaults | create, retrieve, list, delete | Missing |
@@ -178,6 +179,14 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 - The upstream self-hosted environment includes an exec-server `remote_url`.
   A Parsar daemon socket is not automatically compatible with that transport.
   Provider adaptation must be explicit and verified before advertising support.
+- Environment retrieval returns `object: agent.environment`, its ID/type, durable
+  resource status and required non-null `files`, `plugins` and `skills` arrays.
+  The supported profile has no API-managed installations; empty arrays do not
+  describe native discovery or workspace files created by commands. Unknown
+  installation configurations are rejected, not reported as empty. Reads use the
+  owning live Session's project partition and do not require execution setup.
+  Populated metadata schemas, installation/files/templates, hosted lifecycle and
+  exact hosted error semantics remain gaps.
 
 ## Delivery and verification
 

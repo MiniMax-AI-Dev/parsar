@@ -223,7 +223,17 @@ POSIX workspace directory without NUL, CR, LF or backslash for the current adapt
 omitted/null capability directories use the empty default.
 Nonempty capability directories, initial input, function tools and other engine
 placements remain rejected implementation gaps. Session output uses the owned
-Environment association; standalone metadata/file resources remain separate.
+Environment association; file operations and populated installation metadata remain separate.
+
+Environment retrieval uses the existing tenant-scoped join to a live owning Session
+and its durable connection status, independently of execution or registry setup.
+It preserves project-shared read access and exposes only the pinned resource fields.
+The current closed self-hosted configuration has no API-managed file, plugin or skill
+installations, so those required arrays are empty. They are not a filesystem listing
+or a claim about native discovery. Reuse the strict Environment configuration parser
+and reject unsupported installation fields/capabilities or resource states instead
+of treating unknown inventory as empty. No read initiates native work or changes
+connection state; connection does not establish readiness or process quiescence.
 
 
 The private Environment input reservation stores one canonical message batch before
@@ -471,17 +481,17 @@ captures cancellation/session references under the lock. Successful transfer sto
 the preparation deadline and uses the ordinary run pump and completion release;
 later preparation Release cannot cancel that Run. Released/expired status makes
 the handle unusable; asynchronous native cleanup still counts toward capacity and
-does not promise immediate OS quiescence. Production admission/start wiring and
-public Environment lifecycle remain separate required work.
+does not promise immediate OS quiescence. The public idle-text path uses this
+admission/start wiring; complete Environment lifecycle remains required work.
 
 This daemon slice keeps existing best-effort cancellation and harness cleanup.
 Native detached-session cleanup may stop remote commands after a delay; an applied
 receipt is not immediate process quiescence or complete final output/Usage. The
 opt-in registered-daemon test independently observes PID exit and stopped heartbeats
 while the daemon, registry and executor stay alive. Targeted process termination,
-cross-Turn background preservation, public `self_hosted` admission,
-public credential identity/renewal and public lifecycle remain
-separate work. Do not expose the public mode merely because the adapter probe passes.
+cross-Turn background preservation and complete public cancellation/lifecycle remain
+separate work. The public idle-text profile has its own built-service acceptance;
+an adapter probe alone does not establish public compatibility.
 
 The private Dispatcher can execute a pending Environment input on an already bound,
 capable daemon. It requires the current leased Store before resolving transient
@@ -519,8 +529,8 @@ A preparation failure may retry while still pending, without extending its store
 deadline. This is private scheduling policy, not an upstream timing guarantee.
 Unknown promotion results and errors after admission stop scheduling; existing
 claimed-Turn reconciliation handles restart without another Start. Expiry retains
-its ordinary cadence even at capacity. Public admission/initial inputs, principal
-identity and public Environment lifecycle remain separate work.
+its ordinary cadence even at capacity. Public idle-text admission and principal
+identity are implemented; initial inputs and complete public lifecycle remain separate.
 
 The standalone service wires this resolver when its daemon gateway and
 `AGENTS_API_EXECUTOR_URL` are configured. Construct the gateway and native registry,

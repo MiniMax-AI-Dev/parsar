@@ -166,6 +166,48 @@ definitions:
     required:
     - type
     type: object
+  v1.EnvironmentInfo:
+    properties:
+      files:
+        items:
+          type: object
+        type: array
+      id:
+        type: string
+      object:
+        enum:
+        - agent.environment
+        type: string
+      plugins:
+        items:
+          type: object
+        type: array
+      skills:
+        items:
+          type: object
+        type: array
+      status:
+        enum:
+        - pending
+        - connected
+        - disconnected
+        - expired
+        - failed
+        type: string
+      type:
+        enum:
+        - openai_hosted
+        - self_hosted
+        type: string
+    required:
+    - files
+    - id
+    - object
+    - plugins
+    - skills
+    - status
+    - type
+    type: object
   v1.ErrorResponse:
     properties:
       error:
@@ -1135,6 +1177,55 @@ paths:
       summary: Update a reusable Agent
       tags:
       - Agents
+  /agents/environments/{environment_id}:
+    get:
+      description: Returns durable connection status and safe installed metadata for
+        the supported self_hosted profile. Empty files/plugins/skills describe the
+        absence of API-managed installations, not the contents or discovered capabilities
+        of the caller's machine. Unsupported installation configurations remain implementation
+        gaps. This read does not prepare execution, start compute or require an enabled
+        execution worker. Session deletion removes the associated Environment from
+        public reads; project-shared read authorization is unchanged. Connection status
+        does not prove native readiness or process quiescence.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Environment ID
+        in: path
+        name: environment_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.EnvironmentInfo'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve an execution Environment
+      tags:
+      - Environments
   /agents/sessions:
     get:
       description: Cursor and results are scoped to the authenticated execution tenant.
