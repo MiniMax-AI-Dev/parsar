@@ -627,6 +627,17 @@ check in addition to `make check`; do not make ordinary Go builds require Docker
 Registry publication, additional runtime architectures, daemon packaging and
 product cutover remain separate work.
 
+`make build-agents-api-release` reuses the isolated build for a Linux amd64 archive
+under `~/.parsar/`, with its four commands, license, operator guide, source/tree and
+protocol manifest, and file/archive checksums. It requires clean committed source
+and Python 3.9+, stages output privately, and packages fixed artifacts deterministically.
+Keep runtime configuration, credentials, product sources and separately installed
+daemons/harnesses out of the archive. Archive changes require content/hash and
+fresh-extraction operator checks plus `make check`; execution acceptance uses the
+packaged operators and public protocol, not private Store provisioning. Preserve
+the database and native history when replacing the API package. This target does
+not publish a release or provide an installer/supervisor.
+
 #### Current implementation
 
 The constraints below describe existing code, not requirements to preserve legacy
