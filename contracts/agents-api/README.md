@@ -328,6 +328,13 @@ complete native tool registry: environment and subagent tools have separate
 configuration. The upstream behavior of internal Goal, Skills and user-input
 utilities needs further evidence; their presence alone is not proof of a mismatch.
 
+A private typed discovery path projects verified native child identities through
+the leased execution journal. It freezes service identity, Session ownership,
+native parent/creation and first-observation provenance for internal scoped reads.
+It does not enable the public resources above or infer lifecycle from idle/unload.
+Bounded discovery and delivery rules are documented in
+[the contributor guide](../../CONTRIBUTING.md#current-implementation).
+
 ### Turn recovery reads
 
 `GET /v1/agents/sessions/{session_id}/turns` and retrieval by `turn_id`

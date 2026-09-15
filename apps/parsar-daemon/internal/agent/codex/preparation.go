@@ -81,19 +81,20 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	rpc := NewJSONRPCClient(rpcCfg)
 
 	s := &Session{
-		functions:               functions,
-		observeMessages:         req.ObserveMessages,
-		observeTools:            req.ObserveTools,
-		observeToolObservations: req.ObserveToolObservations,
-		cfg:                     cfg,
-		rpc:                     rpc,
-		cancelCtx:               cancelCtx,
-		cancelFn:                cancelFn,
-		waitDone:                make(chan struct{}),
-		cleanup:                 sync.OnceFunc(plan.Cleanup),
-		bufs:                    NewItemBuffers(),
-		resolvedModel:           plan.Model,
-		interactions:            newPendingCodexInteractions(),
+		functions:                 functions,
+		observeMessages:           req.ObserveMessages,
+		observeTools:              req.ObserveTools,
+		observeToolObservations:   req.ObserveToolObservations,
+		observeSubagentIdentities: req.ObserveSubagentIdentities && !req.DisableSubagents,
+		cfg:                       cfg,
+		rpc:                       rpc,
+		cancelCtx:                 cancelCtx,
+		cancelFn:                  cancelFn,
+		waitDone:                  make(chan struct{}),
+		cleanup:                   sync.OnceFunc(plan.Cleanup),
+		bufs:                      NewItemBuffers(),
+		resolvedModel:             plan.Model,
+		interactions:              newPendingCodexInteractions(),
 	}
 	plan.Cleanup = s.cleanup
 

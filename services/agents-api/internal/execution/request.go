@@ -37,7 +37,8 @@ func (d *Dispatcher) executionRequest(ctx context.Context, session store.Session
 		AgentOptions: options, ExecutionControls: controls, AgentStateKey: "agents-api-" + session.ID,
 		AgentSessionID: nativeID, ReleaseOnCompletion: true, StrictResume: true,
 		ObserveMessages: caps.MessageItems, ObserveToolObservations: true,
-		DisableSubagents: !snapshot.Agent.MultiAgent.Enabled}
+		ObserveSubagentIdentities: snapshot.Agent.MultiAgent.Enabled,
+		DisableSubagents:          !snapshot.Agent.MultiAgent.Enabled}
 	if len(mcp) != 0 {
 		selected, err := selectedMCPCredentials(snapshot)
 		if err != nil {

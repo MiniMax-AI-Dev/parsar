@@ -14,7 +14,7 @@ func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 	defer s.stopCodexInteractionTimers()
 	defer s.stopFunctionCalls()
 	defer s.cleanup()
-	defer s.closeOut()
+	defer s.closeRunOutput()
 
 	if err := s.resolveThread(req, plan); err != nil {
 		s.emitTerminal(err.Error(), true)

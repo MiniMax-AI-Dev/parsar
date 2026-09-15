@@ -54,14 +54,16 @@ func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- pro
 //  5. turn/completed emits TypeDone + closes out. Cancel can short-cut
 //     this by killing the child early.
 type Session struct {
-	functions               *functionCalls
-	observeMessages         bool
-	observeTools            bool
-	observeToolObservations bool
-	runID                   string
-	cfg                     sessionConfig
-	out                     chan<- proto.Envelope
-	rpc                     *JSONRPCClient
+	subagents                 *subagentObservations
+	observeSubagentIdentities bool
+	functions                 *functionCalls
+	observeMessages           bool
+	observeTools              bool
+	observeToolObservations   bool
+	runID                     string
+	cfg                       sessionConfig
+	out                       chan<- proto.Envelope
+	rpc                       *JSONRPCClient
 
 	cancelCtx context.Context
 	cancelFn  context.CancelFunc
@@ -352,7 +354,7 @@ func (s *Session) emitDone(content string, usage *TurnUsage) {
 	if err != nil {
 		return
 	}
-	s.trySend(env)
+	s.sendTerminal(env)
 }
 
 func (s *Session) emitUsage(u TurnUsage) {
@@ -385,10 +387,11 @@ func (s *Session) emitTerminal(message string, asError bool) {
 			"thread_id", s.currentThreadID(),
 			"message_len", len(message))
 	}
+	var events []proto.Envelope
 	if asError {
 		env, err := proto.NewEnvelope(proto.TypeError, s.runID, proto.ErrorPayload{Error: message})
 		if err == nil {
-			s.trySend(env)
+			events = append(events, env)
 		}
 	}
 	doneMeta := map[string]any{}
@@ -405,21 +408,7 @@ func (s *Session) emitTerminal(message string, asError bool) {
 	if err != nil {
 		return
 	}
-	s.trySend(env)
-}
-
-func (s *Session) trySend(env proto.Envelope) {
-	s.outMu.RLock()
-	defer s.outMu.RUnlock()
-	if s.outClosed {
-		return
-	}
-	select {
-	case s.out <- env:
-	case <-s.cancelCtx.Done():
-	case <-time.After(terminalSendTimeout):
-		s.cfg.logger.Warn("codex: out send timed out", "type", env.Type, "run_id", s.runID)
-	}
+	s.sendTerminal(append(events, env)...)
 }
 
 func (s *Session) closeOut() {
@@ -433,7 +422,9 @@ func (s *Session) closeOut() {
 }
 
 func (s *Session) finishAfterTerminal() {
-	s.closeOut()
+	if s.subagents == nil {
+		s.closeOut()
+	}
 }
 
 // ---------------------------------------------------------------------------
