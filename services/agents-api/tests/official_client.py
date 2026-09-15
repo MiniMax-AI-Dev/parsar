@@ -20,6 +20,7 @@ import httpx2
 from jsonschema import Draft4Validator
 from official_items import verify_items
 from official_agents import verify_agents
+from official_vaults import verify_vaults, verify_vault_recovery
 from official_agent_list import verify_agent_list
 from official_agent_references import verify_agent_references
 from official_session_requests import verify_session_create_requests
@@ -53,6 +54,8 @@ def main():
                 path += "/turns" + ("/{turn_id}" if len(suffix) > 1 else "")
             elif suffix and suffix[0] == "items":
                 path += "/items"
+        elif path.startswith("/vaults/"):
+            path = "/vaults/{vault_id}"
         elif path.startswith("/agents/") and path != "/agents/sessions":
             path = "/agents/{agent_id}"
         schema = contract["paths"][path][response.request.method.lower()]["responses"][str(response.status_code)]["schema"]
@@ -122,6 +125,9 @@ def main():
             try:
                 process = start()
                 with client(tokens[0]) as a, client(tokens[1]) as b, client("invalid-key") as invalid:
+                    with client(peer_principal, organization=bindings[0]["organization_id"],
+                                project=bindings[0]["project_id"]) as peer:
+                        saved_vaults = verify_vaults(a, b, invalid, peer, bindings[0], expect_error)
                     saved_agents = verify_agents(a, b, invalid, expect_error)
                     listed_agents = verify_agent_list(a, b, invalid, saved_agents, expect_error)
                     sessions = a.beta.agents.sessions
@@ -207,6 +213,8 @@ def main():
                     process.terminate()
                     process.wait(timeout=15)
                     process = start()
+                    with client(peer_principal) as peer:
+                        verify_vault_recovery(a, b, peer, saved_vaults)
                     assert [a.beta.agents.retrieve(item.id) for item in saved_agents] == saved_agents
                     assert [item.id for item in a.beta.agents.list(limit=2, order="asc") if item.id in listed_agents] == listed_agents
                     assert [sessions.retrieve(item.id) for item in request_sessions] == request_sessions

@@ -679,6 +679,15 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   create primitive creates a fresh resource; public retry conformance remains
   unverified. Internal storage admission is 512 KiB for configuration and 64 KiB
   for metadata, not a claim about upstream limits.
+- Vaults have their own tenant-scoped records in the execution database. Initial
+  `POST /v1/vaults` and `GET /v1/vaults/{vault_id}` operations persist and read the
+  resource without creating Sessions or contacting an engine. Omitted name is
+  null; a supplied non-null string is trimmed and limited to 1–256 UTF-8 bytes.
+  Omitted/null metadata becomes an empty object. Reuse the 64 KiB encoded metadata
+  storage bound, without applying Session-specific pair/character limits. This is
+  a local bound, not hosted parity. Credentials, list/delete lifecycle and Session
+  bindings remain separate gaps; do not introduce product roles or speculative
+  credential/lifecycle fields into this resource slice.
 - Public reusable Agent create/retrieve uses `/v1/agents` and the same authenticated
   tenant/Beta-header boundary as Sessions. The resource envelope owns identity,
   timestamps and metadata, separately from saved configuration and Session state.
