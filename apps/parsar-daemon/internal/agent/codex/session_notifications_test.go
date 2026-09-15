@@ -109,28 +109,67 @@ func TestNotificationsCannotEstablishRootIdentity(t *testing.T) {
 }
 
 func TestRootNativeErrorNotification(t *testing.T) {
-	out := make(chan proto.Envelope, 4)
-	s := &Session{runID: "run", out: out, cancelCtx: context.Background(), cfg: defaultSessionConfig(), rpc: NewJSONRPCClient(JSONRPCConfig{})}
-	s.registerHandlers()
-	s.setThreadID("root")
-	scopeNotification(t, s, "turn/started", `{"threadId":"root","turn":{"id":"turn"}}`)
-	scopeNotification(t, s, "error", `{"threadId":"root","turnId":"turn","error":{"message":"native provider failure"},"willRetry":false}`)
-	scopeNotification(t, s, "turn/completed", `{"threadId":"root","turn":{"id":"turn","status":"failed"}}`)
-	var doneCount int
-	for env := range out {
-		if env.Type == proto.TypeDone {
-			doneCount++
-			var done proto.DonePayload
-			if err := env.DecodePayload(&done); err != nil {
-				t.Fatal(err)
-			}
-			if done.Content != "native provider failure" || done.Metadata[proto.DoneMetaAgentSessionID] != "root" {
-				t.Fatalf("native failure lost: %+v", done)
-			}
+	for name, errorJSON := range map[string]string{
+		"object variant": `{"message":"native provider failure","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":502}},"additionalDetails":null}`,
+		"string details": `{"message":"native provider failure","codexErrorInfo":"other","additionalDetails":"request failed"}`,
+		"null metadata":  `{"message":"native provider failure","codexErrorInfo":null,"additionalDetails":null}`,
+	} {
+		for _, location := range []string{"error notification", "completion"} {
+			t.Run(name+"/"+location, func(t *testing.T) {
+				out := make(chan proto.Envelope, 4)
+				s := &Session{runID: "run", out: out, cancelCtx: context.Background(), cfg: defaultSessionConfig(), rpc: NewJSONRPCClient(JSONRPCConfig{})}
+				s.registerHandlers()
+				s.setThreadID("root")
+				scopeNotification(t, s, "turn/started", `{"threadId":"root","turn":{"id":"turn"}}`)
+				for _, threadID := range []string{"child", "root"} {
+					turnID := "turn"
+					if threadID == "root" {
+						turnID = "stale-turn"
+					}
+					scopeNotification(t, s, "error", `{"threadId":"`+threadID+`","turnId":"`+turnID+`","error":`+errorJSON+`,"willRetry":false}`)
+					scopeNotification(t, s, "turn/completed", `{"threadId":"`+threadID+`","turn":{"id":"`+turnID+`","status":"failed","error":`+errorJSON+`}}`)
+				}
+				if s.terminal.Load() || s.peekLastErrText() != "" || len(out) != 0 {
+					t.Fatal("foreign native failure changed the root Run")
+				}
+				completionError := "null"
+				if location == "error notification" {
+					scopeNotification(t, s, "error", `{"threadId":"root","turnId":"turn","error":`+errorJSON+`,"willRetry":false}`)
+					if s.peekLastErrText() != "native provider failure" || s.terminal.Load() {
+						t.Fatal("root error must be buffered until completion")
+					}
+				} else {
+					completionError = errorJSON
+				}
+				scopeNotification(t, s, "turn/completed", `{"threadId":"root","turn":{"id":"turn","status":"failed","error":`+completionError+`}}`)
+				if !s.terminal.Load() {
+					t.Fatal("valid native failure did not settle the root Run")
+				}
+				var errorCount, doneCount int
+				for env := range out {
+					switch env.Type {
+					case proto.TypeError:
+						errorCount++
+						var payload proto.ErrorPayload
+						if err := env.DecodePayload(&payload); err != nil || payload.Error != "native provider failure" {
+							t.Fatalf("native failure lost: %+v, %v", payload, err)
+						}
+					case proto.TypeDone:
+						doneCount++
+						var done proto.DonePayload
+						if err := env.DecodePayload(&done); err != nil {
+							t.Fatal(err)
+						}
+						if done.Content != "native provider failure" || done.Metadata[proto.DoneMetaAgentSessionID] != "root" {
+							t.Fatalf("native failure lost: %+v", done)
+						}
+					}
+				}
+				if errorCount != 1 || doneCount != 1 {
+					t.Fatalf("terminal counts: errors=%d done=%d", errorCount, doneCount)
+				}
+			})
 		}
-	}
-	if doneCount != 1 {
-		t.Fatalf("terminal count = %d", doneCount)
 	}
 }
 

@@ -270,23 +270,15 @@ type Turn struct {
 	ID     string     `json:"id"`
 	Usage  *TurnUsage `json:"usage,omitempty"`
 	Status string     `json:"status,omitempty"`
-	// Error is populated on turn.status="failed" payloads. codex packs
-	// upstream provider errors (gateway 4xx/5xx, model-server failures)
-	// here as a JSON-encoded inner blob in `message`; the
-	// CodexErrorInfo field categorises ("rate_limit", "context_window",
-	// "other") and AdditionalDetails carries structured retry hints.
+	// Failed Turns carry the native provider error here.
 	Error *TurnError `json:"error,omitempty"`
 }
 
-// TurnError mirrors codex's turn error payload. The Message field is
-// the human-readable error body — for OpenAI-Responses-style gateways
-// it typically contains a stringified JSON {"error":{"code","message",
-// "type"}}. The daemon surfaces it verbatim so operators can paste it
-// directly into a ticket; UI may pretty-print at a later stage.
+// CodexErrorInfo is a native enum with string and object variants.
 type TurnError struct {
-	Message           string         `json:"message,omitempty"`
-	CodexErrorInfo    string         `json:"codexErrorInfo,omitempty"`
-	AdditionalDetails map[string]any `json:"additionalDetails,omitempty"`
+	Message           string          `json:"message,omitempty"`
+	CodexErrorInfo    json.RawMessage `json:"codexErrorInfo,omitempty"`
+	AdditionalDetails *string         `json:"additionalDetails,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

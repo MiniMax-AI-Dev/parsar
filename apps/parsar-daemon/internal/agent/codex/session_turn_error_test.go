@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -14,7 +15,7 @@ import (
 func TestTurnErrorMessage_UnwrapsGatewayJSON(t *testing.T) {
 	te := &TurnError{
 		Message:        `{"error":{"code":"submodule_not_allowed","message":"X-Sub-Module is not allowed for this API key","type":"invalid_request_error"}}`,
-		CodexErrorInfo: "other",
+		CodexErrorInfo: json.RawMessage(`"other"`),
 	}
 	got := turnErrorMessage(te)
 	want := "submodule_not_allowed: X-Sub-Module is not allowed for this API key"
