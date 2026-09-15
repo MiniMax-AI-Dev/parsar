@@ -17,7 +17,7 @@ import (
 var ErrCredentialStorageUnavailable = errors.New("credential encryption is not configured")
 
 // Credential contains only public metadata. Secret ciphertext is never selected
-// by resource reads, and no public method returns a decrypted token.
+// by resource reads; decryption belongs to scoped execution lookup only.
 type Credential struct {
 	ID, VaultID, Name, AuthType, MCPServerURL string
 	CreatedAt, UpdatedAt                      time.Time

@@ -20,8 +20,8 @@ func resolveMCPTool(raw json.RawMessage, saved bool) (json.RawMessage, error) {
 	if input.ConnectionOrigin == nil || *input.ConnectionOrigin != "service" {
 		return nil, errors.New("MCP currently requires explicit connection_origin=service.")
 	}
-	if input.CredentialID != nil {
-		return nil, errors.New("MCP vault credentials are not supported yet.")
+	if input.CredentialID != nil && *input.CredentialID == "" {
+		return nil, errors.New("MCP credential_id must be null or a nonempty string.")
 	}
 	required, err := optionalBoolean(input.Required, false)
 	if err != nil || required {
@@ -36,7 +36,7 @@ func resolveMCPTool(raw json.RawMessage, saved bool) (json.RawMessage, error) {
 		Headers   json.RawMessage `json:"headers"`
 	}
 	if decodeInputObject(input.Transport, &transport, "type", "server_url", "headers") != nil || transport.Type != "http" || transport.ServerURL == nil {
-		return nil, errors.New("MCP currently supports credential-free HTTP transport only.")
+		return nil, errors.New("MCP currently supports HTTP transport only.")
 	}
 	u, err := url.Parse(*transport.ServerURL)
 	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.Fragment != "" || u.RawQuery != "" || u.ForceQuery {
@@ -64,7 +64,7 @@ func resolveMCPTool(raw json.RawMessage, saved bool) (json.RawMessage, error) {
 	}
 	tool := v1.MCPTool{Type: "mcp", ServerLabel: *input.ServerLabel,
 		Transport:    v1.MCPHTTPTransport{Type: "http", ServerURL: *transport.ServerURL},
-		AllowedTools: allowed, ConnectionOrigin: "service", RequestMetadata: map[string]json.RawMessage{}}
+		AllowedTools: allowed, ConnectionOrigin: "service", CredentialID: input.CredentialID, RequestMetadata: map[string]json.RawMessage{}}
 	if saved {
 		headers := map[string]string{}
 		tool.Transport.Headers = &headers

@@ -40,7 +40,6 @@ def verify_mcp_configuration(client, other, expect_error):
     saved_before = {item.id for item in agents.list()}
     invalid = [{**tool, "connection_origin": value} for value in (None, "environment")]
     invalid += [{**tool, "required": True}, {**tool, "required": None},
-                {**tool, "credential_id": "unavailable"},
                 {**tool, "request_metadata": {"x": "y"}},
                 {**tool, "allowed_tools": [None]}]
     for changes in ({"headers": {"Authorization": "synthetic-private"}},

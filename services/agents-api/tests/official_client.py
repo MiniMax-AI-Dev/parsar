@@ -23,6 +23,7 @@ from official_items import verify_items
 from official_agents import verify_agents
 from official_vaults import verify_vaults, verify_vault_recovery
 from official_credentials import verify_credentials, verify_credential_recovery, verify_credential_storage_disabled
+from official_mcp_credentials import verify_mcp_credentials, verify_mcp_credential_recovery
 from official_agent_list import verify_agent_list
 from official_agent_references import verify_agent_references
 from official_session_requests import verify_session_create_requests
@@ -221,12 +222,15 @@ def main():
                     mcp_sessions, mcp_agents = verify_mcp_configuration(a, b, expect_error)
                     request_sessions.extend(mcp_sessions)
                     saved_agents.extend(mcp_agents)
+                    with client(peer_principal) as peer:
+                        mcp_credentials = verify_mcp_credentials(a, b, peer, credential_canary, expect_error)
                     process.terminate()
                     process.wait(timeout=15)
                     process = start()
                     with client(peer_principal) as peer:
                         verify_vault_recovery(a, b, peer, saved_vaults)
                         verify_credential_recovery(a, b, peer, saved_credentials)
+                        verify_mcp_credential_recovery(a, mcp_credentials)
                     assert [a.beta.agents.retrieve(item.id) for item in saved_agents] == saved_agents
                     assert [item.id for item in a.beta.agents.list(limit=2, order="asc") if item.id in listed_agents] == listed_agents
                     assert [sessions.retrieve(item.id) for item in request_sessions] == request_sessions

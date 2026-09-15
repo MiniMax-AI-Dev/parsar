@@ -80,7 +80,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | environments.files | create, list | Missing |
 | environments.templates | create, retrieve, update, list, delete | Missing |
 | vaults | create, retrieve, list, delete | Create/retrieve with independent tenant persistence; list/delete and Credential use remain missing |
-| vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve with encrypted storage and safe metadata; OAuth, other lifecycle operations and execution binding remain missing |
+| vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve with encrypted storage and safe metadata; Session attachment and exact-URL HTTPS MCP binding; OAuth and other lifecycle operations remain missing |
 
 For each resource, verify the referenced request/response unions and observable
 behavior, not just the route. Non-text initial input, configuration
@@ -103,8 +103,8 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   contact. Public metadata contains identity, owning Vault, name, timestamps and
   auth type/destination; it never returns tokens or ciphertext and can be read
   without the encryption key. Missing encryption configuration locally rejects
-  creation with 503. OAuth, rotation/list/delete, key scopes and Session/MCP binding
-  remain gaps. See the [credential storage guide](../../services/agents-api/credentials.md)
+  creation with 503. Attached Sessions can use static credentials for exact-URL HTTPS
+  MCP; OAuth, rotation/list/delete and key scopes remain gaps. See the [credential storage guide](../../services/agents-api/credentials.md)
   for encryption and operational limits; this does not establish complete Credential
   or hosted error/retry compatibility.
 - Vaults use `POST /vaults` and `GET /vaults/{vault_id}` with the same project/tenant
@@ -116,8 +116,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   64 KiB encoded metadata and 1 MiB HTTP body bounds are local implementation
   limits. Creation does not start execution. Missing, malformed and foreign IDs
   return the same local not-found response. Exact hosted error/retry semantics,
-  restricted-key scopes, list/delete lifecycle, Credentials and Session bindings
-  remain unverified or unimplemented; this is not complete Vault compatibility.
+  restricted-key scopes and list/delete lifecycle remain unverified or unimplemented; this is not complete Vault compatibility.
 - Reusable Agents use `POST /agents` and `GET /agents/{agent_id}`. Keep their own
   identity, timestamps and metadata separate from Session effective configuration.
   On creation, omitted/null name and instructions resolve to null, metadata to `{}`, tools to
@@ -160,10 +159,17 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   stays unresolved rather than being populated from a guessed model default. An
   explicit effort/summary is retained. Omitted/null service tier currently follows
   the service's `auto` policy; complete upstream-default/error/retry conformance is
-  unverified. Credential-free HTTP MCP with explicit `service` origin and
+  unverified. HTTP MCP with explicit `service` origin and
   `required` omitted/false supports saved configuration and Codex `none` execution.
   The saved HTTP transport includes `headers:{}`; effective Session transport omits
   headers. Omitted/null `allowed_tools` is unrestricted; `[]` denies all tools.
+  Session `vault_ids` attaches tenant-owned Vaults. Explicit `credential_id` must
+  belong to an attached Vault and match the exact HTTPS URL; omission/null selects
+  one matching static credential, zero stays anonymous and ambiguity fails. Private
+  immutable selections do not populate the public credential field. Scope is
+  rechecked before dispatch-only decryption; authenticated execution requires the
+  separate bearer capability and never downgrades on failure. Exact URL/selection
+  timing, implicit response population and hosted errors remain local or unverified.
   Other MCP variants and web-search remain gaps, not changes to the pinned target
   or claims of complete resource coverage.
 
@@ -245,7 +251,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 that immutable choice. The public request supplies a model, not a harness selector.
 Both no-environment profiles require disabled `multi_agent`, implicit reasoning,
 service tier `auto`, ordinary text and non-deferred functions. Codex additionally
-supports credential-free service-origin HTTP MCP on `none`, and the self-hosted
+supports anonymous or attached static-bearer service-origin HTTP MCP on `none`, and the self-hosted
 text/function profile described in the Environment contract. See the
 [HTTP MCP profile and limits](../../services/agents-api/README.md#http-mcp-execution).
 
@@ -276,7 +282,7 @@ extension separately from upstream fields and document it here when implemented.
 
 `openapi.yaml` is our generated supported surface; it is not the full upstream
 specification. The shared Go wire types are in `v1`. Physical Session cleanup, non-text
-message input, structured output execution, broader options/tools, Vaults,
+message input, structured output execution, broader options/tools, remaining Vault lifecycle,
 Subagents and environment/provider resources remain incomplete. Reject unsupported
 requests explicitly; persisted saved configuration is not execution admission.
 

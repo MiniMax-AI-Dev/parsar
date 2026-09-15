@@ -5,18 +5,18 @@ import (
 	"errors"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 	"github.com/google/uuid"
 )
 
 type configuration struct {
-	Agent       v1.Agent       `json:"agent"`
-	Environment v1.Environment `json:"environment"`
+	Agent          v1.Agent                     `json:"agent"`
+	Environment    v1.Environment               `json:"environment"`
+	VaultIDs       []string                     `json:"vault_ids,omitempty"`
+	MCPCredentials []store.MCPCredentialBinding `json:"mcp_credentials,omitempty"`
 }
 
 func resolve(input sessionRequest, tenant, key string, saved *v1.SavedAgent) (json.RawMessage, error) {
-	if len(input.VaultIDs) > 0 {
-		return nil, errors.New("Vaults are not supported by this service yet.")
-	}
 	if input.Environment == nil || (input.Environment.Type != "none" && input.Environment.Type != "self_hosted") {
 		return nil, errors.New("This service currently supports environment.type=none or self_hosted.")
 	}
@@ -33,5 +33,5 @@ func resolve(input sessionRequest, tenant, key string, saved *v1.SavedAgent) (js
 	} else {
 		agent.ID = saved.ID
 	}
-	return json.Marshal(configuration{Agent: agent, Environment: *input.Environment})
+	return json.Marshal(configuration{Agent: agent, Environment: *input.Environment, VaultIDs: input.VaultIDs})
 }

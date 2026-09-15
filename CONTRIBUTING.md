@@ -685,8 +685,8 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   null; a supplied non-null string is trimmed and limited to 1–256 UTF-8 bytes.
   Omitted/null metadata becomes an empty object. Reuse the 64 KiB encoded metadata
   storage bound, without applying Session-specific pair/character limits. This is
-  a local bound, not hosted parity. Credentials, list/delete lifecycle and Session
-  bindings remain separate gaps; do not introduce product roles or speculative
+  a local bound, not hosted parity. List/delete lifecycle remains a separate gap;
+  do not introduce product roles or speculative
   credential/lifecycle fields into this resource slice.
 - Static-bearer Credentials are children of tenant-owned Vaults in the execution
   database. Creation admits the owner in the same SQL statement as the insert;
@@ -699,7 +699,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   this storage boundary. Missing key configuration disables credential writes;
   malformed explicit configuration fails startup. See
   [`services/agents-api/credentials.md`](services/agents-api/credentials.md) for
-  key persistence and current limits. Session/MCP binding, OAuth and rotation remain
+  key persistence and current limits. OAuth and rotation remain
   separate gaps; resource creation never contacts the destination.
 - Public reusable Agent create/retrieve uses `/v1/agents` and the same authenticated
   tenant/Beta-header boundary as Sessions. The resource envelope owns identity,
@@ -725,8 +725,9 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   `headers:{}`; the effective Session transport omits headers, matching the two
   pinned resource types. Saved-Agent updates never change existing Session
   snapshots; per-Session tools replace the whole field. The initial profile admits
-  only credential-free HTTP(S), `required` omitted/false, empty/null metadata and
-  empty/null headers. Credentials, inline authorization, URL userinfo/query/fragment,
+  HTTP(S), `required` omitted/false, empty/null metadata and empty/null headers.
+  Static bearer authentication requires HTTPS and the attached-Vault rules below.
+  Inline authorization, URL userinfo/query/fragment,
   other origins, stdio and required readiness remain explicitly unsupported.
 - Send MCP declarations through typed daemon fields, independently of function
   callbacks. A non-nil declaration replaces operator MCP options; use the existing
@@ -744,7 +745,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
 - Private daemon HTTPS MCP bearer authentication additionally requires
   `mcp_http_bearer_auth` and the existing MCP/environment capabilities, checked
   before the factory. It is restricted to trusted service-side Codex
-  `environment:none`; public MCP admission remains credential-free. A transient
+  `environment:none`. A transient
   per-server `bearer_token` becomes a fresh daemon-owned `bearer_token_env_var`
   reference for each native process. Put the exact secret only in that app-server
   child's environment, after auxiliary launch probes; never in global environment,
@@ -753,8 +754,25 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   of ambient credential sources. Use the native HTTP client with TLS verification.
   This execution profile rejects empty values and bytes outside RFC 6750 b64token
   syntax with generic errors; it never trims tokens or narrows opaque Credential
-  storage. Vault selection/admission, OAuth and hosted redirect/error equivalence
+  storage. OAuth and hosted redirect/error equivalence
   remain separate work.
+- Session `vault_ids` omission/null/empty means `[]`; nonempty attachments must all
+  belong to the authenticated tenant. Preserve caller order and public MCP
+  `credential_id`. Saved Agents may store a nullable/nonempty credential reference
+  without authorizing its use. Session admission resolves an explicit credential
+  only inside attached Vaults for the exact declared URL, or selects the unique
+  matching static credential when the ID is omitted/null. No match remains
+  anonymous; ambiguity is a local 400 and unavailable references use the same 404.
+  Resolve before any Session, initial input or event write. Freeze safe bindings,
+  including anonymous decisions, in private Session configuration; never populate
+  the public credential field from implicit resolution. At actual dispatch, recheck
+  tenant, attached Vault, selected ID, static auth type and exact URL before scoped
+  decryption. Metadata queries select no ciphertext; tokens enter only the existing
+  transient daemon request. Selected authentication requires `mcp_http_bearer_auth`
+  during device selection and the final preclaim check. Missing/wrong keys or
+  binding failures never fall back to anonymous execution. Exact URL equality,
+  immutable selection timing, implicit response population and hosted error/redirect
+  semantics remain local decisions or unverified gaps. No new MCP loop is permitted.
 - Public Agent updates use `POST /v1/agents/{agent_id}` with the same tenant/Beta
   boundary and shared saved-field validation. Preserve omission separately from
   null; only supplied fields replace saved values. Metadata is a separate whole-map
@@ -792,8 +810,9 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Reuse saved configuration validation and keep native capability restrictions at
   Session admission. Reject unsupported effective options instead of dropping them;
   an explicit supported replacement may make a saved configuration executable.
-  Inline Sessions use the same admission path and keep their existing retry identity.
-  New saved-reference Sessions record a separate caller-intent hash: source ID,
+  Inline Sessions use the same admission path. New saved-reference Sessions and
+  inline requests with Vault attachments or credential references record a separate
+  caller-intent hash: source ID (empty for inline),
   supplied overrides (including field presence), environment/vaults, original metadata
   and normalized initial input. Exclude response streaming and resolved source values.
   Compare that same-tenant retry identity before looking up the source. A matching
@@ -802,7 +821,9 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   event cursor and emit no created event. Recheck after source resolution failure
   for a concurrently committed creator; do not hold a lock across resolution.
   The unique creation upsert remains authoritative when concurrent resolutions differ.
-  Inline requests keep their existing resolved/default equivalences. Rows with a
+  Unrelated inline requests keep their existing resolved/default equivalences.
+  Recorded credential-bound retries recover before reading mutable Vault contents,
+  so another same-URL Credential cannot change an accepted selection. Rows with a
   known creator but without recorded request intent retain resolved-hash behavior;
   original overrides cannot be reconstructed, so no backfill is permitted. Source
   mutation-independent retries apply only to recorded identities. Exact hosted

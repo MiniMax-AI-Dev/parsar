@@ -17,7 +17,7 @@ type CredentialStore interface {
 }
 
 // @Summary Create a static-bearer Vault Credential
-// @Description Stores the write-only token as execution-owned authenticated ciphertext. Required name is trimmed to 1–256 UTF-8 bytes; auth requires static_bearer, an HTTPS mcp_server_url and a string token. Token bytes are preserved, including empty strings; hosted token edge validation is unverified. The initial URL profile excludes userinfo and fragments, preserves queries and makes no network request. Public responses contain only safe metadata. Missing encryption configuration returns local 503. OAuth, execution binding, rotation and exact hosted error/retry semantics remain gaps.
+// @Description Stores the write-only token as execution-owned authenticated ciphertext. Required name is trimmed to 1–256 UTF-8 bytes; auth requires static_bearer, an HTTPS mcp_server_url and a string token. Token bytes are preserved, including empty strings; hosted token edge validation is unverified. The initial URL profile excludes userinfo and fragments, preserves queries and makes no network request. Public responses contain only safe metadata. Missing encryption configuration returns local 503. Session admission can bind static credentials from attached Vaults to exact HTTPS MCP destinations; secret decryption occurs only at dispatch. OAuth, rotation and exact hosted error/retry semantics remain gaps.
 // @Tags Credentials
 // @Accept json
 // @Produce json
