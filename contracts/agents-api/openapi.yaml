@@ -1045,6 +1045,21 @@ definitions:
     - metadata
     - object
     type: object
+  v1.VaultDeleted:
+    properties:
+      deleted:
+        type: boolean
+      id:
+        type: string
+      object:
+        enum:
+        - vault.deleted
+        type: string
+    required:
+    - deleted
+    - id
+    - object
+    type: object
   v1.VaultList:
     properties:
       data:
@@ -2139,6 +2154,58 @@ paths:
       tags:
       - Vaults
   /vaults/{vault_id}:
+    delete:
+      description: Atomically removes the authenticated project's Vault and all its
+        stored Credentials without an encryption key, decryption or external requests.
+        Existing Session snapshots, history and recorded retries retain their frozen
+        identities; subsequent credential lookups fail without reselection or anonymous
+        fallback. Already-resolved tokens and running Sessions are not revoked or
+        cancelled. Missing/repeated deletion locally returns 404. Exact hosted archive,
+        post-delete visibility and concurrent/error semantics remain unverified; physical
+        erasure from native history, WAL or backups is not established.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Vault ID
+        in: path
+        name: vault_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.VaultDeleted'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a Vault and all its Credentials
+      tags:
+      - Vaults
     get:
       description: Reads a Vault owned by the authenticated project without resolving
         credentials, Sessions or execution devices. Missing and foreign IDs share

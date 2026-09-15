@@ -696,9 +696,19 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   ordering and changes between pages remain unverified. Private archived fixtures
   prove filtering only: there is no public archive writer, archive timestamp or
   inferred delete-to-archive behavior. Retrieval, Session binding and dispatch retain
-  their existing rules. Archive/delete/revocation lifecycle remains a separate gap;
+  their existing rules. Archive/revocation lifecycle remains a separate gap;
   do not introduce product roles or speculative lifecycle fields. Migration rollback
   refuses to discard classification while archived rows exist.
+- Vault `DELETE /v1/vaults/{vault_id}` removes the project-owned parent and all
+  Credentials through the existing foreign-key cascade in one SQL mutation. Do not
+  loop through child deletions, decrypt secrets, require the storage key or call
+  providers. Deletion applies to both stored classifications. Local missing/repeated
+  deletion returns not-found; subsequent parent/child reads and new attachments
+  cannot use the removed resources. Preserve Session snapshots, frozen choices,
+  history and recorded retries. Later secret lookups fail without selecting another
+  attached Vault or anonymous MCP. Already-resolved tokens and running Sessions
+  are not revoked. Exact hosted archive, visibility, overlapping-mutation and error
+  semantics remain unverified; row removal does not prove physical storage erasure.
 - Static-bearer Credentials are children of tenant-owned Vaults in the execution
   database. Creation admits the owner in the same SQL statement as the insert;
   retrieval joins the owning Vault and selects public metadata only. No public

@@ -58,6 +58,7 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 		r.Post("/vaults", h.createVault)
 		r.Get("/vaults", h.listVaults)
 		r.Get("/vaults/{vault_id}", h.getVault)
+		r.Delete("/vaults/{vault_id}", h.deleteVault)
 		r.Post("/vaults/{vault_id}/credentials", h.createCredential)
 		r.Get("/vaults/{vault_id}/credentials", h.listCredentials)
 		r.Get("/vaults/{vault_id}/credentials/{credential_id}", h.getCredential)

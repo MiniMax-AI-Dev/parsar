@@ -97,8 +97,8 @@ trusted service memory; this protects stored secrets, not a compromised service 
 
 Credential archive behavior, OAuth refresh, restricted-key scopes and revocation
 semantics remain separate gaps. The foreign key preserves Vault ownership and
-defines dependent-row removal for a future Vault deletion operation; no public
-Vault deletion is added here. The full protocol target is unchanged.
+atomically removes all dependent Credentials when their Vault is deleted. The full
+protocol target is unchanged.
 
 ## Use a credential in a Session
 
@@ -194,3 +194,27 @@ The relationship between deletion and archived status, exact hosted metadata
 visibility and duplicate-deletion errors remain unverified. This implementation
 does not infer an archive transition. Row removal is not evidence of physical
 erasure from PostgreSQL pages, WAL, backups or native history.
+
+## Delete a Vault and its credentials
+
+```python
+deleted = client.beta.agents.vaults.delete(vault.id)
+```
+
+The response contains `id`, `deleted: true` and `object: vault.deleted`. Deletion
+removes the project-owned Vault and every stored Credential in one database
+transaction, including active and archived classifications. It needs no storage
+key and sends no provider requests. Other Vaults and their Credentials are unchanged.
+
+Local retrieval, repeated deletion, child reads/updates/listing and new Session
+attachments return 404 after removal. New child creation also returns 404 when
+credential writes are configured; the existing missing-key 503 still takes
+precedence when writes are disabled. Vault lists omit the deleted parent.
+Existing Session snapshots and recorded creation retries keep the original Vault
+and Credential IDs, and historical Items remain available. Later secret lookup
+fails without selecting another Credential from an attached Vault or downgrading
+to anonymous MCP. Already-read tokens may remain in dispatched work.
+
+This operation follows the same provider revocation, running-Session and physical
+erasure limits as single-Credential deletion. Exact hosted archive relationships,
+post-delete visibility and overlapping-mutation/error semantics remain unverified.

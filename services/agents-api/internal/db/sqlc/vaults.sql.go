@@ -43,6 +43,22 @@ func (q *Queries) CreateVault(ctx context.Context, arg CreateVaultParams) (Vault
 	return i, err
 }
 
+const deleteVault = `-- name: DeleteVault :one
+DELETE FROM vaults WHERE tenant_id = $1 AND id = $2 RETURNING id
+`
+
+type DeleteVaultParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) DeleteVault(ctx context.Context, arg DeleteVaultParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, deleteVault, arg.TenantID, arg.ID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getVault = `-- name: GetVault :one
 SELECT id, tenant_id, name, metadata, created_at, status FROM vaults WHERE tenant_id = $1 AND id = $2
 `

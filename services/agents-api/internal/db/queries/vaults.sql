@@ -6,6 +6,9 @@ RETURNING *;
 -- name: GetVault :one
 SELECT * FROM vaults WHERE tenant_id = $1 AND id = $2;
 
+-- name: DeleteVault :one
+DELETE FROM vaults WHERE tenant_id = $1 AND id = $2 RETURNING id;
+
 -- name: ListVaults :many
 SELECT * FROM vaults
 WHERE tenant_id = sqlc.arg(tenant_id)
