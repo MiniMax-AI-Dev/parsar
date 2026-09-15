@@ -54,12 +54,22 @@ credential = client.beta.agents.vaults.credentials.create(
 metadata = client.beta.agents.vaults.credentials.retrieve(
     credential.id, vault_id=vault.id,
 )
+for metadata in client.beta.agents.vaults.credentials.list(vault.id, order="asc"):
+    print(metadata.id, metadata.name, metadata.auth.mcp_server_url)
 ```
 
-Both operations use ordinary project authentication and `OpenAI-Beta: agents=v1`.
+These operations use ordinary project authentication and `OpenAI-Beta: agents=v1`.
 Users and service accounts in the same project share access; a foreign project or
 wrong owning Vault cannot retrieve the Credential. Parsar approval and personal
 credential policies belong in the product client.
+
+Listing supports `after`, creation order (default `desc`), a limit defaulting to
+20 and clamped to 1–100, and scalar or array `status` filters (`active`/`archived`,
+both by default). Credential classification is private and independent of Vault
+classification. Listing requires no encryption key and reads only safe metadata;
+the parent and cursor must belong to the requested project and Vault. Synthetic
+archived fixtures verify filtering, not a public archive operation. Archive/delete
+and exact hosted query/concurrent-page semantics remain separate gaps.
 
 Required name is trimmed to 1–256 UTF-8 bytes. Required `auth` accepts
 `static_bearer`, an HTTPS `mcp_server_url` and a string `token`. The token is
@@ -85,7 +95,7 @@ authentication. Names are public mutable metadata and are not part of this bindi
 Resource SQL reads select no secret ciphertext. The key and request token exist in
 trusted service memory; this protects stored secrets, not a compromised service host.
 
-Credential list/delete, OAuth refresh, restricted-key scopes and revocation
+Credential archive/delete, OAuth refresh, restricted-key scopes and revocation
 semantics remain separate gaps. The foreign key preserves Vault ownership and
 defines dependent-row removal for a future Vault deletion operation; no public
 Vault deletion is added here. The full protocol target is unchanged.

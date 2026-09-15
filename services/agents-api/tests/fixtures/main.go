@@ -27,6 +27,9 @@ func main() {
 }
 
 func seed() error {
+	if path := os.Getenv("AGENTS_API_CREDENTIAL_LIST_FIXTURE"); path != "" {
+		return seedCredentialList(path)
+	}
 	if path := os.Getenv("AGENTS_API_VAULT_LIST_FIXTURE"); path != "" {
 		return seedVaultList(path)
 	}

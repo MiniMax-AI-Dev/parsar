@@ -15,7 +15,7 @@ Parsar product execution and its eventual public-client cutover are separate.
 ## Reusable Agents
 
 Static-bearer Vault Credentials support creation, token replacement and safe
-metadata retrieval. Configure their independent encryption key and authenticated
+metadata retrieval/listing. Configure their independent encryption key and authenticated
 Session use through the [credential guide](credentials.md). OAuth remains a
 separate implementation gap.
 
@@ -184,7 +184,7 @@ The SDK base URL is `http://127.0.0.1:8091/v1`. Requests require a bearer key an
 - Session event submission and live streaming, Turn retrieve/list and Items list.
 - Environment retrieve for the supported self-hosted profile.
 - Vault create/retrieve/list (project-scoped pagination and stored active/archived
-  filtering; no public archive/delete lifecycle) and static-bearer Credential create/retrieve/token replacement,
+  filtering; no public archive/delete lifecycle) and static-bearer Credential create/retrieve/list/token replacement,
   with Session attachments for
   [authenticated HTTPS MCP](credentials.md#use-a-credential-in-a-session).
 

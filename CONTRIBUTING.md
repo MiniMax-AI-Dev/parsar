@@ -712,6 +712,18 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   [`services/agents-api/credentials.md`](services/agents-api/credentials.md) for
   key persistence and current limits. OAuth and storage-key rotation remain
   separate gaps; resource creation never contacts the destination.
+- `GET /v1/vaults/{vault_id}/credentials` lists safe metadata only, with both
+  project and Vault ownership enforced on the parent, cursor and row query. An
+  inaccessible parent returns not-found, even when the collection would be empty.
+  Reuse the Vault status/limit parser and Credential metadata mapping. SQL must
+  never select ciphertext for listing; no encryption key or execution is needed.
+  Credential status is a separate private active/archived classification, defaulting
+  historical/new records to active and never derived from the parent Vault's status.
+  Synthetic archived fixtures prove filtering only. There is no public archive writer,
+  timestamp or delete-to-archive inference; existing create/retrieve/token replacement,
+  Session bindings and dispatch keep their rules. Migration rollback refuses to lose
+  archived classification. Archive/delete/revocation lifecycle, OAuth and hosted
+  query/concurrency semantics remain gaps.
 - Credential `POST /v1/vaults/{vault_id}/credentials/{credential_id}` replaces only
   the static-bearer token and update time. Require `auth.type=static_bearer` and a
   string `auth.token`, preserving opaque bytes; reject extra mutation fields before
