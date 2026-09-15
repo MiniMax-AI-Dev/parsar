@@ -203,3 +203,55 @@ Session. It verifies the serialized key ID and absent exact restriction before
 real-provider commands/files and cold continuation. PostgreSQL/HTTP fixtures cover
 same-principal multiple Sessions, cross-principal rejection, rotation/revocation,
 restart and deletion. These checks do not enable public Environment admission.
+
+## Shared native filesystem owner
+
+`TestNativeSharedEnvironmentFiles` is an opt-in ownership experiment. It embeds
+the unchanged upstream app-server through its public in-process interface and
+injects the same `EnvironmentManager` used for direct native filesystem calls.
+The Go fixture owns the actual registry, dedicated PostgreSQL lease and credentials,
+caller executor container and remote-only workspace. This does not change the
+production daemon or expose public file endpoints.
+
+Compile `shared_files_probe.rs` as `app-server/examples/parsar_shared_files_probe.rs`
+in a task-owned copy of native commit
+`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`; copy its `shared_files/` modules beside
+that example. Keep build source, cache and output under `~/.parsar/`. Use Rust
+1.95.0 and the matching native installation/resources, with the existing OpenSSL
+and platform build prerequisites. The probe follows native startup with 16 MiB
+main-runtime and worker stacks. The upstream release manifest says `0.153.4`
+while its tracked lock retains `0.0.0` for 149 workspace packages. Normalize only
+those workspace versions and verify that all third-party packages, checksums and
+dependency edges remain identical, then retain that build lock and use `--locked`.
+
+From the copied upstream `codex-rs` directory:
+
+```sh
+cargo build --locked -p codex-app-server --example parsar_shared_files_probe
+cargo clippy --locked -p codex-app-server --example parsar_shared_files_probe -- -D warnings
+rustfmt --check --edition 2024 app-server/examples/parsar_shared_files_probe.rs
+```
+
+Supply the PostgreSQL, native binary, launcher, image, private proof and real model
+key prerequisites above, plus `PARSAR_SHARED_FILES_PROBE` pointing to this example.
+From the Parsar worktree, run:
+
+```sh
+go test ./services/agents-api/internal/store \
+  -run '^TestNativeSharedEnvironmentFiles$' -count=1 -v -timeout=12m
+```
+
+The fixture requires a 128 KiB binary round trip, actual metadata/directory reads,
+and direct filesystem writes during an independently observed blocked native model
+command. The same pair remains connected through both execution and file access.
+A fresh harness process must resume native history and observe retained files.
+Expected command lifecycle, cwd/stdout/stderr/exit, answers and side effects are
+checked separately. All model calls use the real provider; synthetic credentials
+and test bytes do not replace that acceptance.
+
+Results characterize shared access with production composition blockers. The
+pinned in-process router can silently drop non-required notifications when full
+without emitting `Lagged`; the dedicated drain and bounded fixture establish only
+the expected observations of this run. Raw stdio initialization, lossless event
+handling, process/credential lifetime and public path/reference/pagination semantics
+need separate acceptance before adopting this runtime or exposing Environment files.

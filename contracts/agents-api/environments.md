@@ -318,6 +318,23 @@ native detached cleanup may delay that exit. Complete resource lifecycle and
 complete public cancellation settlement remain separate from the initial text profile.
 
 
+## Shared native filesystem prerequisite
+
+The opt-in [shared-owner fixture](../../services/agents-api/tests/native/README.md#shared-native-filesystem-owner)
+characterizes direct remote file operations alongside the upstream native model/tool
+loop. It uses one injected `EnvironmentManager` and one authorized registry pair;
+it does not open another harness connection or use stock host-only `fs/*` calls.
+Native filesystem metadata supplies actual byte sizes, which the stock app-server
+metadata response omits. Follow the [ownership boundary](../../CONTRIBUTING.md).
+
+The fixture requires idle and active binary/file access, independent remote command
+effects, and cold native history. Passing those observations does not establish
+lossless delivery under saturation: the pinned embedding transport can drop
+notifications without a `Lagged` event. Production event handling, process/credential
+lifetime and daemon integration remain prerequisites. Public file create/list,
+uploaded file references, workspace path semantics, pagination and installation
+inventory remain unimplemented by this experiment.
+
 ## Pending input storage prerequisite
 
 A private Store reservation can retain one ordered message batch without a Turn,

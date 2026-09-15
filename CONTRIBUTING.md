@@ -419,6 +419,19 @@ harnesses are rejected without eviction. Full public Environment conformance and
 placements remain separate work. Native transport annotations are excluded from the
 pinned public SDK OpenAPI output; their routes are documented in the service guide.
 
+Remote file operations must share the native execution owner's filesystem and
+authorized connection. The pinned stock app-server `fs/*` methods select its local
+Environment and cannot access an executor-only workspace. The opt-in
+[shared-filesystem probe](services/agents-api/tests/native/README.md#shared-native-filesystem-owner)
+instead injects one upstream `EnvironmentManager` into the native in-process
+app-server and uses its typed filesystem directly. This is a prerequisite
+experiment, not a production daemon selection or public file implementation.
+The pinned in-process transport can silently drop notifications under saturation;
+absence of a `Lagged` event does not prove lossless delivery. Resolve that event
+contract and process/authorization ownership before adopting an embedded runtime.
+Public workspace paths, file references, live metadata and pagination require
+separate protocol acceptance; no model prompt or shell command implements file IO.
+
 Connection observations use the existing execution lease and Session lock. A
 separate `environment_connections` row retains the current generation and revision;
 `environments.status` and its Session Environment-event snapshot commit together.
