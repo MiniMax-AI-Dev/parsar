@@ -27,6 +27,7 @@ func preparationFixture(t *testing.T) (proto.PromptRequestPayload, sessionConfig
 	t.Setenv("PARSAR_PREPARATION_FRAMES", filepath.Join(root, "frames.jsonl"))
 	t.Setenv("PARSAR_PREPARATION_STATUS", filepath.Join(root, "remote-status"))
 	t.Setenv("PARSAR_PREPARATION_BLOCK", "")
+	t.Setenv("PARSAR_PREPARATION_OBSERVE", "")
 	for _, key := range []string{"CODEX_EXEC_SERVER_URL", "CODEX_EXEC_SERVER_NOISE_REGISTRY_URL", "CODEX_EXEC_SERVER_NOISE_ENVIRONMENT_ID", "CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN"} {
 		t.Setenv(key, "")
 	}
@@ -168,6 +169,11 @@ func TestPreparationFakeCodexProcess(t *testing.T) {
 					status = string(data)
 				}
 			}
+			if status == "blocked" {
+				for {
+					time.Sleep(time.Second)
+				}
+			}
 			result = map[string]string{"status": status}
 		case "config/read":
 			data, err := os.ReadFile(os.Getenv("PARSAR_PREPARATION_MCP_CONFIG"))
@@ -184,6 +190,14 @@ func TestPreparationFakeCodexProcess(t *testing.T) {
 		}
 		if frame.Method == "turn/start" {
 			_ = output.Encode(map[string]any{"jsonrpc": "2.0", "method": "turn/started", "params": map[string]any{"threadId": "fixture-native-thread", "turn": map[string]string{"id": "fixture-native-turn"}}})
+			if os.Getenv("PARSAR_PREPARATION_OBSERVE") == "1" {
+				for _, raw := range []string{
+					`{"method":"item/completed","params":{"threadId":"fixture-native-thread","turnId":"fixture-native-turn","item":{"type":"agentMessage","id":"message","text":"observed partial answer"}}}`,
+					`{"method":"thread/tokenUsage/updated","params":{"threadId":"fixture-native-thread","turnId":"fixture-native-turn","tokenUsage":{"total":{"inputTokens":30,"cachedInputTokens":4,"outputTokens":10,"reasoningOutputTokens":2,"totalTokens":40}}}}`,
+				} {
+					_ = output.Encode(json.RawMessage(raw))
+				}
+			}
 		}
 	}
 	_ = log.Close()

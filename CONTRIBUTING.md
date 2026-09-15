@@ -509,6 +509,17 @@ operation deadlines remain separate. Owner cancellation/RPC exit release pending
 resources; executor loss is checked at Start, not continuously monitored. This
 adapter seam does not provide public admission or a new scheduler.
 
+The optional `PreparedCancellation` adapter contract follows cancellation across
+Start's resource transfer. Codex fences future Start under the transfer lock;
+unused resources use preparation teardown, while transferred resources use the
+existing Session cancellation path. `Close` remains inert after transfer.
+`CancellationOutcome` exposes observed content, Usage and verified native identity;
+an unstarted resource has no measured Usage or observed resume identity. This is
+best-effort cancellation and an observed snapshot, not immutable final output,
+notification drain, caller-deadline compliance or remote process quiescence.
+Daemon cancellation receipt ordering and late-Session output forwarding remain
+separate integration work.
+
 The private daemon preparation controls reuse execution configuration but reject
 input, RunID, Conversation, attachments and product authoring. The initial profile
 requires a remote environment, stable state key, strict resume and completion
