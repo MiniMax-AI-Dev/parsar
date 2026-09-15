@@ -32,6 +32,8 @@ func TestToolSnapshotsPreserveNativeResultsOnlyWhenRequested(t *testing.T) {
 			for _, enabled := range []bool{false, true} {
 				out := make(chan proto.Envelope, 4)
 				s := &Session{runID: "run", observeTools: enabled, out: out, cancelCtx: context.Background(), bufs: NewItemBuffers(), cfg: defaultSessionConfig()}
+				s.setThreadID("private-thread")
+				s.onTurnStarted(json.RawMessage(`{"threadId":"private-thread","turn":{"id":"private-turn"}}`))
 				raw := json.RawMessage(`{"threadId":"private-thread","turnId":"private-turn","item":` + item + `}`)
 				s.onItemStarted(raw)
 				s.onItemCompleted(raw)
@@ -82,7 +84,9 @@ func TestToolObservationsReplaceNativeSnapshotsWhenRequested(t *testing.T) {
 			t.Run(source.ID, func(t *testing.T) {
 				out := make(chan proto.Envelope, 4)
 				s := &Session{runID: "run", observeTools: nativeSnapshots, observeToolObservations: true, out: out, cancelCtx: context.Background(), bufs: NewItemBuffers(), cfg: defaultSessionConfig()}
-				raw := json.RawMessage(`{"item":` + item + `}`)
+				s.setThreadID("private-thread")
+				s.onTurnStarted(json.RawMessage(`{"threadId":"private-thread","turn":{"id":"private-turn"}}`))
+				raw := json.RawMessage(`{"threadId":"private-thread","turnId":"private-turn","item":` + item + `}`)
 				s.onItemStarted(raw)
 				s.onItemCompleted(raw)
 				if len(out) != 2 {

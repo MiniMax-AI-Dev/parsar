@@ -1674,6 +1674,15 @@ or filesystem isolation. Automatic installation remains separate.
   Explicit engine approval requests still use the durable interaction lifecycle;
   user-input requests continue to wait for a human answer.
 
+- Each Codex daemon Run owns the root Thread returned by its successful
+  `thread/start` or `thread/resume` RPC and one active native Turn. Thread
+  notifications cannot replace that identity. Filter notification-driven output,
+  Items, Usage, steering and terminal state by the root Thread and available Turn
+  coordinates before changing state, including when notifications precede RPC
+  replies. Preserve the root resume Usage baseline before its Turn begins. This
+  notification isolation does not implement child server-request interactions or
+  enable public subagents.
+
 - Active-turn text uses optional daemon `prompt_steer` / `prompt_steer_ack`
   frames, correlated by run ID and payload `input_id`. Check the engine's
   advertised `steering` capability first; Codex uses native `turn/steer` with
@@ -1722,7 +1731,7 @@ or filesystem isolation. Automatic installation remains separate.
   before `turn/started` as the baseline and persist only the current turn's
   delta; repeated snapshots must not increase recorded usage.
 - Codex cancellation sends both native thread and Turn IDs. Capture the observed
-  Turn identity while stopping steering; before `turn/started`, send the native
+  Turn identity while stopping steering; before a Turn identity is known, send the native
   explicit-empty startup Turn ID. Do not interrupt an already observed terminal
   Turn. Keep cancellation best-effort with the existing response deadline and
   process cleanup; an applied daemon receipt does not prove remote process exit.

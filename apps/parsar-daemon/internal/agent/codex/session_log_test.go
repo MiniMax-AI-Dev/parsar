@@ -120,8 +120,9 @@ func TestOnErrorNotif_LogsAndBuffers(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(&buf, nil))
 	s := &Session{runID: "run-x", cfg: sessionConfig{logger: logger}}
 	s.setThreadID("thread-y")
+	s.onTurnStarted(json.RawMessage(`{"threadId":"thread-y","turn":{"id":"turn"}}`))
 
-	raw, _ := json.Marshal(ErrorNotification{Message: "401 from gateway: invalid X-Sub-Module header"})
+	raw, _ := json.Marshal(ErrorNotification{ThreadID: "thread-y", TurnID: "turn", Message: "401 from gateway: invalid X-Sub-Module header"})
 	s.onErrorNotif(raw)
 
 	if got := s.peekLastErrText(); !strings.Contains(got, "401") {
@@ -157,11 +158,13 @@ func TestOnTurnFailed_LogsBufferedError(t *testing.T) {
 		out:       out,
 		cancelCtx: ctx,
 	}
+	s.setThreadID("thread")
+	s.onTurnStarted(json.RawMessage(`{"threadId":"thread","turn":{"id":"t-1"}}`))
 	// Simulate codex sending the real error first…
-	rawErr, _ := json.Marshal(ErrorNotification{Message: "platform-api 500"})
+	rawErr, _ := json.Marshal(ErrorNotification{ThreadID: "thread", TurnID: "t-1", Message: "platform-api 500"})
 	s.onErrorNotif(rawErr)
 	// …then turn/failed.
-	rawFail, _ := json.Marshal(TurnCompletedNotification{Turn: Turn{ID: "t-1", Status: "failed"}})
+	rawFail, _ := json.Marshal(TurnCompletedNotification{ThreadID: "thread", Turn: Turn{ID: "t-1", Status: "failed"}})
 	s.onTurnFailed(rawFail)
 
 	logs := buf.String()
@@ -182,7 +185,8 @@ func TestTerminalTurnKeepsRPCAliveUntilSessionCancel(t *testing.T) {
 			name: "completed",
 			run: func(s *Session) {
 				raw, _ := json.Marshal(TurnCompletedNotification{
-					Turn: Turn{ID: "turn-1", Status: "completed"},
+					ThreadID: "thread-completed",
+					Turn:     Turn{ID: "turn-1", Status: "completed"},
 				})
 				s.onTurnCompleted(raw)
 			},
@@ -191,7 +195,8 @@ func TestTerminalTurnKeepsRPCAliveUntilSessionCancel(t *testing.T) {
 			name: "failed",
 			run: func(s *Session) {
 				raw, _ := json.Marshal(TurnCompletedNotification{
-					Turn: Turn{ID: "turn-2", Status: "failed"},
+					ThreadID: "thread-failed",
+					Turn:     Turn{ID: "turn-2", Status: "failed"},
 				})
 				s.onTurnFailed(raw)
 			},
@@ -216,6 +221,12 @@ func TestTerminalTurnKeepsRPCAliveUntilSessionCancel(t *testing.T) {
 				cancelFn:  cancel,
 			}
 			s.setThreadID("thread-" + tt.name)
+			turnID := "turn-1"
+			if tt.name == "failed" {
+				turnID = "turn-2"
+			}
+			start, _ := json.Marshal(TurnStartedNotification{ThreadID: s.currentThreadID(), Turn: Turn{ID: turnID}})
+			s.onTurnStarted(start)
 
 			tt.run(s)
 

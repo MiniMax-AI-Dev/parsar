@@ -30,7 +30,7 @@ func TestSteeringUsesNativeActiveTurnAndReceipt(t *testing.T) {
 			defer cancel()
 			s := &Session{runID: "daemon-run", rpc: client.JSONRPCClient, cancelCtx: ctx}
 			s.setThreadID("native-thread")
-			s.startSteering(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"native-turn"}}`))
+			s.onTurnStarted(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"native-turn"}}`))
 			done := make(chan error, 1)
 			go func() {
 				done <- s.Steer(ctx, proto.PromptSteerPayload{InputID: "input-1", Text: "追加输入"})
@@ -73,7 +73,7 @@ func TestSteeringDeadlineReleasesBlockedNativeWrite(t *testing.T) {
 	defer cleanup()
 	s := &Session{rpc: client.JSONRPCClient, cancelCtx: context.Background()}
 	s.setThreadID("native-thread")
-	s.startSteering(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"native-turn"}}`))
+	s.onTurnStarted(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"native-turn"}}`))
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	done := make(chan error, 1)
@@ -100,13 +100,13 @@ func TestSteeringDoesNotStartOrReviveTurns(t *testing.T) {
 	input := proto.PromptSteerPayload{InputID: "input-1", Text: "extra"}
 	// A nil RPC client proves these states do not issue a request.
 	for _, notification := range []json.RawMessage{nil, json.RawMessage(`{"threadId":"other-thread","turn":{"id":"other-turn"}}`)} {
-		s.startSteering(notification)
+		s.onTurnStarted(notification)
 		if err := s.Steer(ctx, input); !errors.Is(err, agent.ErrSteeringNotReady) {
 			t.Fatalf("starting turn: %v", err)
 		}
 	}
 	s.stopSteering()
-	s.startSteering(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"late-turn"}}`))
+	s.onTurnStarted(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"late-turn"}}`))
 	if err := s.Steer(ctx, input); !errors.Is(err, agent.ErrSteeringInactive) {
 		t.Fatalf("terminal turn revived: %v", err)
 	}

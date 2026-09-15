@@ -48,13 +48,17 @@ func TestThreadRequestsApplyBypassPolicy(t *testing.T) {
 			if method == "thread/resume" && request.Params["threadId"] != "old-thread" {
 				t.Fatalf("resume lost thread ID: %+v", request.Params)
 			}
-			if err := json.NewEncoder(server.ToClient).Encode(map[string]any{"id": request.ID, "result": map[string]any{"thread": map[string]any{"id": "resolved-thread"}}}); err != nil {
+			resolvedID := "resolved-thread"
+			if method == "thread/resume" {
+				resolvedID = "old-thread"
+			}
+			if err := json.NewEncoder(server.ToClient).Encode(map[string]any{"id": request.ID, "result": map[string]any{"thread": map[string]any{"id": resolvedID}}}); err != nil {
 				t.Fatal(err)
 			}
 			if err := <-done; err != nil {
 				t.Fatal(err)
 			}
-			if session.currentThreadID() != "resolved-thread" {
+			if session.currentThreadID() != resolvedID {
 				t.Fatal("thread response was not applied")
 			}
 		})

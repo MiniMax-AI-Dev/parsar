@@ -84,12 +84,14 @@ type Session struct {
 
 	bufs *ItemBuffers
 
-	usageMu       sync.Mutex
-	latestUsage   *TurnUsage
-	usageTotal    TurnUsage
-	usageBaseline TurnUsage
-	usageTurnID   string
-	resolvedModel string
+	usageMu             sync.Mutex
+	latestUsage         *TurnUsage
+	usageTotal          TurnUsage
+	usageBaseline       TurnUsage
+	usageTurnID         string
+	resumeUsageThreadID string
+	resumeUsageTotal    *TurnUsage
+	resolvedModel       string
 
 	finalTextMu sync.Mutex
 	finalText   string
@@ -120,7 +122,7 @@ func (s *Session) SubmitPromptForUserChoice(_ context.Context, askID string, dec
 func (s *Session) registerHandlers() {
 	rpc := s.rpc
 
-	rpc.OnNotification("thread/started", s.onThreadStarted)
+	rpc.OnNotification("thread/started", func(_ json.RawMessage) {})
 	rpc.OnNotification("turn/started", s.onTurnStarted)
 	rpc.OnNotification("turn/completed", s.onTurnCompleted)
 	rpc.OnNotification("turn/failed", s.onTurnFailed)
@@ -143,23 +145,11 @@ func (s *Session) registerHandlers() {
 	rpc.OnServerRequest("mcpServer/elicitation/request", s.handleCodexMCPElicitation)
 }
 
-func (s *Session) onThreadStarted(raw json.RawMessage) {
-	var p ThreadStartedNotification
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return
-	}
-	if p.Thread.ID != "" {
-		s.setThreadID(p.Thread.ID)
-	}
-}
-
 func (s *Session) onTurnStarted(raw json.RawMessage) {
-	s.startSteering(raw)
-	s.beginUsageTurn(raw)
-	// Reset per-turn buffers. The session is per-prompt so this is
-	// belt-and-suspenders today, but it keeps the buffer semantics
-	// honest when codex emits a fresh turn id mid-session.
-	s.bufs = NewItemBuffers()
+	var p TurnStartedNotification
+	if json.Unmarshal(raw, &p) == nil {
+		s.beginRootTurn(p.ThreadID, p.Turn.ID)
+	}
 }
 
 func (s *Session) onReasoningDelta(raw json.RawMessage) {
@@ -167,7 +157,7 @@ func (s *Session) onReasoningDelta(raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
-	if p.Delta == "" {
+	if !s.isRootTurn(p.ThreadID, p.TurnID) || p.Delta == "" || p.ItemID == "" {
 		return
 	}
 	_ = FoldDeltaIntoBuffer(s.bufs, "reasoning", p.ItemID, p.Delta)
@@ -182,14 +172,11 @@ func (s *Session) onReasoningDelta(raw json.RawMessage) {
 func (s *Session) onTurnCompleted(raw json.RawMessage) {
 	s.outcome.notificationMu.Lock()
 	defer s.outcome.notificationMu.Unlock()
-	s.stopSteering()
 	var p TurnCompletedNotification
-	if err := json.Unmarshal(raw, &p); err != nil {
-		s.cfg.logger.Warn("codex: turn/completed decode error",
-			"run_id", s.runID, "err", err, "raw_len", len(raw))
-		s.emitTerminal("codex: turn/completed decode error", true)
+	if json.Unmarshal(raw, &p) != nil || !s.isRootTurn(p.ThreadID, p.Turn.ID) {
 		return
 	}
+	s.stopSteering()
 
 	usage := p.Turn.Usage
 	if usage == nil {
@@ -288,7 +275,9 @@ func appendOnNewline(base, extra string) string {
 
 func (s *Session) onTurnFailed(raw json.RawMessage) {
 	var p TurnCompletedNotification
-	_ = json.Unmarshal(raw, &p)
+	if json.Unmarshal(raw, &p) != nil || !s.isRootTurn(p.ThreadID, p.Turn.ID) {
+		return
+	}
 	// turn/failed carries no payload detail today; the actual cause
 	// usually arrived earlier on the "error" notification stream and is
 	// already buffered in lastErrText. Log both so post-mortems can
@@ -306,6 +295,12 @@ func (s *Session) onErrorNotif(raw json.RawMessage) {
 	var p ErrorNotification
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
+	}
+	if !s.isRootTurn(p.ThreadID, p.TurnID) {
+		return
+	}
+	if p.Error != nil {
+		p.Message = turnErrorMessage(p.Error)
 	}
 	if p.Message == "" {
 		return
@@ -453,7 +448,9 @@ func (s *Session) currentThreadID() string {
 
 func (s *Session) setThreadID(id string) {
 	s.threadIDMu.Lock()
-	s.threadID = id
+	if s.threadID == "" {
+		s.threadID = id
+	}
 	s.threadIDMu.Unlock()
 }
 

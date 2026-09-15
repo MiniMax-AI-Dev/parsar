@@ -10,7 +10,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
-func TestNativeTokenUsageAcrossTurns(t *testing.T) {
+func TestNativeTokenUsageAcrossRuns(t *testing.T) {
 	out := make(chan proto.Envelope, 4)
 	s := &Session{runID: "run", out: out, cancelCtx: context.Background(),
 		cfg: sessionConfig{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}}
@@ -30,7 +30,11 @@ func TestNativeTokenUsageAcrossTurns(t *testing.T) {
 	if s.latestUsage == nil || s.latestUsage.InputTokens != 500 || s.latestUsage.OutputTokens != 50 {
 		t.Fatalf("current turn usage = %+v, want 500 input / 50 output", s.latestUsage)
 	}
-	// A subsequent turn in this process uses the last total as its baseline.
+	// The next Run resumes the native thread and replays its last total.
+	s = &Session{runID: "next-run", out: out, cancelCtx: context.Background(),
+		cfg: sessionConfig{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}}
+	s.setThreadID("thread")
+	s.onUsageUpdated(second)
 	s.onTurnStarted(json.RawMessage(`{"threadId":"thread","turn":{"id":"next"}}`))
 	if s.latestUsage != nil {
 		t.Fatal("new turn retained previous turn usage")
@@ -94,7 +98,7 @@ func TestCompleteTokenBreakdownAndCancellation(t *testing.T) {
 	s := &Session{}
 	s.setThreadID("thread")
 	s.onUsageUpdated(json.RawMessage(`{"threadId":"thread","turnId":"old","tokenUsage":{"total":{"inputTokens":100,"cachedInputTokens":20,"outputTokens":50,"reasoningOutputTokens":10,"totalTokens":150}}}`))
-	s.beginUsageTurn(json.RawMessage(`{"turn":{"id":"new"}}`))
+	s.onTurnStarted(json.RawMessage(`{"threadId":"thread","turn":{"id":"new"}}`))
 	snapshot := json.RawMessage(`{"threadId":"thread","turnId":"new","tokenUsage":{"total":{"inputTokens":130,"cachedInputTokens":24,"outputTokens":60,"reasoningOutputTokens":12,"totalTokens":190}}}`)
 	s.onUsageUpdated(snapshot)
 	s.onUsageUpdated(snapshot)
@@ -132,7 +136,7 @@ func TestAbnormalTerminationTransmitsKnownUsage(t *testing.T) {
 	out := make(chan proto.Envelope, 4)
 	s := &Session{runID: "run", out: out, cancelCtx: context.Background(), cfg: sessionConfig{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}}
 	s.setThreadID("thread")
-	s.beginUsageTurn(json.RawMessage(`{"turn":{"id":"turn"}}`))
+	s.onTurnStarted(json.RawMessage(`{"threadId":"thread","turn":{"id":"turn"}}`))
 	s.onUsageUpdated(json.RawMessage(`{"threadId":"thread","turnId":"turn","tokenUsage":{"total":{"inputTokens":10,"cachedInputTokens":4,"outputTokens":3,"reasoningOutputTokens":2,"totalTokens":13}}}`))
 	s.emitTerminal("native connection closed", true)
 	s.closeOut()

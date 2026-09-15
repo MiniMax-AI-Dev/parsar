@@ -382,7 +382,10 @@ type ThreadTokenUsageUpdatedNotification struct {
 }
 
 type ErrorNotification struct {
-	Message string `json:"message,omitempty"`
+	ThreadID string     `json:"threadId"`
+	TurnID   string     `json:"turnId"`
+	Error    *TurnError `json:"error,omitempty"`
+	Message  string     `json:"message,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

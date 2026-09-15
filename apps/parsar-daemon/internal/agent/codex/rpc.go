@@ -124,9 +124,10 @@ type deferReplySentinel struct{}
 var DeferReply = deferReplySentinel{}
 
 type pendingRequest struct {
-	method string
-	resp   chan rpcResponse
-	timer  *time.Timer
+	method   string
+	resp     chan rpcResponse
+	timer    *time.Timer
+	onResult func(json.RawMessage) error
 }
 
 type rpcResponse struct {
@@ -427,6 +428,12 @@ func (c *JSONRPCClient) handleResponse(rawID, rawResult, rawError json.RawMessag
 		}
 		p.resp <- rpcResponse{err: fmt.Errorf("codex rpc: %s: %w", p.method, &errBody)}
 		return
+	}
+	if p.onResult != nil {
+		if err := p.onResult(rawResult); err != nil {
+			p.resp <- rpcResponse{err: err}
+			return
+		}
 	}
 	p.resp <- rpcResponse{result: rawResult}
 }

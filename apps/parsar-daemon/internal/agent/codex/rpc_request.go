@@ -16,10 +16,15 @@ func (c *JSONRPCClient) Request(ctx context.Context, method string, params any) 
 }
 
 func (c *JSONRPCClient) request(ctx context.Context, method string, params any, write func(any) error) (json.RawMessage, error) {
-	return c.requestWithTimeout(ctx, method, params, write, c.cfg.RequestTimeout)
+	return c.requestWithTimeout(ctx, method, params, write, c.cfg.RequestTimeout, nil)
 }
 
-func (c *JSONRPCClient) requestWithTimeout(ctx context.Context, method string, params any, write func(any) error, timeout time.Duration) (json.RawMessage, error) {
+// The result hook runs on the read loop before any following notification.
+func (c *JSONRPCClient) requestWithResult(ctx context.Context, method string, params any, onResult func(json.RawMessage) error) (json.RawMessage, error) {
+	return c.requestWithTimeout(ctx, method, params, c.writeFrame, c.cfg.RequestTimeout, onResult)
+}
+
+func (c *JSONRPCClient) requestWithTimeout(ctx context.Context, method string, params any, write func(any) error, timeout time.Duration, onResult func(json.RawMessage) error) (json.RawMessage, error) {
 	if !c.Alive() {
 		return nil, errors.New("codex rpc: client not alive")
 	}
@@ -28,8 +33,9 @@ func (c *JSONRPCClient) requestWithTimeout(ctx context.Context, method string, p
 		return nil, fmt.Errorf("codex rpc: id: %w", err)
 	}
 	pending := &pendingRequest{
-		method: method,
-		resp:   make(chan rpcResponse, 1),
+		method:   method,
+		resp:     make(chan rpcResponse, 1),
+		onResult: onResult,
 	}
 	c.pendingMu.Lock()
 	c.pending[id] = pending

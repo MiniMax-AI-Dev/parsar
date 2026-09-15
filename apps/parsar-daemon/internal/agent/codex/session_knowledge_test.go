@@ -31,7 +31,7 @@ func TestResumeRefreshesReferenceContext(t *testing.T) {
 			if request.Params["threadId"] != "same-thread" {
 				t.Fatal("lost history")
 			}
-			if err := json.NewEncoder(server.ToClient).Encode(map[string]any{"id": request.ID, "result": map[string]any{}}); err != nil {
+			if err := json.NewEncoder(server.ToClient).Encode(map[string]any{"id": request.ID, "result": map[string]any{"thread": map[string]string{"id": "same-thread"}}}); err != nil {
 				t.Fatal(err)
 			}
 			if err := <-done; err != nil {

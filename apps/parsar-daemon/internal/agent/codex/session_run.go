@@ -21,9 +21,6 @@ func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 		return
 	}
 
-	// turn/start fires the first prompt. The reply ack is fire-and-forget
-	// — streaming events flow via notifications + the eventual
-	// turn/completed.
 	input := FirstUserInput(req.Prompt)
 	if len(input) == 0 {
 		s.emitTerminal("codex: empty prompt", true)
@@ -53,7 +50,7 @@ func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 		}
 	}
 	turnCtx, turnCancel := context.WithTimeout(s.cancelCtx, 10*time.Second)
-	_, ackErr := s.rpc.Request(turnCtx, "turn/start", turnParams)
+	_, ackErr := s.rpc.requestWithResult(turnCtx, "turn/start", turnParams, s.bindTurnResult)
 	turnCancel()
 	if ackErr != nil {
 		s.cfg.logger.Warn("codex: turn/start ack failed", "run_id", s.runID, "err", ackErr)

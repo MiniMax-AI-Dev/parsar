@@ -18,7 +18,7 @@ func TestSteeringReceiptTimeoutAndCompletionKeepProcessAlive(t *testing.T) {
 			out := make(chan proto.Envelope, 4)
 			s := &Session{rpc: client.JSONRPCClient, cancelCtx: context.Background(), out: out, cfg: sessionConfig{logger: obslog.Bg()}}
 			s.setThreadID("thread")
-			s.startSteering(json.RawMessage(`{"threadId":"thread","turn":{"id":"turn"}}`))
+			s.onTurnStarted(json.RawMessage(`{"threadId":"thread","turn":{"id":"turn"}}`))
 			timeout := 50 * time.Millisecond
 			if complete {
 				timeout = time.Second
@@ -106,7 +106,11 @@ func TestBlockedSteeringWriteEndsRunWithTerminalFrames(t *testing.T) {
 					return
 				}
 			}
-			if err := encoder.Encode(map[string]any{"id": request.ID, "result": map[string]any{"thread": map[string]any{"id": "thread"}}}); err != nil {
+			result := map[string]any{"thread": map[string]any{"id": "thread"}}
+			if method == "turn/start" {
+				result = map[string]any{"turn": map[string]any{"id": "turn"}}
+			}
+			if err := encoder.Encode(map[string]any{"id": request.ID, "result": result}); err != nil {
 				ready <- err
 				return
 			}

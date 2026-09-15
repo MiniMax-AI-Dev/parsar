@@ -71,7 +71,7 @@ func (s *Session) steer(ctx context.Context, input proto.PromptSteerPayload, wri
 			written()
 		}
 		return nil
-	}, timeout)
+	}, timeout, nil)
 	if err != nil {
 		var rejected *JsonRpcError
 		if errors.As(err, &rejected) {
@@ -91,16 +91,17 @@ func (s *Session) steer(ctx context.Context, input proto.PromptSteerPayload, wri
 	return nil
 }
 
-func (s *Session) startSteering(raw json.RawMessage) {
-	var notification TurnStartedNotification
-	if json.Unmarshal(raw, &notification) != nil || notification.ThreadID != s.currentThreadID() {
-		return
+func (s *Session) startSteering(threadID, turnID string) bool {
+	if !s.isRootThread(threadID) || turnID == "" {
+		return false
 	}
 	s.steering.mu.Lock()
 	defer s.steering.mu.Unlock()
-	if !s.steering.stopped {
-		s.steering.id = notification.Turn.ID
+	if s.steering.stopped || s.steering.id != "" {
+		return false
 	}
+	s.steering.id = turnID
+	return true
 }
 
 // stopSteering atomically retains the cancellation target and stops new input.

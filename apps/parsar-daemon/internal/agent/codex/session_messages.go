@@ -11,7 +11,7 @@ func (s *Session) onAgentDelta(raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
-	if p.Delta == "" {
+	if !s.isRootTurn(p.ThreadID, p.TurnID) || p.Delta == "" || p.ItemID == "" {
 		return
 	}
 	_ = FoldDeltaIntoBuffer(s.bufs, "agent", p.ItemID, p.Delta)
@@ -32,6 +32,9 @@ func (s *Session) onItemStarted(raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
+	if !s.isRootTurn(p.ThreadID, p.TurnID) || p.Item.ID == "" {
+		return
+	}
 	s.observeMessage(p.Item, "in_progress", nil)
 	envs, err := DispatchStartedItem(s.runID, p.Item)
 	if err != nil {
@@ -44,6 +47,9 @@ func (s *Session) onItemStarted(raw json.RawMessage) {
 func (s *Session) onItemCompleted(raw json.RawMessage) {
 	var p ItemCompletedNotification
 	if err := json.Unmarshal(raw, &p); err != nil {
+		return
+	}
+	if !s.isRootTurn(p.ThreadID, p.TurnID) || p.Item.ID == "" {
 		return
 	}
 	envs, text, err := DispatchCompletedItem(s.runID, p.Item, s.bufs)

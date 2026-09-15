@@ -6,17 +6,13 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
-func (s *Session) beginUsageTurn(raw json.RawMessage) {
-	var p TurnStartedNotification
-	if json.Unmarshal(raw, &p) != nil || p.Turn.ID == "" {
-		return
-	}
+func (s *Session) beginUsageTurn(turnID string) {
 	s.usageMu.Lock()
 	defer s.usageMu.Unlock()
-	if s.usageTurnID == p.Turn.ID {
+	if s.usageTurnID == turnID {
 		return
 	}
-	s.usageTurnID = p.Turn.ID
+	s.usageTurnID = turnID
 	s.usageBaseline = s.usageTotal
 	s.latestUsage = nil
 }
@@ -26,12 +22,20 @@ func (s *Session) onUsageUpdated(raw json.RawMessage) {
 	if json.Unmarshal(raw, &p) != nil {
 		return
 	}
-	if threadID := s.currentThreadID(); threadID != "" && p.ThreadID != threadID {
+	if !s.isRootThread(p.ThreadID) {
+		s.usageMu.Lock()
+		if s.resumeUsageThreadID != "" && p.ThreadID == s.resumeUsageThreadID && p.TurnID != "" && p.TokenUsage != nil && p.TokenUsage.Total != nil {
+			s.resumeUsageTotal = p.TokenUsage.Total
+		}
+		s.usageMu.Unlock()
+		return
+	}
+	if s.terminal.Load() {
 		return
 	}
 	s.usageMu.Lock()
 	defer s.usageMu.Unlock()
-	if p.TokenUsage != nil && p.TokenUsage.Total != nil {
+	if p.TokenUsage != nil && p.TokenUsage.Total != nil && p.TurnID != "" {
 		// app-server replays the previous thread total after resume and
 		// before turn/started. It establishes a baseline, not new usage.
 		if s.usageTurnID == "" {
@@ -46,7 +50,7 @@ func (s *Session) onUsageUpdated(raw json.RawMessage) {
 		s.latestUsage = &u
 		return
 	}
-	if p.Usage != nil && (p.TurnID == "" || p.TurnID == s.usageTurnID) {
+	if p.Usage != nil && s.usageTurnID != "" && (p.TurnID == "" || p.TurnID == s.usageTurnID) {
 		u := *p.Usage
 		s.latestUsage = &u
 	}
