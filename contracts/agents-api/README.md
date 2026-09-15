@@ -35,6 +35,8 @@ waits for preparation/admission of later idle text batches. Environment retrieva
 exposes durable status and safe empty installation metadata for that profile.
 Populated installation metadata, initial input, mixed/active/function input and full lifecycle conformance remain
 unimplemented; see the [Environment scope](environments.md).
+Its initial-input persistence prerequisite reserves messages with creation and
+records pre-Turn timeout failure, but does not yet open public initial creation.
 
 Remaining work includes physical Session cleanup/content variants, broader configuration
 and tools, execution recovery, environments/files, Vaults and protocol Subagents.

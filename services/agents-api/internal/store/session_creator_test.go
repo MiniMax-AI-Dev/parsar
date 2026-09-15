@@ -84,12 +84,14 @@ func TestConcurrentSessionCreatorsCannotShareCreationRetry(t *testing.T) {
 	if succeeded != 4 || conflicted != 4 || created != 1 {
 		t.Fatalf("success/conflict/created = %d/%d/%d", succeeded, conflicted, created)
 	}
-	var environments, turns, inputs int
+	var environments, turns, inputs, reservations, initialReservations int
 	if err := pool.QueryRow(t.Context(), `SELECT
         (SELECT count(*) FROM environments WHERE session_id=$1),
         (SELECT count(*) FROM turns WHERE session_id=$1),
-        (SELECT count(*) FROM turn_inputs WHERE session_id=$1)`, winner.ID).Scan(&environments, &turns, &inputs); err != nil || environments != 1 || turns != 1 || inputs != 1 {
-		t.Fatal("concurrent creators duplicated resources", environments, turns, inputs, err)
+        (SELECT count(*) FROM turn_inputs WHERE session_id=$1),
+        (SELECT count(*) FROM environment_input_reservations WHERE session_id=$1),
+        (SELECT count(*) FROM environment_input_reservations WHERE session_id=$1 AND is_initial)`, winner.ID).Scan(&environments, &turns, &inputs, &reservations, &initialReservations); err != nil || environments != 1 || turns != 0 || inputs != 0 || reservations != 1 || initialReservations != 1 {
+		t.Fatal("concurrent creators duplicated or prematurely admitted resources", environments, turns, inputs, reservations, initialReservations, err)
 	}
 	pool.Close()
 	restarted, _ := testStore(t)

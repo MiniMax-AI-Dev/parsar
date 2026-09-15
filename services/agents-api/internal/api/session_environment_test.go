@@ -75,7 +75,7 @@ func TestEnvironmentInputActivitySnapshotsIgnoreCurrentTurnAndActivity(t *testin
 	session.EnvironmentInputActivity = &store.EnvironmentInputActivity{Status: "requires_action", EnvironmentID: "environment", LastActiveAt: time.Unix(1700000300, 0)}
 	session.RequiredActions = []v1.FunctionCallAction{{Type: "function_call", CallID: "stale"}}
 	session.Usage = json.RawMessage(`{"input_tokens":999,"output_tokens":0,"total_tokens":999}`)
-	for _, status := range []string{"requires_action", "idle"} {
+	for _, status := range []string{"requires_action", "idle", "failed"} {
 		activity := &store.EnvironmentInputActivity{Status: status, LastActiveAt: time.Unix(1700000100, 0)}
 		if status == "requires_action" {
 			activity.EnvironmentID = "environment"
@@ -89,7 +89,7 @@ func TestEnvironmentInputActivitySnapshotsIgnoreCurrentTurnAndActivity(t *testin
 			t.Fatal(event, err)
 		}
 		value := event.Session
-		if value.Status != status || value.Error != nil || value.Usage != nil || value.LastActiveAt != 1700000100 || value.RequiredActions == nil {
+		if value.Status != status || (value.Error != nil) != (status == "failed") || value.Usage != nil || value.LastActiveAt != 1700000100 || value.RequiredActions == nil {
 			t.Fatal("activity borrowed current Session state", value)
 		}
 		raw, err := json.Marshal(event)
@@ -104,8 +104,11 @@ func TestEnvironmentInputActivitySnapshotsIgnoreCurrentTurnAndActivity(t *testin
 		if status == "requires_action" && string(actions) != `[{"environment_id":"environment","type":"environment_connection"}]` {
 			t.Fatal("function fields leaked into environment action", string(actions))
 		}
-		if status == "idle" && string(actions) != `[]` {
+		if status != "requires_action" && string(actions) != `[]` {
 			t.Fatal("settled action leaked", string(actions))
+		}
+		if status == "failed" && *value.Error != "The initial input timed out waiting for the environment connection." {
+			t.Fatal("unsafe or missing initial failure message", value.Error)
 		}
 	}
 	change := store.SessionChange{

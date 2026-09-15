@@ -12,10 +12,10 @@ import (
 )
 
 const getEnvironmentInputActivity = `-- name: GetEnvironmentInputActivity :one
-SELECT r.state, r.created_at, r.settled_at, e.id AS environment_id, e.status AS connection_status
+SELECT r.state, r.is_initial, r.created_at, r.settled_at, e.id AS environment_id, e.status AS connection_status
 FROM environments e
 JOIN LATERAL (
-    SELECT id, session_id, idempotency_key, batch, state, created_at, deadline, settled_at FROM environment_input_reservations
+    SELECT id, session_id, idempotency_key, batch, state, created_at, deadline, settled_at, is_initial FROM environment_input_reservations
     WHERE session_id = e.session_id
     ORDER BY created_at DESC, id DESC LIMIT 1
 ) r ON true
@@ -28,6 +28,7 @@ WHERE e.session_id = $1 AND r.state <> 'admitted'
 
 type GetEnvironmentInputActivityRow struct {
 	State            string             `json:"state"`
+	IsInitial        bool               `json:"is_initial"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	SettledAt        pgtype.Timestamptz `json:"settled_at"`
 	EnvironmentID    pgtype.UUID        `json:"environment_id"`
@@ -39,6 +40,7 @@ func (q *Queries) GetEnvironmentInputActivity(ctx context.Context, sessionID pgt
 	var i GetEnvironmentInputActivityRow
 	err := row.Scan(
 		&i.State,
+		&i.IsInitial,
 		&i.CreatedAt,
 		&i.SettledAt,
 		&i.EnvironmentID,

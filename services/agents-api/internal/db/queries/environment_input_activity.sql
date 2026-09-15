@@ -1,5 +1,5 @@
 -- name: GetEnvironmentInputActivity :one
-SELECT r.state, r.created_at, r.settled_at, e.id AS environment_id, e.status AS connection_status
+SELECT r.state, r.is_initial, r.created_at, r.settled_at, e.id AS environment_id, e.status AS connection_status
 FROM environments e
 JOIN LATERAL (
     SELECT * FROM environment_input_reservations

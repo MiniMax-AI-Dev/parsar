@@ -55,10 +55,14 @@ func sessionResponse(session store.Session, executorURL string) (v1.Session, err
 		}
 	}
 	if activity := session.EnvironmentInputActivity; activity != nil {
-		if activity.Status != "idle" && activity.Status != "requires_action" {
+		if activity.Status != "idle" && activity.Status != "requires_action" && activity.Status != "failed" {
 			return v1.Session{}, errors.New("unsupported stored environment input activity")
 		}
 		response.Status, response.Error = activity.Status, nil
+		if activity.Status == "failed" {
+			message := "The initial input timed out waiting for the environment connection."
+			response.Error = &message
+		}
 		response.LastActiveAt = activity.LastActiveAt.Unix()
 		response.RequiredActions = []v1.RequiredAction{}
 		if activity.Status == "requires_action" {

@@ -1,7 +1,7 @@
 -- name: CreateEnvironmentInputReservation :one
 WITH accepted AS (SELECT clock_timestamp() AS at)
-INSERT INTO environment_input_reservations(id, session_id, idempotency_key, batch, created_at, deadline)
-SELECT $1, $2, $3, $4, at, at + interval '5 minutes' FROM accepted
+INSERT INTO environment_input_reservations(id, session_id, idempotency_key, batch, is_initial, created_at, deadline)
+SELECT $1, $2, $3, $4, $5, at, at + interval '5 minutes' FROM accepted
 RETURNING *;
 
 -- name: FindEnvironmentInputReservation :one

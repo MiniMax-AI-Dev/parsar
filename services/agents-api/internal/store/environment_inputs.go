@@ -26,6 +26,7 @@ type EnvironmentInputReservation struct {
 	ID        string
 	SessionID string
 	State     string
+	IsInitial bool
 	Inputs    []Input
 	CreatedAt time.Time
 	Deadline  time.Time
@@ -235,7 +236,7 @@ func environmentInputOutcome(ctx context.Context, q *sqlc.Queries, row sqlc.Envi
 func environmentInputFromRow(row sqlc.EnvironmentInputReservation) (EnvironmentInputReservation, error) {
 	result := EnvironmentInputReservation{
 		ID: uuid.UUID(row.ID.Bytes).String(), SessionID: uuid.UUID(row.SessionID.Bytes).String(),
-		State: row.State, CreatedAt: row.CreatedAt.Time, Deadline: row.Deadline.Time,
+		State: row.State, IsInitial: row.IsInitial, CreatedAt: row.CreatedAt.Time, Deadline: row.Deadline.Time,
 	}
 	if row.SettledAt.Valid {
 		result.SettledAt = &row.SettledAt.Time

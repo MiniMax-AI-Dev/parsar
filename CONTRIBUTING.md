@@ -249,6 +249,20 @@ cancels pending input in the same transaction. A terminal reservation retry must
 affect a later reservation or Turn. Evaluate deadlines after acquiring the Session
 lock, and return terminal storage outcomes without rolling their transaction back.
 
+Initial messages for a newly created Environment-bearing Session use that same
+reservation in the creation transaction, including its connection-action event.
+The creation winner alone inserts it; the original pre-work snapshot and stream
+cursor remain unchanged. A durable initial/later flag defaults historical rows to
+later input without inferring origin. Initial expiry projects a failed Session and
+safe error before any Turn exists; later expiry retains idle semantics. Failure
+events capture the settled activity and Usage atomically. Late connections and
+creation retries cannot reset or replay expired input, and newer work supersedes
+old activity without changing its event snapshots. The Environment itself is not
+failed by an input deadline. This Store rule covers actual self-hosted and internal
+hosted associations; it does not enable hosted providers or the still-gated public
+self-hosted initial-input workflow. None/absent Environment initial input retains
+immediate Turn admission. Cancellation/deletion keep their existing semantics.
+
 The public self-hosted input profile accepts idle message-only batches through this
 reservation path, including already-connected environments. Only the Session-locked
 reservation operation decides retry, active-work conflict and new admission; an

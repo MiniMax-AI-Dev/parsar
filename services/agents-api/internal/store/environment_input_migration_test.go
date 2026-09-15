@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )
@@ -38,14 +37,6 @@ func TestEnvironmentInputMigrationRetainsHistoryAndRetryIdentity(t *testing.T) {
 	if _, err := provider.UpTo(ctx, 21); err != nil {
 		t.Fatal(err)
 	}
-	poolConfig := pool.Config()
-	poolConfig.ConnConfig = cfg
-	migrated, err := pgxpool.NewWithConfig(ctx, poolConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(migrated.Close)
-	s := New(migrated)
 	tenant, session := uuid.NewString(), uuid.NewString()
 	// Historical schemas must be seeded without the current Store's creation contract.
 	input := environmentInput("session", "self_hosted", "/workspace")
@@ -76,16 +67,20 @@ func TestEnvironmentInputMigrationRetainsHistoryAndRetryIdentity(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "SELECT to_jsonb(s)::text FROM sessions s WHERE id=$1", session).Scan(&after); err != nil || before != after {
 		t.Fatal("migration changed Session", err)
 	}
-	pending := reserveEnvironmentInput(t, s, tenant, session, "pending")
-	// Current reservation writes append activity; the rejected downgrade must preserve it.
-	if err := db.QueryRowContext(ctx, "SELECT to_jsonb(s)::text FROM sessions s WHERE id=$1", session).Scan(&before); err != nil {
+	// Seed the historical schema directly; current queries require later columns.
+	pending := uuid.NewString()
+	if _, err := db.ExecContext(ctx, `INSERT INTO environment_input_reservations(id,session_id,idempotency_key,batch,created_at,deadline)
+		VALUES ($1,$2,'pending','[{"kind":"message","payload":{"text":"pending"}}]',clock_timestamp(),clock_timestamp()+interval '5 minutes')`, pending, session); err != nil {
+		t.Fatal(err)
+	}
+	var original, retained string
+	if err := db.QueryRowContext(ctx, "SELECT to_jsonb(r)::text FROM environment_input_reservations r WHERE id=$1", pending).Scan(&original); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := provider.DownTo(ctx, 21); err == nil || !strings.Contains(err.Error(), "Cannot remove durable Environment input identities") {
 		t.Fatal("downgrade discarded retry identity", err)
 	}
-	retained, err := s.GetEnvironmentInputReservation(ctx, tenant, session, pending.ID)
-	if err != nil || retained.ID != pending.ID || !retained.Deadline.Equal(pending.Deadline) {
+	if err := db.QueryRowContext(ctx, "SELECT to_jsonb(r)::text FROM environment_input_reservations r WHERE id=$1", pending).Scan(&retained); err != nil || retained != original {
 		t.Fatal("downgrade lost reservation", retained, err)
 	}
 	if err := db.QueryRowContext(ctx, "SELECT to_jsonb(s)::text FROM sessions s WHERE id=$1", session).Scan(&after); err != nil || before != after {
