@@ -196,6 +196,29 @@ definitions:
     - updated_at
     - vault_id
     type: object
+  v1.CredentialList:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/v1.Credential'
+        type: array
+      first_id:
+        type: string
+        x-nullable: true
+      has_more:
+        type: boolean
+      last_id:
+        type: string
+        x-nullable: true
+      object:
+        enum:
+        - list
+        type: string
+    required:
+    - data
+    - has_more
+    - object
+    type: object
   v1.Environment:
     properties:
       capability_directories:
@@ -2145,6 +2168,87 @@ paths:
       tags:
       - Vaults
   /vaults/{vault_id}/credentials:
+    get:
+      description: Lists only metadata from the authenticated project's requested
+        Vault, without decryption or execution. Includes active and archived Credentials
+        by default, independently of Vault status. Status accepts a scalar or SDK
+        status[] array; mixed encodings and repeated scalars are rejected locally.
+        Limits default to 20 and clamp to 1–100. Equal creation times use ID ordering.
+        Hosted errors, concurrent-page behavior and archive/delete lifecycle remain
+        unverified or unimplemented.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Vault ID
+        in: path
+        name: vault_id
+        required: true
+        type: string
+      - description: Last Credential ID from the previous page
+        in: query
+        name: after
+        type: string
+      - default: 20
+        description: Requested page size, clamped to 1–100
+        in: query
+        name: limit
+        type: integer
+      - default: desc
+        description: Creation order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - description: Scalar status filter
+        enum:
+        - active
+        - archived
+        in: query
+        name: status
+        type: string
+      - collectionFormat: multi
+        description: Array status filter; cannot be combined with status
+        in: query
+        items:
+          enum:
+          - active
+          - archived
+          type: string
+        name: status[]
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.CredentialList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List safe Vault Credential metadata
+      tags:
+      - Credentials
     post:
       consumes:
       - application/json

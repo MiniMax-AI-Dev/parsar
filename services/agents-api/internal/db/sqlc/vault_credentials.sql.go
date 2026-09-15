@@ -98,6 +98,79 @@ func (q *Queries) GetCredential(ctx context.Context, arg GetCredentialParams) (G
 	return i, err
 }
 
+const listCredentials = `-- name: ListCredentials :many
+SELECT c.id, c.vault_id, c.name, c.auth_type, c.mcp_server_url, c.created_at, c.updated_at
+FROM vault_credentials c
+JOIN vaults v ON v.id = c.vault_id
+WHERE v.tenant_id = $1 AND v.id = $2
+  AND c.status = ANY($3::text[])
+  AND ($4::timestamptz IS NULL
+    OR (NOT $5::boolean AND (c.created_at, c.id) < ($4::timestamptz, $6::uuid))
+    OR ($5::boolean AND (c.created_at, c.id) > ($4::timestamptz, $6::uuid)))
+ORDER BY
+  CASE WHEN $5::boolean THEN c.created_at END ASC,
+  CASE WHEN $5::boolean THEN c.id END ASC,
+  CASE WHEN NOT $5::boolean THEN c.created_at END DESC,
+  CASE WHEN NOT $5::boolean THEN c.id END DESC
+LIMIT $7
+`
+
+type ListCredentialsParams struct {
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	VaultID      pgtype.UUID        `json:"vault_id"`
+	Statuses     []string           `json:"statuses"`
+	AfterCreated pgtype.Timestamptz `json:"after_created"`
+	Ascending    bool               `json:"ascending"`
+	AfterID      pgtype.UUID        `json:"after_id"`
+	PageLimit    int32              `json:"page_limit"`
+}
+
+type ListCredentialsRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	VaultID      pgtype.UUID        `json:"vault_id"`
+	Name         string             `json:"name"`
+	AuthType     string             `json:"auth_type"`
+	McpServerUrl string             `json:"mcp_server_url"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListCredentials(ctx context.Context, arg ListCredentialsParams) ([]ListCredentialsRow, error) {
+	rows, err := q.db.Query(ctx, listCredentials,
+		arg.TenantID,
+		arg.VaultID,
+		arg.Statuses,
+		arg.AfterCreated,
+		arg.Ascending,
+		arg.AfterID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCredentialsRow{}
+	for rows.Next() {
+		var i ListCredentialsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.VaultID,
+			&i.Name,
+			&i.AuthType,
+			&i.McpServerUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateStaticCredential = `-- name: UpdateStaticCredential :one
 UPDATE vault_credentials c
 SET token_ciphertext = $1, updated_at = statement_timestamp()

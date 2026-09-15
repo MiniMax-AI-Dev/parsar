@@ -23,6 +23,9 @@ type credentialFixture struct {
 	tenant, vault, id string
 	calls             int
 	err               error
+	page              store.CredentialPage
+	options           pageOptions
+	statuses          []string
 }
 
 func (f *credentialFixture) CreateStaticCredential(_ context.Context, tenant, vault string, input store.CreateStaticCredentialInput) (store.Credential, error) {

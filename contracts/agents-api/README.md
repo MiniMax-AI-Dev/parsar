@@ -80,7 +80,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | environments.files | create, list | Missing |
 | environments.templates | create, retrieve, update, list, delete | Missing |
 | vaults | create, retrieve, list, delete | Create/retrieve/list with independent tenant persistence, stored status filtering and Session attachments; archive/delete lifecycle remains missing |
-| vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve/token replacement with encrypted storage and safe metadata; Session attachment and exact-URL HTTPS MCP binding; OAuth and list/delete remain missing |
+| vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve/list/token replacement with encrypted storage and safe metadata; Session attachment and exact-URL HTTPS MCP binding; OAuth and archive/delete lifecycle remain missing |
 
 For each resource, verify the referenced request/response unions and observable
 behavior, not just the route. Non-text initial input, configuration
@@ -104,9 +104,19 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   auth type/destination; it never returns tokens or ciphertext and can be read
   without the encryption key. Missing encryption configuration locally rejects
   creation/replacement with 503. Attached Sessions can use static credentials for
-  exact-URL HTTPS MCP; OAuth, storage-key rotation, list/delete and key scopes remain gaps. See the [credential storage guide](../../services/agents-api/credentials.md)
+  exact-URL HTTPS MCP; OAuth, storage-key rotation, archive/delete and key scopes remain gaps. See the [credential storage guide](../../services/agents-api/credentials.md)
   for encryption and operational limits; this does not establish complete Credential
   or hosted error/retry compatibility.
+- `GET /vaults/{vault_id}/credentials` lists only safe metadata, with parent and
+  cursor ownership checked within the authenticated project and requested Vault.
+  It uses the same paging/filter grammar as Vault listing below. Credential status
+  is stored separately from Vault status, defaults active, and never appears in
+  the public response. Both active and archived Credentials are included by default;
+  synthetic archived fixtures establish read/filter behavior, not archive lifecycle.
+  No token/ciphertext column, decryption, execution or encryption key is needed.
+  An inaccessible parent is not returned as an authorized empty collection. Existing
+  create/retrieve/token replacement and dispatch rules are unchanged; exact hosted
+  errors and pagination under concurrent mutation remain unverified.
 - `POST /vaults/{vault_id}/credentials/{credential_id}` replaces a static token using
   only required `auth.type=static_bearer` and string `auth.token`. It preserves opaque
   strings, rejects missing/null/type/extra-field mutations and returns safe metadata.

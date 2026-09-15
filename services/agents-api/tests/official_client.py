@@ -24,6 +24,7 @@ from official_agents import verify_agents
 from official_vaults import verify_vaults, verify_vault_recovery
 from official_vault_list import verify_vault_list, verify_vault_list_recovery
 from official_credentials import verify_credentials, verify_credential_recovery, verify_credential_storage_disabled
+from official_credential_list import verify_credential_list, verify_credential_list_recovery
 from official_mcp_credentials import verify_mcp_credentials, verify_mcp_credential_recovery
 from official_credential_rotation import verify_credential_rotation, verify_rotation_recovery
 from official_agent_list import verify_agent_list
@@ -144,6 +145,9 @@ def main():
                         saved_credentials = verify_credentials(a, b, invalid, peer, saved_vaults, credential_canary, expect_error)
                         listed_vaults = verify_vault_list(a, b, invalid, peer, bindings[0], saved_vaults,
                                                           root, directory, expect_error)
+                        listed_credentials = verify_credential_list(
+                            a, b, invalid, peer, bindings[0], saved_vaults, saved_credentials,
+                            listed_vaults, root, directory, credential_canary, expect_error)
                     saved_agents = verify_agents(a, b, invalid, expect_error)
                     listed_agents = verify_agent_list(a, b, invalid, saved_agents, expect_error)
                     sessions = a.beta.agents.sessions
@@ -237,6 +241,7 @@ def main():
                         verify_vault_recovery(a, b, peer, saved_vaults)
                         verify_vault_list_recovery(a, b, peer, listed_vaults)
                         verify_credential_recovery(a, b, peer, saved_credentials)
+                        verify_credential_list_recovery(a, b, peer, listed_credentials, credential_canary)
                         verify_mcp_credential_recovery(a, mcp_credentials)
                         verify_rotation_recovery(a, peer, credential_rotation)
                     assert [a.beta.agents.retrieve(item.id) for item in saved_agents] == saved_agents
@@ -268,8 +273,10 @@ def main():
                 process.wait(timeout=15)
                 env.pop("AGENTS_API_CREDENTIAL_KEY_FILE")
                 process = start()
-                with client(tokens[0]) as without_key:
+                with client(tokens[0]) as without_key, client(tokens[1]) as other, client(peer_principal) as peer:
                     verify_credential_storage_disabled(without_key, saved_credentials[0][0], credential_canary, expect_error)
+                    verify_credential_list_recovery(without_key, other, peer, listed_credentials,
+                                                    credential_canary, phase="restart without the storage key")
                 print("Caller principal: SDK/raw HTTP scope checks, shared project access and persistent startup conflict passed.")
                 print("Official Turn client: lifecycle, Agent identity, safe errors, restart recovery, pagination and tenant/Session isolation passed.")
                 print("Official Go client: creation/retries, retrieval, bidirectional pagination and tenant isolation passed.")

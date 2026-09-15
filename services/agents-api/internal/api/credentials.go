@@ -15,6 +15,7 @@ type CredentialStore interface {
 	CreateStaticCredential(context.Context, string, string, store.CreateStaticCredentialInput) (store.Credential, error)
 	UpdateStaticCredential(context.Context, string, string, string, store.UpdateStaticCredentialInput) (store.Credential, error)
 	GetCredential(context.Context, string, string, string) (store.Credential, error)
+	ListCredentials(context.Context, string, string, string, int, bool, []string) (store.CredentialPage, error)
 }
 
 // @Summary Create a static-bearer Vault Credential

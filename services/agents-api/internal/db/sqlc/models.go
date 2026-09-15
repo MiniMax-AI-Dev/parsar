@@ -173,4 +173,5 @@ type VaultCredential struct {
 	TokenCiphertext []byte             `json:"token_ciphertext"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	Status          string             `json:"status"`
 }
