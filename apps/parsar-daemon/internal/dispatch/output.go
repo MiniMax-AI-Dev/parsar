@@ -41,7 +41,9 @@ func (r *Router) forwardSessionOutput(s *sessionState, wait bool) error {
 				r.log.InfoContext(pumpCtx, "pump: out channel closed", "run_id", s.runID)
 				return nil
 			}
-			r.indexPermissionFrame(s, env)
+			if s.session != nil {
+				r.indexPermissionFrame(s, env)
+			}
 			if env.Type == proto.TypeDone && s.releaseOnCompletion {
 				if err := r.releaseCompletedSession(s); err != nil {
 					sendCtx, stop := r.shutdownContext(pumpCtx)

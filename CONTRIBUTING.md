@@ -521,6 +521,10 @@ During a pending Start, the Router invokes that cancellation capability once out
 its receive loop and retains native preparation capacity until Start, cancellation,
 output forwarding and cleanup finish. A late Session is used only for teardown and
 forwarding; it never becomes available for input or publishes successful Start.
+Forwarded permission and user-choice observations from that cancelled handoff do
+not register actionable interactions. Codex prepared cancellation also waits for
+the transferred Session's local cleanup, which can finish after output closes;
+ordinary Session cancellation retains its existing behavior.
 The ordinary output pump forwards accepted frames before the observed cancellation
 outcome receipt. Missing capability, failed cancellation or failed forwarding cannot
 produce an applied receipt. An unused resource may supply an empty observed outcome;

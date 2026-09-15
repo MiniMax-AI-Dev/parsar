@@ -86,6 +86,8 @@ func TestPreparedCancellationWaitsForOutputAndCleanup(t *testing.T) {
 		session = &fakeSession{out: out, closeOutOnCancel: true,
 			postCancelEnvelopes: []proto.Envelope{mustEnv(t, proto.TypeDone, id, p.outcome)}}
 		out <- mustEnv(t, proto.TypeDelta, id, proto.DeltaPayload{Delta: "observed"})
+		out <- mustEnv(t, proto.TypePermissionRequest, id, proto.PermissionRequestPayload{RequestID: "permission"})
+		out <- mustEnv(t, proto.TypePromptForUserChoice, id, proto.PromptForUserChoicePayload{AskID: "ask"})
 		out <- mustEnv(t, proto.TypeUsage, id, proto.UsagePayload{Usage: p.outcome.Usage})
 		close(startEntered)
 		<-startReturn
@@ -115,6 +117,16 @@ func TestPreparedCancellationWaitsForOutputAndCleanup(t *testing.T) {
 	if len(cancellationAcks(sender.recSender)) != 0 || r.ActiveRuns() != 1 {
 		t.Fatal("cleanup released ownership early")
 	}
+	for _, decision := range []proto.Envelope{
+		mustEnv(t, proto.TypePermissionDecision, "permission", proto.PermissionDecisionPayload{DeliveryID: "permission-reply", Approved: true}),
+		mustEnv(t, proto.TypePromptForUserChoiceDecision, "ask", proto.PromptForUserChoiceDecisionPayload{DeliveryID: "ask-reply", Answers: []string{"yes"}}),
+	} {
+		if err := r.Handle(t.Context(), decision); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertDecisionAck(t, sender.recSender, "permission-reply", false, "not_pending")
+	assertDecisionAck(t, sender.recSender, "ask-reply", false, "not_pending")
 	close(cleanupReturn)
 	waitFor(t, func() bool { return len(cancellationAcks(sender.recSender)) == 2 && r.ActiveRuns() == 0 }, "prepared cancellation receipts")
 	if p.calls.Load() != 1 || session.cancels() != 1 {
@@ -126,7 +138,7 @@ func TestPreparedCancellationWaitsForOutputAndCleanup(t *testing.T) {
 		}
 	}
 	got := sender.typesFor("run")
-	want := []string{proto.TypeDelta, proto.TypeUsage, proto.TypeDone, proto.TypeInteractionDecisionAck, proto.TypeInteractionDecisionAck}
+	want := []string{proto.TypeDelta, proto.TypePermissionRequest, proto.TypePromptForUserChoice, proto.TypeUsage, proto.TypeDone, proto.TypeInteractionDecisionAck, proto.TypeInteractionDecisionAck}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("output/receipt order = %v", got)
 	}

@@ -109,7 +109,9 @@ func (p *Prepared) Cancel(ctx context.Context) error {
 	started := p.started
 	p.mu.Unlock()
 	if started {
-		return p.session.Cancel(ctx)
+		err := p.session.Cancel(ctx)
+		<-p.session.waitDone
+		return err
 	}
 	return p.Close()
 }
