@@ -243,7 +243,10 @@ def main():
             assert "output" not in second_result["event"]
             final = snapshot("final", "idle")
             assert final["required_actions"] == [] and proof["old_result_did_not_retarget"]
-            verify_environment(api.beta.agents.environments.retrieve(environment_id).to_dict(), environment_id, "connected")
+            # Native release precedes Turn completion; executor reconnection is asynchronous.
+            connected = wait_for(lambda: value if (value := api.beta.agents.environments.retrieve(environment_id, timeout=5)).status == "connected" else None,
+                                 30, "executor reconnection after completion")
+            proof["final_environment"] = verify_environment(connected.to_dict(), environment_id, "connected")
             turns = list(sessions.turns.list(session_id, order="asc"))
             items = list(sessions.items.list(session_id, order="asc", limit=100))
             assert len(turns) == 2 and all(turn.status == "completed" for turn in turns)
