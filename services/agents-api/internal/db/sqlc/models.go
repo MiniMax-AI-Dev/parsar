@@ -154,3 +154,11 @@ type TurnInput struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	BatchPosition  int32              `json:"batch_position"`
 }
+
+type Vault struct {
+	ID        pgtype.UUID        `json:"id"`
+	TenantID  pgtype.UUID        `json:"tenant_id"`
+	Name      pgtype.Text        `json:"name"`
+	Metadata  []byte             `json:"metadata"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}

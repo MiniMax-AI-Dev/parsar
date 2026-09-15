@@ -149,6 +149,16 @@ definitions:
     required:
     - environment
     type: object
+  v1.CreateVaultRequest:
+    properties:
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+        x-nullable: true
+      name:
+        type: string
+    type: object
   v1.Environment:
     properties:
       capability_directories:
@@ -890,6 +900,29 @@ definitions:
           type: string
         type: object
         x-nullable: true
+    type: object
+  v1.Vault:
+    properties:
+      created_at:
+        type: integer
+      id:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+        x-nullable: true
+      object:
+        enum:
+        - vault
+        type: string
+    required:
+    - created_at
+    - id
+    - metadata
+    - object
     type: object
   v1.WebSearchAction:
     properties:
@@ -1829,6 +1862,99 @@ paths:
       summary: Retrieve an execution Turn
       tags:
       - Turns
+  /vaults:
+    post:
+      consumes:
+      - application/json
+      description: Creates a project-owned Vault independently of execution. Omitted
+        name stays null; a supplied string is trimmed and must contain 1–256 UTF-8
+        bytes. Explicit null name is invalid. Omitted/null metadata becomes an empty
+        object; values must be strings. Metadata has a local 64 KiB encoded storage
+        bound. Credentials, Session binding and hosted error/retry parity remain incomplete.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Vault name and metadata
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v1.CreateVaultRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.Vault'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a Vault
+      tags:
+      - Vaults
+  /vaults/{vault_id}:
+    get:
+      description: Reads a Vault owned by the authenticated project without resolving
+        credentials, Sessions or execution devices. Missing and foreign IDs share
+        the same not-found response; exact hosted error semantics remain unverified.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Vault ID
+        in: path
+        name: vault_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.Vault'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve a Vault
+      tags:
+      - Vaults
 schemes:
 - http
 - https

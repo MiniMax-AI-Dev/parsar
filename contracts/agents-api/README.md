@@ -57,7 +57,7 @@ dependencies, risk and effort. Parsar cutover and its business Team loop are sep
 
 This inventory is based on the pinned Python source, not our generated OpenAPI.
 It contains 42 distinct HTTP operations in 15 resource classes, excluding async
-duplicates, overloads and client-side helpers. Sixteen operations currently have
+duplicates, overloads and client-side helpers. Eighteen operations currently have
 handlers; that count is not a compatibility score. Even those operations implement
 only part of the upstream input, configuration and event variants.
 
@@ -79,7 +79,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | environments | retrieve | Supported self-hosted profile: durable status and safe empty installation metadata; hosted/populated inventory remains missing |
 | environments.files | create, list | Missing |
 | environments.templates | create, retrieve, update, list, delete | Missing |
-| vaults | create, retrieve, list, delete | Missing |
+| vaults | create, retrieve, list, delete | Create/retrieve with independent tenant persistence; list/delete and Credential use remain missing |
 | vaults.credentials | create, retrieve, update, list, delete | Missing |
 
 For each resource, verify the referenced request/response unions and observable
@@ -94,6 +94,17 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 
 ## Public semantics
 
+- Vaults use `POST /vaults` and `GET /vaults/{vault_id}` with the same project/tenant
+  authentication and Beta header as other resources. The response contains only
+  `id`, `object: vault`, `created_at`, `name` and `metadata`. Omitted name stays null;
+  explicit null is rejected. Supplied strings are trimmed and must contain 1–256
+  UTF-8 bytes. Omitted/null metadata becomes `{}` and values must be strings.
+  Session-specific metadata pair/character limits do not apply. The existing
+  64 KiB encoded metadata and 1 MiB HTTP body bounds are local implementation
+  limits. Creation does not start execution. Missing, malformed and foreign IDs
+  return the same local not-found response. Exact hosted error/retry semantics,
+  restricted-key scopes, list/delete lifecycle, Credentials and Session bindings
+  remain unverified or unimplemented; this is not complete Vault compatibility.
 - Reusable Agents use `POST /agents` and `GET /agents/{agent_id}`. Keep their own
   identity, timestamps and metadata separate from Session effective configuration.
   On creation, omitted/null name and instructions resolve to null, metadata to `{}`, tools to
