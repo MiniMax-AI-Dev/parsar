@@ -14,10 +14,10 @@ new directory under `~/.parsar/`. Keep deployment configuration outside the extr
 package so replacing binaries does not replace credentials or state.
 
 ```sh
-sha256sum -c agents-api-<revision>-linux-amd64.tar.gz.sha256
+sha256sum -c agents-api-@SOURCE_REVISION@-linux-amd64.tar.gz.sha256
 mkdir -p "$HOME/.parsar/releases"
-tar -xzf agents-api-<revision>-linux-amd64.tar.gz -C "$HOME/.parsar/releases"
-cd "$HOME/.parsar/releases/agents-api-<revision>-linux-amd64"
+tar -xzf agents-api-@SOURCE_REVISION@-linux-amd64.tar.gz -C "$HOME/.parsar/releases"
+cd "$HOME/.parsar/releases/agents-api-@SOURCE_REVISION@-linux-amd64"
 sha256sum -c SHA256SUMS
 export AGENTS_API_BIN_DIR="$PWD/bin"
 ```
@@ -127,7 +127,7 @@ separately installed launcher using the returned target. Transfer only its scope
 
 ```sh
 agents-api-codex-executor --remote "$REMOTE_URL" \
-  --environment-id "$ENVIRONMENT_ID" --credentials /private/executor-key.json \
+  --environment-id "$ENVIRONMENT_ID" --credentials "$HOME/.parsar/executor-key.json" \
   --codex-bin /opt/codex/bin/codex
 ```
 
