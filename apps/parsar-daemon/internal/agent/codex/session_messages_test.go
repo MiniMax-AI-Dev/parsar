@@ -13,13 +13,15 @@ func TestMessageObservationIsOptInAndKeepsNativeBoundaries(t *testing.T) {
 		t.Run(map[bool]string{false: "legacy", true: "observed"}[enabled], func(t *testing.T) {
 			out := make(chan proto.Envelope, 16)
 			s := &Session{runID: "run", observeMessages: enabled, out: out, cancelCtx: context.Background(), bufs: NewItemBuffers(), cfg: defaultSessionConfig()}
-			s.onItemStarted(json.RawMessage(`{"item":{"type":"agentMessage","id":"a","phase":"commentary"}}`))
-			s.onAgentDelta(json.RawMessage(`{"itemId":"a","delta":"first"}`))
-			s.onItemStarted(json.RawMessage(`{"item":{"type":"agentMessage","id":"b","phase":"final_answer"}}`))
-			s.onAgentDelta(json.RawMessage(`{"itemId":"b","delta":"second"}`))
-			s.onItemCompleted(json.RawMessage(`{"item":{"type":"agentMessage","id":"a","phase":"commentary","text":"first complete"}}`))
+			s.setThreadID("thread")
+			s.onTurnStarted(json.RawMessage(`{"threadId":"thread","turn":{"id":"turn"}}`))
+			s.onItemStarted(json.RawMessage(`{"threadId":"thread","turnId":"turn","item":{"type":"agentMessage","id":"a","phase":"commentary"}}`))
+			s.onAgentDelta(json.RawMessage(`{"threadId":"thread","turnId":"turn","itemId":"a","delta":"first"}`))
+			s.onItemStarted(json.RawMessage(`{"threadId":"thread","turnId":"turn","item":{"type":"agentMessage","id":"b","phase":"final_answer"}}`))
+			s.onAgentDelta(json.RawMessage(`{"threadId":"thread","turnId":"turn","itemId":"b","delta":"second"}`))
+			s.onItemCompleted(json.RawMessage(`{"threadId":"thread","turnId":"turn","item":{"type":"agentMessage","id":"a","phase":"commentary","text":"first complete"}}`))
 			// b stays unfinished, as when the native request is cancelled before item/completed.
-			s.onItemCompleted(json.RawMessage(`{"item":{"type":"agentMessage","id":"c","phase":"final_answer","text":"without deltas"}}`))
+			s.onItemCompleted(json.RawMessage(`{"threadId":"thread","turnId":"turn","item":{"type":"agentMessage","id":"c","phase":"final_answer","text":"without deltas"}}`))
 			var deltas []proto.DeltaPayload
 			var messages []proto.OutputMessagePayload
 			for len(out) > 0 {

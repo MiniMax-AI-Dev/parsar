@@ -17,7 +17,7 @@ func TestDurableSteeringBypassesOnlyNativeResponseDeadline(t *testing.T) {
 			client.cfg.RequestTimeout = 20 * time.Millisecond
 			s := &Session{rpc: client.JSONRPCClient, cancelCtx: context.Background()}
 			s.setThreadID("thread")
-			s.startSteering(json.RawMessage(`{"threadId":"thread","turn":{"id":"turn"}}`))
+			s.onTurnStarted(json.RawMessage(`{"threadId":"thread","turn":{"id":"turn"}}`))
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			written := make(chan struct{})
@@ -80,7 +80,7 @@ func TestDurableSteeringKeepsConfirmedReceiptAtCompletion(t *testing.T) {
 			client, server, cleanup := NewTestClient()
 			s := &Session{rpc: client.JSONRPCClient, cancelCtx: context.Background()}
 			s.setThreadID("thread")
-			s.startSteering(json.RawMessage(`{"threadId":"thread","turn":{"id":"turn"}}`))
+			s.onTurnStarted(json.RawMessage(`{"threadId":"thread","turn":{"id":"turn"}}`))
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			inWritten, releaseWritten := make(chan struct{}), make(chan struct{})
 			reply := make(chan error, 1)

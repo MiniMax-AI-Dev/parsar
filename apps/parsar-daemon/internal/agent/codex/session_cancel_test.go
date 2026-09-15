@@ -29,10 +29,10 @@ func TestCancelUsesNativeTurnIdentity(t *testing.T) {
 				s.setThreadID("native-thread")
 			}
 			if name != "startup" && name != "before thread" {
-				s.startSteering(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"native-turn"}}`))
+				s.onTurnStarted(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"native-turn"}}`))
 			}
 			if name == "foreign notification" {
-				s.startSteering(json.RawMessage(`{"threadId":"foreign-thread","turn":{"id":"foreign-turn"}}`))
+				s.onTurnStarted(json.RawMessage(`{"threadId":"foreign-thread","turn":{"id":"foreign-turn"}}`))
 			}
 			if name == "completed" {
 				s.onTurnCompleted(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"native-turn","status":"completed"}}`))
@@ -88,7 +88,7 @@ func TestCancelRacingTurnStartedKeepsValidNativeTarget(t *testing.T) {
 		observed := make(chan struct{})
 		go func() {
 			<-start
-			s.startSteering(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"native-turn"}}`))
+			s.onTurnStarted(json.RawMessage(`{"threadId":"native-thread","turn":{"id":"native-turn"}}`))
 			close(observed)
 		}()
 		close(start)
