@@ -229,6 +229,7 @@ type UserInput struct {
 }
 
 type TurnStartParams struct {
+	OutputSchema      json.RawMessage        `json:"outputSchema,omitempty"`
 	Environments      []EnvironmentSelection `json:"environments,omitempty"`
 	ThreadID          string                 `json:"threadId"`
 	Input             []UserInput            `json:"input"`

@@ -325,9 +325,16 @@ extension separately from upstream fields and document it here when implemented.
 
 `openapi.yaml` is our generated supported surface; it is not the full upstream
 specification. The shared Go wire types are in `v1`. Physical Session cleanup, non-text
-message input, structured output execution, broader options/tools, remaining Vault lifecycle,
+message input, public structured output execution, broader options/tools, remaining Vault lifecycle,
 Subagents and environment/provider resources remain incomplete. Reject unsupported
 requests explicitly; persisted saved configuration is not execution admission.
+
+The private daemon `output_schema` capability forwards a frozen schema object to
+Codex on each new or resumed Turn. It reuses native generation and ordinary text
+observations; unsupported peers fail before execution. Public `text.format` schema
+admission remains gated. Full schema dialect support, hosted refusal/error mapping
+and other engines require separate evidence; this prerequisite does not establish
+public structured-output compatibility.
 
 ### Native subagent control
 

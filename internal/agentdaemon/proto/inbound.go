@@ -263,8 +263,10 @@ type AgentKindCapabilities struct {
 	Preparation        bool `json:"preparation,omitempty"`
 	WebSearchControl   bool `json:"web_search_control,omitempty"`
 	// ExecutionControls supports typed search and verbosity controls.
-	ExecutionControls    bool `json:"execution_controls,omitempty"`
-	TextVerbosity        bool `json:"text_verbosity,omitempty"`
+	ExecutionControls bool `json:"execution_controls,omitempty"`
+	TextVerbosity     bool `json:"text_verbosity,omitempty"`
+	// OutputSchema supports per-Turn JSON Schema forwarding, not dialect validation.
+	OutputSchema         bool `json:"output_schema,omitempty"`
 	SubagentControl      bool `json:"subagent_control,omitempty"`
 	DurableInputReceipts bool `json:"durable_input_receipts,omitempty"`
 	// DurableTurns includes strict resume, completion release and cancellation snapshots.

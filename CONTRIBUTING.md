@@ -1053,6 +1053,19 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   unsupported non-default levels remain an explicit implementation gap.
   Product requests that omit the native option retain their existing defaults.
   Structured output formats remain a separate protocol gap.
+- Private `output_schema` requests carry a JSON object unchanged to the native
+  harness, independently of search and verbosity controls. Call only a peer whose
+  adapter advertises `output_schema`; the daemon rejects unsupported requests
+  before ordinary or prepared execution. Codex validates the object shape and
+  freezes a copy during preparation, then passes it as `turn/start.outputSchema`
+  on every new or cold-resumed Turn. It is not a sticky thread setting. Steering
+  and function continuation retain the active native Turn's constraint. Omission
+  preserves ordinary callers. Keep schema dialect validation and enforcement in
+  the harness/provider; do not convert numbers, coerce schemas, repair output or
+  fall back to unconstrained generation on failure. Successful structured output
+  remains text through existing observations. This capability denotes forwarding,
+  not complete dialect/refusal conformance. Public `json_schema` admission and
+  official-client acceptance remain separate; other adapters do not advertise it.
 - `subagent_control` advertises native subagent tool control. Agents API requires
   it when resolved `multi_agent.enabled` is false and sends the typed internal
   `disable_subagents` policy on both new and resumed Turns. Native translation

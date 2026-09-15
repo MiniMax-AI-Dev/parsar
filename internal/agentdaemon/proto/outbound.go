@@ -1,5 +1,7 @@
 package proto
 
+import "encoding/json"
+
 // Type constants for server → daemon frames.
 const (
 	// TypePromptRequest triggers one prompt cycle. Envelope.ID = RunID;
@@ -72,6 +74,9 @@ type PromptRequestPayload struct {
 
 	// ExecutionControls are authoritative engine-neutral settings, translated by the adapter.
 	ExecutionControls *ExecutionControls `json:"execution_controls,omitempty"`
+	// OutputSchema constrains this Turn's final text through the native harness.
+	// Omission preserves ordinary output. Send only to peers advertising output_schema.
+	OutputSchema json.RawMessage `json:"output_schema,omitempty"`
 	// MCPHTTPServers replaces MCP configuration for the service-side HTTP profile.
 	// Nil preserves existing behavior; an empty list explicitly declares no servers.
 	MCPHTTPServers *[]MCPHTTPServer `json:"mcp_http_servers,omitempty"`

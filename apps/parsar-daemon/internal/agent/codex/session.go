@@ -54,6 +54,7 @@ func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- pro
 //  5. turn/completed emits TypeDone + closes out. Cancel can short-cut
 //     this by killing the child early.
 type Session struct {
+	outputSchema              json.RawMessage
 	subagents                 *subagentObservations
 	observeSubagentIdentities bool
 	functions                 *functionCalls
