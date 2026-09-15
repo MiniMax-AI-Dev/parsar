@@ -16,6 +16,7 @@ import (
 type VaultStore interface {
 	CreateVault(context.Context, string, store.CreateVaultInput) (store.Vault, error)
 	GetVault(context.Context, string, string) (store.Vault, error)
+	ListVaults(context.Context, string, string, int, bool, []string) (store.VaultPage, error)
 }
 
 // @Summary Create a Vault

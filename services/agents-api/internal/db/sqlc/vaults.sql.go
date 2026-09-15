@@ -14,7 +14,7 @@ import (
 const createVault = `-- name: CreateVault :one
 INSERT INTO vaults (id, tenant_id, name, metadata)
 VALUES ($1, $2, $3, $4)
-RETURNING id, tenant_id, name, metadata, created_at
+RETURNING id, tenant_id, name, metadata, created_at, status
 `
 
 type CreateVaultParams struct {
@@ -38,12 +38,13 @@ func (q *Queries) CreateVault(ctx context.Context, arg CreateVaultParams) (Vault
 		&i.Name,
 		&i.Metadata,
 		&i.CreatedAt,
+		&i.Status,
 	)
 	return i, err
 }
 
 const getVault = `-- name: GetVault :one
-SELECT id, tenant_id, name, metadata, created_at FROM vaults WHERE tenant_id = $1 AND id = $2
+SELECT id, tenant_id, name, metadata, created_at, status FROM vaults WHERE tenant_id = $1 AND id = $2
 `
 
 type GetVaultParams struct {
@@ -60,6 +61,65 @@ func (q *Queries) GetVault(ctx context.Context, arg GetVaultParams) (Vault, erro
 		&i.Name,
 		&i.Metadata,
 		&i.CreatedAt,
+		&i.Status,
 	)
 	return i, err
+}
+
+const listVaults = `-- name: ListVaults :many
+SELECT id, tenant_id, name, metadata, created_at, status FROM vaults
+WHERE tenant_id = $1
+  AND status = ANY($2::text[])
+  AND ($3::timestamptz IS NULL
+    OR (NOT $4::boolean AND (created_at, id) < ($3::timestamptz, $5::uuid))
+    OR ($4::boolean AND (created_at, id) > ($3::timestamptz, $5::uuid)))
+ORDER BY
+  CASE WHEN $4::boolean THEN created_at END ASC,
+  CASE WHEN $4::boolean THEN id END ASC,
+  CASE WHEN NOT $4::boolean THEN created_at END DESC,
+  CASE WHEN NOT $4::boolean THEN id END DESC
+LIMIT $6
+`
+
+type ListVaultsParams struct {
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	Statuses     []string           `json:"statuses"`
+	AfterCreated pgtype.Timestamptz `json:"after_created"`
+	Ascending    bool               `json:"ascending"`
+	AfterID      pgtype.UUID        `json:"after_id"`
+	PageLimit    int32              `json:"page_limit"`
+}
+
+func (q *Queries) ListVaults(ctx context.Context, arg ListVaultsParams) ([]Vault, error) {
+	rows, err := q.db.Query(ctx, listVaults,
+		arg.TenantID,
+		arg.Statuses,
+		arg.AfterCreated,
+		arg.Ascending,
+		arg.AfterID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Vault{}
+	for rows.Next() {
+		var i Vault
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.Name,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

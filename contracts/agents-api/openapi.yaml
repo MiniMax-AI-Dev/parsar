@@ -1007,6 +1007,29 @@ definitions:
     - metadata
     - object
     type: object
+  v1.VaultList:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/v1.Vault'
+        type: array
+      first_id:
+        type: string
+        x-nullable: true
+      has_more:
+        type: boolean
+      last_id:
+        type: string
+        x-nullable: true
+      object:
+        enum:
+        - list
+        type: string
+    required:
+    - data
+    - has_more
+    - object
+    type: object
   v1.WebSearchAction:
     properties:
       pattern:
@@ -1954,6 +1977,81 @@ paths:
       tags:
       - Turns
   /vaults:
+    get:
+      description: Lists project-owned Vaults independently of execution. Includes
+        active and archived records by default. Status accepts a scalar or the SDK's
+        status[] array; mixed encodings and repeated scalars are rejected locally.
+        Limits default to 20 and clamp to 1–100. Equal creation times use ID ordering;
+        exact hosted errors and concurrent-page behavior remain unverified. Archive/delete
+        lifecycle is not implemented.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Last Vault ID from the previous page
+        in: query
+        name: after
+        type: string
+      - default: 20
+        description: Requested page size, clamped to 1–100
+        in: query
+        name: limit
+        type: integer
+      - default: desc
+        description: Creation order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - description: Scalar status filter
+        enum:
+        - active
+        - archived
+        in: query
+        name: status
+        type: string
+      - collectionFormat: multi
+        description: Array status filter; cannot be combined with status
+        in: query
+        items:
+          enum:
+          - active
+          - archived
+          type: string
+        name: status[]
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.VaultList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List Vaults
+      tags:
+      - Vaults
     post:
       consumes:
       - application/json

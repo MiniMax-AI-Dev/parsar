@@ -183,7 +183,8 @@ The SDK base URL is `http://127.0.0.1:8091/v1`. Requests require a bearer key an
   and ordinary or streaming responses.
 - Session event submission and live streaming, Turn retrieve/list and Items list.
 - Environment retrieve for the supported self-hosted profile.
-- Vault create/retrieve and static-bearer Credential create/retrieve/token replacement,
+- Vault create/retrieve/list (project-scoped pagination and stored active/archived
+  filtering; no public archive/delete lifecycle) and static-bearer Credential create/retrieve/token replacement,
   with Session attachments for
   [authenticated HTTPS MCP](credentials.md#use-a-credential-in-a-session).
 

@@ -161,6 +161,7 @@ type Vault struct {
 	Name      pgtype.Text        `json:"name"`
 	Metadata  []byte             `json:"metadata"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	Status    string             `json:"status"`
 }
 
 type VaultCredential struct {
