@@ -38,7 +38,7 @@ func (s *Store) CreateVault(ctx context.Context, tenantID string, input CreateVa
 	}
 	var name pgtype.Text
 	if input.Name != nil {
-		if len(*input.Name) < 1 || len(*input.Name) > 256 || !utf8.ValidString(*input.Name) {
+		if !validVaultName(*input.Name) {
 			return Vault{}, fmt.Errorf("%w: vault name must contain 1–256 UTF-8 bytes", ErrInvalidInput)
 		}
 		name = pgtype.Text{String: *input.Name, Valid: true}
@@ -55,6 +55,10 @@ func (s *Store) CreateVault(ctx context.Context, tenantID string, input CreateVa
 		return Vault{}, fmt.Errorf("create vault: %w", err)
 	}
 	return vaultFromRow(row)
+}
+
+func validVaultName(name string) bool {
+	return len(name) >= 1 && len(name) <= 256 && utf8.ValidString(name)
 }
 
 // GetVault scopes every lookup to the authenticated caller's tenant.

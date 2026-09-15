@@ -1,5 +1,6 @@
 """Exercise the real service and PostgreSQL with the pinned official Python SDK."""
 
+import base64
 import hashlib
 import importlib.metadata
 import json
@@ -21,6 +22,7 @@ from jsonschema import Draft4Validator
 from official_items import verify_items
 from official_agents import verify_agents
 from official_vaults import verify_vaults, verify_vault_recovery
+from official_credentials import verify_credentials, verify_credential_recovery, verify_credential_storage_disabled
 from official_agent_list import verify_agent_list
 from official_agent_references import verify_agent_references
 from official_session_requests import verify_session_create_requests
@@ -55,7 +57,10 @@ def main():
             elif suffix and suffix[0] == "items":
                 path += "/items"
         elif path.startswith("/vaults/"):
+            suffix = path.split("/")[3:]
             path = "/vaults/{vault_id}"
+            if suffix and suffix[0] == "credentials":
+                path += "/credentials" + ("/{credential_id}" if len(suffix) > 1 else "")
         elif path.startswith("/agents/") and path != "/agents/sessions":
             path = "/agents/{agent_id}"
         schema = contract["paths"][path][response.request.method.lower()]["responses"][str(response.status_code)]["schema"]
@@ -84,11 +89,16 @@ def main():
                      {**bindings[0], "token_sha256": hashlib.sha256(same_subject_id.encode()).hexdigest(),
                       "subject_kind": "user"}])
     process = None
+    credential_canary = secrets.token_hex(32)
     with tempfile.TemporaryDirectory(prefix="agents-api-test-") as directory:
         keys = Path(directory) / "keys.json"
         keys.write_text(json.dumps(bindings))
         keys.chmod(0o600)
+        credential_key = Path(directory) / "credential-key.txt"
+        credential_key.touch(mode=0o600)
+        credential_key.write_text(base64.b64encode(secrets.token_bytes(32)).decode() + "\n")
         env = dict(os.environ, AGENTS_API_DATABASE_URL=dsn, AGENTS_API_KEYS_FILE=str(keys), AGENTS_API_ADDR=f"127.0.0.1:{port}", AGENTS_API_ENGINE="codex")
+        env["AGENTS_API_CREDENTIAL_KEY_FILE"] = str(credential_key)
         with (Path(directory) / "server.log").open("w+") as log:
             def start():
                 child = subprocess.Popen([binary], env=env, stdout=log, stderr=log)
@@ -128,6 +138,7 @@ def main():
                     with client(peer_principal, organization=bindings[0]["organization_id"],
                                 project=bindings[0]["project_id"]) as peer:
                         saved_vaults = verify_vaults(a, b, invalid, peer, bindings[0], expect_error)
+                        saved_credentials = verify_credentials(a, b, invalid, peer, saved_vaults, credential_canary, expect_error)
                     saved_agents = verify_agents(a, b, invalid, expect_error)
                     listed_agents = verify_agent_list(a, b, invalid, saved_agents, expect_error)
                     sessions = a.beta.agents.sessions
@@ -215,6 +226,7 @@ def main():
                     process = start()
                     with client(peer_principal) as peer:
                         verify_vault_recovery(a, b, peer, saved_vaults)
+                        verify_credential_recovery(a, b, peer, saved_credentials)
                     assert [a.beta.agents.retrieve(item.id) for item in saved_agents] == saved_agents
                     assert [item.id for item in a.beta.agents.list(limit=2, order="asc") if item.id in listed_agents] == listed_agents
                     assert [sessions.retrieve(item.id) for item in request_sessions] == request_sessions
@@ -240,6 +252,12 @@ def main():
                 process = start()
                 with client(tokens[0]) as restored:
                     assert restored.beta.agents.sessions.retrieve(first.id) == first
+                process.terminate()
+                process.wait(timeout=15)
+                env.pop("AGENTS_API_CREDENTIAL_KEY_FILE")
+                process = start()
+                with client(tokens[0]) as without_key:
+                    verify_credential_storage_disabled(without_key, saved_credentials[0][0], credential_canary, expect_error)
                 print("Caller principal: SDK/raw HTTP scope checks, shared project access and persistent startup conflict passed.")
                 print("Official Turn client: lifecycle, Agent identity, safe errors, restart recovery, pagination and tenant/Session isolation passed.")
                 print("Official Go client: creation/retries, retrieval, bidirectional pagination and tenant isolation passed.")
@@ -248,6 +266,11 @@ def main():
                 if process and process.poll() is None:
                     process.terminate()
                     process.wait(timeout=15)
+                log.flush()
+                log.seek(0)
+                output = log.read()
+                assert credential_canary not in output, "Credential token leaked into the service log"
+                assert credential_key.read_text().strip() not in output, "Credential key leaked into the service log"
 
 
 if __name__ == "__main__":

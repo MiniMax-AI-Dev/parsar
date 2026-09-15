@@ -57,7 +57,7 @@ dependencies, risk and effort. Parsar cutover and its business Team loop are sep
 
 This inventory is based on the pinned Python source, not our generated OpenAPI.
 It contains 42 distinct HTTP operations in 15 resource classes, excluding async
-duplicates, overloads and client-side helpers. Eighteen operations currently have
+duplicates, overloads and client-side helpers. Twenty operations currently have
 handlers; that count is not a compatibility score. Even those operations implement
 only part of the upstream input, configuration and event variants.
 
@@ -80,7 +80,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | environments.files | create, list | Missing |
 | environments.templates | create, retrieve, update, list, delete | Missing |
 | vaults | create, retrieve, list, delete | Create/retrieve with independent tenant persistence; list/delete and Credential use remain missing |
-| vaults.credentials | create, retrieve, update, list, delete | Missing |
+| vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve with encrypted storage and safe metadata; OAuth, other lifecycle operations and execution binding remain missing |
 
 For each resource, verify the referenced request/response unions and observable
 behavior, not just the route. Non-text initial input, configuration
@@ -94,6 +94,19 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 
 ## Public semantics
 
+- Credentials use `POST /vaults/{vault_id}/credentials` and
+  `GET /vaults/{vault_id}/credentials/{credential_id}`. The initial profile accepts
+  only `static_bearer` with required string token and HTTPS destination, plus a
+  required name trimmed to 1–256 UTF-8 bytes. Tokens remain opaque, including empty
+  strings; exact hosted token validation is unverified. The local URL profile
+  excludes userinfo/fragments and preserves queries without normalization or network
+  contact. Public metadata contains identity, owning Vault, name, timestamps and
+  auth type/destination; it never returns tokens or ciphertext and can be read
+  without the encryption key. Missing encryption configuration locally rejects
+  creation with 503. OAuth, rotation/list/delete, key scopes and Session/MCP binding
+  remain gaps. See the [credential storage guide](../../services/agents-api/credentials.md)
+  for encryption and operational limits; this does not establish complete Credential
+  or hosted error/retry compatibility.
 - Vaults use `POST /vaults` and `GET /vaults/{vault_id}` with the same project/tenant
   authentication and Beta header as other resources. The response contains only
   `id`, `object: vault`, `created_at`, `name` and `metadata`. Omitted name stays null;

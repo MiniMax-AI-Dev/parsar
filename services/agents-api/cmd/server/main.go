@@ -55,6 +55,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	credentialKey, err := credentialCipher()
+	if err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	pool, err := pgxpool.New(ctx, databaseURL)
@@ -71,7 +75,7 @@ func run() error {
 	if engine == "" {
 		engine = "codex"
 	}
-	executionStore := store.New(pool)
+	executionStore := store.NewWithCredentialCipher(pool, credentialKey)
 	if err := executionStore.EnsureProjectScopes(ready, auth.ProjectScopes()); err != nil {
 		return err
 	}

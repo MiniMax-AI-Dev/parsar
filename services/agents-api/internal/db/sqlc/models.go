@@ -162,3 +162,14 @@ type Vault struct {
 	Metadata  []byte             `json:"metadata"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
+
+type VaultCredential struct {
+	ID              pgtype.UUID        `json:"id"`
+	VaultID         pgtype.UUID        `json:"vault_id"`
+	Name            string             `json:"name"`
+	AuthType        string             `json:"auth_type"`
+	McpServerUrl    string             `json:"mcp_server_url"`
+	TokenCiphertext []byte             `json:"token_ciphertext"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}

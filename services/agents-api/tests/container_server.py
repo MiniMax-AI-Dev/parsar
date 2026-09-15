@@ -14,6 +14,12 @@ args = [
     "--mount", f"type=bind,source={keys},target=/run/keys.json,readonly",
     "--env", "AGENTS_API_KEYS_FILE=/run/keys.json",
 ]
+credential_key = os.environ.get("AGENTS_API_CREDENTIAL_KEY_FILE")
+if credential_key:
+    args.extend([
+        "--mount", f"type=bind,source={credential_key},target=/run/credential.key,readonly",
+        "--env", "AGENTS_API_CREDENTIAL_KEY_FILE=/run/credential.key",
+    ])
 for name in ("AGENTS_API_DATABASE_URL", "AGENTS_API_ADDR", "AGENTS_API_ENGINE"):
     args.extend(["--env", name])
 args.append(os.environ["AGENTS_API_IMAGE"])

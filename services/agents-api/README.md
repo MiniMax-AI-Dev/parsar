@@ -14,6 +14,11 @@ Parsar product execution and its eventual public-client cutover are separate.
 
 ## Reusable Agents
 
+Static-bearer Vault Credentials also support creation and safe metadata retrieval;
+configure their independent encryption key as described in the
+[credential storage guide](credentials.md). Credential execution and OAuth remain
+separate implementation gaps.
+
 The pinned Python client can save configuration independently of execution:
 
 ```python
