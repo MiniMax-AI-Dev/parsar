@@ -217,11 +217,11 @@ backfilled. Creation and recorded-intent retry snapshots load the Environment wi
 the Session row/cursor in the same transaction, without borrowing subsequent
 activity or Turn state. Initial state is `pending`; authenticated connection observations follow
 the lifecycle rules below.
-Public creation supports an empty `self_hosted` Session on the Codex profile when
+Public creation supports a `self_hosted` Session on the Codex profile when
 execution and a validated executor origin are configured. Require an absolute
 POSIX workspace directory without NUL, CR, LF or backslash for the current adapter;
 omitted/null capability directories use the empty default.
-Nonempty capability directories, initial input, function tools and other engine
+Nonempty capability directories, function tools and other engine
 placements remain rejected implementation gaps. Session output uses the owned
 Environment association; file operations and populated installation metadata remain separate.
 
@@ -259,15 +259,24 @@ events capture the settled activity and Usage atomically. Late connections and
 creation retries cannot reset or replay expired input, and newer work supersedes
 old activity without changing its event snapshots. The Environment itself is not
 failed by an input deadline. This Store rule covers actual self-hosted and internal
-hosted associations; it does not enable hosted providers or the still-gated public
-self-hosted initial-input workflow. None/absent Environment initial input retains
+hosted associations; it does not enable hosted providers. None/absent Environment initial input retains
 immediate Turn admission. Cancellation/deletion keep their existing semantics.
+
+Ordinary and streamed public self-hosted creation accept initial text through this
+transaction after configuration and new-work lease checks. They return the owned
+Environment ID and executor URL while offline, without waiting for admission.
+The creation stream sends its original pre-work `created` snapshot before the
+committed connection action. A disconnected observer leaves committed input intact;
+only the existing Worker prepares, promotes and starts it. Saved-Agent retries with recorded intent
+recover before fresh execution admission or source resolution; inline retries keep
+their existing resolved-snapshot validation.
+Later live subscribers observe only future events and recover history through queries.
 
 The public self-hosted input profile accepts idle message-only batches through this
 reservation path, including already-connected environments. Only the Session-locked
 reservation operation decides retry, active-work conflict and new admission; an
-unlocked activity read must never choose direct Turn creation. Automatic initial
-input, active steering/cancellation, mixed inputs and function results remain gaps;
+unlocked activity read must never choose direct Turn creation. Active
+steering/cancellation, mixed inputs and function results remain gaps;
 these restrictions do not narrow the pinned protocol target. Promotion requires the current leased execution writer and the caller's
 retained native preparation; never hold a database lock during external preparation. Only
 the first successful non-replay receipts authorize Start on that same preparation.

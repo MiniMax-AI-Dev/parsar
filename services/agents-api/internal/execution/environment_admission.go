@@ -20,12 +20,18 @@ func selfHostedConfiguration(configuration json.RawMessage) bool {
 	return json.Unmarshal(configuration, &snapshot) == nil && snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted"
 }
 
-func (w *Worker) validateCreation(input store.CreateSessionInput) error {
+func (w *Worker) validateCreation(ctx context.Context, input store.CreateSessionInput) error {
 	if selfHostedConfiguration(input.Configuration) {
-		if len(input.InitialInputs) != 0 || w.dispatcher.EnvironmentConnection == nil {
+		if w.dispatcher.EnvironmentConnection == nil {
 			return store.ErrInvalidInput
 		}
-		return ValidateSessionConfiguration(input.Engine, input.Configuration)
+		if err := ValidateSessionConfiguration(input.Engine, input.Configuration); err != nil {
+			return err
+		}
+		if len(input.InitialInputs) > 0 {
+			return w.checkAdmissionOwnership(ctx)
+		}
+		return nil
 	}
 	if !canAdmitInputs(input.Engine, input.Configuration) {
 		return store.ErrInvalidInput

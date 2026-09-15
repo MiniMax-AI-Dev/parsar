@@ -31,7 +31,7 @@ func TestEnvironmentInitialFailureOfficialClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Private setup tests the persistence prerequisite; public initial creation stays gated.
+	// Private setup isolates the persistence prerequisite from public creation admission.
 	configuration := json.RawMessage(`{"agent":{"id":"agent_initial_failure","model":"fixture","tools":[],"multi_agent":{"enabled":false,"max_concurrent_subagents":null},"reasoning":{},"service_tier":"auto","text":{"format":{"type":"text"},"verbosity":"medium"}},"environment":{"type":"self_hosted","workspace_directory":"/workspace"}}`)
 	session, err := s.CreateSession(t.Context(), tenant, store.CreateSessionInput{
 		Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "initial", Configuration: configuration,

@@ -15,10 +15,14 @@ sys.dont_write_bytecode = True
 import httpx2
 from openai import OpenAI
 from official_environment_retrieve import verify_environment
+from official_self_hosted_creation import assert_creation_retry, create_initial_session
 
 
 def main():
     settings = json.load(sys.stdin)
+    mode = settings.get("creation_mode", "empty_later")
+    assert mode in ("empty_later", "ordinary_initial", "streamed_initial")
+    initial_input = mode != "empty_later"
     base, token, foreign = (settings[name] for name in ("base", "token", "foreign_token"))
     directory = Path(settings["evidence"])
     os.umask(0o077)
@@ -27,7 +31,7 @@ def main():
     source = json.loads(distribution.read_text("direct_url.json") or "{}")
     assert distribution.version == pin["sdk_version"]
     assert source.get("vcs_info", {}).get("commit_id") == pin["commit"]
-    proof = {"scope": "public Session creation and input admission through a built standalone service; real remote execution",
+    proof = {"scope": "public Session creation and input admission through a built standalone service; real remote execution", "creation_mode": mode,
              "sdk_version": distribution.version, "sdk_commit": pin["commit"], "snapshots": {}, "environment_reads": {}}
     observations = {"sdk": [], "raw": []}
     ready = {name: threading.Event() for name in observations}
@@ -149,11 +153,18 @@ def main():
                 value = sessions.create(agent=agent, environment={**environment, "capability_directories": capability}, input=None)
                 assert_empty(value)
             creation_key = str(uuid.uuid4())
-            created = sessions.create(**creation, extra_headers={"Idempotency-Key": creation_key})
-            initial = assert_empty(created)
+            if initial_input:
+                creation["input"] = prompt("first") if mode == "ordinary_initial" else message(prompt("first"))["input"]
+                created = create_initial_session(sessions, creation, creation_key, mode, assert_empty, proof)
+                initial = created.to_dict()
+            else:
+                created = sessions.create(**creation, extra_headers={"Idempotency-Key": creation_key})
+                initial = assert_empty(created)
             session_id = created.id
-            expected_environment = initial["environment"]
+            expected_environment = {**environment, "id": initial["environment"]["id"],
+                                    "capability_directories": [], "remote_url": settings["remote_url"]}
             agent_id = initial["agent"]["id"]
+            check_session(initial, "requires_action" if initial_input else "idle")
             assert sessions.create(**creation, extra_headers={"Idempotency-Key": creation_key}).id == session_id
 
             def snapshot(name, status):
@@ -173,10 +184,10 @@ def main():
                 wire = verify_environment(response.json(), environment_id, status)
                 proof["environment_reads"][name] = {"sdk": value, "raw": wire}
 
-            snapshot("initial", "idle")
+            snapshot("initial", "requires_action" if initial_input else "idle")
             environment_snapshot("initial", "pending")
             before = {value.id for value in sessions.list()}
-            for change in ({"input": "Not yet supported"}, {"agent": {**agent, "tools": [
+            for change in ({"input": [{"role": "user", "content": [{"type": "input_image", "image_url": "https://example.invalid/image.png"}]}]}, {"agent": {**agent, "tools": [
                 {"type": "function", "name": "pending", "description": "Unsupported pending action", "parameters": {"type": "object"}}]}},
                 {"environment": {"type": "self_hosted", "workspace_directory": "relative"}}):
                 reply = raw.post("/agents/sessions", json={**creation, **change})
@@ -219,29 +230,40 @@ def main():
                 finally:
                     submitted.set()
 
-            threading.Thread(target=submit_first, daemon=True).start()
-            wait_for(lambda: all(any(item["type"] == "agent.session.requires_action" for item in values)
-                                 for values in observations.values()), 25, "offline action")
+            if not initial_input:
+                threading.Thread(target=submit_first, daemon=True).start()
+                wait_for(lambda: all(any(item["type"] == "agent.session.requires_action" for item in values)
+                                     for values in observations.values()), 25, "offline action")
             pending = snapshot("waiting", "requires_action")
             assert pending["usage"] is None
+            if mode == "streamed_initial":
+                assert proof["creation_events"][1]["session"] == pending
             began = time.monotonic()
             # Exceed the server's ordinary write timeout while no executor or daemon exists.
             while time.monotonic() - began < 32:
-                assert not submitted.is_set(), "input returned before executor/native readiness"
+                if not initial_input:
+                    assert not submitted.is_set(), "input returned before executor/native readiness"
                 assert list(sessions.turns.list(session_id)) == [] and list(sessions.items.list(session_id)) == []
                 time.sleep(0.25)
+            proof["offline_observation_seconds"] = time.monotonic() - began
             with lock:
                 for values in observations.values():
-                    assert len(values) == 1 and values[0]["type"] == "agent.session.requires_action"
-                    assert values[0]["session"] == pending
+                    if initial_input:
+                        assert values == [], "GET events replayed initial creation activity"
+                    else:
+                        assert len(values) == 1 and values[0]["type"] == "agent.session.requires_action"
+                        assert values[0]["session"] == pending
             write_private("waiting", {"session_id": session_id, "environment_id": expected_environment["id"],
-                                      "remote_url": expected_environment["remote_url"]})
+                                      "remote_url": expected_environment["remote_url"], "creation_mode": mode})
             wait_for(lambda: (directory / "initial-connection-ready.json").exists(), 90, "executor connection before daemon startup")
             environment_snapshot("connected_before_execution", "connected")
             write_private("initial-connection-read", {"environment_id": expected_environment["id"]})
-            wait_for(submitted.is_set, 150, "first input admission")
-            assert submission["elapsed_seconds"] >= 32
-            proof["first_input"] = submission
+            if initial_input:
+                proof["first_input"] = {"source": mode, "creation_response_elapsed_seconds": proof["creation_response_elapsed_seconds"]}
+            else:
+                wait_for(submitted.is_set, 150, "first input admission")
+                assert submission["elapsed_seconds"] >= 32
+                proof["first_input"] = submission
 
             def completed(count):
                 turns = list(sessions.turns.list(session_id, order="asc"))
@@ -252,7 +274,10 @@ def main():
             first_turn = wait_for(lambda: completed(1), 150, "first real Turn")[0]
             snapshot("after_first", "idle")
             environment_snapshot("after_first")
-            sessions.events.create(session_id, events=[first_event], idempotency_key=first_key)
+            if initial_input:
+                assert_creation_retry(sessions, raw, creation, creation_key, session_id)
+            else:
+                sessions.events.create(session_id, events=[first_event], idempotency_key=first_key)
             assert len(list(sessions.turns.list(session_id))) == 1
             write_private("first-completed", {"turn_id": first_turn.id})
             wait_for(lambda: (directory / "resume-ready.json").exists(), 45, "retained native binding and executor reconnection")
@@ -284,11 +309,14 @@ def main():
                 assert "WRONG_LOCAL_INSTRUCTIONS" not in answer
             assert raw.get("/agents/sessions/" + session_id + "/turns", params={"order": "asc"}).json()["data"] == proof["turns"]
             assert raw.get("/agents/sessions/" + session_id + "/items", params={"order": "asc", "limit": 100}).json()["data"] == proof["items"]
-            for event, key in ((first_event, first_key), (second_event, second_key)):
+            retries = [(second_event, second_key)] if initial_input else [(first_event, first_key), (second_event, second_key)]
+            for event, key in retries:
                 sessions.events.create(session_id, events=[event], idempotency_key=key)
                 response = raw.post("/agents/sessions/" + session_id + "/events", json={"events": [message("Changed retry")]},
                                     headers={"Idempotency-Key": key})
                 assert response.status_code == 409
+            if initial_input:
+                assert_creation_retry(sessions, raw, creation, creation_key, session_id)
             time.sleep(1)
             assert list(sessions.turns.list(session_id, order="asc")) == turns
             assert list(sessions.items.list(session_id, limit=100, order="asc")) == items
@@ -298,11 +326,15 @@ def main():
                 ids = [value["event_id"] for value in values]
                 assert len(ids) == len(set(ids))
                 kinds = [value["type"] for value in values]
-                request, connected = kinds.index("agent.session.requires_action"), kinds.index("agent.session.environment.connected")
+                connected = kinds.index("agent.session.environment.connected")
                 cleared, admitted = kinds.index("agent.session.idle"), kinds.index("agent.session.turn.created")
-                assert request < connected < cleared < admitted
-                assert kinds.count("agent.session.requires_action") == 1
-                assert values[request]["session"] == pending
+                assert connected < cleared < admitted
+                if initial_input:
+                    assert "agent.session.created" not in kinds and "agent.session.requires_action" not in kinds
+                else:
+                    request = kinds.index("agent.session.requires_action")
+                    assert request < connected and kinds.count("agent.session.requires_action") == 1
+                    assert values[request]["session"] == pending
                 assert set(values[cleared]) == {"type", "event_id", "session"}
                 check_session(values[cleared]["session"], "idle")
                 assert values[cleared]["session"]["usage"] is None
@@ -321,8 +353,9 @@ def main():
                 assert list(resource.items.list(session_id, limit=100, order="asc")) == items
                 verify_environment(recovered.beta.agents.environments.retrieve(expected_environment["id"]).to_dict(), expected_environment["id"])
             proof["query_recovery"] = True
+            proof["live_event_scope"] = "common GET subscription interval; creation events are recorded separately"
             proof["status"] = "public_creation_waiting_admission_and_real_remote_continuation_verified"
-            print("Built service: public self-hosted creation/wait, safe Environment GET, fixed SDK/raw SSE, two real remote Turns and retry recovery passed.", flush=True)
+            print("Built service (" + mode + "): public self-hosted creation/wait, safe Environment GET, fixed SDK/raw SSE, two real remote Turns and retry recovery passed.", flush=True)
     finally:
         with lock:
             proof["sdk_events"], proof["raw_events"] = list(observations["sdk"]), list(observations["raw"])

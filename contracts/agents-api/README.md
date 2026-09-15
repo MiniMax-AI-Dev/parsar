@@ -30,13 +30,14 @@ describe values the adapter never applied.
 The private native registry persists fenced connection observations and pinned
 Environment-event snapshots through the existing execution owner. Session reads
 and live SSE also expose safe `self_hosted` output and reservation-owned connection
-actions. The initial public self-hosted profile creates empty Codex Sessions and
-waits for preparation/admission of later idle text batches. Environment retrieval
+actions. Public self-hosted creation accepts initial text or empty Codex Sessions;
+initial input reserves work while returning the connection target promptly.
+Later idle text submissions wait for preparation/admission. Environment retrieval
 exposes durable status and safe empty installation metadata for that profile.
-Populated installation metadata, initial input, mixed/active/function input and full lifecycle conformance remain
+Populated installation metadata, mixed/active/function input and full lifecycle conformance remain
 unimplemented; see the [Environment scope](environments.md).
-Its initial-input persistence prerequisite reserves messages with creation and
-records pre-Turn timeout failure, but does not yet open public initial creation.
+Initial messages commit with creation and a connection action; an initial deadline
+failure is queryable before a Turn exists. Ordinary and streamed creation share this path.
 
 Remaining work includes physical Session cleanup/content variants, broader configuration
 and tools, execution recovery, environments/files, Vaults and protocol Subagents.
@@ -478,8 +479,12 @@ establish non-default verbosity, tool-set enforcement or full protocol conforman
 
 Session creation accepts the pinned string and user-message-array input
 forms. It shares text validation and admission with the events endpoint. The
-Session, first Turn, input Items and event records commit atomically; an identical
+Session and its initial work commit atomically; an identical
 creation retry never re-admits the input, including after later or terminal Turns.
+With `none`, this includes the first Turn and input Items. With `self_hosted`, it
+includes the initial reservation and connection action; preparation and Turn
+admission belong to the existing Worker. Creation returns while the executor is
+offline, and an initial deadline failure leaves a failed Session without a Turn.
 Omitted/null input creates an idle Session. Execution must be enabled and the
 configured engine must support admission before any initial work is persisted.
 
@@ -494,7 +499,9 @@ express the string/array union, so input is unconstrained with a type descriptio
 
 `POST /v1/agents/sessions` also accepts `stream=true` for the supported creation
 inputs. Fresh creation sends `agent.session.created` with the pre-input Session,
-then the same committed Turn/Item/output events as GET streams. The cursor comes
+then its committed activity/Turn/Item/output events. Self-hosted initial creation
+first requests the Environment connection, before native readiness and a Turn.
+The cursor comes
 from the atomic creation upsert, so rapid initial execution cannot move the start
 past its own events. The ordinary bounded-buffer/gap policy still applies.
 
@@ -502,7 +509,7 @@ The local `Idempotency-Key` creation extension shares identity across response
 modes. Retrying creation streams only future changes and never resubmits input or
 replays old events. Recover a lost Session ID by repeating the same request/key
 with `stream=false`, then use Session/Turn/Items reads. Disconnect only stops the
-HTTP observer; admitted execution continues. Idle streams remain open for later
+HTTP observer; committed reservations and admitted execution continue. Idle streams remain open for later
 Turns. Pinned SDK3.13.0 proves the creation stream and created-event schema; exact
 upstream initial snapshot/order, POST stream lifetime and retry behavior have not
 been compared with the hosted service. These choices are not full conformance.

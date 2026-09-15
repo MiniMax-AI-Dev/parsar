@@ -290,7 +290,9 @@ Environment reads and retrieval after reopening without execution configuration.
 `TestEnvironmentInitialFailureOfficialClient` verifies failed Session reads and
 matching SDK/raw live failure events after privately provisioned initial input
 expires, without fabricating a Turn or changing the Environment status. It is a
-persistence prerequisite test; public self-hosted initial creation remains gated.
+persistence prerequisite test. `TestSelfHostedInitialCreationOfficialClient`
+separately exercises ordinary/streamed public initial creation through the Worker,
+retry identity, disconnect survival and explicitly controlled deadline failure.
 The test database must be named `parsar_agents_api_*_tests` and contain no product
 workspace tables. Tests apply only this service's migrations and use new tenant
 IDs without truncating tables. Missing test configuration skips DB tests locally;
@@ -380,9 +382,9 @@ an official SSE replay mechanism.
 
 The disabled-by-default Codex adapter supports executor registration, harness key
 authorization and an opaque native Noise relay. Configured execution and an
-executor origin enable empty public `self_hosted` Sessions on Codex. The current
+executor origin enable public `self_hosted` Sessions on Codex. The current
 profile requires an absolute `workspace_directory`, empty/default
-`capability_directories`, no initial input and no function tools.
+`capability_directories` and no function tools. Initial text is optional.
 
 To enable it alongside the existing daemon worker, set
 `AGENTS_API_EXECUTOR_URL` to the externally reachable HTTPS origin. Apply the
@@ -485,7 +487,12 @@ Explicit retry keys preserve the original input identity and deadline. A disconn
 HTTP observer does not cancel the reservation. Local expiry/cancellation errors are
 409 `environment_input_expired` / `environment_input_cancelled`; ownership loss is
 503 `execution_unavailable`. Exact hosted status/body parity remains unverified.
-Initial input, active steering/cancellation, mixed events, function tools/results,
+Initial text on ordinary or streamed creation commits its reservation and returns
+the connection target promptly while offline. Connect using that target; the same
+Worker prepares and starts the initial Turn. A disconnected creation stream does
+not cancel the reservation. Initial expiry leaves a queryable failed Session with
+a safe error and no Turn; exact hosted error/timing parity remains unverified.
+Active steering/cancellation, mixed events, function tools/results,
 nonempty capability directories, other placements, populated installation metadata
 and Environment file/template routes remain unavailable. These are implementation gaps.
 
