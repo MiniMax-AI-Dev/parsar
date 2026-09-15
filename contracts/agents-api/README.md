@@ -37,7 +37,10 @@ reuse durable admission without creating work or retargeting retries; pending
 pre-Turn input still blocks new cancellation. HTTP acceptance does not establish
 native completion or process quiescence. Environment retrieval
 exposes durable status and safe empty installation metadata for that profile.
-Populated installation metadata, mixed/active/function input and full lifecycle conformance remain
+Non-deferred functions and homogeneous result-only batches reuse the existing
+callback/application path, with explicit call identity and no new Turn on results.
+These callbacks are not installed Environment resources.
+Populated installation metadata, mixed/active input and full lifecycle conformance remain
 unimplemented; see the [Environment scope](environments.md).
 Initial messages commit with creation and a connection action; an initial deadline
 failure is queryable before a Turn exists. Ordinary and streamed creation share this path.
@@ -213,7 +216,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 that immutable choice. The public request supplies a model, not a harness selector.
 Both no-environment profiles require disabled `multi_agent`, implicit reasoning,
 service tier `auto`, ordinary text and non-deferred functions. Codex additionally
-supports the initial self-hosted text profile described below.
+supports the self-hosted text/function profile described in the Environment contract.
 
 | Profile | Current limits |
 | --- | --- |

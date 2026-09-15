@@ -221,8 +221,9 @@ Public creation supports a `self_hosted` Session on the Codex profile when
 execution and a validated executor origin are configured. Require an absolute
 POSIX workspace directory without NUL, CR, LF or backslash for the current adapter;
 omitted/null capability directories use the empty default.
-Nonempty capability directories, function tools and other engine
-placements remain rejected implementation gaps. Session output uses the owned
+Supported non-deferred function tools use the existing validation and native
+callback bridge. Nonempty capability directories and other engine placements
+remain rejected implementation gaps. Session output uses the owned
 Environment association; file operations and populated installation metadata remain separate.
 
 Environment retrieval uses the existing tenant-scoped join to a live owning Session
@@ -276,14 +277,22 @@ The public self-hosted input profile accepts idle message-only batches through t
 reservation path, including already-connected environments. Only the Session-locked
 reservation operation decides retry, active-work conflict and new admission; an
 unlocked activity read must never choose direct Turn creation. Active
-steering, mixed inputs and function results remain gaps;
+steering and mixed inputs remain gaps;
 these restrictions do not narrow the pinned protocol target. Cancellation-only batches
 use the existing direct admission after configuration and execution-ownership checks.
 Only the Session-locked transaction chooses the active Turn or an idle receipt;
 matching retries retain that target even during later work. Cancellation cannot
 create a Turn or bypass preparation. A new cancellation still conflicts with a
 pending reservation; it does not cancel pre-Turn input. Its 204 response confirms
-durable admission, not native completion or process exit.
+durable admission, not native completion or process exit. Homogeneous function-result
+batches also use direct admission after those same checks: their explicit Turn/call
+identity selects an existing pending call, never new work. Reuse function validation,
+Session-locked whole-batch receipts, preserved output/error fields and native
+application acknowledgements. Matching retries remain bound to their original calls
+after completion or during later work; new results cannot bypass a pending reservation.
+Definitions remain fixed through preparation and cold native continuation. These
+callbacks are not installed Environment metadata. Mixed result/cancel publication
+and exact hosted action-removal timing remain separate gaps.
 Promotion requires the current leased execution writer and the caller's
 retained native preparation; never hold a database lock during external preparation. Only
 the first successful non-replay receipts authorize Start on that same preparation.
@@ -781,7 +790,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   The operator-selected
   `AGENTS_API_ENGINE` is separate from the requested model.
   Public execution supports Codex and Claude SDK with environment `none`, plus
-  the initial Codex self-hosted text profile defined above; reject unsupported
+  the Codex self-hosted text/function profile defined above; reject unsupported
   input/environment/agent options explicitly.
 - `packages/agents-client/v1` configures the pinned official `openai-go` Session
   service. Use SDK request/response types, pagination and errors directly rather

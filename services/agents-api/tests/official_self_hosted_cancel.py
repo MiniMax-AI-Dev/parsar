@@ -116,11 +116,13 @@ def main():
                 raw_submit(pending_id, "rejected-pending-cancel", expected=409)
                 assert current(pending_id) == pending
                 assert list(sessions.turns.list(pending_id)) == list(sessions.items.list(pending_id)) == []
-            for events in ([message, cancel], [cancel, message], [
-                    {"type": "agent.session.input.tool_result", "turn_id": turn_id,
-                     "call_id": "unsupported-function", "success": True, "output": "not admitted"}]):
+            for events in ([message, cancel], [cancel, message]):
                 sdk_submit(session_id, str(uuid.uuid4()), events, 400)
                 raw_submit(session_id, str(uuid.uuid4()), events, 400)
+            missing_function = [{"type": "agent.session.input.tool_result", "turn_id": turn_id,
+                                 "call_id": "unknown-function", "success": True, "output": "not admitted"}]
+            sdk_submit(session_id, str(uuid.uuid4()), missing_function, 404)
+            raw_submit(session_id, str(uuid.uuid4()), missing_function, 404)
             raw_submit(session_id, "foreign-cancel", expected=404, key_token=settings["foreign_token"])
             for missing in (result["deleted_id"], str(uuid.uuid4())):
                 sdk_submit(missing, "missing-cancel", expected=404)

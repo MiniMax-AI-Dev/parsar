@@ -1298,24 +1298,24 @@ paths:
         text verbosity, non-deferred function tools, disabled multi_agent, implicit
         reasoning, service tier auto and environment type none, subject to the configured
         engine. The initial self_hosted profile requires Codex, an absolute workspace_directory,
-        empty capability_directories and no function tools. Omitted/null capability_directories
-        use the empty-list default; self_hosted requires configured execution plus
-        executor registry. Claude SDK currently requires medium verbosity and object-root
-        function schemas. Omitted stream defaults to false; stream and agent_id cannot
-        be null. Metadata may be null, but its values must be strings. Initial input
-        accepts a string or user-message array containing text. None initial input
-        atomically starts a Turn; self_hosted initial input is reserved while returning
-        its Environment connection target, with execution deferred to native readiness
-        and Session failure on initial timeout. Omitted or null input creates an idle
-        Session. With stream=true, returns live Session events starting at creation;
-        disconnect does not cancel execution. New Sessions retain their authenticated
-        creator; all creation retries require the same typed subject, including across
-        key rotation. Saved-Agent retries retain request intent independently of later
-        Agent changes. Unknown historical creators reject retries; known creators
-        without recorded intent retain resolved-snapshot retry rules. These conflict
-        policies are local and not verified hosted parity. Creation retries observe
-        future events without replay; retry with stream=false to retrieve the Session.
-        Non-text initial input remains unsupported.
+        empty capability_directories and optional non-deferred function tools. Omitted/null
+        capability_directories use the empty-list default; self_hosted requires configured
+        execution plus executor registry. Claude SDK currently requires medium verbosity
+        and object-root function schemas. Omitted stream defaults to false; stream
+        and agent_id cannot be null. Metadata may be null, but its values must be
+        strings. Initial input accepts a string or user-message array containing text.
+        None initial input atomically starts a Turn; self_hosted initial input is
+        reserved while returning its Environment connection target, with execution
+        deferred to native readiness and Session failure on initial timeout. Omitted
+        or null input creates an idle Session. With stream=true, returns live Session
+        events starting at creation; disconnect does not cancel execution. New Sessions
+        retain their authenticated creator; all creation retries require the same
+        typed subject, including across key rotation. Saved-Agent retries retain request
+        intent independently of later Agent changes. Unknown historical creators reject
+        retries; known creators without recorded intent retain resolved-snapshot retry
+        rules. These conflict policies are local and not verified hosted parity. Creation
+        retries observe future events without replay; retry with stream=false to retrieve
+        the Session. Non-text initial input remains unsupported.
       parameters:
       - description: agents=v1
         in: header
@@ -1582,8 +1582,10 @@ paths:
         five-minute connection/admission deadline and returns 204 only after durable
         admission. Cancellation-only self_hosted batches use existing durable cancellation
         admission and return 204 without waiting for native exit; a new cancellation
-        conflicts while a pre-Turn reservation is pending. Active steering, function
-        results and mixed self_hosted batches remain unsupported. HTTP expiry/cancellation
+        conflicts while a pre-Turn reservation is pending. Homogeneous tool_result-only
+        self_hosted batches reuse existing scoped result admission and application
+        receipts without creating a Turn or bypassing a pending reservation. Active
+        steering and mixed self_hosted batches remain unsupported. HTTP expiry/cancellation
         use local 409 environment_input_expired/environment_input_cancelled errors;
         exact hosted failure mapping is unverified. Losing execution ownership returns
         503. Disconnecting the waiting HTTP request does not cancel retained work

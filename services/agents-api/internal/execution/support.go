@@ -18,10 +18,11 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 		return store.ErrInvalidInput
 	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" {
-		if engine != "codex" || snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" || !path.IsAbs(snapshot.Environment.WorkspaceDirectory) || strings.ContainsAny(snapshot.Environment.WorkspaceDirectory, "\x00\r\n\\") || len(snapshot.Environment.CapabilityDirectories) != 0 || len(snapshot.Agent.Tools) != 0 {
+		if engine != "codex" || snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" || !path.IsAbs(snapshot.Environment.WorkspaceDirectory) || strings.ContainsAny(snapshot.Environment.WorkspaceDirectory, "\x00\r\n\\") || len(snapshot.Environment.CapabilityDirectories) != 0 {
 			return store.ErrInvalidInput
 		}
-		return nil
+		_, err := functionTools(snapshot.Agent.Tools)
+		return err
 	}
 	if engine != "claude_sdk" {
 		return nil

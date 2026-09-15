@@ -2,8 +2,8 @@
 
 This assessment covers the fixed [Python SDK contract](upstream.json). It is an
 implementation plan with partial current coverage. Public execution admits
-`environment.type=none` on Codex and Claude SDK, plus the initial Codex self-hosted
-text profile. Environment retrieval supports that profile; populated installation
+`environment.type=none` on Codex and Claude SDK, plus the Codex self-hosted
+text/function profile. Environment retrieval supports that profile; populated installation
 metadata, templates and file operations remain missing. See [current coverage](README.md#public-semantics).
 
 The internal Store now owns a durable Environment association for newly created
@@ -46,7 +46,7 @@ Create a Session with `environment.type=self_hosted`, an absolute
 `workspace_directory` and omitted/null/empty `capability_directories`. Creation
 accepts initial text as a string or ordered user-message array. Omitted/null input
 creates no Turn or connection action. Configured execution, a validated registry origin,
-Codex and no function tools are required before persistence.
+Codex and supported non-deferred function definitions are validated before persistence.
 
 Initial text commits a reservation and connection action, then returns the Session
 and Environment connection target while offline. Streamed creation sends its
@@ -71,7 +71,13 @@ target during later work. Pending pre-Turn reservations still block new cancella
 HTTP 204 confirms admission, not native completion or OS quiescence. A cancellation
 before native Session transfer can still lack a final Outcome and conservatively
 fail; complete cancellation settlement remains open.
-Active steering, mixed events, function configuration/results, non-text input, nonempty capability directories and other
+Homogeneous function-result batches reuse scoped locked admission and native
+application receipts, without creating a Turn or preparation. Definitions use the
+existing function parser and remain fixed through native preparation and continuation;
+output/error field presence and ordered content keep their existing semantics.
+Retries retain the original call, including during later work. New results cannot
+bypass pending input. Function callbacks do not populate Environment installations.
+Active steering, mixed events, non-text input, nonempty capability directories and other
 engine placements are rejected temporary gaps. The current adapter also rejects
 workspace paths containing NUL, CR, LF or backslash; broader path/platform support
 remains open. Native execution still uses the
@@ -323,7 +329,8 @@ pre-admission or claimed-Turn semantics.
 
 The initial public idle-text profile uses this primitive. Its message-only scope
 and single pending reservation are implementation limits, not claims about the
-final protocol. Mixed/active/function inputs remain required.
+final protocol. Homogeneous results use the separate existing call-admission path;
+mixed and active-message inputs remain required.
 The Store reserves initial messages atomically with a new
 Environment-bearing Session, preserving the creation cursor and retry identity.
 Initial expiry emits a failed Session snapshot with a safe error and no Turn;

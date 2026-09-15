@@ -166,7 +166,7 @@ func TestSelfHostedCreationRejectsBeforePersistence(t *testing.T) {
 		{name: "hosted", environment: `{"type":"openai_hosted"}`},
 		{name: "initial image", environment: validEnvironment, input: `,"input":[{"role":"user","content":[{"type":"input_image","image_url":"https://example.com/image.png"}]}]`},
 		{name: "initial assistant message", environment: validEnvironment, input: `,"input":[{"role":"assistant","content":[{"type":"input_text","text":"start"}]}]`},
-		{name: "functions", environment: validEnvironment, agentFields: `,"tools":[{"type":"function","name":"lookup","description":"Find a value","parameters":{"type":"object"}}]`},
+		{name: "deferred functions", environment: validEnvironment, agentFields: `,"tools":[{"type":"function","name":"lookup","description":"Find a value","parameters":{"type":"object"},"defer_loading":true}]`},
 		{name: "Claude SDK placement", environment: validEnvironment, engine: "claude_sdk"},
 		{name: "Claude Code placement", environment: validEnvironment, engine: "claude_code"},
 	} {
