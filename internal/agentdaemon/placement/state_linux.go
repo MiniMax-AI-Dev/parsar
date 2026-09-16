@@ -147,7 +147,11 @@ func (c *Controller) save(r *Receipt) error {
 	if err := os.Rename(f.Name(), c.recordPath(r.Target.Container)); err != nil {
 		return err
 	}
-	dir, err := os.Open(c.root)
+	return c.syncDir(c.root)
+}
+
+func syncDirectory(path string) error {
+	dir, err := os.Open(path)
 	if err != nil {
 		return err
 	}

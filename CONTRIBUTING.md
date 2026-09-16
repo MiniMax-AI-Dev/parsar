@@ -491,9 +491,11 @@ first local Runtime retirement consumer in `internal/agentdaemon/placement`.
 They use a fixed local Docker socket, an exact labeled container/incarnation,
 private durable state under `~/.parsar/placements`, and a per-target process lock.
 Enrollment is limited to the documented unprivileged Linux/cgroup-v2 local-storage
-profile. Keep controller state and Docker authority outside generated-code mounts.
+profile. Keep controller state and the canonical Docker socket outside generated-code mounts,
+including when a workspace source is a filesystem root.
 Stopping, independent membership/process observations and non-forced removal must
-precede a durable successful receipt. Missing evidence or a crash after removal
+precede a durable successful receipt. Recovered receipts must complete their directory-sync barrier before success.
+Missing evidence or a crash after removal
 but before receipt persistence remains unknown; never clear it based on absence.
 Normal harness release is unchanged. This local operator command is not Core
 admission, authenticated remote receipt support, or public Files compatibility.

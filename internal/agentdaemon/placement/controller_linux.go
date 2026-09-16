@@ -23,6 +23,8 @@ type Controller struct {
 	run        func(context.Context, ...string) ([]byte, error)
 	procRoot   string
 	cgroupRoot string
+	socketPath string
+	syncDir    func(string) error
 }
 
 // New uses a fixed local Docker endpoint and private state beneath ~/.parsar.
@@ -32,7 +34,7 @@ func New() (*Controller, error) {
 		return nil, err
 	}
 	return &Controller{root: filepath.Join(home, ".parsar", "placements"), run: runDocker,
-		procRoot: "/proc", cgroupRoot: "/sys/fs/cgroup"}, nil
+		procRoot: "/proc", cgroupRoot: "/sys/fs/cgroup", socketPath: localDockerSocket, syncDir: syncDirectory}, nil
 }
 
 // Enroll records a currently running, explicitly labeled, qualified placement.
@@ -101,6 +103,11 @@ func (c *Controller) Retire(ctx context.Context, id string) (*Receipt, error) {
 		return nil, err
 	}
 	if r.State == "retired" {
+		// A previous process may have published the rename without completing
+		// its directory sync. Finish that barrier before recovering success.
+		if err := c.syncDir(c.root); err != nil {
+			return nil, fmt.Errorf("placement receipt durability unknown: %w", err)
+		}
 		return r, nil
 	}
 	err = c.retire(ctx, r)

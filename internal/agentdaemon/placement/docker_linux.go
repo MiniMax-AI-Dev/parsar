@@ -15,9 +15,11 @@ import (
 	"syscall"
 )
 
+const localDockerSocket = "/var/run/docker.sock"
+
 // Do not inherit a remote Docker context while observing local /proc and cgroups.
 func runDocker(ctx context.Context, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "docker", append([]string{"--host", "unix:///var/run/docker.sock"}, args...)...)
+	cmd := exec.CommandContext(ctx, "docker", append([]string{"--host", "unix://" + localDockerSocket}, args...)...)
 	for _, v := range os.Environ() {
 		if !strings.HasPrefix(v, "DOCKER_") {
 			cmd.Env = append(cmd.Env, v)
@@ -92,7 +94,8 @@ func contains(values []string, value string) bool {
 }
 
 func inside(parent, path string) bool {
-	return path == parent || strings.HasPrefix(path, parent+string(os.PathSeparator))
+	relative, err := filepath.Rel(parent, path)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(os.PathSeparator))
 }
 
 func (c *Controller) validateProfile(u *container, owner, workspace string) error {
@@ -125,11 +128,15 @@ func (c *Controller) validateProfile(u *container, owner, workspace string) erro
 	default:
 		return errors.New("unqualified workspace filesystem")
 	}
+	socket, err := filepath.EvalSymlinks(c.socketPath)
+	if err != nil {
+		return fmt.Errorf("cannot resolve supervisor socket: %w", err)
+	}
 	found := false
 	for _, m := range u.Mounts {
 		canonical, err := filepath.EvalSymlinks(m.Source)
-		if err != nil || canonical != m.Source || inside(m.Source, c.root) || inside(c.root, m.Source) {
-			return errors.New("mount aliases or exposes controller state")
+		if err != nil || canonical != m.Source || inside(m.Source, c.root) || inside(c.root, m.Source) || inside(m.Source, socket) {
+			return errors.New("mount aliases or exposes controller state or supervisor socket")
 		}
 		if m.Type != "bind" || (m.Propagation != "rprivate" && m.Propagation != "") {
 			return errors.New("only private bind mounts are qualified")

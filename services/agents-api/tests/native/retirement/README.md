@@ -141,7 +141,8 @@ the target. Use a non-root container user, private PID/IPC/cgroup namespaces,
 no devices, additional capabilities, shared volumes or privileged settings.
 Exactly one writable bind retains workspace/history on ext-family, XFS, Btrfs or
 tmpfs storage without nested mounts; additional binds may only be read-only regular
-files. Controller state must not be exposed by any mount. Use canonical absolute
+files. Controller state and the canonical Docker socket must not be exposed by any mount,
+including ancestor directories and filesystem roots. Use canonical absolute
 workspace paths and a trusted operator account with Docker access. State ancestors
 must be owned by that user or root and not writable by group/others; the placement
 state directory and files require modes 0700/0600. Host administrators remain trusted.
@@ -149,7 +150,8 @@ state directory and files require modes 0700/0600. Host administrators remain tr
 The command persists intent before stop and verifies stopped state, cgroup emptiness
 and old process identities before non-forced container removal. It never removes
 workspace files or Docker volumes, releases an ordinary Turn, or replays unknown
-writes. A saved completed receipt survives controller restart; unavailable evidence,
+writes. A saved completed receipt survives controller restart; recovery completes the
+directory-sync barrier before returning success. Unavailable evidence,
 changed incarnations and removal without a durable receipt remain unknown. An
 interrupted stop can reconcile the same still-existing stopped unit. There is no
 clear-unknown shortcut. This consumer does not gate Core dispatch or grant public

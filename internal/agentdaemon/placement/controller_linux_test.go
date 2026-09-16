@@ -55,8 +55,9 @@ func newFixture(t *testing.T) *fixture {
 	if err := os.Mkdir(f.workspace, 0700); err != nil {
 		t.Fatal(err)
 	}
-	f.c = &Controller{root: filepath.Join(dir, "state"), procRoot: filepath.Join(dir, "proc"), cgroupRoot: filepath.Join(dir, "cgroup")}
+	f.c = &Controller{root: filepath.Join(dir, "state"), procRoot: filepath.Join(dir, "proc"), cgroupRoot: filepath.Join(dir, "cgroup"), socketPath: filepath.Join(dir, "run/docker.sock"), syncDir: syncDirectory}
 	f.c.run = f.run
+	writeTestFile(t, f.c.socketPath, "fake supervisor socket")
 	f.unit = &container{ID: testID, Created: "created-1", Image: "sha256:image"}
 	f.unit.State.Running = true
 	f.unit.State.Pid = 123
@@ -347,5 +348,64 @@ func TestSymlinkedStateAndChangedProfileAreRejected(t *testing.T) {
 	}
 	if f.stops+f.removals != 0 {
 		t.Fatal("mutated unqualified placement")
+	}
+}
+
+func TestRootAndCanonicalSupervisorSocketAreNeverExposed(t *testing.T) {
+	f := newFixture(t)
+	if !inside("/", f.c.root) || !inside("/", f.c.socketPath) {
+		t.Fatal("filesystem root hides protected descendants")
+	}
+	f.workspace = filepath.Dir(f.c.socketPath)
+	f.unit.Mounts[0].Source = f.workspace
+	alias := filepath.Join(filepath.Dir(f.c.root), "socket-alias")
+	if err := os.Symlink(f.c.socketPath, alias); err != nil {
+		t.Fatal(err)
+	}
+	f.c.socketPath = alias
+	if _, err := f.c.Enroll(context.Background(), testID, "owner-1", f.workspace); err == nil || !strings.Contains(err.Error(), "supervisor socket") {
+		t.Fatal("canonical socket exposed", err)
+	}
+	if f.stops+f.removals != 0 {
+		t.Fatal("unqualified supervisor mutated")
+	}
+}
+
+func TestPublishedReceiptMustCompleteDirectorySyncOnRecovery(t *testing.T) {
+	f := newFixture(t)
+	f.enroll()
+	f.c.syncDir = func(path string) error {
+		r, err := f.c.load(testID)
+		if err != nil {
+			return err
+		}
+		if r.State == "retired" {
+			return errors.New("injected directory sync failure after rename")
+		}
+		return syncDirectory(path)
+	}
+	if r, err := f.c.Retire(context.Background(), testID); err == nil || r.State == "retired" {
+		t.Fatal("reported success before durable receipt", r, err)
+	}
+	published, err := f.c.load(testID)
+	if err != nil || published.State != "retired" {
+		t.Fatal("failure did not exercise published rename", published, err)
+	}
+	fresh := *f.c
+	fresh.run = func(context.Context, ...string) ([]byte, error) {
+		t.Fatal("receipt recovery must not mutate supervisor")
+		return nil, nil
+	}
+	if _, err := fresh.Retire(context.Background(), testID); err == nil {
+		t.Fatal("recovery skipped durability barrier")
+	}
+	synced := false
+	fresh.syncDir = func(path string) error { synced = true; return syncDirectory(path) }
+	recovered, err := fresh.Retire(context.Background(), testID)
+	if err != nil || !synced || !reflect.DeepEqual(recovered, published) {
+		t.Fatal("durable receipt recovery failed", recovered, err)
+	}
+	if f.stops != 1 || f.removals != 1 {
+		t.Fatal("repeated destructive action")
 	}
 }
