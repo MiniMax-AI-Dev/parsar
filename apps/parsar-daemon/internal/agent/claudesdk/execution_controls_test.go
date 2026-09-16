@@ -61,15 +61,15 @@ func TestExecutionControlsRejectUnsupportedProfilesBeforeLaunch(t *testing.T) {
 	}
 }
 
-func TestPublicMCPRejectedBeforeClaudeSetup(t *testing.T) {
+func TestMCPWithoutEnvironmentNoneRejectedBeforeSetup(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("PARSAR_HOME", root)
 	config := Config{Node: "must-not-run", Entrypoint: filepath.Join(root, "worker"), StateDir: filepath.Join(root, "state")}
 	servers := []proto.MCPHTTPServer{}
 	request := proto.PromptRequestPayload{RunID: "run", Prompt: "Input", MCPHTTPServers: &servers}
 	_, err := NewFactory(config)(t.Context(), request, make(chan proto.Envelope, 1))
-	if err == nil || !strings.Contains(err.Error(), "requested capability") {
-		t.Fatal("MCP reached an unsupported engine", err)
+	if err == nil || !strings.Contains(err.Error(), "HTTP MCP requires environment:none") {
+		t.Fatal("MCP reached an unsupported environment", err)
 	}
 	if _, err := os.Stat(config.StateDir); !os.IsNotExist(err) {
 		t.Fatal("MCP reached native setup", err)

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/clirunner"
@@ -15,12 +16,17 @@ import (
 // RuntimeInfo describes a successful local probe, not provider authentication or
 // execution capability. Versions are checked against the installed pinned manifest.
 type RuntimeInfo struct {
-	Type     string `json:"type"`
-	Protocol int    `json:"protocol"`
-	Node     string `json:"node"`
-	SDK      string `json:"sdk"`
-	MCP      string `json:"mcp"`
-	Native   string `json:"native"`
+	Type     string   `json:"type"`
+	Protocol int      `json:"protocol"`
+	Node     string   `json:"node"`
+	SDK      string   `json:"sdk"`
+	MCP      string   `json:"mcp"`
+	Native   string   `json:"native"`
+	Features []string `json:"features"`
+}
+
+func (info RuntimeInfo) SupportsHTTPMCP() bool {
+	return slices.Contains(info.Features, "mcp_http_tools")
 }
 
 // CheckRuntime checks the packaged companion and exact execution entrypoint.

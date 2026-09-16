@@ -1372,6 +1372,46 @@ Thinking/tool-only messages produce no text Items; interrupted messages retain
 their streamed partial text. No phase is inferred from the final result.
 SDK/native child release and output draining precede daemon completion.
 
+The private adapter also accepts typed anonymous HTTP MCP declarations on the
+trusted `environment:none` harness host. The packaged readiness report must include
+`mcp_http_tools`; discovery advertises that feature only when present, and execution
+rechecks the installed bundle before dispatching an MCP request. An unchanged SDK
+version alone cannot qualify an older bridge. Public Claude MCP admission remains
+a separate, unimplemented service boundary.
+
+MCP queries use the SDK's main-thread Agent definition to restrict model-visible
+tools, in addition to empty built-ins, strict MCP configuration, empty setting
+sources and default-deny permissions. Permission allowlists alone do not restrict
+the native model inventory. Null selects all tools from a declared server; an empty
+list selects none. Host functions compose with those selections. Native server
+status supplies original tool identities; map their normalized native aliases while
+preserving the original names in observations. Native status deduplicates aliases,
+so it does not prove a complete original server inventory. A native PreToolUse hook
+waits for inventory verification before admitting root calls and denies unverified,
+mismatched or cancelled calls. The native Agent restriction controls model-visible
+tools; inventory verification is not a barrier before the model request.
+Anonymous HTTP declarations explicitly set an empty Authorization header to disable
+native OAuth and automatic credential injection. Preserve that header; do not erase
+native history or credentials to enforce this boundary. Servers that reject a blank
+Authorization header, normalized name collisions and inventory changes during a
+query require separate validation; this private profile covers static inventories.
+The bounded private profile currently requires connected servers, reserves the
+`functions` label, accepts alphanumeric/underscore/hyphen server labels and
+alphanumeric/underscore/hyphen/dot selected tool names, and excludes credentials,
+required startup and remote environments. These remain implementation limits.
+
+Root assistant tool calls and live root user results produce the existing neutral
+MCP observations. Correlate actual Session/call identities; exclude replay,
+synthetic and subagent work and keep host function receipts separate. Preserve
+the exact native `tool_use_result` when one result is unambiguous, otherwise the
+per-call result content. Native errors remain observed native errors. The SDK can
+replace annotated MCP content with rendered structuredContent and flatten MCP
+errors; these observations do not claim original MCP envelope fidelity or hosted
+output parity. Do not reconstruct lost fields or infer output from model prose.
+Unfinished observed calls become incomplete on shutdown, without claiming that
+remote tool effects were cancelled. Rich content, native truncation and asynchronous
+MCP task results remain unverified.
+
 Daemon `connect` optionally registers this factory as `claude_sdk` when the
 operator sets `PARSAR_CLAUDE_SDK_ENTRYPOINT` to the absolute packaged `dist/main.js`.
 `PARSAR_CLAUDE_SDK_NODE` selects Node (default: `node` on PATH). Discovery resolves
@@ -1411,7 +1451,7 @@ identity. These are implementation limits, not changes to the upstream contract.
 Do not bypass them by dropping fields, changing model identity or fabricating usage.
 The server owns no provider credential: operators configure the daemon's native SDK
 provider environment. Product `claude_code` and product execution are unchanged.
-The bounded profile accepts only
+The public profile accepts only
 text, explicit model/system instructions, managed state, exact native resume and
 declared functions with ordered text results. It rejects unsupported request
 options and disables built-in tools and undeclared MCP discovery.
@@ -1419,8 +1459,8 @@ options and disables built-in tools and undeclared MCP discovery.
 this fixed restrictive profile. Omission does not enable built-in tools. New and
 resumed queries use the SDK's empty built-in tool set, explicit function MCP
 configuration and allowlist, strict MCP configuration and empty user/project/local
-setting sources. Native initialization and real provider request inventories must
-contain only the declared host functions. Managed operator policy may further
+setting sources. Without HTTP MCP declarations, native initialization and real
+provider request inventories must contain only the declared host functions. Managed operator policy may further
 restrict execution; it must not widen the profile. This limits model tool access,
 not native state files or filesystem access by an explicitly supplied host function;
 it is not sandbox/file isolation. The private factory accepts typed execution
@@ -1447,7 +1487,7 @@ order. Missing identities and undeclared tools fail before invoking the host.
 Return content/error fields unchanged over MCP and forward its per-request abort
 signal. The private Go factory connects declared functions through this helper and
 reuses the daemon function-call/result interface and opt-in neutral observations.
-The native registry must contain exactly those functions. SDK allowlisting admits
+The native function-server registry must contain exactly those functions. SDK allowlisting admits
 only these host callbacks; the host still owns result decisions and any business
 permission checks. It grants no runtime-token business authority.
 

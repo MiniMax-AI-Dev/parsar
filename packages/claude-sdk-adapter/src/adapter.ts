@@ -7,6 +7,8 @@ import { createFunctionServer } from "./functions.js";
 import { FunctionBridge, type FunctionEvent } from "./function_bridge.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { isAbsolute } from "node:path";
+import { MCPProfile, parseHTTPServers, type HTTPServer } from "./mcp.js";
+import { MCPObserver, type MCPEvent } from "./mcp_observer.js";
 
 export type Start = {
   type: "start";
@@ -17,11 +19,13 @@ export type Start = {
   resume?: string;
   observe_messages?: boolean;
   functions?: { name: string; description: string; parameters: Tool["inputSchema"] }[];
+  mcp_http_servers?: HTTPServer[];
 };
 export type Event =
   | MessageEvent
   | InputEvent
   | FunctionEvent
+  | MCPEvent
   | { type: "usage"; session_id: string; result_id: string; usage: NativeUsage }
   | { type: "delta"; delta: string }
   | { type: "result"; session_id: string; text: string }
@@ -31,7 +35,7 @@ export function parseStart(line: string): Start {
   const value: unknown = JSON.parse(line);
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_request");
   const request = value as Record<string, unknown>;
-  const allowed = new Set(["type", "prompt", "model", "system_prompt", "cwd", "resume", "observe_messages", "functions"]);
+  const allowed = new Set(["type", "prompt", "model", "system_prompt", "cwd", "resume", "observe_messages", "functions", "mcp_http_servers"]);
   if (Object.keys(request).some(key => !allowed.has(key)) || request.type !== "start" ||
       typeof request.prompt !== "string" || !request.prompt.trim() ||
       typeof request.model !== "string" || !request.model.trim() ||
@@ -44,6 +48,7 @@ export function parseStart(line: string): Start {
   if (request.functions !== undefined && (!Array.isArray(request.functions) || request.functions.some(tool =>
       !tool || typeof tool.name !== "string" || !tool.name || typeof tool.description !== "string" ||
       !tool.parameters || tool.parameters.type !== "object"))) throw new Error("invalid_request");
+  parseHTTPServers(request.mcp_http_servers);
   return request as Start;
 }
 
@@ -54,7 +59,11 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
   }
   const definitions = (request.functions ?? []).map(tool => ({ name: tool.name, description: tool.description, inputSchema: tool.parameters }));
   const names = definitions.map(tool => `mcp__functions__${tool.name}`);
-  const mcpServers: Record<string, McpServerConfig> = definitions.length ? { functions: createFunctionServer(definitions, functions.invoke) } : {};
+  const mcpServers: Record<string, McpServerConfig> = Object.create(null);
+  if (definitions.length) mcpServers.functions = createFunctionServer(definitions, functions.invoke);
+  const profile = request.mcp_http_servers === undefined ? undefined : new MCPProfile(request.mcp_http_servers, names);
+  const mcp = profile ? new MCPObserver(profile.identities) : undefined;
+  if (profile) Object.assign(mcpServers, profile.servers);
   const children: Promise<number | null>[] = [];
   let result: Extract<Event, { type: "result" }> | undefined;
   let nativeID = "";
@@ -71,7 +80,13 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
         model: request.model,
         systemPrompt: request.system_prompt,
         ...(request.resume ? { resume: request.resume } : {}),
-        tools: [], mcpServers, allowedTools: names, strictMcpConfig: true, settingSources: [],
+        tools: [], mcpServers, allowedTools: profile?.allowed ?? names, strictMcpConfig: true, settingSources: [],
+        ...(profile ? {
+          agent: "parsar_root", disallowedTools: profile.denied,
+          hooks: { PreToolUse: [{ hooks: [profile.beforeTool] }] },
+          agents: { parsar_root: { description: "Execution root.", prompt: request.system_prompt,
+            model: request.model, tools: profile.allowed } },
+        } : {}),
         persistSession: true, includePartialMessages: true, abortController: abort,
         canUseTool: async () => ({ behavior: "deny", message: "Tools are unavailable in this execution profile." }),
         spawnClaudeCodeProcess: options => {
@@ -83,10 +98,13 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
     });
     for await (const message of stream) {
       await functions.consume(message, nativeID);
+      if (mcp) for (const event of mcp.consume(message, nativeID)) await emit(event);
       if (messages) for (const event of messages.consume(message)) await emit(event);
       if (message.type === "system" && message.subtype === "init") {
         nativeID = message.session_id;
-        if (!nativeID || (request.resume && nativeID !== request.resume) || message.tools.length !== names.length || message.tools.some(name => !names.includes(name)) ||
+        if (!nativeID || (request.resume && nativeID !== request.resume)) throw new Error("unexpected native session");
+        if (profile) profile.verify(message.tools, await stream.mcpServerStatus(), nativeID);
+        else if (message.tools.length !== names.length || message.tools.some(name => !names.includes(name)) ||
             message.mcp_servers.length !== (definitions.length ? 1 : 0) ||
             message.mcp_servers.some(server => server.name !== "functions" || server.status !== "connected")) {
           throw new Error("unexpected native configuration");
@@ -106,14 +124,17 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
       if (message.type !== "result") for (const event of inputs.consume(message)) await emit(event);
     }
     functions.assertComplete();
+    mcp?.assertComplete();
   } catch {
     failed = true;
   } finally {
+    profile?.close();
     inputs.close();
     functions.close();
     stream?.close();
     const exits = await Promise.all(children);
     if (!exits.length || exits.some(code => code !== 0)) failed = true;
+    if (mcp) for (const event of mcp.close()) await emit(event);
   }
   if (abort.signal.aborted) await emit({ type: "error", code: "cancelled" });
   else if (failed || !result || !inputs.complete) await emit({ type: "error", code: "execution_failed" });

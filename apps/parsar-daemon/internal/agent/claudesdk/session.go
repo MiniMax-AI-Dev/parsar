@@ -35,6 +35,12 @@ func NewFactory(config Config) agent.Factory {
 		if err != nil {
 			return nil, err
 		}
+		if start.MCPHTTPServers != nil {
+			info, err := CheckRuntime(ctx, config)
+			if err != nil || !info.SupportsHTTPMCP() {
+				return nil, fmt.Errorf("claudesdk: packaged runtime does not support HTTP MCP")
+			}
+		}
 		binary := config.Node
 		if binary == "" {
 			binary = "node"
@@ -50,19 +56,22 @@ func NewFactory(config Config) agent.Factory {
 }
 
 type bridgeEvent struct {
-	InputID    string                      `json:"input_id"`
-	ResultID   string                      `json:"result_id"`
-	Usage      json.RawMessage             `json:"usage,omitempty"`
-	Type       string                      `json:"type"`
-	Delta      string                      `json:"delta"`
-	SessionID  string                      `json:"session_id"`
-	Text       string                      `json:"text"`
-	Code       string                      `json:"code"`
-	ItemID     string                      `json:"item_id"`
-	Message    *proto.OutputMessagePayload `json:"message"`
-	Call       *proto.FunctionCallPayload  `json:"call"`
-	CallID     string                      `json:"call_id"`
-	DeliveryID string                      `json:"delivery_id"`
+	InputID     string                      `json:"input_id"`
+	ResultID    string                      `json:"result_id"`
+	Usage       json.RawMessage             `json:"usage,omitempty"`
+	Type        string                      `json:"type"`
+	Delta       string                      `json:"delta"`
+	SessionID   string                      `json:"session_id"`
+	Text        string                      `json:"text"`
+	Code        string                      `json:"code"`
+	ItemID      string                      `json:"item_id"`
+	Message     *proto.OutputMessagePayload `json:"message"`
+	Call        *proto.FunctionCallPayload  `json:"call"`
+	CallID      string                      `json:"call_id"`
+	DeliveryID  string                      `json:"delivery_id"`
+	ID          string                      `json:"id"`
+	Stage       string                      `json:"stage"`
+	Observation *proto.ToolObservation      `json:"observation"`
 }
 
 func (s *session) run(ctx context.Context, runID string, start startRequest, out chan<- proto.Envelope) {
@@ -79,6 +88,12 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 		var stopping <-chan struct{}
 		if kind != proto.TypeError && kind != proto.TypeDone {
 			stopping = s.process.Context().Done()
+		}
+		// Preserve drained observations when the consumer can accept them immediately.
+		select {
+		case out <- event:
+			return
+		default:
 		}
 		select {
 		case out <- event:
@@ -102,6 +117,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	usageIDs := map[string]bool{}
 	var sequence uint64
 	terminal := false
+	mcp := mcpState{calls: map[string]proto.ToolObservation{}}
 	for scanner.Scan() {
 		var event bridgeEvent
 		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil || terminal {
@@ -110,6 +126,11 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 			break
 		}
 		switch event.Type {
+		case "mcp_observation":
+			if err := mcp.receive(event, start, emit); err != nil {
+				failure = err
+				s.process.Cancel()
+			}
 		case "delta":
 			if start.ObserveMessages && event.ItemID == "" || !start.ObserveMessages && event.ItemID != "" {
 				failure = fmt.Errorf("claudesdk: invalid message delta identity")
@@ -157,7 +178,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 			usageSession = event.SessionID
 			emit(proto.TypeUsage, proto.UsagePayload{Usage: usage})
 		case "result":
-			if !s.matchesInputSession(event.SessionID) || event.SessionID == "" || start.Resume != "" && event.SessionID != start.Resume || usageSession != "" && event.SessionID != usageSession || !s.functionsComplete() || !s.steeringComplete() {
+			if !s.matchesInputSession(event.SessionID) || event.SessionID == "" || start.Resume != "" && event.SessionID != start.Resume || usageSession != "" && event.SessionID != usageSession || !s.functionsComplete() || !s.steeringComplete() || !mcp.complete() {
 				failure = fmt.Errorf("claudesdk: invalid native completion or unconfirmed input/result")
 				s.process.Cancel()
 			} else {
@@ -193,6 +214,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	if result == nil && failure == nil {
 		failure = fmt.Errorf("claudesdk: SDK result is missing")
 	}
+	mcp.close(start, emit)
 	s.stopFunctions()
 	s.stopSteering()
 	metadata := map[string]any{proto.DoneMetaAgentSessionType: "claude_session"}
