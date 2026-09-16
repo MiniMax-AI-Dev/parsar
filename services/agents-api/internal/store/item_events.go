@@ -49,6 +49,12 @@ func recordItemChange(ctx context.Context, q *sqlc.Queries, session pgtype.UUID,
 	if !index.Valid {
 		return nil
 	}
+	if item.Type == "command_execution" && delta != nil {
+		event := base
+		event.Type = "agent.output.command_execution_output.delta"
+		event.ItemID, event.Delta = item.ID, delta
+		return recordSessionChange(ctx, q, session, SessionChange{Event: event})
+	}
 	if textMessage {
 		zero := 0
 		event := base

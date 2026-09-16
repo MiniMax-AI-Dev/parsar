@@ -12,8 +12,9 @@ import (
 )
 
 type Update struct {
-	Item       v1.Item
-	AppendText bool
+	Item               v1.Item
+	AppendText         bool
+	CommandOutputDelta *string
 	// A legacy aggregate is used only when no native message identity was recorded.
 	LegacyFinal bool
 }
@@ -92,25 +93,33 @@ func Project(turn, kind string, sequence int64, raw json.RawMessage) ([]Update, 
 		return []Update{{Item: message(turn, "legacy-message", "assistant", final.Content, status), LegacyFinal: true}}, nil
 	case proto.TypeToolCall:
 		return projectTool(turn, raw)
+	case proto.TypeCommandOutput:
+		return projectCommandOutput(turn, raw)
 	default:
 		return nil, nil
 	}
 }
 
-func Merge(update Update, previous v1.Item) v1.Item {
+func Merge(update Update, previous v1.Item) (v1.Item, error) {
+	if update.CommandOutputDelta != nil {
+		return mergeCommandOutput(update, previous)
+	}
 	item := update.Item
 	if previous.ID == "" {
-		return item
+		return item, nil
 	}
 	if previous.Status != "in_progress" && !(update.LegacyFinal && previous.Status == "incomplete") {
-		return previous
+		return previous, nil
 	}
 	if (item.Type == "function_call") && (item.Arguments == nil || string(encoded(item.Arguments)) == "null") {
 		item.Arguments = previous.Arguments
 	}
+	if item.Type == "command_execution" && item.Output == nil {
+		item.Output = previous.Output
+	}
 	if update.AppendText {
 		if previous.Status != "in_progress" {
-			return previous
+			return previous, nil
 		}
 		text := *previous.Content[0].Text + *item.Content[0].Text
 		item.Content = slices.Clone(item.Content)
@@ -119,5 +128,5 @@ func Merge(update Update, previous v1.Item) v1.Item {
 			item.Phase = previous.Phase
 		}
 	}
-	return item
+	return item, nil
 }
