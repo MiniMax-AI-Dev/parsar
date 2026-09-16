@@ -15,7 +15,12 @@ export class Inputs implements AsyncIterable<SDKUserMessage> {
   private ended = false;
   private sessionID = "";
 
-  constructor(prompt: string) { this.enqueue(prompt); }
+  constructor(prompt?: string) { if (prompt !== undefined) this.release(prompt); }
+
+  release(prompt: string): void {
+    if (this.ended || this.submitted.size || !prompt.trim()) throw new Error("Invalid initial input.");
+    this.enqueue(prompt);
+  }
 
   start(sessionID: string): InputEvent[] {
     if (this.ended || !sessionID || this.sessionID && this.sessionID !== sessionID) throw new Error("Invalid input session identity.");

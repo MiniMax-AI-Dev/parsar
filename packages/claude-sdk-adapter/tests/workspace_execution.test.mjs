@@ -8,7 +8,7 @@ import { mkdtempSync, mkdirSync, realpathSync, rmSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-const sdk = 'export function getSessionInfo(...args){return globalThis.historyFixture(...args);} export function query(options){return globalThis.queryFixture(options);}';
+const sdk = 'export function getSessionInfo(...args){return globalThis.historyFixture(...args);} export function query(options){return globalThis.queryFixture(options);} export function startup(){throw new Error("Unexpected preparation");}';
 registerHooks({ resolve(specifier, context, next) {
   if (specifier === "@anthropic-ai/claude-agent-sdk") return {url:"data:text/javascript,"+encodeURIComponent(sdk),shortCircuit:true};
   return next(specifier,context);

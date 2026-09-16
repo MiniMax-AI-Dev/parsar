@@ -1,64 +1,30 @@
-import { getSessionInfo, query, type McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
+import { getSessionInfo, query, startup, type McpServerConfig, type Options, type WarmQuery } from "@anthropic-ai/claude-agent-sdk";
 import { Inputs, type InputEvent } from "./inputs.js";
 import { resultUsage, type NativeUsage } from "./usage.js";
 import { spawnNative } from "./native.js";
 import { MessageObserver, type MessageEvent } from "./messages.js";
 import { createFunctionServer } from "./functions.js";
 import { FunctionBridge, type FunctionEvent } from "./function_bridge.js";
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
-import { isAbsolute } from "node:path";
-import { MCPProfile, parseHTTPServers, type HTTPServer } from "./mcp.js";
+import { MCPProfile } from "./mcp.js";
 import { MCPObserver, type MCPEvent } from "./mcp_observer.js";
-import { parseWorkspace, WorkspaceProfile, type Workspace } from "./workspace.js";
+import { WorkspaceProfile } from "./workspace.js";
+import type { Prepare, Start } from "./request.js";
+export { parseStart, type Start } from "./request.js";
 
-export type Start = {
-  type: "start";
-  prompt: string;
-  model: string;
-  system_prompt: string;
-  cwd: string;
-  resume?: string;
-  observe_messages?: boolean;
-  functions?: { name: string; description: string; parameters: Tool["inputSchema"] }[];
-  mcp_http_servers?: HTTPServer[];
-  workspace?: Workspace;
-};
 export type Event =
   | MessageEvent
   | InputEvent
   | FunctionEvent
   | MCPEvent
+  | { type: "prepared" }
   | { type: "usage"; session_id: string; result_id: string; usage: NativeUsage }
   | { type: "delta"; delta: string }
   | { type: "result"; session_id: string; text: string }
   | { type: "error"; code: "invalid_request" | "history_unavailable" | "execution_failed" | "cancelled" };
 
-export function parseStart(line: string): Start {
-  const value: unknown = JSON.parse(line);
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_request");
-  const request = value as Record<string, unknown>;
-  const allowed = new Set(["type", "prompt", "model", "system_prompt", "cwd", "resume", "observe_messages", "functions", "mcp_http_servers", "workspace"]);
-  if (Object.keys(request).some(key => !allowed.has(key)) || request.type !== "start" ||
-      typeof request.prompt !== "string" || !request.prompt.trim() ||
-      typeof request.model !== "string" || !request.model.trim() ||
-      typeof request.system_prompt !== "string" ||
-      typeof request.cwd !== "string" || !isAbsolute(request.cwd) ||
-      (request.observe_messages !== undefined && typeof request.observe_messages !== "boolean") ||
-      (request.resume !== undefined && (typeof request.resume !== "string" || !request.resume))) {
-    throw new Error("invalid_request");
-  }
-  if (request.functions !== undefined && (!Array.isArray(request.functions) || request.functions.some(tool =>
-      !tool || typeof tool.name !== "string" || !tool.name || typeof tool.description !== "string" ||
-      !tool.parameters || tool.parameters.type !== "object"))) throw new Error("invalid_request");
-  parseHTTPServers(request.mcp_http_servers);
-  if (parseWorkspace(request.workspace, request.cwd) && ("functions" in request || "mcp_http_servers" in request)) {
-    throw new Error("invalid_request");
-  }
-  return request as Start;
-}
-
-export async function execute(request: Start, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit), inputs = new Inputs(request.prompt)): Promise<void> {
+export async function execute(request: Start | Prepare, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit), inputs = new Inputs(request.type === "start" ? request.prompt : undefined)): Promise<void> {
   const workspace = request.workspace === undefined ? undefined : new WorkspaceProfile(request.cwd, request.workspace);
+  if (request.type === "prepare" && !workspace) throw new Error("invalid_request");
   if (workspace && ("functions" in request || "mcp_http_servers" in request)) throw new Error("invalid_request");
   if (request.resume && !await getSessionInfo(request.resume, { dir: request.cwd })) {
     await emit({ type: "error", code: "history_unavailable" });
@@ -78,10 +44,13 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
   let failed = false;
   const messages = request.observe_messages ? new MessageObserver() : undefined;
   let stream: ReturnType<typeof query> | undefined;
+  let warm: WarmQuery | undefined;
+  let nativeAlive = false;
+  const closeInputs = () => inputs.close();
+  abort.signal.addEventListener("abort", closeInputs, { once: true });
   try {
-    stream = query({
-      prompt: inputs,
-      options: {
+    if (abort.signal.aborted) throw new Error("cancelled");
+    const options: Options = {
         cwd: request.cwd,
         env: workspace?.options.env ?? { ...process.env },
         model: request.model,
@@ -99,11 +68,21 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
         ...(workspace?.options ?? {}),
         spawnClaudeCodeProcess: options => {
           const child = spawnNative(options);
-          children.push(new Promise(resolve => child.once("close", code => resolve(code))));
+          nativeAlive = true;
+          child.once("exit", () => { nativeAlive = false; });
+          children.push(new Promise(resolve => child.once("close", code => { nativeAlive = false; resolve(code); })));
           return child;
         },
-      },
-    });
+    };
+    if (request.type === "prepare") {
+      warm = await startup({ options, initializeTimeoutMs: 15000 });
+      stream = warm.query(inputs);
+      const initialized = await stream.initializationResult();
+      if (initialized.hooks_applied !== true || children.length !== 1 || !nativeAlive || abort.signal.aborted) {
+        throw new Error("preparation unavailable");
+      }
+      await emit({ type: "prepared" });
+    } else stream = query({ prompt: inputs, options });
     for await (const message of stream) {
       await functions.consume(message, nativeID);
       if (mcp) for (const event of mcp.consume(message, nativeID)) await emit(event);
@@ -141,6 +120,8 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
     inputs.close();
     functions.close();
     stream?.close();
+    warm?.close();
+    abort.signal.removeEventListener("abort", closeInputs);
     const exits = await Promise.all(children);
     if (!exits.length || exits.some(code => code !== 0)) failed = true;
     if (mcp) for (const event of mcp.close()) await emit(event);

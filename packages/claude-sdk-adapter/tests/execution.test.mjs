@@ -7,7 +7,7 @@ import test from "node:test";
 const fixture = `
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
-const sdk = 'export async function getSessionInfo(){return {sessionId:"native"};} export function query(options){return globalThis.queryFixture(options);}';
+const sdk = 'export async function getSessionInfo(){return {sessionId:"native"};} export function query(options){return globalThis.queryFixture(options);} export function startup(){throw new Error("Unexpected preparation");}';
 registerHooks({ resolve(specifier, context, next) {
   if (specifier === "@anthropic-ai/claude-agent-sdk") return {url:"data:text/javascript,"+encodeURIComponent(sdk),shortCircuit:true};
   return next(specifier,context);
