@@ -143,6 +143,11 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	if err != nil {
 		return device.KindCapabilities{}, err
 	}
+	for _, server := range mcp {
+		if server.Required && !caps.MCPHTTPRequired {
+			return fail("device must advertise mcp_http_required")
+		}
+	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" && len(mcp) > 0 {
 		if !caps.MCPHTTPRemoteEnvironment {
 			return fail("device must support service-side HTTP MCP with a remote environment")

@@ -16,7 +16,7 @@ import (
 )
 
 func TestWorkerWaitsForToolCapabilities(t *testing.T) {
-	for _, missing := range []string{"durable_input_receipts", "execution_controls", "function_tools", "tool_observations", "mcp_http_tools", "mcp_http_bearer_auth"} {
+	for _, missing := range []string{"durable_input_receipts", "execution_controls", "function_tools", "tool_observations", "mcp_http_tools", "mcp_http_bearer_auth", "mcp_http_required"} {
 		for _, prebound := range []bool{false, true} {
 			t.Run(missing+"/"+map[bool]string{false: "select", true: "bound"}[prebound], func(t *testing.T) {
 				h := newFunctionHarness(t)
@@ -28,6 +28,9 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 				}
 				if missing == "mcp_http_bearer_auth" {
 					configuration, token = mcpBearerWorkerConfiguration(t, h)
+				}
+				if missing == "mcp_http_required" {
+					configuration = strings.Replace(configuration, `"required":false`, `"required":true`, 1)
 				}
 				if !prebound || isMCP {
 					var err error
@@ -41,7 +44,7 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				caps := proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, DurableInputReceipts: missing != "durable_input_receipts", EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: missing != "execution_controls", SubagentControl: true, ToolObservations: missing != "tool_observations", MCPHTTPTools: missing != "mcp_http_tools", MCPHTTPBearerAuth: missing != "mcp_http_bearer_auth", FunctionTools: missing != "function_tools" && !isMCP}
+				caps := proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, DurableInputReceipts: missing != "durable_input_receipts", EnvironmentNone: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: missing != "execution_controls", SubagentControl: true, ToolObservations: missing != "tool_observations", MCPHTTPTools: missing != "mcp_http_tools", MCPHTTPRequired: missing != "mcp_http_required", MCPHTTPBearerAuth: missing != "mcp_http_bearer_auth", FunctionTools: missing != "function_tools" && !isMCP}
 				heartbeat := func() {
 					h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: caps}}})
 				}
@@ -50,7 +53,7 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 				for {
 					peer, _ := h.registry.LookupDevice(h.device.ID)
 					info, _, _ := peer.AgentKindStatus("codex")
-					if info.Capabilities.ExecutionControls == caps.ExecutionControls && info.Capabilities.FunctionTools == caps.FunctionTools && info.Capabilities.ToolObservations == caps.ToolObservations && info.Capabilities.MCPHTTPTools == caps.MCPHTTPTools && info.Capabilities.MCPHTTPBearerAuth == caps.MCPHTTPBearerAuth {
+					if info.Capabilities.ExecutionControls == caps.ExecutionControls && info.Capabilities.FunctionTools == caps.FunctionTools && info.Capabilities.ToolObservations == caps.ToolObservations && info.Capabilities.MCPHTTPTools == caps.MCPHTTPTools && info.Capabilities.MCPHTTPBearerAuth == caps.MCPHTTPBearerAuth && info.Capabilities.MCPHTTPRequired == caps.MCPHTTPRequired {
 						break
 					}
 					if time.Now().After(deadline) {
@@ -86,7 +89,7 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 					}
 				}
 				caps.DurableInputReceipts, caps.ExecutionControls, caps.ToolObservations, caps.MCPHTTPTools = true, true, true, true
-				caps.MCPHTTPBearerAuth, caps.FunctionTools = true, !isMCP
+				caps.MCPHTTPBearerAuth, caps.FunctionTools, caps.MCPHTTPRequired = true, !isMCP, true
 				heartbeat()
 				request := h.read(proto.TypePromptRequest)
 				var prompt proto.PromptRequestPayload
@@ -96,6 +99,9 @@ func TestWorkerWaitsForToolCapabilities(t *testing.T) {
 				if isMCP {
 					if prompt.MCPHTTPServers == nil || len(*prompt.MCPHTTPServers) != 1 || (*prompt.MCPHTTPServers)[0].ServerLabel != "tickets" || (*prompt.MCPHTTPServers)[0].AllowedTools == nil || len(*(*prompt.MCPHTTPServers)[0].AllowedTools) != 0 || len(prompt.FunctionTools) != 0 {
 						t.Fatal("MCP declaration lost during dispatch")
+					}
+					if (*prompt.MCPHTTPServers)[0].Required != (missing == "mcp_http_required") {
+						t.Fatal("dispatch changed required initialization")
 					}
 					bearer := (*prompt.MCPHTTPServers)[0].BearerToken
 					if token != "" && (bearer == nil || *bearer != token) || token == "" && bearer != nil {

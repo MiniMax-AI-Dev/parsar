@@ -36,10 +36,10 @@ func TestRemoteMCPDiscoveryRequiresPinnedNative(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.Codex.Capabilities.MCPHTTPRemoteEnvironment != (version == "codex-cli 0.153.4") || got.Codex.Capabilities.MCPHTTPRemoteBearerAuth != (version == "codex-cli 0.153.4") {
+		if got.Codex.Capabilities.MCPHTTPRequired != (version == "codex-cli 0.153.4") || got.Codex.Capabilities.MCPHTTPRemoteEnvironment != (version == "codex-cli 0.153.4") || got.Codex.Capabilities.MCPHTTPRemoteBearerAuth != (version == "codex-cli 0.153.4") {
 			t.Fatal("unverified native combination advertised")
 		}
-		if got.ClaudeCode.Capabilities.MCPHTTPRemoteEnvironment || got.OpenCode.Capabilities.MCPHTTPRemoteEnvironment || got.Pi.Capabilities.MCPHTTPRemoteEnvironment || got.ClaudeCode.Capabilities.MCPHTTPRemoteBearerAuth || got.OpenCode.Capabilities.MCPHTTPRemoteBearerAuth || got.Pi.Capabilities.MCPHTTPRemoteBearerAuth {
+		if got.ClaudeCode.Capabilities.MCPHTTPRequired || got.OpenCode.Capabilities.MCPHTTPRequired || got.Pi.Capabilities.MCPHTTPRequired || got.ClaudeCode.Capabilities.MCPHTTPRemoteEnvironment || got.OpenCode.Capabilities.MCPHTTPRemoteEnvironment || got.Pi.Capabilities.MCPHTTPRemoteEnvironment || got.ClaudeCode.Capabilities.MCPHTTPRemoteBearerAuth || got.OpenCode.Capabilities.MCPHTTPRemoteBearerAuth || got.Pi.Capabilities.MCPHTTPRemoteBearerAuth {
 			t.Fatal("other engine advertised combination")
 		}
 	}

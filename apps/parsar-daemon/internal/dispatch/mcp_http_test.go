@@ -13,7 +13,7 @@ import (
 )
 
 func TestMCPHTTPBearerRejectsUnsupportedRequestsBeforeFactory(t *testing.T) {
-	for _, mode := range []string{"supported", "no bearer capability", "no MCP capability", "unavailable", "no none capability", "local", "remote", "other engine", "HTTP", "credential-free", "product"} {
+	for _, mode := range []string{"supported", "no bearer capability", "no MCP capability", "unavailable", "no none capability", "local", "remote", "other engine", "HTTP", "credential-free", "product", "required", "required old peer", "optional old peer"} {
 		t.Run(mode, func(t *testing.T) {
 			h := newHarness(t)
 			defer h.router.Shutdown(context.Background())
@@ -22,6 +22,10 @@ func TestMCPHTTPBearerRejectsUnsupportedRequestsBeforeFactory(t *testing.T) {
 			req := proto.PromptRequestPayload{AgentKind: "codex", DisableExecutionEnvironment: true, MCPHTTPServers: &servers}
 			caps := proto.AgentKindCapabilities{EnvironmentNone: true, MCPHTTPTools: true, MCPHTTPBearerAuth: true}
 			switch mode {
+			case "required", "required old peer", "optional old peer":
+				servers[0].Required = mode != "optional old peer"
+				servers[0].BearerToken = nil
+				caps.MCPHTTPRequired = mode == "required"
 			case "no bearer capability", "credential-free", "product":
 				caps.MCPHTTPBearerAuth = false
 			case "no MCP capability":
@@ -49,13 +53,16 @@ func TestMCPHTTPBearerRejectsUnsupportedRequestsBeforeFactory(t *testing.T) {
 			h.reg.RegisterKind(proto.SupportedAgentKind{Kind: req.AgentKind, Available: mode != "unavailable", Capabilities: caps},
 				func(_ context.Context, got proto.PromptRequestPayload, _ chan<- proto.Envelope) (agent.Session, error) {
 					called = true
+					if mode == "required" && !(*got.MCPHTTPServers)[0].Required {
+						t.Error("required initialization lost before adapter")
+					}
 					if mode == "supported" && (got.MCPHTTPServers == nil || (*got.MCPHTTPServers)[0].BearerToken == nil || *(*got.MCPHTTPServers)[0].BearerToken != token) {
 						t.Error("token lost before adapter")
 					}
 					return nil, errors.New("controlled factory stop")
 				})
 			err := h.router.Handle(t.Context(), mustEnv(t, proto.TypePromptRequest, "mcp-bearer", req))
-			if called != (mode == "supported" || mode == "credential-free" || mode == "product") {
+			if called != (mode == "supported" || mode == "credential-free" || mode == "product" || mode == "required" || mode == "optional old peer") {
 				t.Fatal("wrong factory admission")
 			}
 			frames := h.sender.snapshot()
@@ -68,7 +75,7 @@ func TestMCPHTTPBearerRejectsUnsupportedRequestsBeforeFactory(t *testing.T) {
 }
 
 func TestRemoteMCPRejectsBeforePreparationFactory(t *testing.T) {
-	for _, mode := range []string{"supported", "old peer", "no MCP", "no remote", "bearer old peer", "bearer supported", "bearer no general auth", "bearer none conflict", "bearer HTTP", "other engine", "empty declaration", "no declaration"} {
+	for _, mode := range []string{"supported", "old peer", "no MCP", "no remote", "bearer old peer", "bearer supported", "bearer no general auth", "bearer none conflict", "bearer HTTP", "other engine", "empty declaration", "no declaration", "required", "required old peer"} {
 		t.Run(mode, func(t *testing.T) {
 			h := newHarness(t)
 			defer h.router.Shutdown(context.Background())
@@ -78,6 +85,9 @@ func TestRemoteMCPRejectsBeforePreparationFactory(t *testing.T) {
 			req.Configuration.MCPHTTPServers = &servers
 			caps := proto.AgentKindCapabilities{RemoteEnvironment: true, MCPHTTPTools: true, MCPHTTPRemoteEnvironment: true, EnvironmentNone: true, MCPHTTPBearerAuth: true}
 			switch mode {
+			case "required", "required old peer":
+				servers[0].Required = true
+				caps.MCPHTTPRequired = mode == "required"
 			case "old peer":
 				caps.MCPHTTPRemoteEnvironment = false
 			case "no MCP":
@@ -113,6 +123,9 @@ func TestRemoteMCPRejectsBeforePreparationFactory(t *testing.T) {
 				return nil, errors.New("unexpected")
 			})
 			h.reg.RegisterPreparation(req.Configuration.AgentKind, func(_ context.Context, got proto.PromptRequestPayload) (agent.Prepared, error) {
+				if mode == "required" && !(*got.MCPHTTPServers)[0].Required {
+					t.Error("required initialization lost before preparation")
+				}
 				if mode == "bearer supported" && (got.MCPHTTPServers == nil || (*got.MCPHTTPServers)[0].BearerToken == nil || *(*got.MCPHTTPServers)[0].BearerToken != "synthetic-private-token") {
 					t.Error("remote bearer lost before preparation")
 				}
@@ -120,7 +133,7 @@ func TestRemoteMCPRejectsBeforePreparationFactory(t *testing.T) {
 				return nil, errors.New("controlled stop")
 			})
 			err := h.router.Handle(t.Context(), mustEnv(t, proto.TypeExecutionPrepare, "remote-mcp", req))
-			allowed := mode == "supported" || mode == "no declaration" || mode == "bearer supported"
+			allowed := mode == "supported" || mode == "no declaration" || mode == "bearer supported" || mode == "required"
 			if (err == nil) != allowed {
 				t.Fatal("wrong preparation admission", err)
 			}

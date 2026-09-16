@@ -1,6 +1,7 @@
 """HTTP MCP resource semantics; execution requires the separate real-provider run."""
 
 from copy import deepcopy
+from itertools import product
 
 from openai import BadRequestError, NotFoundError
 
@@ -11,13 +12,16 @@ def verify_mcp_configuration(client, other, expect_error):
     tool = {"type": "mcp", "server_label": "tickets", "transport": transport,
             "connection_origin": "service"}
     recovered, saved = [], []
-    for allow in ({}, {"allowed_tools": None}, {"allowed_tools": []},
-                  {"allowed_tools": ["lookup_ticket"]}):
-        declared = {**tool, **allow}
+    for allow, readiness in product(
+        ({}, {"allowed_tools": None}, {"allowed_tools": []},
+         {"allowed_tools": ["lookup_ticket"]}),
+        ({}, {"required": False}, {"required": True}),
+    ):
+        declared = {**tool, **allow, **readiness}
         response = agents.with_raw_response.create(model="requested-model", tools=[declared])
         resource, body = response.parse(), response.http_response.json()
         canonical = {**declared, "allowed_tools": allow.get("allowed_tools"),
-                     "credential_id": None, "request_metadata": {}, "required": False,
+                     "credential_id": None, "request_metadata": {}, "required": readiness.get("required", False),
                      "transport": {**transport, "headers": {}}}
         assert body["tools"] == [canonical]
         spec = {"agent_id": resource.id, "environment": {"type": "none"}}
@@ -39,7 +43,7 @@ def verify_mcp_configuration(client, other, expect_error):
     before = {item.id for item in sessions.list()}
     saved_before = {item.id for item in agents.list()}
     invalid = [{**tool, "connection_origin": value} for value in (None, "environment")]
-    invalid += [{**tool, "required": True}, {**tool, "required": None},
+    invalid += [{**tool, "required": "true"}, {**tool, "required": None},
                 {**tool, "request_metadata": {"x": "y"}},
                 {**tool, "allowed_tools": [None]}]
     for changes in ({"headers": {"Authorization": "synthetic-private"}},

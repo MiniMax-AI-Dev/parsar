@@ -81,6 +81,22 @@ func allowlistName(tools *[]string) string {
 	return "selected"
 }
 
+func TestPublicMCPHTTPRequiredConfigurationCannotBeWeakened(t *testing.T) {
+	servers := map[string]mcpServerConfig{"docs": {URL: "https://docs.example/mcp", Required: true}}
+	for _, value := range []any{true, false, nil, "true", "omitted"} {
+		response := mcpHTTPConfigResponse(servers)
+		server := response["config"].(map[string]any)["mcp_servers"].(map[string]any)["docs"].(map[string]any)
+		server["required"] = value
+		if value == "omitted" {
+			delete(server, "required")
+		}
+		raw, err := json.Marshal(response)
+		if err != nil || matchesMCPHTTPConfig(raw, servers) != (value == true) {
+			t.Fatal("required initialization was weakened or rejected", value, err)
+		}
+	}
+}
+
 func TestPublicMCPHTTPPreflightRedactsNativeErrors(t *testing.T) {
 	client, server, cleanup := NewTestClient()
 	defer cleanup()

@@ -203,10 +203,15 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   explicit effort/summary is retained. Omitted/null service tier currently follows
   the service's `auto` policy; complete upstream-default/error/retry conformance is
   unverified. HTTP MCP with explicit `service` origin and
-  `required` omitted/false supports saved configuration and Codex `none` execution,
+  boolean `required` (default false) supports saved configuration and Codex `none` execution,
   plus `self_hosted` execution behind explicit combination capabilities. Remote
   static Bearer authentication additionally requires `mcp_http_remote_bearer_auth`;
-  it keeps the secret in the trusted service native process.
+  it keeps the secret in the trusted service native process. Required initialization
+  additionally needs `mcp_http_required` on the pinned native profile. Native root
+  thread creation/cold resume must initialize required servers before a native
+  Turn starts; failure cannot silently replace retained history. Public acceptance
+  or queued work does not prove native readiness. Hosted creation timing/error
+  parity and continuing server health remain unverified.
   The saved HTTP transport includes `headers:{}`; effective Session transport omits
   headers. Omitted/null `allowed_tools` is unrestricted; `[]` denies all tools.
   Session `vault_ids` attaches tenant-owned Vaults. Explicit `credential_id` must

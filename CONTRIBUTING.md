@@ -817,10 +817,19 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   `headers:{}`; the effective Session transport omits headers, matching the two
   pinned resource types. Saved-Agent updates never change existing Session
   snapshots; per-Session tools replace the whole field. The initial profile admits
-  HTTP(S), `required` omitted/false, empty/null metadata and empty/null headers.
+  HTTP(S), boolean `required` (default false), empty/null metadata and empty/null headers.
   Static bearer authentication requires HTTPS and the attached-Vault rules below.
   Inline authorization, URL userinfo/query/fragment,
-  other origins, stdio and required readiness remain explicitly unsupported.
+  other origins and stdio remain explicitly unsupported.
+- Required MCP initialization additionally needs `mcp_http_required`, advertised
+  only for the verified native pin and checked during selection, final preclaim
+  and daemon dispatch/preparation. Preserve the boolean through typed messages,
+  native rendering and exact configuration preflight. Reuse native required-server
+  initialization during root thread creation and cold resume; send no native Turn
+  until it succeeds, and never replace a failed strict resume with a new thread.
+  Public work may already be accepted/queued/in progress while native initialization
+  waits. This is not a continuing health monitor or a new public readiness state;
+  exact hosted Session creation timing and initialization errors remain unverified.
 - Send MCP declarations through typed daemon fields, independently of function
   callbacks. A non-nil declaration replaces operator MCP options; use the existing
   native renderer and original tool names for `enabled_tools`, including `[]`.

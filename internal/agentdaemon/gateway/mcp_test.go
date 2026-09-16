@@ -68,3 +68,23 @@ func TestMCPRemoteBearerCapabilityIsExplicit(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPRequiredCapabilityIsExplicit(t *testing.T) {
+	for _, supported := range []bool{false, true} {
+		heartbeat := proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{RemoteEnvironment: true, MCPHTTPTools: true, MCPHTTPRemoteEnvironment: true, MCPHTTPBearerAuth: true, MCPHTTPRequired: supported}}}}
+		raw, err := json.Marshal(heartbeat)
+		if err != nil || strings.Contains(string(raw), `"mcp_http_required":true`) != supported {
+			t.Fatal("wire capability differs", err)
+		}
+		var decoded proto.HeartbeatPayload
+		if err = json.Unmarshal(raw, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		s := &Session{}
+		s.setSupportedAgentKinds(deviceKindsFromHeartbeat(decoded))
+		info, found, known := s.AgentKindStatus("codex")
+		if !found || !known || info.Capabilities.MCPHTTPRequired != supported {
+			t.Fatal("combination capability lost or inferred")
+		}
+	}
+}

@@ -181,6 +181,17 @@ func TestPreparationFakeCodexProcess(t *testing.T) {
 				os.Exit(6)
 			}
 		case "thread/start", "thread/resume":
+			if gate := os.Getenv("PARSAR_PREPARATION_THREAD_GATE"); gate != "" {
+				var state []byte
+				for string(state) != "ready" && string(state) != "failed" {
+					state, _ = os.ReadFile(gate)
+					time.Sleep(time.Millisecond)
+				}
+				if string(state) == "failed" {
+					_ = output.Encode(map[string]any{"jsonrpc": "2.0", "id": frame.ID, "error": map[string]any{"code": -32603, "message": "required MCP initialization failed"}})
+					continue
+				}
+			}
 			result = map[string]any{"thread": map[string]string{"id": "fixture-native-thread"}, "model": "fixture-model"}
 		case "turn/start":
 			result = map[string]any{"turn": map[string]string{"id": "fixture-native-turn"}}

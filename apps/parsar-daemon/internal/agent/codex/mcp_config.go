@@ -20,6 +20,7 @@ type mcpServerConfig struct {
 	Args              []string
 	Env               map[string]string
 	EnabledTools      *[]string
+	Required          bool
 	BearerTokenEnvVar string
 }
 
@@ -49,6 +50,9 @@ func writeCodexMCPConfig(codexHome string, servers map[string]mcpServerConfig) e
 		b.WriteString(tomlQuoteString(name))
 		b.WriteString("]\n")
 		if srv.URL != "" {
+			if srv.Required {
+				b.WriteString("required = true\n")
+			}
 			b.WriteString(`url = `)
 			b.WriteString(tomlQuoteString(srv.URL))
 			b.WriteByte('\n')

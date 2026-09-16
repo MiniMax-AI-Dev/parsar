@@ -36,7 +36,7 @@ func publicMCPHTTPServers(req proto.PromptRequestPayload) (map[string]mcpServerC
 		if declaration.BearerToken != nil && (endpoint.Scheme != "https" || !validMCPHTTPBearerToken(*declaration.BearerToken)) {
 			return nil, errors.New("codex: unsupported HTTPS MCP bearer credential")
 		}
-		server := mcpServerConfig{Name: name, URL: declaration.ServerURL}
+		server := mcpServerConfig{Name: name, URL: declaration.ServerURL, Required: declaration.Required}
 		if declaration.AllowedTools != nil {
 			tools := slices.Clone(*declaration.AllowedTools)
 			for _, tool := range tools {

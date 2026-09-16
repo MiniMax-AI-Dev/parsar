@@ -48,6 +48,12 @@ func matchesMCPHTTPConfig(raw json.RawMessage, declared map[string]mcpServerConf
 		delete(server, "url")
 		delete(server, "environment_id")
 		delete(server, "enabled")
+		if expected.Required {
+			if server["required"] != true {
+				return false
+			}
+			delete(server, "required")
+		}
 		if expected.BearerTokenEnvVar != "" {
 			if server["bearer_token_env_var"] != expected.BearerTokenEnvVar {
 				return false

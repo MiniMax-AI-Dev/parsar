@@ -271,6 +271,7 @@ type AgentKindCapabilities struct {
 	DurableTurns             bool `json:"durable_turns,omitempty"`
 	FunctionTools            bool `json:"function_tools,omitempty"`
 	MCPHTTPTools             bool `json:"mcp_http_tools,omitempty"`
+	MCPHTTPRequired          bool `json:"mcp_http_required,omitempty"`
 	MCPHTTPRemoteEnvironment bool `json:"mcp_http_remote_environment,omitempty"`
 	MCPHTTPRemoteBearerAuth  bool `json:"mcp_http_remote_bearer_auth,omitempty"`
 	MCPHTTPBearerAuth        bool `json:"mcp_http_bearer_auth,omitempty"`

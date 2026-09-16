@@ -24,8 +24,8 @@ func resolveMCPTool(raw json.RawMessage, saved bool) (json.RawMessage, error) {
 		return nil, errors.New("MCP credential_id must be null or a nonempty string.")
 	}
 	required, err := optionalBoolean(input.Required, false)
-	if err != nil || required {
-		return nil, errors.New("MCP required must be omitted or false; required-server readiness is not supported yet.")
+	if err != nil {
+		return nil, errors.New("MCP required must be a boolean.")
 	}
 	if !emptyMCPObject(input.RequestMetadata) {
 		return nil, errors.New("Nonempty MCP request_metadata is not supported yet.")
@@ -64,7 +64,7 @@ func resolveMCPTool(raw json.RawMessage, saved bool) (json.RawMessage, error) {
 	}
 	tool := v1.MCPTool{Type: "mcp", ServerLabel: *input.ServerLabel,
 		Transport:    v1.MCPHTTPTransport{Type: "http", ServerURL: *transport.ServerURL},
-		AllowedTools: allowed, ConnectionOrigin: "service", CredentialID: input.CredentialID, RequestMetadata: map[string]json.RawMessage{}}
+		AllowedTools: allowed, Required: required, ConnectionOrigin: "service", CredentialID: input.CredentialID, RequestMetadata: map[string]json.RawMessage{}}
 	if saved {
 		headers := map[string]string{}
 		tool.Transport.Headers = &headers
