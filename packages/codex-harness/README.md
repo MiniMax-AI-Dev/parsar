@@ -84,7 +84,10 @@ The request shares one ten-second deadline. A stalled frame or response writer
 closes its connection. If the native operation has not settled by the deadline,
 the artifact exits with an error and closes admission; dropping the native wait
 does not cancel remote work. Recovery must retain that uncertainty and must not
-infer remote retirement from this local failure.
+infer remote retirement from this local failure. Runtime shutdown waits at most
+one second for blocking tasks, including native stdin, so a caller keeping its
+input pipe open still observes local process exit. This is not a remote cleanup
+guarantee.
 
 ## Acceptance limits
 

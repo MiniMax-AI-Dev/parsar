@@ -475,7 +475,9 @@ Environment UUID, the adapter's native `remote` manager key, and no local fallba
 Keep socket admission bounded and close it with the runner. An unresolved native
 metadata timeout must stop the owner before admitting another operation; client
 frame/response timeouts are connection-local. Never equate dropping the native
-response future with remote settlement. The socket directory
+response future with remote settlement. Bound Tokio runtime shutdown so an
+uncancellable native stdin read cannot hide local process exit from the RPC owner.
+The socket directory
 must be new and private under `~/.parsar`; native/helper/socket selectors remain
 operator configuration. Public feature admission and default daemon selection
 are unchanged. Metadata path checks do not qualify filesystem isolation, idle
