@@ -42,6 +42,9 @@ globalThis.startupFixture = async ({options, initializeTimeoutMs}) => {
         close,
         async initializationResult(){return {hooks_applied:mode !== "missing-hooks"};},
         async *[Symbol.asyncIterator](){
+          const command={type:"assistant",session_id:"native",parent_tool_use_id:null,
+            message:{content:[{type:"tool_use",id:"command",name:"Bash",input:{command:"printf 'prepared'"}}]}};
+          if(mode === "command-before-input")yield command;
           const iterator=prompt[Symbol.asyncIterator]();
           const first=await Promise.race([iterator.next(),closed.then(()=>({done:true}))]);
           if(first.done)return;
@@ -49,6 +52,11 @@ globalThis.startupFixture = async ({options, initializeTimeoutMs}) => {
           yield {type:"system",subtype:"init",session_id:mode === "resume-mismatch"?"other":"native",mcp_servers:[],
             tools:mode === "bad-inventory"?["Bash","Read","Edit","Agent"]:["Bash","Read","Edit"]};
           const ids=[first.value.uuid];
+          if(mode === "commands") {
+            yield command;
+            yield {type:"user",session_id:"native",parent_tool_use_id:null,
+              message:{content:[{type:"tool_result",tool_use_id:"command",content:"prepared",is_error:false}]}};
+          }
           if(mode === "steer") {
             const second=await Promise.race([iterator.next(),closed.then(()=>({done:true}))]);
             if(second.done)return;
@@ -133,7 +141,7 @@ async function launch(t, mode) {
   return { child, request, events, observations, send, wait, finish };
 }
 
-for (const mode of ["release", "resume", "steer", "unused", "owner-cancel", "native-exit", "duplicate", "replacement", "early-steer", "bad-inventory", "resume-mismatch"]) {
+for (const mode of ["release", "resume", "steer", "commands", "unused", "owner-cancel", "native-exit", "duplicate", "replacement", "early-steer", "bad-inventory", "resume-mismatch"]) {
   test(`prepared entrypoint lifecycle: ${mode}`, { timeout: 10000 }, async t => {
     const bridge = await launch(t, mode);
     const { child, request, events, observations, send, wait, finish } = bridge;
@@ -161,10 +169,21 @@ for (const mode of ["release", "resume", "steer", "unused", "owner-cancel", "nat
         assert.deepEqual(observations.filter(value => value.kind === "input"), [{ kind: "input", text: "first" }]);
         if (mode === "steer") assert.ok(events.some(event => event.type === "input_applied" && event.input_id === "extra"));
         if (mode === "resume") assert.equal(observations[0].kind, "history");
+        if (mode === "commands") assert.deepEqual(events.filter(event=>event.type === "command_observation").map(event=>
+          [event.session_id,event.id,event.stage,event.observation.output]),
+          [["native","command","before",undefined],["native","command","after","prepared"]]);
       }
     }
   });
 }
+
+test("preparation cannot observe commands before actual input", { timeout: 10000 }, async t => {
+  const { request, events, observations, send, finish } = await launch(t, "command-before-input");
+  send(request);
+  await finish("execution_failed");
+  assert.equal(events.some(event=>event.type === "command_observation"),false);
+  assert.equal(observations.some(value=>value.kind === "input"),false);
+});
 
 for (const mode of ["missing-history", "missing-hooks", "startup-error", "early-start", "cancel-startup"]) {
   test(`preparation rejects before receipt: ${mode}`, { timeout: 10000 }, async t => {

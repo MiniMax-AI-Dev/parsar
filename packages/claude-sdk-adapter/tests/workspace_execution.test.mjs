@@ -52,6 +52,16 @@ globalThis.queryFixture = ({prompt, options}) => {
     const first = (await prompt[Symbol.asyncIterator]().next()).value;
     yield { type: "system", subtype: "init", session_id: "native", mcp_servers: mode === "extra-mcp" ? [{name:"other",status:"connected"}] : [],
       tools: mode === "extra-tool" ? ["Bash", "Read", "Edit", "Agent"] : ["Bash", "Read", "Edit"] };
+    if (mode.startsWith("commands")) {
+      const call = id => ({type:"assistant",session_id:"native",parent_tool_use_id:null,
+        message:{content:[{type:"tool_use",name:"Bash",id,input:{command:"printf 'observed'"}}]}});
+      yield call("observed");
+      yield {type:"user",session_id:"native",parent_tool_use_id:null,
+        message:{content:[{type:"tool_result",tool_use_id:"observed",content:"observed",is_error:false}]},
+        tool_use_result:{stdout:"observed",stderr:"",interrupted:false}};
+      if (mode !== "commands-success") yield call("unfinished");
+      if (mode === "commands-cancel") {abort.abort();return;}
+    }
     yield { type: "result", uuid: "result", session_id: "native", user_message_uuids: [first.uuid],
       subtype: "success", is_error: false, result: "fixture", usage: {input_tokens:1,output_tokens:1}, modelUsage:{} };
   } };
@@ -71,13 +81,25 @@ try {
       if (mode.startsWith("extra")) {
         assert.deepEqual(events.at(-1), {type:"error",code:"execution_failed"});
         assert.equal(events.some(e => e.type === "input_ready"), false);
+      } else if (mode.startsWith("commands")) {
+        const observations=events.filter(e=>e.type==="command_observation");
+        assert.deepEqual(observations.slice(0,2).map(e=>[e.id,e.stage,e.observation.output]),
+          [["observed","before",undefined],["observed","after","observed"]]);
+        assert.equal(events.some(e=>e.type==="command_output"),false);
+        if(mode === "commands-success") {
+          assert.equal(observations.length,2);assert.equal(events.at(-1).type,"result");
+        } else {
+          assert.equal(observations.length,4);
+          assert.deepEqual(observations.at(-1).observation,{kind:"command",status:"incomplete",command:"printf 'observed'"});
+          assert.deepEqual(events.at(-1),{type:"error",code:mode === "commands-cancel"?"cancelled":"execution_failed"});
+        }
       } else assert.equal(events.at(-1).type, "result");
     }
   }
 } finally { rmSync(root, {recursive:true,force:true}); }
 `;
 
-for (const mode of ["fresh", "resume-existing", "resume-missing", "resume-mismatch", "extra-tool", "extra-mcp"]) {
+for (const mode of ["fresh", "resume-existing", "resume-missing", "resume-mismatch", "extra-tool", "extra-mcp", "commands-success", "commands-cancel", "commands-missing"]) {
   test(`workspace execution boundary: ${mode}`, { timeout: 15000 }, () => {
     const child = spawnSync(process.execPath, ["--input-type=module", "-e", fixture, mode], { encoding: "utf8", timeout: 10000 });
     assert.equal(child.status, 0, child.stderr || child.error?.message);

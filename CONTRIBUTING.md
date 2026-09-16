@@ -1423,7 +1423,7 @@ The deployment must retain these controls, including the SDK-owned hook.
 Functions, MCP and remote-environment combinations are rejected in this private
 profile until separately qualified. The existing `none` profile retains its
 behavior. Packaged `workspace_tools` establishes bridge support only, not host
-isolation or a public capability. Native command/file Item projection, public
+isolation or a public capability. Public command/file Item delivery, public
 preparation, shared placement quotas and Files ownership remain separate work.
 `TestLiveClaudeWorkspaceFactory` is explicit real-provider acceptance inside a
 qualified placement, including effects, cancellation and same-history continuation.
@@ -1463,6 +1463,20 @@ an unstarted preparation has no measured Usage or observed native Session identi
 A cancellation deadline cannot establish cleanup completion while cleanup remains
 pending. This adapter ownership seam does not register a daemon capability or
 supply per-Session placement authorization, public admission or an idle Files owner.
+
+With `ObserveToolObservations`, private workspace execution requires the packaged
+`workspace_command_observations` feature and emits the existing neutral command
+snapshots. Match root, current-query native Bash call/result identities after input;
+ignore historical replay, synthetic and child work. Preserve exact command text and
+the native per-call textual result, including native rendering or truncation. This
+is final native output, not incremental stdout/stderr or reconstructed interleaving.
+Native error results are failed; unambiguous structured interruption is incomplete.
+Missing results close as incomplete after the observation drain; query cancellation
+does not overwrite an already observed native failure. Do not infer an
+exit code from rendered text or supply cwd/duration without qualified native fields.
+Preparation alone emits no command. Cold continuation must not reissue historical
+observations. This private translation does not enable public workspace admission,
+Read/Edit Items or Files ownership.
 
 The private adapter also accepts typed anonymous HTTP and static-bearer HTTPS MCP
 declarations on the trusted `environment:none` harness host. The packaged readiness

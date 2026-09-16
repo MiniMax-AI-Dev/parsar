@@ -71,6 +71,7 @@ func testLiveClaudeWorkspace(t *testing.T, explicitPreparation bool) {
 	heartbeat := filepath.Join(config.Workspace.Directory, "heartbeat.txt")
 	artifact := filepath.Join(config.Workspace.Directory, "value.txt")
 	type evidence struct {
+		RunID                 string            `json:"run_id"`
 		Events                []proto.Envelope  `json:"events"`
 		Done                  proto.DonePayload `json:"done"`
 		Failure               string            `json:"failure,omitempty"`
@@ -101,9 +102,9 @@ func testLiveClaudeWorkspace(t *testing.T, explicitPreparation bool) {
 		out := make(chan proto.Envelope, 64)
 		req := workspaceRequest()
 		req.RunID, req.Prompt, req.AgentSessionID = uuid.NewString(), prompt, resume
-		req.StrictResume, req.ReleaseOnCompletion, req.ObserveMessages = true, true, true
+		req.StrictResume, req.ReleaseOnCompletion, req.ObserveMessages, req.ObserveToolObservations = true, true, true, true
 		req.AgentOptions = map[string]any{"model": "MiniMax-M3", "system_prompt": "Follow the exact verification instructions using the requested native tools. Preserve conversation facts. No other files, network operations or background work."}
-		proof := evidence{}
+		proof := evidence{RunID: req.RunID}
 		var running agent.Session
 		var owner agent.PreparedCancellation
 		if explicitPreparation {
@@ -119,7 +120,7 @@ func testLiveClaudeWorkspace(t *testing.T, explicitPreparation bool) {
 				before, _ := os.ReadFile(artifact)
 				time.Sleep(500 * time.Millisecond)
 				after, _ := os.ReadFile(artifact)
-				if !bytes.Equal(before, after) || liveWorkspaceNativeIdentity(t, proof.PreparedPID) != proof.NativeBefore {
+				if !bytes.Equal(before, after) || liveWorkspaceNativeIdentity(t, proof.PreparedPID) != proof.NativeBefore || len(out) != 0 {
 					t.Fatal("prepared resource changed before initial input")
 				}
 				operation, stopOperation := context.WithCancel(ctx)
@@ -207,18 +208,44 @@ func testLiveClaudeWorkspace(t *testing.T, explicitPreparation bool) {
 		}
 		return proof
 	}
+	commands := []string{
+		`python3 -c "import sys; print('OBS_SUCCESS_STDOUT'); print('OBS_SUCCESS_STDERR', file=sys.stderr)"`,
+		`python3 -c "import sys; print('OBS_FAILURE_STDOUT'); print('OBS_FAILURE_STDERR', file=sys.stderr); sys.exit(7)"`,
+	}
+	observed := run("commands", fmt.Sprintf("Execute exactly these two foreground Bash calls, sequentially, with timeout 10000. Preserve each command exactly. The second intentionally fails; do not retry or repair it. Use no other tools.\n1. %s\n2. %s", commands[0], commands[1]), "", false)
+	observedID, _ := observed.Done.Metadata[proto.DoneMetaAgentSessionID].(string)
+	if observedID == "" || observed.Failure != "" {
+		t.Fatal("real command observation query failed")
+	}
+	completed := liveWorkspaceCommands(t, observed.RunID, observed.Events, commands)
+	for i, expected := range []struct{ status, output string }{
+		{"completed", "OBS_SUCCESS_STDERR\nOBS_SUCCESS_STDOUT"},
+		{"failed", "Exit code 7\nOBS_FAILURE_STDERR\nOBS_FAILURE_STDOUT"},
+	} {
+		var output string
+		if completed[i].Observation.Status != expected.status || json.Unmarshal(completed[i].Observation.Output, &output) != nil || output != expected.output {
+			t.Fatal("native command result text/status was not preserved")
+		}
+	}
 	nonce := "conversation-" + uuid.NewString()
 	command := "python3 -u - <<'VERIFY_PY'\nimport secrets,time\nfrom pathlib import Path\nPath('value.txt').write_text(secrets.token_hex(16)+'\\n')\nfor n in range(180):\n Path('heartbeat.txt').write_text(str(n))\n time.sleep(1)\nVERIFY_PY"
-	first := run("first", fmt.Sprintf("Remember the conversation-only value %s; do not write it into any file. Execute exactly one foreground Bash call with timeout 120000 and this exact command. Wait for it; use no other tools.\n%s", nonce, command), "", true)
+	first := run("first", fmt.Sprintf("Remember the conversation-only value %s; do not write it into any file. Execute exactly one foreground Bash call with timeout 120000 and this exact command. Wait for it; use no other tools.\n%s", nonce, command), observedID, true)
 	id, _ := first.Done.Metadata[proto.DoneMetaAgentSessionID].(string)
-	if id == "" {
+	if id == "" || id != observedID {
 		t.Fatal("cancelled native Session identity unavailable")
+	}
+	interrupted := liveWorkspaceCommands(t, first.RunID, first.Events, []string{command})
+	if interrupted[0].ID == completed[0].ID || interrupted[0].ID == completed[1].ID ||
+		(interrupted[0].Observation.Status != "incomplete" && interrupted[0].Observation.Status != "failed") ||
+		(interrupted[0].Observation.Status == "failed" && len(interrupted[0].Observation.Output) == 0) {
+		t.Fatal("cancelled command lost its native failure or incomplete observation")
 	}
 	original, err := os.ReadFile(artifact)
 	if err != nil || len(bytes.TrimSpace(original)) != 32 {
 		t.Fatal("actual workspace artifact missing")
 	}
 	second := run("resumed", "Use native Read to read value.txt. Then use native Edit to append the literal suffix -resumed to its value, retaining a trailing newline. Do not use Bash. Reply with the original file value and the conversation-only value remembered earlier.", id, false)
+	liveWorkspaceCommands(t, second.RunID, second.Events, nil)
 	final, err := os.ReadFile(artifact)
 	if err != nil || string(final) != strings.TrimSpace(string(original))+"-resumed\n" || second.Failure != "" ||
 		second.Done.Metadata[proto.DoneMetaAgentSessionID] != id || !strings.Contains(second.Done.Content, nonce) ||

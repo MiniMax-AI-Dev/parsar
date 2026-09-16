@@ -23,7 +23,7 @@ assert.equal(probe.status, 0, "Exported runtime is unavailable");
 const report = JSON.parse(probe.stdout);
 assert.equal(report.type, "runtime_ready");
 assert.equal(report.protocol, 1);
-assert.deepEqual(report.features, ["mcp_http_tools", "mcp_http_bearer_auth", "workspace_tools", "workspace_prepare"]);
+assert.deepEqual(report.features, ["mcp_http_tools", "mcp_http_bearer_auth", "workspace_tools", "workspace_prepare", "workspace_command_observations"]);
 assert.equal(report.sdk, source.dependencies["@anthropic-ai/claude-agent-sdk"]);
 assert.equal(report.mcp, source.dependencies["@modelcontextprotocol/sdk"]);
 console.log(`Verified exported SDK ${report.sdk}, MCP ${report.mcp}, ${report.native}`);

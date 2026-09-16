@@ -77,6 +77,8 @@ export class Inputs implements AsyncIterable<SDKUserMessage> {
 
   get complete(): boolean { return [...this.submitted.values()].every(input => input.completed); }
 
+  get hasInput(): boolean { return this.submitted.size > 0; }
+
   close(): void { this.ended = true; this.wake?.(); }
 
   async *[Symbol.asyncIterator](): AsyncIterator<SDKUserMessage> {

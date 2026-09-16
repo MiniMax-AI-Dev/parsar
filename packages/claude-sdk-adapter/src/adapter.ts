@@ -7,6 +7,7 @@ import { createFunctionServer } from "./functions.js";
 import { FunctionBridge, type FunctionEvent } from "./function_bridge.js";
 import { MCPProfile } from "./mcp.js";
 import { MCPObserver, type MCPEvent } from "./mcp_observer.js";
+import { CommandObserver, type CommandEvent } from "./command_observer.js";
 import { WorkspaceProfile } from "./workspace.js";
 import type { Prepare, Start } from "./request.js";
 export { parseStart, type Start } from "./request.js";
@@ -16,6 +17,7 @@ export type Event =
   | InputEvent
   | FunctionEvent
   | MCPEvent
+  | CommandEvent
   | { type: "prepared" }
   | { type: "usage"; session_id: string; result_id: string; usage: NativeUsage }
   | { type: "delta"; delta: string }
@@ -24,6 +26,7 @@ export type Event =
 
 export async function execute(request: Start | Prepare, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit), inputs = new Inputs(request.type === "start" ? request.prompt : undefined)): Promise<void> {
   const workspace = request.workspace === undefined ? undefined : new WorkspaceProfile(request.cwd, request.workspace);
+  const commands = workspace ? new CommandObserver() : undefined;
   if (request.type === "prepare" && !workspace) throw new Error("invalid_request");
   if (workspace && ("functions" in request || "mcp_http_servers" in request)) throw new Error("invalid_request");
   if (request.resume && !await getSessionInfo(request.resume, { dir: request.cwd })) {
@@ -86,6 +89,7 @@ export async function execute(request: Start | Prepare, emit: (event: Event) => 
     for await (const message of stream) {
       await functions.consume(message, nativeID);
       if (mcp) for (const event of mcp.consume(message, nativeID)) await emit(event);
+      if (commands) for (const event of commands.consume(message, nativeID, inputs.hasInput)) await emit(event);
       if (messages) for (const event of messages.consume(message)) await emit(event);
       if (message.type === "system" && message.subtype === "init") {
         nativeID = message.session_id;
@@ -113,6 +117,7 @@ export async function execute(request: Start | Prepare, emit: (event: Event) => 
     }
     functions.assertComplete();
     mcp?.assertComplete();
+    commands?.assertComplete();
   } catch {
     failed = true;
   } finally {
@@ -125,6 +130,7 @@ export async function execute(request: Start | Prepare, emit: (event: Event) => 
     const exits = await Promise.all(children);
     if (!exits.length || exits.some(code => code !== 0)) failed = true;
     if (mcp) for (const event of mcp.close()) await emit(event);
+    if (commands) for (const event of commands.close()) await emit(event);
   }
   if (abort.signal.aborted) await emit({ type: "error", code: "cancelled" });
   else if (failed || !result || !inputs.complete) await emit({ type: "error", code: "execution_failed" });

@@ -151,6 +151,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	var sequence uint64
 	terminal := false
 	mcp := mcpState{calls: map[string]proto.ToolObservation{}}
+	commands := commandState{calls: map[string]proto.ToolObservation{}}
 	for scanner.Scan() {
 		var event bridgeEvent
 		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil || terminal {
@@ -159,6 +160,11 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 			break
 		}
 		switch event.Type {
+		case "command_observation":
+			if err := commands.receive(event, start, s.inputSessionID(), emit); err != nil {
+				failure = err
+				s.process.Cancel()
+			}
 		case "mcp_observation":
 			if err := mcp.receive(event, start, emit); err != nil {
 				failure = err
@@ -211,7 +217,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 			usageSession = event.SessionID
 			emit(proto.TypeUsage, proto.UsagePayload{Usage: usage})
 		case "result":
-			if !s.matchesInputSession(event.SessionID) || event.SessionID == "" || start.Resume != "" && event.SessionID != start.Resume || usageSession != "" && event.SessionID != usageSession || !s.functionsComplete() || !s.steeringComplete() || !mcp.complete() {
+			if !s.matchesInputSession(event.SessionID) || event.SessionID == "" || start.Resume != "" && event.SessionID != start.Resume || usageSession != "" && event.SessionID != usageSession || !s.functionsComplete() || !s.steeringComplete() || !mcp.complete() || !commands.complete() {
 				failure = fmt.Errorf("claudesdk: invalid native completion or unconfirmed input/result")
 				s.process.Cancel()
 			} else {
@@ -234,6 +240,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 		failure = fmt.Errorf("claudesdk: SDK result is missing")
 	}
 	mcp.close(start, emit)
+	commands.close(start, emit)
 	s.stopFunctions()
 	s.stopSteering()
 	metadata := map[string]any{proto.DoneMetaAgentSessionType: "claude_session"}
