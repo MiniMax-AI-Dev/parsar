@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/openai/codex",
+  "revision": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
+  "native_version": "0.153.4",
+  "rust_toolchain": "1.95.0",
+  "scope": "private no-model raw-runner manager qualification; no production selection",
+  "patch": {
+    "file": "manager-exposure.patch",
+    "sha256": "047e1fe5e267cfc350e0a6373e50eeff5c51581bdaffaf29807430d35b8c8adc"
+  },
+  "cargo_lock": {
+    "original_sha256": "3494b8a78d0f643556a83a9cc184e912bcab9f4c5640288952f4223452ba5dc8",
+    "normalized_sha256": "a2cb91dfb2e8112bc81d05158fa00b9698e2df8cc1ae0547b5dc5606a44904d3",
+    "workspace_packages": 149
+  },
+  "fixtures": [
+    {
+      "source": "probe.rs",
+      "target": "codex-rs/app-server/examples/parsar_raw_manager_probe.rs"
+    },
+    {
+      "source": "owner.rs",
+      "target": "codex-rs/app-server/examples/raw_manager/owner.rs"
+    }
+  ]
+}
