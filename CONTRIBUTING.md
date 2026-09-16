@@ -1932,8 +1932,11 @@ or filesystem isolation. Automatic installation remains separate.
 - Codex cancellation sends both native thread and Turn IDs. Capture the observed
   Turn identity while stopping steering; before a Turn identity is known, send the native
   explicit-empty startup Turn ID. Do not interrupt an already observed terminal
-  Turn. Keep cancellation best-effort with the existing response deadline and
-  process cleanup; an applied daemon receipt does not prove remote process exit.
+  Turn. The existing two-second interrupt budget covers both the control write
+  and response wait. A blocked write closes only its owned transport through the
+  shared deadline-aware writer, then uses existing process cleanup. Cancellation
+  remains best-effort: a completed write or applied daemon receipt does not prove
+  remote interruption, descendant exit or a global daemon shutdown deadline.
 - Omitted Codex mode means `default`, matching the Agent UI. Send the current
   instructions through that turn mode; cold resume alone may retain old instructions.
 - OpenCode JSON CLI tool parts arrive after execution. Translate each terminal

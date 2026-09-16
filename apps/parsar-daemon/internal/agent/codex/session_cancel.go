@@ -15,7 +15,9 @@ func (s *Session) Cancel(_ context.Context) error {
 		if threadID := s.currentThreadID(); threadID != "" && active {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			_, _ = s.rpc.Request(ctx, "turn/interrupt", TurnInterruptParams{ThreadID: threadID, TurnID: turnID})
+			_, _ = s.rpc.request(ctx, "turn/interrupt", TurnInterruptParams{ThreadID: threadID, TurnID: turnID}, func(frame any) error {
+				return s.rpc.writeFrameContext(ctx, frame)
+			})
 		}
 		s.cancelFn()
 		_ = s.rpc.Close()
