@@ -48,3 +48,9 @@ func TestNewHostAliasIsRejectedBeforeRetirement(t *testing.T) {
 		t.Fatal("supervisor mutated before mount qualification")
 	}
 }
+
+func TestUnrelatedNamespaceMountDoesNotInvalidateStorageEvidence(t *testing.T) {
+	f := newFixture(t)
+	writeTestFile(t, filepath.Join(f.c.procRoot, "self/mountinfo"), "1 0 8:2 / / rw - ext4 /dev/test rw\n2 1 0:4 net:[12345] /run/docker/netns/example rw - nsfs nsfs rw\n")
+	f.enroll()
+}

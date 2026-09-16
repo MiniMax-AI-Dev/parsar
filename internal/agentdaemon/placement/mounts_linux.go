@@ -28,7 +28,7 @@ func (c *Controller) hostMounts(workspace string) ([]hostMount, error) {
 			return nil, errors.New("incomplete host mount evidence")
 		}
 		mount := hostMount{device: fields[2], root: decode.Replace(fields[3]), point: decode.Replace(fields[4])}
-		if !filepath.IsAbs(mount.root) || !filepath.IsAbs(mount.point) || filepath.Clean(mount.point) != mount.point {
+		if !filepath.IsAbs(mount.point) || filepath.Clean(mount.point) != mount.point {
 			return nil, errors.New("invalid host mount evidence")
 		}
 		if mount.point != workspace && inside(workspace, mount.point) {
