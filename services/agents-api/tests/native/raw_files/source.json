@@ -3,7 +3,7 @@
   "revision": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
   "native_version": "0.153.4",
   "rust_toolchain": "1.95.0",
-  "scope": "private raw remote Files/execution/cold-history qualification; no production selection",
+  "scope": "private raw remote Files/execution/cancellation/cold-history qualification; no production selection",
   "patch": {
     "file": "../raw_manager/manager-exposure.patch",
     "sha256": "047e1fe5e267cfc350e0a6373e50eeff5c51581bdaffaf29807430d35b8c8adc"
@@ -45,6 +45,10 @@
     {
       "source": "../shared_files/configuration.rs",
       "target": "codex-rs/app-server/examples/shared_files/configuration.rs"
+    },
+    {
+      "source": "../shared_files/cancellation.rs",
+      "target": "codex-rs/app-server/examples/shared_files/cancellation.rs"
     }
   ],
   "fixture_patch": {

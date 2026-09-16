@@ -1,3 +1,5 @@
+#[path = "shared_files/cancellation.rs"]
+mod cancellation;
 #[path = "shared_files/configuration.rs"]
 mod configuration;
 #[path = "shared_files/files.rs"]
@@ -10,5 +12,5 @@ mod probe;
 mod runtime;
 
 fn main() -> std::process::ExitCode {
-    probe::main()
+    probe::main(true)
 }

@@ -204,6 +204,13 @@ engines. Public `remote_url` must support the documented executor connection flo
 a private daemon URL or an additional undocumented installation is not equivalent.
 Keep local harness cwd separate from an executor-only workspace path.
 
+Core and Runtime use common preparation, start, input-receipt, cancellation,
+release and recovery semantics for Codex and Claude. Retain each harness's native
+implementation behind its adapter. Core acts on verified capabilities and runtime
+conditions; a capability declaration alone never grants public feature admission.
+Extend existing interfaces during related functional work and apply common
+acceptance to both engines, without introducing a second framework or a broad rewrite.
+
 Use distinct authorization for callers, devices and environment connections. A
 co-located harness must not expose broader application credentials or other tenants'
 secrets to generated code. Directory bindings and process identities do not provide
@@ -462,6 +469,10 @@ Record its fixture-only workspace dependency patch separately from the manager
 hook and third-party versions. Its finite real Files/history workflow does not
 qualify the client's internal unbounded event queue for production. Client closure
 is not runner shutdown; join the stock runner before reporting owner teardown.
+Its dedicated cancellation scenario distinguishes native interruption from command
+retirement. Target native background termination only by observed current-Turn
+item/process identity, and verify Files plus retained interrupted history through
+the maintained native client before any production ownership or public admission.
 
 Connection observations use the existing execution lease and Session lock. A
 separate `environment_connections` row retains the current generation and revision;

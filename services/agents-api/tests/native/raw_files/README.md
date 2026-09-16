@@ -67,6 +67,26 @@ prompt-only random value. The legacy in-process fixture remains available throug
 `TestNativeSharedEnvironmentFiles` and `PARSAR_SHARED_FILES_PROBE`; run it with the
 prepared legacy example when shared fixture code changes.
 
+The dedicated cancellation workflow preserves that ordinary regression and adds a
+separate `first -> cancel -> fresh` run with the same raw example:
+
+```sh
+go test ./services/agents-api/internal/store \
+  -run '^TestNativeRawEnvironmentFilesCancellation$' -count=1 -v -timeout=12m
+```
+
+Go independently observes the active command before allowing native interruption.
+The fixture distinguishes its acknowledgement from the observed interrupted Turn,
+nullable command completion, targeted background-terminal termination and command
+effects. A termination target must match the current Turn's observed native item
+and process identifiers; an OS PID never selects a native target. The owner stays
+alive while typed Files and the independently observed command exit are checked.
+After a fresh process resumes, native Turn listing must retain the interrupted
+Turn, and typed Files must retain the post-cancel marker and binary hash before new
+execution. Completed command counts prove old work was not rerun. Keep native
+typed bodies and actual unknown fields; do not synthesize an exit code or final
+answer for cancellation.
+
 ## Limits
 
 The maintained remote client has an internal unbounded event channel and uses its
@@ -77,8 +97,10 @@ complete output, public Files paths/references/pagination, idle ownership or cal
 and tenant authorization. Client shutdown alone does not stop the runner; the
 fixture must use native runner shutdown and join it before claiming completion.
 
-Cancellation remains a separate required composition scenario. Production adoption
-also requires exact Environment/device/generation ownership, bounded capacity and
+Only the dedicated three-phase workflow qualifies this cancellation composition;
+the ordinary first/fresh checks do not exercise it. Command PID exit and a stable
+heartbeat are bounded observations, not proof that all descendants are gone.
+Production adoption also requires exact Environment/device/generation ownership, bounded capacity and
 lifetime, history retention and stale-write retirement. Never replay an unknown
 mutation. Readiness-gated command output does not fix the recorded native early-output
 limitation. Real model calls are necessary for this acceptance; no-model or synthetic

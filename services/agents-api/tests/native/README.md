@@ -266,4 +266,7 @@ The [raw remote Files fixture](raw_files/README.md) combines that hook with the
 pinned native Unix-socket client, reusing the same registry/container and typed
 Files acceptance. Its real first/fresh phases cover file access during execution
 and cold history. The native client's internal unbounded event queue remains an
-explicit production-adoption limit; cancellation is a separate required scenario.
+explicit production-adoption limit. Its dedicated first/cancel/fresh scenario
+checks observed interruption, exact native termination ownership, independent
+command exit, post-cancel Files and retained interrupted history; ordinary
+first/fresh acceptance does not cover cancellation.
