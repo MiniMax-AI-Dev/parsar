@@ -22,6 +22,7 @@ import (
 
 type sharedFilesProbeProof struct {
 	Status                string `json:"status"`
+	Transport             string `json:"transport"`
 	Phase                 string `json:"phase"`
 	NativeThreadID        string `json:"native_thread_id"`
 	NativeTurnID          string `json:"native_turn_id"`
@@ -54,8 +55,31 @@ type sharedFilesProbeProof struct {
 	} `json:"files"`
 }
 
+type sharedFilesProfile struct {
+	probeVariable string
+	status        string
+	transport     string
+	limitations   string
+}
+
 func TestNativeSharedEnvironmentFiles(t *testing.T) {
-	probe, binary := os.Getenv("PARSAR_SHARED_FILES_PROBE"), os.Getenv("PARSAR_CODEX_BINARY")
+	testNativeSharedEnvironmentFiles(t, sharedFilesProfile{
+		probeVariable: "PARSAR_SHARED_FILES_PROBE", status: "shared_native_files_characterized_with_blockers",
+		transport:   "in_process",
+		limitations: "The upstream event queue may drop nonrequired events without Lagged. Principal counters/answers/effects characterize this bounded workload, not a lossless production transport, public protocol compatibility, workspace confinement or OS quiescence.",
+	})
+}
+
+func TestNativeRawEnvironmentFiles(t *testing.T) {
+	testNativeSharedEnvironmentFiles(t, sharedFilesProfile{
+		probeVariable: "PARSAR_RAW_FILES_PROBE", status: "raw_native_files_characterized",
+		transport:   "raw_unix_socket",
+		limitations: "The native remote client has an internal unbounded event queue. This finite workflow does not qualify production backpressure, complete output, public Files, idle ownership, authorization/fencing or cancellation.",
+	})
+}
+
+func testNativeSharedEnvironmentFiles(t *testing.T, profile sharedFilesProfile) {
+	probe, binary := os.Getenv(profile.probeVariable), os.Getenv("PARSAR_CODEX_BINARY")
 	proofDirectory, image := os.Getenv("PARSAR_EXECUTOR_PROOF_DIR"), os.Getenv("PARSAR_PLACEMENT_EXECUTOR_IMAGE")
 	keyFile, launcher := os.Getenv("PARSAR_PLACEMENT_MODEL_KEY_FILE"), os.Getenv("PARSAR_EXECUTOR_LAUNCHER")
 	if probe == "" || binary == "" || proofDirectory == "" || image == "" || keyFile == "" || launcher == "" {
@@ -75,6 +99,22 @@ func TestNativeSharedEnvironmentFiles(t *testing.T) {
 		t.Fatal("real provider credential unavailable")
 	}
 	key := strings.TrimSpace(string(keyBytes))
+	callerHome, err := os.UserHomeDir()
+	if err != nil || !filepath.IsAbs(callerHome) || !filepath.IsAbs(proofDirectory) {
+		t.Fatal("absolute caller HOME and proof directory required")
+	}
+	stateRoot, err := filepath.EvalSymlinks(filepath.Join(callerHome, ".parsar"))
+	if err != nil {
+		t.Fatal("resolve caller state directory", err)
+	}
+	proofDirectory, err = filepath.EvalSymlinks(proofDirectory)
+	if err != nil {
+		t.Fatal("resolve proof directory", err)
+	}
+	relative, err := filepath.Rel(stateRoot, proofDirectory)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		t.Fatal("proof directory must resolve under caller ~/.parsar")
+	}
 	root, err := os.MkdirTemp(proofDirectory, "shared-files-")
 	if err != nil {
 		t.Fatal(err)
@@ -146,7 +186,8 @@ func TestNativeSharedEnvironmentFiles(t *testing.T) {
 		"environment_id": environment.ID, "session_id": session.ID, "remote_workspace": workspace,
 		"native_version": strings.TrimSpace(string(version)), "phases": map[string]sharedFilesProbeProof{},
 		"relay_observations": map[string]map[string]int{},
-		"limitations":        "The upstream event queue may drop nonrequired events without Lagged. Principal counters/answers/effects characterize this bounded workload, not a lossless production transport, public protocol compatibility, workspace confinement or OS quiescence.",
+		"limitations":        profile.limitations,
+		"transport":          profile.transport,
 	}
 	secrets := []string{key, credential.Token}
 	defer func() { persistDaemonRemoteProof(t, root, proof, secrets) }()
@@ -164,6 +205,7 @@ func TestNativeSharedEnvironmentFiles(t *testing.T) {
 		probeEnvironment := []string{
 			"PATH=" + os.Getenv("PATH"), "HOME=" + filepath.Join(root, "harness"), "CODEX_HOME=" + filepath.Join(root, "harness", "codex"),
 			"PARSAR_SHARED_FILES_ROOT=" + root, "PARSAR_SHARED_FILES_WORKSPACE=" + workspace,
+			"PARSAR_SHARED_FILES_CALLER_HOME=" + callerHome, "TMPDIR=" + root,
 			"PARSAR_PLACEMENT_MODEL_KEY_FILE=" + keyFile, "PARSAR_PROBE_MODEL_KEY=" + key, "PARSAR_CODEX_BINARY=" + binary,
 			"CODEX_EXEC_SERVER_NOISE_REGISTRY_URL=" + server.URL, "CODEX_EXEC_SERVER_NOISE_ENVIRONMENT_ID=" + environment.ID,
 			"CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN=" + harnessToken, "NO_PROXY=127.0.0.1,localhost", "RUST_LOG=off",
@@ -188,7 +230,7 @@ func TestNativeSharedEnvironmentFiles(t *testing.T) {
 		writeSharedFilesSignal(t, filepath.Join(root, phase+"-active-observed"))
 		awaitSharedFilesSignal(t, ctx, process, filepath.Join(root, phase+"-ready.json"), 180*time.Second)
 		checkpoint := readSharedFilesProof(t, filepath.Join(root, phase+"-ready.json"))
-		assertSharedFilesProof(t, checkpoint, phase, workspace, local)
+		assertSharedFilesProof(t, checkpoint, phase, workspace, local, profile)
 		proof["relay_observations"].(map[string]map[string]int)[phase+"_completed"] = assertSharedFilesPair(t, observation, index+1)
 		writeSharedFilesSignal(t, filepath.Join(root, phase+"-release"))
 		select {
@@ -200,7 +242,7 @@ func TestNativeSharedEnvironmentFiles(t *testing.T) {
 			t.Fatal("shared native owner did not shut down within the fixture bound")
 		}
 		result := readSharedFilesProof(t, filepath.Join(root, phase+".json"))
-		assertSharedFilesProof(t, result, phase, workspace, local)
+		assertSharedFilesProof(t, result, phase, workspace, local, profile)
 		if !strings.Contains(result.Answer, instruction) {
 			t.Fatal("native model did not use executor-side instructions")
 		}
@@ -252,7 +294,7 @@ func TestNativeSharedEnvironmentFiles(t *testing.T) {
 	proof["probe_sha256"] = sharedFilesHash(t, probe)
 	proof["native_sha256"] = sharedFilesHash(t, binary)
 	proof["launcher_sha256"] = sharedFilesHash(t, launcher)
-	proof["status"] = "shared_native_files_characterized_with_blockers"
+	proof["status"] = profile.status
 }
 
 const sharedFilesGate = `#!/bin/sh
@@ -317,10 +359,13 @@ func assertSharedFilesPair(t *testing.T, observation *relayObservation, pairs in
 	return map[string]int{"harnesses": observation.harnesses, "executors": observation.executors, "validations": observation.validations, "connects": observation.connects}
 }
 
-func assertSharedFilesProof(t *testing.T, proof sharedFilesProbeProof, phase, workspace, local string) {
+func assertSharedFilesProof(t *testing.T, proof sharedFilesProbeProof, phase, workspace, local string, profile sharedFilesProfile) {
 	t.Helper()
-	if proof.Status != "shared_native_files_characterized_with_blockers" || proof.Phase != phase || proof.NativeThreadID == "" || proof.NativeTurnID == "" || proof.Marker == "" || proof.HistoryValue == "" || proof.Marker == proof.HistoryValue {
+	if proof.Status != profile.status || proof.Phase != phase || proof.NativeThreadID == "" || proof.NativeTurnID == "" || proof.Marker == "" || proof.HistoryValue == "" || proof.Marker == proof.HistoryValue {
 		t.Fatal("shared filesystem proof lacks its native identities or random evidence")
+	}
+	if profile.transport == "raw_unix_socket" && proof.Transport != profile.transport {
+		t.Fatal("raw probe did not identify its qualified transport")
 	}
 	if proof.TurnStartedCount != 1 || proof.TurnCompletedCount != 1 || proof.CommandStartedCount != 1 || proof.CommandCompletedCount != 1 {
 		t.Fatal("native probe omitted or repeated principal lifecycle observations")

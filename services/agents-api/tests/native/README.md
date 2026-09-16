@@ -261,3 +261,9 @@ explicit, pinned native patch that shares the stock raw runner's manager while
 retaining its transport assembly. Its deterministic no-model checks qualify only
 that seam. They neither replace this real-provider proof nor establish production
 Files ownership or public protocol acceptance.
+
+The [raw remote Files fixture](raw_files/README.md) combines that hook with the
+pinned native Unix-socket client, reusing the same registry/container and typed
+Files acceptance. Its real first/fresh phases cover file access during execution
+and cold history. The native client's internal unbounded event queue remains an
+explicit production-adoption limit; cancellation is a separate required scenario.

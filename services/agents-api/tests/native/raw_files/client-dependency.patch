@@ -1,0 +1,20 @@
+--- a/codex-rs/app-server/Cargo.toml
++++ b/codex-rs/app-server/Cargo.toml
+@@ -118,6 +118,7 @@
+ codex-windows-sandbox = { workspace = true }
+ 
+ [dev-dependencies]
++codex-app-server-client = { workspace = true }
+ app_test_support = { workspace = true }
+ axum = { workspace = true, default-features = false, features = [
+     "http1",
+--- a/codex-rs/Cargo.lock
++++ b/codex-rs/Cargo.lock
+@@ -2032,6 +2032,7 @@
+  "clap",
+  "codex-agent-extension",
+  "codex-analytics",
++ "codex-app-server-client",
+  "codex-app-server-protocol",
+  "codex-app-server-transport",
+  "codex-arg0",

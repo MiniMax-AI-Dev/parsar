@@ -6,7 +6,7 @@ mod files;
 mod observations;
 #[path = "shared_files/probe.rs"]
 mod probe;
-#[path = "shared_files/runtime.rs"]
+#[path = "shared_files/raw_runtime.rs"]
 mod runtime;
 
 fn main() -> std::process::ExitCode {

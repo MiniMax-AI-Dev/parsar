@@ -456,6 +456,13 @@ Production adoption requires real remote execution/files/history acceptance plus
 bounded idle ownership, caller authorization and stale-write fencing. Connection
 observation generations alone cannot retract already-issued filesystem mutations.
 
+The private [raw Files composition](services/agents-api/tests/native/raw_files/README.md)
+reuses the pinned native socket client and the same typed Files/registry fixture.
+Record its fixture-only workspace dependency patch separately from the manager
+hook and third-party versions. Its finite real Files/history workflow does not
+qualify the client's internal unbounded event queue for production. Client closure
+is not runner shutdown; join the stock runner before reporting owner teardown.
+
 Connection observations use the existing execution lease and Session lock. A
 separate `environment_connections` row retains the current generation and revision;
 `environments.status` and its Session Environment-event snapshot commit together.
