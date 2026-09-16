@@ -472,7 +472,10 @@ from a mutable upstream worktree or present this integration as a stock binary.
 The existing Go RPC owns its raw stdio child. A private same-user local socket
 offers metadata only through that runner's manager, with a frozen registry
 Environment UUID, the adapter's native `remote` manager key, and no local fallback.
-Keep socket admission bounded and close it with the runner. The socket directory
+Keep socket admission bounded and close it with the runner. An unresolved native
+metadata timeout must stop the owner before admitting another operation; client
+frame/response timeouts are connection-local. Never equate dropping the native
+response future with remote settlement. The socket directory
 must be new and private under `~/.parsar`; native/helper/socket selectors remain
 operator configuration. Public feature admission and default daemon selection
 are unchanged. Metadata path checks do not qualify filesystem isolation, idle

@@ -80,6 +80,12 @@ Environment variable. The native manager uses its fixed `remote` key, independen
 of that UUID. A response reports native metadata or a safe error. There is
 no local filesystem fallback and no read, write or listing method.
 
+The request shares one ten-second deadline. A stalled frame or response writer
+closes its connection. If the native operation has not settled by the deadline,
+the artifact exits with an error and closes admission; dropping the native wait
+does not cancel remote work. Recovery must retain that uncertainty and must not
+infer remote retirement from this local failure.
+
 ## Acceptance limits
 
 Qualification must use this final binary through the existing Go RPC caller and

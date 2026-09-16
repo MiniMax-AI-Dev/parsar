@@ -3,6 +3,7 @@ use codex_exec_server::{EnvironmentManager, EnvironmentObservedStatus, GetMetada
 use codex_utils_path_uri::PathUri;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::future::Future;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
@@ -10,6 +11,7 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::oneshot;
+use tokio::time::{Instant, timeout_at};
 
 use crate::options::Binding;
 
@@ -79,17 +81,15 @@ impl PrivateSocket {
             .await
             .context("native manager was not published")?;
         loop {
-            // One operation is served at a time. No task or request queue grows
-            // with connections; stalled peers consume only this bounded interval.
+            // A native deadline ends this owner: dropping a response future
+            // does not settle the remote operation or authorize another one.
             let (stream, _) = self.listener.accept().await?;
             if stream.peer_cred()?.uid() != self.uid {
                 continue;
             }
-            let _ = tokio::time::timeout(
-                REQUEST_DEADLINE,
-                serve_connection(stream, &manager, binding),
-            )
-            .await;
+            if let Ok(outcome) = serve_connection(stream, &manager, binding).await {
+                outcome.require_settled()?;
+            }
         }
     }
 }
@@ -163,17 +163,58 @@ async fn metadata(manager: &EnvironmentManager, path: PathUri) -> Result<Value, 
     )
 }
 
+#[derive(Debug, PartialEq)]
+enum ConnectionOutcome {
+    Settled,
+    UnsettledNativeOperation,
+}
+
+impl ConnectionOutcome {
+    fn require_settled(self) -> Result<()> {
+        ensure!(
+            self == Self::Settled,
+            "native metadata deadline expired; owner stopped with remote operation unresolved"
+        );
+        Ok(())
+    }
+}
+
 async fn serve_connection(
     stream: UnixStream,
     manager: &EnvironmentManager,
     binding: &Binding,
-) -> Result<()> {
+) -> Result<ConnectionOutcome> {
+    exchange(stream, binding, REQUEST_DEADLINE, |path| {
+        metadata(manager, path)
+    })
+    .await
+}
+
+async fn exchange<F, R>(
+    stream: UnixStream,
+    binding: &Binding,
+    duration: Duration,
+    operation: F,
+) -> Result<ConnectionOutcome>
+where
+    F: FnOnce(PathUri) -> R,
+    R: Future<Output = Result<Value, &'static str>>,
+{
+    let deadline = Instant::now() + duration;
     let (read, mut write) = stream.into_split();
     let mut reader = BufReader::new(read.take((MAX_FRAME + 1) as u64));
     let mut frame = Vec::new();
-    reader.read_until(b'\n', &mut frame).await?;
+    match timeout_at(deadline, reader.read_until(b'\n', &mut frame)).await {
+        Ok(result) => {
+            result?;
+        }
+        Err(_) => return Ok(ConnectionOutcome::Settled),
+    }
     let result = match request_path(&frame, binding) {
-        Ok(path) => metadata(manager, path).await,
+        Ok(path) => match timeout_at(deadline, operation(path)).await {
+            Ok(result) => result,
+            Err(_) => return Ok(ConnectionOutcome::UnsettledNativeOperation),
+        },
         Err(error) => Err(error),
     };
     let response = match result {
@@ -182,9 +223,14 @@ async fn serve_connection(
     };
     let mut bytes = serde_json::to_vec(&response)?;
     bytes.push(b'\n');
-    write.write_all(&bytes).await?;
-    write.shutdown().await?;
-    Ok(())
+    // The native result has settled. A failed or stalled response writer can
+    // close this connection without leaving another native operation outstanding.
+    let _ = timeout_at(deadline, async {
+        write.write_all(&bytes).await?;
+        write.shutdown().await
+    })
+    .await;
+    Ok(ConnectionOutcome::Settled)
 }
 
 #[cfg(test)]
@@ -253,6 +299,44 @@ mod tests {
             .await
             .is_err()
         );
+        assert_eq!(client.read(&mut [0; 1]).await?, 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn pending_native_response_requires_owner_failure() -> Result<()> {
+        let binding = Binding {
+            native_binary: "/native".into(),
+            environment: "expected".into(),
+            workspace: "/workspace".into(),
+            ipc_root: "/unused".into(),
+        };
+        let (server, mut client) = UnixStream::pair()?;
+        client
+            .write_all(b"{\"environment_id\":\"expected\",\"path\":\"file\"}\n")
+            .await?;
+        let (dispatched, observed) = oneshot::channel();
+        let (response, received) = oneshot::channel();
+        let outcome = exchange(server, &binding, Duration::from_millis(20), |_path| async {
+            dispatched.send(()).unwrap();
+            // The remote side has accepted work but has not settled its reply.
+            received.await.unwrap()
+        })
+        .await?;
+        observed.await?;
+        assert_eq!(outcome, ConnectionOutcome::UnsettledNativeOperation);
+        assert!(outcome.require_settled().is_err());
+        assert_eq!(client.read(&mut [0; 1]).await?, 0);
+        // A response producer can still complete after its receiver was dropped;
+        // this is why timeout must fail the owner rather than release admission.
+        assert!(response.send(Ok(json!({"size": 1}))).is_err());
+
+        let (server, mut client) = UnixStream::pair()?;
+        let outcome = exchange(server, &binding, Duration::from_millis(20), |_path| async {
+            panic!("a stalled frame must not dispatch native work")
+        })
+        .await?;
+        outcome.require_settled()?;
         assert_eq!(client.read(&mut [0; 1]).await?, 0);
         Ok(())
     }
