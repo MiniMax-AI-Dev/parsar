@@ -101,6 +101,10 @@ func TestTextFactoryRejectsUnsupportedInput(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	if os.Getenv("GO_CLAUDE_PREPARATION_HELPER") == "1" {
+		runPreparationHelper()
+		os.Exit(0)
+	}
 	if os.Getenv("GO_CLAUDE_READINESS_HELPER") == "1" {
 		runReadinessHelper()
 		os.Exit(0)
