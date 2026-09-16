@@ -188,6 +188,14 @@ the same transaction as its Session and creation identity when this resource is
 implemented. Keep mutable connection/registration state out of immutable
 configuration; replacement ownership must fence stale observations.
 
+The current delivery milestone is the Codex/Claude single-Agent path: Session
+creation, environment preparation, native execution, files/artifacts, cancellation,
+reconnection/recovery queries, and standalone deployment acceptance. Select each
+bounded task from the complete board; nonblocking local improvements stay queued.
+Authentication, tenant/credential isolation, state consistency and data loss remain
+material acceptance requirements. Other harnesses and protocol Subagent execution
+are deferred without changing the complete pinned protocol target.
+
 Process placement and native transport are adapter responsibilities. A harness may
 run beside its workspace or use a separate executor; neither arrangement changes
 public ownership or permits a second model/tool loop. Codex registry/Noise support
@@ -203,7 +211,11 @@ filesystem isolation. Preserve or demonstrably restore native history across
 compute replacement; never silently move a bound Session or replay unknown work.
 Self-hosted compute/files remain caller-owned, with explicit cleanup separate from
 Session deletion. The full Environment implementation remains pending; follow the
-[pinned contract and acceptance sequence](contracts/agents-api/environments.md).
+[pinned contract and acceptance sequence](contracts/agents-api/environments.md)
+and the [two-engine placement prerequisites](contracts/agents-api/workspace-placement.md).
+For co-location, qualify both deployment isolation and native tool restrictions.
+Bash sandbox settings alone do not establish file-tool or whole-harness isolation.
+Never enable an environment profile before those boundaries are verified.
 
 The internal Store creates one Environment with an environment-bearing Session in
 its creation transaction. The Session upsert selects the retry winner; retries
