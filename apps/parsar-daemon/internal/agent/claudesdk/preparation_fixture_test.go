@@ -38,9 +38,11 @@ func preparationRequest() proto.PromptRequestPayload {
 func runPreparationHelper() {
 	mode := os.Getenv("SDK_HELPER_MODE")
 	if len(os.Args) > 1 && strings.HasSuffix(os.Args[1], "runtime_check.js") {
-		features := []string{"workspace_tools", "workspace_prepare"}
+		features := []string{"workspace_tools", "workspace_prepare", "workspace_command_observations"}
 		if mode == "old-runtime" {
 			features = []string{"workspace_tools"}
+		} else if mode == "old-command-runtime" {
+			features = []string{"workspace_tools", "workspace_prepare"}
 		}
 		_ = json.NewEncoder(os.Stdout).Encode(RuntimeInfo{Type: "runtime_ready", Protocol: 1, Node: "fixture", SDK: "fixture", MCP: "fixture", Native: "fixture", Features: features})
 		return
@@ -88,6 +90,10 @@ func runPreparationHelper() {
 	}
 	if mode == "cancellation" {
 		runCancellationHelper(request, "cancellation-wait", emit)
+		return
+	}
+	if strings.HasPrefix(mode, "commands") {
+		runCommandsHelper(request, mode, emit)
 		return
 	}
 	emit(bridgeEvent{Type: "input_ready", SessionID: request.Resume})
