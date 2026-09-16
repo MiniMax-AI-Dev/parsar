@@ -17,7 +17,7 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 	if json.Unmarshal(configuration, &snapshot) != nil {
 		return store.ErrInvalidInput
 	}
-	_, err := selectedMCPCredentials(snapshot)
+	_, err := mcpCredentialBindings(engine, snapshot)
 	if err != nil {
 		return err
 	}
@@ -53,7 +53,7 @@ func validateClaudeConfiguration(snapshot Snapshot) error {
 	if err != nil {
 		return err
 	}
-	if err := validateClaudeMCP(snapshot, mcp); err != nil {
+	if err := validateClaudeMCP(mcp); err != nil {
 		return err
 	}
 	for _, tool := range tools {
@@ -69,7 +69,13 @@ func validateClaudeConfiguration(snapshot Snapshot) error {
 
 func canAdmitInputs(engine string, configuration json.RawMessage) bool {
 	var snapshot Snapshot
-	return (engine == "codex" || engine == "claude_sdk") && json.Unmarshal(configuration, &snapshot) == nil && snapshot.Environment != nil && snapshot.Environment.Type == "none" && snapshot.Daemon == nil && (engine != "claude_sdk" || validateClaudeConfiguration(snapshot) == nil)
+	if (engine != "codex" && engine != "claude_sdk") || json.Unmarshal(configuration, &snapshot) != nil || snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil {
+		return false
+	}
+	if _, err := mcpCredentialBindings(engine, snapshot); err != nil {
+		return false
+	}
+	return engine != "claude_sdk" || validateClaudeConfiguration(snapshot) == nil
 }
 
 func validateEngineInputs(engine string, inputs []store.Input) error {
@@ -139,28 +145,8 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	if len(functions) > 0 && !caps.FunctionTools {
 		return fail("device must advertise function_tools")
 	}
-	if len(mcp) > 0 && (!caps.MCPHTTPTools || snapshot.Environment == nil || (snapshot.Environment.Type != "none" && snapshot.Environment.Type != "self_hosted") || snapshot.Daemon != nil) {
-		return fail("device must support the service-side HTTP MCP profile")
-	}
-	selected, err := selectedMCPCredentials(snapshot)
-	if err != nil {
+	if _, err := mcpExecutionCredentials(engine, snapshot, mcp, caps); err != nil {
 		return device.KindCapabilities{}, err
-	}
-	for _, server := range mcp {
-		if server.Required && !caps.MCPHTTPRequired {
-			return fail("device must advertise mcp_http_required")
-		}
-	}
-	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" && len(mcp) > 0 {
-		if !caps.MCPHTTPRemoteEnvironment {
-			return fail("device must support service-side HTTP MCP with a remote environment")
-		}
-		if len(selected) > 0 && !caps.MCPHTTPRemoteBearerAuth {
-			return fail("device must advertise mcp_http_remote_bearer_auth")
-		}
-	}
-	if len(selected) > 0 && !caps.MCPHTTPBearerAuth {
-		return fail("device must advertise mcp_http_bearer_auth")
 	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" && (!caps.Preparation || !caps.RemoteEnvironment) {
 		return fail("device must advertise preparation and remote_environment")
