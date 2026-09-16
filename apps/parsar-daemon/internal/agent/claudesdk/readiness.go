@@ -33,6 +33,10 @@ func (info RuntimeInfo) SupportsHTTPMCPBearer() bool {
 	return info.SupportsHTTPMCP() && slices.Contains(info.Features, "mcp_http_bearer_auth")
 }
 
+func (info RuntimeInfo) supportsWorkspace() bool {
+	return slices.Contains(info.Features, "workspace_tools")
+}
+
 // CheckRuntime checks the packaged companion and exact execution entrypoint.
 // It does not create Session state, register an engine or make a model request.
 func CheckRuntime(ctx context.Context, config Config) (RuntimeInfo, error) {
@@ -48,11 +52,19 @@ func CheckRuntime(ctx context.Context, config Config) (RuntimeInfo, error) {
 	if binary == "" {
 		binary = "node"
 	}
+	env := append(append([]string{}, os.Environ()...), config.Env...)
+	if config.Workspace != nil {
+		var err error
+		_, env, err = workspaceEnvironment(config)
+		if err != nil {
+			return RuntimeInfo{}, err
+		}
+	}
 	process, err := clirunner.Start(clirunner.StartOptions{
 		Parent: ctx, Binary: binary,
 		Args:            []string{filepath.Join(filepath.Dir(config.Entrypoint), "runtime_check.js"), config.Entrypoint},
 		Dir:             filepath.Dir(config.Entrypoint),
-		Env:             append(append([]string{}, os.Environ()...), config.Env...),
+		Env:             env,
 		OwnProcessGroup: true, KillTimeout: 250 * time.Millisecond,
 	})
 	if err != nil {

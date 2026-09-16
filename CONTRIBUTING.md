@@ -1395,6 +1395,39 @@ Thinking/tool-only messages produce no text Items; interrupted messages retain
 their streamed partial text. No phase is inferred from the final result.
 SDK/native child release and output draining precede daemon completion.
 
+`claudesdk.Config.Workspace` is a private, trusted operator binding for one
+qualified placement. It enables only native Bash/Read/Edit in the existing SDK
+loop. The entire factory must already run inside an outer mount/process boundary
+that excludes application, daemon and other-tenant credentials and host policy.
+The factory does not create that boundary. Public discovery/admission remains
+unchanged; cwd and request options cannot select the workspace policy.
+The workspace, managed history, runtime home, scratch and protected secret roots
+must be pre-existing canonical, separate directories. Runtime code and dependency
+search paths must remain outside those roots and be read-only in the placement.
+The complete packaged runtime directory, including `node_modules`, must not
+overlap any bound root. Its bridge uses the packaged `dist/main.js` layout.
+Node, the bridge entrypoint and its readiness companion must use canonical file
+paths. Dependency aliases outside mutable roots are resolved before use in PATH;
+aliases within mutable roots are rejected even if their current target is safe.
+The operator owns allocation, exclusive use and retention; a binding is not
+per-Session authorization, a tenant boundary or an idle Files owner.
+
+For this profile, `Config.Env` replaces inheritance for both readiness and
+execution, selecting only supported provider/proxy variables. The adapter fixes
+HOME/history/scratch, native enforcement flags and tool inventory; the bridge
+request contains variable names, never credential values. Native Bash uses the
+strict sandbox with no fallback or weaker isolation. Separate native file-tool
+permissions and a session tool hook restrict Read/Edit to the bound workspace
+and deny protected roots; background/unsandboxed Bash requests are rejected.
+The deployment must retain these controls, including the SDK-owned hook.
+Functions, MCP and remote-environment combinations are rejected in this private
+profile until separately qualified. The existing `none` profile retains its
+behavior. Packaged `workspace_tools` establishes bridge support only, not host
+isolation or a public capability. Native command/file Item projection, public
+preparation, shared placement quotas and Files ownership remain separate work.
+`TestLiveClaudeWorkspaceFactory` is explicit real-provider acceptance inside a
+qualified placement, including effects, cancellation and same-history continuation.
+
 The private adapter also accepts typed anonymous HTTP and static-bearer HTTPS MCP
 declarations on the trusted `environment:none` harness host. The packaged readiness
 report must include `mcp_http_tools`; discovery advertises that feature only when

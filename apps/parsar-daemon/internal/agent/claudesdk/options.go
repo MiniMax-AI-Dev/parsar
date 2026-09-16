@@ -15,6 +15,7 @@ type Config struct {
 	Entrypoint string
 	StateDir   string
 	Env        []string
+	Workspace  *WorkspaceConfig
 }
 
 type startRequest struct {
@@ -27,6 +28,7 @@ type startRequest struct {
 	ObserveMessages  bool                 `json:"observe_messages,omitempty"`
 	Functions        []proto.FunctionTool `json:"functions,omitempty"`
 	MCPHTTPServers   *[]mcpHTTPServer     `json:"mcp_http_servers,omitempty"`
+	Workspace        *workspaceProfile    `json:"workspace,omitempty"`
 	observeFunctions bool
 }
 
@@ -76,6 +78,15 @@ func prepare(config Config, req proto.PromptRequestPayload) (startRequest, []str
 	}
 	if !filepath.IsAbs(config.Entrypoint) {
 		return fail("SDK entrypoint must be absolute")
+	}
+	if config.Workspace != nil {
+		profile, env, err := prepareWorkspace(config, req)
+		if err != nil {
+			return startRequest{}, nil, err
+		}
+		start.Workspace = profile
+		start.Cwd = config.Workspace.Directory
+		return start, env, nil
 	}
 	root, err := paths.Root()
 	if err != nil {

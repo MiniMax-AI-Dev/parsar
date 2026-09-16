@@ -35,6 +35,12 @@ func NewFactory(config Config) agent.Factory {
 		if err != nil {
 			return nil, err
 		}
+		if start.Workspace != nil {
+			info, err := CheckRuntime(ctx, config)
+			if err != nil || !info.supportsWorkspace() {
+				return nil, fmt.Errorf("claudesdk: packaged runtime does not support workspace tools")
+			}
+		}
 		if start.MCPHTTPServers != nil {
 			info, err := CheckRuntime(ctx, config)
 			if err != nil || !info.SupportsHTTPMCP() {

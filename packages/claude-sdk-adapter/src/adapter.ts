@@ -9,6 +9,7 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { isAbsolute } from "node:path";
 import { MCPProfile, parseHTTPServers, type HTTPServer } from "./mcp.js";
 import { MCPObserver, type MCPEvent } from "./mcp_observer.js";
+import { parseWorkspace, WorkspaceProfile, type Workspace } from "./workspace.js";
 
 export type Start = {
   type: "start";
@@ -20,6 +21,7 @@ export type Start = {
   observe_messages?: boolean;
   functions?: { name: string; description: string; parameters: Tool["inputSchema"] }[];
   mcp_http_servers?: HTTPServer[];
+  workspace?: Workspace;
 };
 export type Event =
   | MessageEvent
@@ -35,7 +37,7 @@ export function parseStart(line: string): Start {
   const value: unknown = JSON.parse(line);
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_request");
   const request = value as Record<string, unknown>;
-  const allowed = new Set(["type", "prompt", "model", "system_prompt", "cwd", "resume", "observe_messages", "functions", "mcp_http_servers"]);
+  const allowed = new Set(["type", "prompt", "model", "system_prompt", "cwd", "resume", "observe_messages", "functions", "mcp_http_servers", "workspace"]);
   if (Object.keys(request).some(key => !allowed.has(key)) || request.type !== "start" ||
       typeof request.prompt !== "string" || !request.prompt.trim() ||
       typeof request.model !== "string" || !request.model.trim() ||
@@ -49,10 +51,15 @@ export function parseStart(line: string): Start {
       !tool || typeof tool.name !== "string" || !tool.name || typeof tool.description !== "string" ||
       !tool.parameters || tool.parameters.type !== "object"))) throw new Error("invalid_request");
   parseHTTPServers(request.mcp_http_servers);
+  if (parseWorkspace(request.workspace, request.cwd) && ("functions" in request || "mcp_http_servers" in request)) {
+    throw new Error("invalid_request");
+  }
   return request as Start;
 }
 
 export async function execute(request: Start, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit), inputs = new Inputs(request.prompt)): Promise<void> {
+  const workspace = request.workspace === undefined ? undefined : new WorkspaceProfile(request.cwd, request.workspace);
+  if (workspace && ("functions" in request || "mcp_http_servers" in request)) throw new Error("invalid_request");
   if (request.resume && !await getSessionInfo(request.resume, { dir: request.cwd })) {
     await emit({ type: "error", code: "history_unavailable" });
     return;
@@ -76,7 +83,7 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
       prompt: inputs,
       options: {
         cwd: request.cwd,
-        env: { ...process.env },
+        env: workspace?.options.env ?? { ...process.env },
         model: request.model,
         systemPrompt: request.system_prompt,
         ...(request.resume ? { resume: request.resume } : {}),
@@ -89,6 +96,7 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
         } : {}),
         persistSession: true, includePartialMessages: true, abortController: abort,
         canUseTool: async () => ({ behavior: "deny", message: "Tools are unavailable in this execution profile." }),
+        ...(workspace?.options ?? {}),
         spawnClaudeCodeProcess: options => {
           const child = spawnNative(options);
           children.push(new Promise(resolve => child.once("close", code => resolve(code))));
@@ -103,7 +111,8 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
       if (message.type === "system" && message.subtype === "init") {
         nativeID = message.session_id;
         if (!nativeID || (request.resume && nativeID !== request.resume)) throw new Error("unexpected native session");
-        if (profile) profile.verify(message.tools, await stream.mcpServerStatus(), nativeID);
+        if (workspace) workspace.verify(message.tools, message.mcp_servers);
+        else if (profile) profile.verify(message.tools, await stream.mcpServerStatus(), nativeID);
         else if (message.tools.length !== names.length || message.tools.some(name => !names.includes(name)) ||
             message.mcp_servers.length !== (definitions.length ? 1 : 0) ||
             message.mcp_servers.some(server => server.name !== "functions" || server.status !== "connected")) {
