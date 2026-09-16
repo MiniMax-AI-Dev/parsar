@@ -24,8 +24,10 @@ test "$ANTHROPIC_AUTH_TOKEN" = selected-provider-fixture || exit 23
 test "$TMPDIR" != "$CLAUDE_CONFIG_DIR/tmp" || exit 24
 case "$1" in
   */runtime_check.js)
-    printf '%s\n' '{"type":"runtime_ready","protocol":1,"node":"fixture","sdk":"fixture","mcp":"fixture","native":"fixture","features":["workspace_tools"]}' ;;
+    printf '%s\n' '{"type":"runtime_ready","protocol":1,"node":"fixture","sdk":"fixture","mcp":"fixture","native":"fixture","features":["workspace_tools","workspace_prepare"]}' ;;
   *)
+    IFS= read -r request
+    printf '%s\n' '{"type":"prepared"}'
     IFS= read -r request
     printf '%s\n' '{"type":"result","session_id":"native","text":"completed"}' ;;
 esac
@@ -56,7 +58,7 @@ esac
 		t.Fatal("expected one settled completion")
 	}
 	// Feature checking must reject an older bridge without starting execution.
-	script = strings.ReplaceAll(script, `"features":["workspace_tools"]`, `"features":[]`)
+	script = strings.ReplaceAll(script, `"features":["workspace_tools","workspace_prepare"]`, `"features":[]`)
 	script = strings.ReplaceAll(script, "IFS= read -r request", "touch '"+filepath.Join(config.StateDir, "unexpected-start")+"'")
 	if err := os.WriteFile(config.Node, []byte(script), 0o700); err != nil {
 		t.Fatal(err)

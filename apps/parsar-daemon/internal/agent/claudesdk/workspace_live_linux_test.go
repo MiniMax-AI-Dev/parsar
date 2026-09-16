@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	"github.com/google/uuid"
 )
@@ -20,6 +21,14 @@ import (
 // Run only inside a separately qualified outer placement, with its pinned native
 // dependencies. This fixture does not create isolation or public admission.
 func TestLiveClaudeWorkspaceFactory(t *testing.T) {
+	testLiveClaudeWorkspace(t, false)
+}
+
+func TestLiveClaudePreparedWorkspace(t *testing.T) {
+	testLiveClaudeWorkspace(t, true)
+}
+
+func testLiveClaudeWorkspace(t *testing.T, explicitPreparation bool) {
 	configFile := os.Getenv("PARSAR_CLAUDE_WORKSPACE_LIVE_CONFIG")
 	if configFile == "" {
 		t.Skip("requires explicit qualified placement and real provider configuration")
@@ -62,14 +71,28 @@ func TestLiveClaudeWorkspaceFactory(t *testing.T) {
 	heartbeat := filepath.Join(config.Workspace.Directory, "heartbeat.txt")
 	artifact := filepath.Join(config.Workspace.Directory, "value.txt")
 	type evidence struct {
-		Events     []proto.Envelope  `json:"events"`
-		Done       proto.DonePayload `json:"done"`
-		Failure    string            `json:"failure,omitempty"`
-		Cancelled  bool              `json:"cancelled"`
-		CancelMS   int64             `json:"cancel_ms,omitempty"`
-		BridgePID  int               `json:"bridge_pid"`
-		Terminals  int               `json:"terminals"`
-		Heartbeats []string          `json:"heartbeats,omitempty"`
+		Events                []proto.Envelope  `json:"events"`
+		Done                  proto.DonePayload `json:"done"`
+		Failure               string            `json:"failure,omitempty"`
+		Cancelled             bool              `json:"cancelled"`
+		CancelMS              int64             `json:"cancel_ms,omitempty"`
+		BridgePID             int               `json:"bridge_pid"`
+		Terminals             int               `json:"terminals"`
+		Heartbeats            []string          `json:"heartbeats,omitempty"`
+		PreparedPID           int               `json:"prepared_pid,omitempty"`
+		NativeBefore          string            `json:"native_before,omitempty"`
+		NativeAfter           string            `json:"native_after,omitempty"`
+		StartContextCancelled bool              `json:"start_context_cancelled,omitempty"`
+	}
+	writeEvidence := func(name string, proof evidence) {
+		t.Helper()
+		encoded, err := json.MarshalIndent(proof, "", "  ")
+		if err != nil || bytes.Contains(encoded, bytes.TrimSpace(key)) {
+			t.Fatal("cannot safely encode factory observations")
+		}
+		if err := os.WriteFile(filepath.Join(root, name+".json"), encoded, 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	run := func(name, prompt, resume string, cancelOnEffect bool) evidence {
 		t.Helper()
@@ -80,13 +103,57 @@ func TestLiveClaudeWorkspaceFactory(t *testing.T) {
 		req.RunID, req.Prompt, req.AgentSessionID = uuid.NewString(), prompt, resume
 		req.StrictResume, req.ReleaseOnCompletion, req.ObserveMessages = true, true, true
 		req.AgentOptions = map[string]any{"model": "MiniMax-M3", "system_prompt": "Follow the exact verification instructions using the requested native tools. Preserve conversation facts. No other files, network operations or background work."}
-		running, err := NewFactory(config)(ctx, req, out)
+		proof := evidence{}
+		var running agent.Session
+		var owner agent.PreparedCancellation
+		if explicitPreparation {
+			preparation := req
+			preparation.RunID, preparation.Prompt = "", ""
+			var resource agent.Prepared
+			resource, err = NewPreparationFactory(config)(ctx, preparation)
+			if err == nil {
+				defer resource.Close()
+				owner = resource.(agent.PreparedCancellation)
+				proof.PreparedPID = resource.(*prepared).session.process.Cmd.Process.Pid
+				proof.NativeBefore = liveWorkspaceNativeIdentity(t, proof.PreparedPID)
+				before, _ := os.ReadFile(artifact)
+				time.Sleep(500 * time.Millisecond)
+				after, _ := os.ReadFile(artifact)
+				if !bytes.Equal(before, after) || liveWorkspaceNativeIdentity(t, proof.PreparedPID) != proof.NativeBefore {
+					t.Fatal("prepared resource changed before initial input")
+				}
+				operation, stopOperation := context.WithCancel(ctx)
+				running, err = resource.Start(operation, req.RunID, req.Prompt, out)
+				stopOperation()
+				proof.StartContextCancelled = true
+				if err == nil {
+					proof.NativeAfter = liveWorkspaceNativeIdentity(t, proof.PreparedPID)
+					if proof.NativeBefore != proof.NativeAfter || resource.Close() != nil {
+						t.Fatal("Start replaced the native process or Close affected its transfer")
+					}
+				}
+			}
+		} else {
+			running, err = NewFactory(config)(ctx, req, out)
+		}
 		if err != nil {
+			if name == "missing-history" && running == nil && strings.Contains(err.Error(), "history_unavailable") {
+				proof.Failure = err.Error()
+				writeEvidence(name, proof)
+				return proof
+			}
 			t.Fatal(err)
 		}
 		s := running.(*session)
 		defer s.Cancel(context.Background())
-		proof := evidence{BridgePID: s.process.Cmd.Process.Pid}
+		proof.BridgePID = s.process.Cmd.Process.Pid
+		if explicitPreparation && proof.BridgePID != proof.PreparedPID {
+			t.Fatal("Start replaced the prepared bridge")
+		}
+		cancelOwned, outcome := s.Cancel, s.CancellationOutcome
+		if owner != nil {
+			cancelOwned, outcome = owner.Cancel, owner.CancellationOutcome
+		}
 		ticker := time.NewTicker(80 * time.Millisecond)
 		defer ticker.Stop()
 		for out != nil {
@@ -97,7 +164,7 @@ func TestLiveClaudeWorkspaceFactory(t *testing.T) {
 				value, _ := os.ReadFile(heartbeat)
 				if cancelOnEffect && !proof.Cancelled && len(value) > 0 && string(value) != "0" && string(value) != "1" {
 					started := time.Now()
-					if err := s.Cancel(ctx); err != nil {
+					if err := cancelOwned(ctx); err != nil {
 						t.Fatal("factory cancellation failed", err)
 					}
 					proof.CancelMS = time.Since(started).Milliseconds()
@@ -128,19 +195,13 @@ func TestLiveClaudeWorkspaceFactory(t *testing.T) {
 			if len(a) == 0 || !bytes.Equal(a, b) {
 				t.Fatal("native command effects continued after Cancel")
 			}
-			settled, _ := json.Marshal(s.CancellationOutcome())
+			settled, _ := json.Marshal(outcome())
 			done, _ := json.Marshal(proof.Done)
 			if !bytes.Equal(settled, done) {
 				t.Fatal("cancellation outcome differs from terminal Done")
 			}
 		}
-		encoded, _ := json.MarshalIndent(proof, "", "  ")
-		if bytes.Contains(encoded, bytes.TrimSpace(key)) {
-			t.Fatal("provider credential entered factory observations")
-		}
-		if err := os.WriteFile(filepath.Join(root, name+".json"), encoded, 0o600); err != nil {
-			t.Fatal(err)
-		}
+		writeEvidence(name, proof)
 		if proof.Terminals != 1 || (cancelOnEffect && !proof.Cancelled) {
 			t.Fatal("missing actual cancellation or unique completion")
 		}
@@ -178,10 +239,25 @@ func TestLiveClaudeWorkspaceFactory(t *testing.T) {
 	missing := run("missing-history", "Continue the existing Session only; do not start another Session.", id, false)
 	entries, err := os.ReadDir(config.StateDir)
 	after, _ := os.ReadFile(artifact)
-	if missing.Failure != "claudesdk: history_unavailable" || err != nil || len(entries) != 0 || !bytes.Equal(final, after) || missing.Done.Metadata[proto.DoneMetaAgentSessionID] != nil {
+	if missing.Failure != "claudesdk: history_unavailable" || missing.Terminals != 0 || err != nil || len(entries) != 0 || !bytes.Equal(final, after) || missing.Done.Metadata[proto.DoneMetaAgentSessionID] != nil {
 		t.Fatal("missing native history did not fail before new execution")
 	}
 	if err := os.RemoveAll(scratch); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func liveWorkspaceNativeIdentity(t *testing.T, bridgePID int) string {
+	t.Helper()
+	raw, err := os.ReadFile(fmt.Sprintf("/proc/%d/task/%d/children", bridgePID, bridgePID))
+	children := strings.Fields(string(raw))
+	if err != nil || len(children) != 1 {
+		t.Fatal("expected exactly one retained native child", err)
+	}
+	status, err := os.ReadFile("/proc/" + children[0] + "/stat")
+	fields := strings.Fields(string(status)[strings.LastIndex(string(status), ")")+1:])
+	if err != nil || len(fields) < 20 {
+		t.Fatal("native process identity unavailable", err)
+	}
+	return children[0] + ":" + fields[19]
 }

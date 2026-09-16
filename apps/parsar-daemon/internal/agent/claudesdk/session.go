@@ -31,15 +31,22 @@ func NewFactory(config Config) agent.Factory {
 		if out == nil {
 			return nil, fmt.Errorf("claudesdk: output channel is required")
 		}
+		if config.Workspace != nil {
+			runID, prompt := req.RunID, req.Prompt
+			if strings.TrimSpace(runID) == "" || strings.TrimSpace(prompt) == "" {
+				return nil, fmt.Errorf("claudesdk: run id and prompt are required")
+			}
+			req.RunID, req.Prompt = "", ""
+			prepared, err := NewPreparationFactory(config)(ctx, req)
+			if err != nil {
+				return nil, err
+			}
+			defer prepared.Close()
+			return prepared.Start(ctx, runID, prompt, out)
+		}
 		start, env, err := prepare(config, req)
 		if err != nil {
 			return nil, err
-		}
-		if start.Workspace != nil {
-			info, err := CheckRuntime(ctx, config)
-			if err != nil || !info.supportsWorkspace() {
-				return nil, fmt.Errorf("claudesdk: packaged runtime does not support workspace tools")
-			}
 		}
 		if start.MCPHTTPServers != nil {
 			info, err := CheckRuntime(ctx, config)
@@ -52,16 +59,11 @@ func NewFactory(config Config) agent.Factory {
 				}
 			}
 		}
-		binary := config.Node
-		if binary == "" {
-			binary = "node"
-		}
-		process, err := clirunner.Start(clirunner.StartOptions{Parent: ctx, Binary: binary, Args: []string{config.Entrypoint}, Dir: start.Cwd, Env: env, NeedStdin: true, OwnProcessGroup: true})
+		s, err := launch(ctx, config, start, env)
 		if err != nil {
 			return nil, err
 		}
-		s := &session{process: process, functions: functionState{calls: map[string]*pendingFunction{}}, settled: make(chan struct{})}
-		go s.run(ctx, req.RunID, start, out)
+		go s.run(ctx, req.RunID, start, out, nil)
 		return s, nil
 	}
 }
@@ -85,8 +87,12 @@ type bridgeEvent struct {
 	Observation *proto.ToolObservation      `json:"observation"`
 }
 
-func (s *session) run(ctx context.Context, runID string, start startRequest, out chan<- proto.Envelope) {
-	defer close(out)
+func (s *session) run(ctx context.Context, runID string, start startRequest, out chan<- proto.Envelope, prepared *prepared) {
+	defer func() {
+		if out != nil {
+			close(out)
+		}
+	}()
 	defer s.stopFunctions()
 	defer s.stopSteering()
 	emit := func(kind string, payload any) {
@@ -121,6 +127,22 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	}
 	scanner := bufio.NewScanner(s.process.Stdout)
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	if prepared != nil {
+		binding, err := prepared.awaitStart(scanner, failure)
+		if binding == nil {
+			prepared.failure = s.drain(scanner, stderrDone, err)
+			close(s.settled)
+			return
+		}
+		runID, out = binding.runID, binding.out
+		if err := json.NewEncoder(s.process.Stdin).Encode(struct {
+			Type   string `json:"type"`
+			Prompt string `json:"prompt"`
+		}{Type: "start", Prompt: binding.prompt}); err != nil {
+			failure = fmt.Errorf("claudesdk: cannot submit SDK input")
+			s.process.Cancel()
+		}
+	}
 	var content strings.Builder
 	var result *bridgeEvent
 	var usage proto.Usage
@@ -197,12 +219,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 			}
 			terminal = true
 		case "error":
-			switch event.Code {
-			case "invalid_request", "history_unavailable", "execution_failed", "cancelled":
-				failure = fmt.Errorf("claudesdk: %s", event.Code)
-			default:
-				failure = fmt.Errorf("claudesdk: unknown SDK bridge failure")
-			}
+			failure = bridgeFailure(event.Code)
 			terminal = true
 		default:
 			failure = fmt.Errorf("claudesdk: unknown SDK bridge event")
@@ -212,16 +229,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 			break
 		}
 	}
-	if scanner.Err() != nil {
-		failure = fmt.Errorf("claudesdk: SDK bridge output read failed")
-		s.process.Cancel()
-	}
-	// Drain remaining output before Wait closes the owned readers.
-	_, _ = io.Copy(io.Discard, s.process.Stdout)
-	<-stderrDone
-	if err := s.process.Wait(); err != nil && failure == nil {
-		failure = fmt.Errorf("claudesdk: SDK process failed")
-	}
+	failure = s.drain(scanner, stderrDone, failure)
 	if result == nil && failure == nil {
 		failure = fmt.Errorf("claudesdk: SDK result is missing")
 	}
@@ -244,6 +252,41 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 		emit(proto.TypeError, proto.ErrorPayload{Error: failure.Error()})
 	}
 	emit(proto.TypeDone, s.outcome)
+}
+
+func launch(ctx context.Context, config Config, start startRequest, env []string) (*session, error) {
+	binary := config.Node
+	if binary == "" {
+		binary = "node"
+	}
+	process, err := clirunner.Start(clirunner.StartOptions{Parent: ctx, Binary: binary, Args: []string{config.Entrypoint}, Dir: start.Cwd, Env: env, NeedStdin: true, OwnProcessGroup: true})
+	if err != nil {
+		return nil, err
+	}
+	return &session{process: process, functions: functionState{calls: map[string]*pendingFunction{}}, settled: make(chan struct{})}, nil
+}
+
+func (s *session) drain(scanner *bufio.Scanner, stderrDone <-chan struct{}, failure error) error {
+	if scanner.Err() != nil {
+		failure = fmt.Errorf("claudesdk: SDK bridge output read failed")
+		s.process.Cancel()
+	}
+	// Drain remaining output before Wait closes the owned readers.
+	_, _ = io.Copy(io.Discard, s.process.Stdout)
+	<-stderrDone
+	if err := s.process.Wait(); err != nil && failure == nil {
+		failure = fmt.Errorf("claudesdk: SDK process failed")
+	}
+	return failure
+}
+
+func bridgeFailure(code string) error {
+	switch code {
+	case "invalid_request", "history_unavailable", "execution_failed", "cancelled":
+		return fmt.Errorf("claudesdk: %s", code)
+	default:
+		return fmt.Errorf("claudesdk: unknown SDK bridge failure")
+	}
 }
 
 func (s *session) SubmitPermission(context.Context, string, proto.PermissionDecisionPayload) error {

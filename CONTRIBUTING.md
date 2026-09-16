@@ -1444,7 +1444,25 @@ identifies this bridge contract only. It does not register daemon preparation,
 enable public admission, or project public Environment readiness. Preparation may
 write native runtime metadata outside the workspace and perform startup traffic;
 it does not prove provider authentication, complete sandbox health or tenant
-placement authorization. The Go prepared-resource binding remains separate work.
+placement authorization.
+
+`claudesdk.NewPreparationFactory` privately binds that workspace bridge to
+`agent.Prepared`; the existing workspace factory uses the same Prepare/Start path.
+Preparation receives configuration and required resume identity without a RunID or
+prompt, checks the installed `workspace_prepare` feature, and owns the process until
+one successful Start transfers it. The selected configuration and environment are
+fixed before returning; a later Start supplies only its actual RunID, prompt and
+output channel. Early preparation failure returns without an executing Session or
+fabricated completion. The non-workspace direct factory keeps its existing path.
+
+The preparation owner context spans the eventual Session. Start's context bounds
+that operation only, and Close is inert after successful transfer. Abandoned or
+failed preparation, owner cancellation and native exit release owned work. The
+same output consumer and cancellation settlement follow the resource across Start;
+an unstarted preparation has no measured Usage or observed native Session identity.
+A cancellation deadline cannot establish cleanup completion while cleanup remains
+pending. This adapter ownership seam does not register a daemon capability or
+supply per-Session placement authorization, public admission or an idle Files owner.
 
 The private adapter also accepts typed anonymous HTTP and static-bearer HTTPS MCP
 declarations on the trusted `environment:none` harness host. The packaged readiness

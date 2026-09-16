@@ -37,6 +37,10 @@ func (info RuntimeInfo) supportsWorkspace() bool {
 	return slices.Contains(info.Features, "workspace_tools")
 }
 
+func (info RuntimeInfo) supportsWorkspacePreparation() bool {
+	return info.supportsWorkspace() && slices.Contains(info.Features, "workspace_prepare")
+}
+
 // CheckRuntime checks the packaged companion and exact execution entrypoint.
 // It does not create Session state, register an engine or make a model request.
 func CheckRuntime(ctx context.Context, config Config) (RuntimeInfo, error) {
