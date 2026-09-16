@@ -5,7 +5,7 @@
   "rust_toolchain": "1.95.0",
   "scope": "private raw remote Files/execution/cancellation/cold-history qualification; no production selection",
   "patch": {
-    "file": "../raw_manager/manager-exposure.patch",
+    "file": "../../../../../packages/codex-harness/patches/manager-exposure.patch",
     "sha256": "047e1fe5e267cfc350e0a6373e50eeff5c51581bdaffaf29807430d35b8c8adc"
   },
   "cargo_lock": {

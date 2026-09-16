@@ -11,7 +11,7 @@ Ownership rules remain in [CONTRIBUTING.md](../../CONTRIBUTING.md#environment-ow
 | Native pin | 0.153.4, commit `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a` | SDK 0.3.269, native 2.1.269 |
 | Public execution | `none` and the accepted `self_hosted` remote-executor profile | `none`, with built-in command/file tools disabled |
 | Workspace placement | Separate native executor; harness cwd is not the remote workspace | Private typed factory binding inside a separately qualified outer placement; changing cwd alone is insufficient |
-| Preparation | Ready before input promotion; Start retains the same native preparation | No workspace preparation capability yet |
+| Preparation | Ready before input promotion; Start retains the same native preparation | Private SDK/Go prepare-start ownership is qualified; public workspace admission remains closed |
 | History | Retained native history on the bound device, separately from executor workspace | Managed native state and exact resume; private workspace continuation has explicit real-provider acceptance |
 | Files | A shared native manager was proven privately; production transport/lifetime composition remains missing | Native tools can access a local workspace; public Files and an authorized idle owner remain missing |
 | Cancellation | Owned-command cancellation verified; auxiliary process cleanup still has a recorded failure | Private workspace factory acceptance checks cancellation and effect cessation; arbitrary escaped descendants are not qualified |
@@ -77,11 +77,15 @@ Specify idle capacity, expiry/revocation and release independently of Run
 completion. Releasing transient credentials must not delete caller-owned files
 or required native history. A replacement socket alone never authorizes overlap.
 
-The pinned Codex raw app-server runner cannot inject the privately proven shared
-manager. Its injectable in-process route can drop notifications on saturation.
-A second connection, a larger downstream queue or host-local `fs/*` against a
-remote workspace does not solve that production seam. Native core integration
-or a maintained upstream entrypoint requires a separately accepted change.
+The tracked exact-pin raw-runner hook now publishes its stock-built manager;
+private Files/execution/cancel/history composition is qualified. The injectable
+in-process route can drop notifications on saturation, while the maintained raw
+socket client's consumer queue is unbounded. The optional private harness artifact
+therefore uses stock raw stdio with the existing Go RPC and a separate local
+metadata socket into the same manager. It does not create a second executor pair
+or call host-local `fs/*` for a remote path. Patch ownership, exact builds and
+acceptance are defined in the [artifact guide](../../packages/codex-harness/README.md).
+This does not enable public Files, a reusable idle owner or full transport bounds.
 
 ## Acceptance and next slice
 

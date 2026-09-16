@@ -1,0 +1,13 @@
+--- a/codex-rs/app-server/Cargo.toml
++++ b/codex-rs/app-server/Cargo.toml
+@@ -15,6 +15,10 @@
+ [[bin]]
+ name = "exec-server"
+ path = "src/bin/exec_server.rs"
++
++[[bin]]
++name = "parsar-codex-harness"
++path = "parsar-harness/main.rs"
+ 
+ [lib]
+ name = "codex_app_server"

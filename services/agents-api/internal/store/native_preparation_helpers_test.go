@@ -11,6 +11,10 @@ import (
 )
 
 func daemonPreparedRemotePrompt(t *testing.T, ctx context.Context, peer *gateway.Session, req proto.PromptRequestPayload, cancelWhen func() bool) (proto.DonePayload, []proto.Envelope, *proto.InteractionDecisionAckPayload) {
+	return daemonPreparedRemotePromptWithReady(t, ctx, peer, req, cancelWhen, nil)
+}
+
+func daemonPreparedRemotePromptWithReady(t *testing.T, ctx context.Context, peer *gateway.Session, req proto.PromptRequestPayload, cancelWhen func() bool, onReady func() bool) (proto.DonePayload, []proto.Envelope, *proto.InteractionDecisionAckPayload) {
 	t.Helper()
 	request := uuid.NewString()
 	sub, err := peer.SubscribePreparation(request)
@@ -55,6 +59,20 @@ func daemonPreparedRemotePrompt(t *testing.T, ctx context.Context, peer *gateway
 	}
 	if ready.Handle == "" || ready.Revision < 2 || ready.RunID != "" {
 		t.Fatal("invalid pre-Turn ready identity")
+	}
+	if onReady != nil && !onReady() {
+		env, err := proto.NewEnvelope(proto.TypeExecutionRelease, request, proto.ExecutionReleasePayload{Handle: ready.Handle})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = peer.Send(ctx, env); err != nil {
+			t.Fatal(err)
+		}
+		released := await("released")
+		if released.State != "released" || released.Handle != ready.Handle || released.Revision <= ready.Revision {
+			t.Fatal("unused native preparation release failed")
+		}
+		return proto.DonePayload{}, observations, nil
 	}
 	start := func(run string) error {
 		env, err := proto.NewEnvelope(proto.TypeExecutionStart, request, proto.ExecutionStartPayload{Handle: ready.Handle, RunID: run, Prompt: req.Prompt})
