@@ -12,7 +12,8 @@ func TestMCPRequiresSupportedServicePlacement(t *testing.T) {
 		valid               bool
 	}{
 		{"codex", `{"type":"none"}`, true},
-		{"claude_sdk", `{"type":"none"}`, false},
+		{"claude_sdk", `{"type":"none"}`, true},
+		{"claude_sdk", `{"type":"self_hosted","workspace_directory":"/work"}`, false},
 		{"unavailable", `{"type":"none"}`, false},
 		{"codex", `null`, false},
 		{"codex", `{"type":"self_hosted","workspace_directory":"/work"}`, true},
