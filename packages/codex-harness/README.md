@@ -80,6 +80,12 @@ Environment variable. The native manager uses its fixed `remote` key, independen
 of that UUID. A response reports native metadata or a safe error. There is
 no local filesystem fallback and no read, write or listing method.
 
+Startup freezes the operator binding before calling native `arg0_dispatch`. This
+preserves native `CODEX_HOME/.env` credential loading and helper dispatch before
+threads start, without letting dotenv replace private selectors. The native alias
+guard lives until runtime teardown; explicit child re-execution uses the pinned
+stock helper.
+
 The request shares one ten-second deadline. A stalled frame or response writer
 closes its connection. If the native operation has not settled by the deadline,
 the artifact exits with an error and closes admission; dropping the native wait

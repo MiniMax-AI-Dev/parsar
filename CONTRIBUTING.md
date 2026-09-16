@@ -469,6 +469,8 @@ Its canonical patch lives in the package; qualification manifests reference the
 same bytes. Export the exact upstream commit, verify the lock normalization and
 named-binary overlay, and retain source/toolchain/artifact provenance. Do not build
 from a mutable upstream worktree or present this integration as a stock binary.
+Capture operator selectors before native bootstrap; retain native dotenv/helper
+initialization before threads and its alias guard until runtime teardown.
 The existing Go RPC owns its raw stdio child. A private same-user local socket
 offers metadata only through that runner's manager, with a frozen registry
 Environment UUID, the adapter's native `remote` manager key, and no local fallback.
