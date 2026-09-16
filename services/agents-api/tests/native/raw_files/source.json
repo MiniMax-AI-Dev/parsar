@@ -1,0 +1,59 @@
+{
+  "repository": "https://github.com/openai/codex",
+  "revision": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
+  "native_version": "0.153.4",
+  "rust_toolchain": "1.95.0",
+  "scope": "private raw remote Files/execution/cold-history qualification; no production selection",
+  "patch": {
+    "file": "../raw_manager/manager-exposure.patch",
+    "sha256": "047e1fe5e267cfc350e0a6373e50eeff5c51581bdaffaf29807430d35b8c8adc"
+  },
+  "cargo_lock": {
+    "original_sha256": "3494b8a78d0f643556a83a9cc184e912bcab9f4c5640288952f4223452ba5dc8",
+    "normalized_sha256": "a2cb91dfb2e8112bc81d05158fa00b9698e2df8cc1ae0547b5dc5606a44904d3",
+    "workspace_packages": 149
+  },
+  "fixtures": [
+    {
+      "source": "../shared_files_probe.rs",
+      "target": "codex-rs/app-server/examples/parsar_shared_files_probe.rs"
+    },
+    {
+      "source": "../raw_files_probe.rs",
+      "target": "codex-rs/app-server/examples/parsar_raw_files_probe.rs"
+    },
+    {
+      "source": "../shared_files/files.rs",
+      "target": "codex-rs/app-server/examples/shared_files/files.rs"
+    },
+    {
+      "source": "../shared_files/runtime.rs",
+      "target": "codex-rs/app-server/examples/shared_files/runtime.rs"
+    },
+    {
+      "source": "../shared_files/raw_runtime.rs",
+      "target": "codex-rs/app-server/examples/shared_files/raw_runtime.rs"
+    },
+    {
+      "source": "../shared_files/probe.rs",
+      "target": "codex-rs/app-server/examples/shared_files/probe.rs"
+    },
+    {
+      "source": "../shared_files/observations.rs",
+      "target": "codex-rs/app-server/examples/shared_files/observations.rs"
+    },
+    {
+      "source": "../shared_files/configuration.rs",
+      "target": "codex-rs/app-server/examples/shared_files/configuration.rs"
+    }
+  ],
+  "fixture_patch": {
+    "file": "client-dependency.patch",
+    "sha256": "76df7fcb970ca67bd1f40b2d98e5a2f8ec24564f2e772a69a7e9e9b7ad7f2cc9",
+    "scope": "one dev-dependency edge to the existing exact-pin workspace client; no third-party changes",
+    "prepared_files": {
+      "codex-rs/app-server/Cargo.toml": "c0d1cbed4ab6256ba28a3bbfaad7b8217ae928dce29b8299bd725027c63e350e",
+      "codex-rs/Cargo.lock": "25dbeba0fe924e6501168dd8b54670a6ec9d0639cd3ad0ccbb5828f1d4b60fa6"
+    }
+  }
+}
