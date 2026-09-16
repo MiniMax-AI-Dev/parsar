@@ -24,7 +24,8 @@ cd "$RETIREMENT_ROOT/source/codex-rs"
 cargo test --locked -p codex-exec-server --lib retirement_qualification -- --nocapture
 cargo clippy --locked -p codex-exec-server --tests -- -D warnings
 rustfmt --check --edition 2024 exec-server/src/retirement_gate.rs \
-  exec-server/src/server/retirement_qualification.rs
+  exec-server/src/server/retirement_qualification.rs \
+  exec-server/src/server/placement_qualification.rs
 ```
 
 The test uses the existing processor's duplex JSON-RPC helper and typed native
@@ -59,7 +60,7 @@ the test to keep the negative result.
 | Native remote runner | Source: `remote.rs` calls the processor shutdown after the remote transport ends. This test exercises that processor boundary directly, not an end-to-end remote runner shutdown. |
 | Registry pair disconnect / harness credential withdrawal | Source: the registry closes authenticated physical peers; native remote reconnect retains its processor. Transport closure is not a filesystem settlement receipt. Credential withdrawal is not directly injected by this test. |
 | Core execution lease loss | Source: database ownership controls service admission; it cannot retract work already dispatched to a native executor. No lease-loss injection is claimed. |
-| Executor process / isolated placement destruction | Not qualified here. A future implementation needs a verified supervisor/storage boundary or native mutation-drain receipt before successor writes. |
+| Executor process / isolated placement destruction | Qualified separately by the candidate fixture below for its task-owned local Docker placement. Production admission still needs an authorized supervisor/storage boundary or native mutation-drain receipt. |
 
 The replacement owner in this regression is admitted directly to native processors;
 it is deliberately not evidence that public Core admission allows this race. It
@@ -82,3 +83,35 @@ upgrade this mechanism result into production retirement acceptance.
 Run repository `make check` independently. No API or database query is changed.
 Public Files, production owner integration, complete descendant retirement and
 Claude's independent placement qualification remain separate tasks.
+
+## Whole-placement candidate qualification
+
+`placement.py` uses the same exact-pin test build and scheduling gate in a
+credential-free, task-owned Linux Docker unit. Build the `codex-exec-server`
+library test binary with `cargo test --locked -p codex-exec-server --lib --no-run`,
+then pass that binary and the already qualified immutable executor image:
+
+```sh
+python3 services/agents-api/tests/native/retirement/placement.py \
+  --binary "$NATIVE_TEST_BINARY" --image "$EXECUTOR_IMAGE_ID" \
+  --output "$HOME/.parsar/placement-retirement/attempt-1"
+```
+
+The host must be the Docker host, expose readable cgroup v2 membership/events,
+and use the existing Debian executor image with `setsid`. The test process is
+the placement init; the native processor dispatches a held file write and a
+command that starts a detached-session descendant. Before stopping, the runner
+checks native readiness, actual cgroup members and independent process-session
+identity. A still-live placement fails the retirement observation and cannot
+start the successor. Docker stop is followed by cgroup and process-identity
+observations before the fresh native write; a successful stop request alone is
+insufficient. Failed assertions retain evidence and reclaim only exact labeled
+test instances. Workspace files survive container removal.
+
+This qualifies only the tested local filesystem and placement. It does not
+implement Core authority, durable unknown-owner reconciliation, remote supervisor
+receipts, Claude containment or public Files. Whole-placement retirement does not
+undo completed effects; the held old mutation remains unknown and is never
+replayed. No model credentials enter the instrumented unit. Run the ordinary
+real-model Files/cancellation/history fixture separately, and report its outcome
+independently. Production runtime/pins and the earlier negative tests are unchanged.

@@ -482,6 +482,9 @@ command exit or a Core lease change. Require an actual executor mutation-drain o
 enforced placement-retirement boundary; retain uncertainty across recovery when
 that boundary cannot be established. Native source evidence, instrumented mechanism
 tests and uninstrumented real execution remain distinct acceptance claims.
+The opt-in whole-placement fixture uses an exact task-owned Docker instance and
+cgroup/process observations before successor writes. This is a local-filesystem
+qualification, not an authenticated remote retirement receipt or public admission.
 
 Connection observations use the existing execution lease and Session lock. A
 separate `environment_connections` row retains the current generation and revision;
