@@ -1428,6 +1428,24 @@ preparation, shared placement quotas and Files ownership remain separate work.
 `TestLiveClaudeWorkspaceFactory` is explicit real-provider acceptance inside a
 qualified placement, including effects, cancellation and same-history continuation.
 
+The private workspace bridge also accepts `prepare` without a prompt. It freezes
+validated configuration and resume identity, checks required history, and retains
+one native process through the pinned SDK's `startup`/`query` API. Preparation
+requires initialization and acknowledgement of the required hooks while the input
+iterator remains empty. Its `prepared` receipt permits one later `start` containing
+only the initial prompt; configuration replacement, premature or duplicate start
+is rejected. Native Session identity and actual tool inventory are still checked
+at execution initialization before `input_ready`. Existing direct execution uses
+the same observation and completion path.
+
+Unused EOF, owner signals, invalid control input and native exit release owned
+resources before a terminal event. The private `workspace_prepare` runtime feature
+identifies this bridge contract only. It does not register daemon preparation,
+enable public admission, or project public Environment readiness. Preparation may
+write native runtime metadata outside the workspace and perform startup traffic;
+it does not prove provider authentication, complete sandbox health or tenant
+placement authorization. The Go prepared-resource binding remains separate work.
+
 The private adapter also accepts typed anonymous HTTP and static-bearer HTTPS MCP
 declarations on the trusted `environment:none` harness host. The packaged readiness
 report must include `mcp_http_tools`; discovery advertises that feature only when
