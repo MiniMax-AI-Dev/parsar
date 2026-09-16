@@ -16,6 +16,7 @@ use tokio::process::{Child, ChildStdout, Command};
 const DEADLINE: Duration = Duration::from_secs(30);
 // Match pinned arg0/async-utils stack sizing for large native futures.
 const NATIVE_STACK_BYTES: usize = 16 * 1024 * 1024;
+const CALLER_HOME_ENV: &str = "PARSAR_RAW_MANAGER_CALLER_HOME";
 
 fn main() -> Result<()> {
     std::thread::Builder::new()
@@ -45,19 +46,25 @@ async fn run() -> Result<()> {
         native.is_absolute() && root.is_absolute(),
         "absolute paths are required"
     );
-    ensure!(
-        root.components().any(|part| part.as_os_str() == ".parsar"),
-        "proof directory must be under .parsar"
-    );
+    let home_variable = match args[1].as_str() {
+        "owner"
+        | "child-receiver-dropped"
+        | "child-startup-failure"
+        | "child-late-startup-failure" => CALLER_HOME_ENV,
+        _ => "HOME",
+    };
+    let caller_home =
+        PathBuf::from(std::env::var_os(home_variable).context("caller HOME is missing")?);
+    let root = proof_root(root, &caller_home)?;
     match args[1].as_str() {
-        "owner" => owner::serve(native, root).await,
+        "owner" => owner::serve(native, &root).await,
         "child-receiver-dropped" | "child-startup-failure" | "child-late-startup-failure" => {
             owner::failure(native, args[1].trim_start_matches("child-")).await
         }
         "smoke" | "receiver-dropped" | "startup-failure" | "late-startup-failure" => {
             let root = tempfile::Builder::new()
                 .prefix("raw-manager-")
-                .tempdir_in(root)?
+                .tempdir_in(&root)?
                 .keep();
             let result = tokio::time::timeout(DEADLINE, qualify(&args[1], native, &root)).await;
             println!(
@@ -68,6 +75,20 @@ async fn run() -> Result<()> {
         }
         _ => bail!("unknown qualification mode"),
     }
+}
+
+fn proof_root(root: &Path, caller_home: &Path) -> Result<PathBuf> {
+    ensure!(caller_home.is_absolute(), "caller HOME must be absolute");
+    let expected = caller_home
+        .join(".parsar")
+        .canonicalize()
+        .context("resolve caller state directory")?;
+    let actual = root.canonicalize().context("resolve proof directory")?;
+    ensure!(
+        actual.starts_with(expected),
+        "proof directory must resolve under caller ~/.parsar"
+    );
+    Ok(actual)
 }
 
 fn child(mode: &str, native: &Path, root: &Path) -> Result<Child> {
@@ -82,6 +103,11 @@ fn child(mode: &str, native: &Path, root: &Path) -> Result<Child> {
         ])
         .env_clear()
         .env("HOME", root)
+        // Retained fixture context, not authorization; native HOME stays isolated.
+        .env(
+            CALLER_HOME_ENV,
+            std::env::var_os("HOME").context("caller HOME is missing")?,
+        )
         .env("CODEX_HOME", home)
         .env("TMPDIR", root)
         .env("PATH", "/usr/bin:/bin")
@@ -176,4 +202,45 @@ async fn qualify(mode: &str, native: &Path, root: &Path) -> Result<()> {
     );
     drop(executor);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proof_root_rejects_component_traversal_and_symlink_escapes() -> Result<()> {
+        let caller_home = PathBuf::from(std::env::var_os("HOME").context("HOME is missing")?);
+        let task_root =
+            PathBuf::from(std::env::var_os("TMPDIR").context("task TMPDIR is missing")?);
+        let task_root = proof_root(&task_root, &caller_home)?;
+        let fixture = tempfile::Builder::new()
+            .prefix("raw-manager-path-test-")
+            .tempdir_in(task_root)?;
+        let home = fixture.path().join("caller");
+        let valid = home.join(".parsar/proof");
+        let outside = fixture.path().join("outside/.parsar");
+        std::fs::create_dir_all(&valid)?;
+        std::fs::create_dir_all(&outside)?;
+        ensure!(proof_root(&valid, &home)? == valid.canonicalize()?);
+        ensure!(
+            proof_root(&outside, &home).is_err(),
+            "a .parsar component is insufficient"
+        );
+        let traversal = home.join(".parsar/../../outside/.parsar");
+        ensure!(
+            proof_root(&traversal, &home).is_err(),
+            "parent traversal escaped the state root"
+        );
+        #[cfg(unix)]
+        {
+            let link = home.join(".parsar/link");
+            std::os::unix::fs::symlink(&outside, &link)?;
+            ensure!(
+                proof_root(&link, &home).is_err(),
+                "symlink escaped the state root"
+            );
+        }
+        Ok(())
+    }
 }

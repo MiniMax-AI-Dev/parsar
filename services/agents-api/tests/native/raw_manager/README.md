@@ -32,10 +32,12 @@ mkdir -p "$RAW_MANAGER_ROOT/state"
 export TMPDIR="$RAW_MANAGER_ROOT/state"
 export CARGO_HOME="$HOME/.parsar/cache/agents-native-cargo"
 export CARGO_TARGET_DIR="$HOME/.parsar/cache/raw-manager-target"
-export RUSTUP_TOOLCHAIN=1.95.0
+export RUSTUP_TOOLCHAIN=1.95
 export CARGO_PROFILE_DEV_DEBUG=0
+rustc --version # The installed toolchain must report 1.95.0.
 cd "$RAW_MANAGER_ROOT/source/codex-rs"
 cargo build --locked -p codex-app-server --example parsar_raw_manager_probe
+cargo test --locked -p codex-app-server --example parsar_raw_manager_probe
 cargo clippy --locked -p codex-app-server --example parsar_raw_manager_probe -- -D warnings
 rustfmt --check --edition 2024 app-server/examples/parsar_raw_manager_probe.rs
 cargo test --locked -p codex-app-server --lib transport::tests
@@ -60,6 +62,10 @@ through the published handle and using its typed filesystem checks shared manage
 identity; a same-disk read/write alone would not. Failure modes exercise a dropped
 manager receiver and startup failure. Existing native transport tests retain the
 stock backpressure/disconnect regression coverage.
+
+The fixture resolves proof paths within the caller's `~/.parsar` before creating
+state. Its isolated child HOME retains the original caller context for this check;
+the path test rejects misleading components, parent traversal and symlink escapes.
 
 Publication means that a manager handle exists. It does not establish completed
 initialization, remote readiness, caller authorization or revocation. An `Arc` may
