@@ -141,7 +141,10 @@ the target. Use a non-root container user, private PID/IPC/cgroup namespaces,
 no devices, additional capabilities, shared volumes or privileged settings.
 Exactly one writable bind retains workspace/history on ext-family, XFS, Btrfs or
 tmpfs storage without nested mounts; additional binds may only be read-only regular
-files. Controller state and the canonical Docker socket must not be exposed by any mount,
+files. Every source must be on a whole-filesystem host mount with exactly one mount
+for that device in the controller namespace. Host bind aliases, Btrfs subvolume
+roots, repeated-device or stacked mounts and missing mount evidence are rejected;
+this first profile does not resolve arbitrary backing-path aliases. Controller state and the canonical Docker socket must not be exposed by any mount,
 including ancestor directories and filesystem roots. Use canonical absolute
 workspace paths and a trusted operator account with Docker access. State ancestors
 must be owned by that user or root and not writable by group/others; the placement

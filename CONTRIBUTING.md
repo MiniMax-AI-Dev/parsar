@@ -492,7 +492,10 @@ They use a fixed local Docker socket, an exact labeled container/incarnation,
 private durable state under `~/.parsar/placements`, and a per-target process lock.
 Enrollment is limited to the documented unprivileged Linux/cgroup-v2 local-storage
 profile. Keep controller state and the canonical Docker socket outside generated-code mounts,
-including when a workspace source is a filesystem root.
+including when a workspace source is a filesystem root. Every source must reside
+on a whole-filesystem host mount whose device appears exactly once in the controller
+mount namespace; bind aliases, subvolume roots, stacked mounts and missing mount
+evidence are unqualified. This bounded profile does not resolve arbitrary mount graphs.
 Stopping, independent membership/process observations and non-forced removal must
 precede a durable successful receipt. Recovered receipts must complete their directory-sync barrier before success.
 Missing evidence or a crash after removal

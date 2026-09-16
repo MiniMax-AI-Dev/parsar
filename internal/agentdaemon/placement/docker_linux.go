@@ -132,11 +132,18 @@ func (c *Controller) validateProfile(u *container, owner, workspace string) erro
 	if err != nil {
 		return fmt.Errorf("cannot resolve supervisor socket: %w", err)
 	}
+	mounts, err := c.hostMounts(workspace)
+	if err != nil {
+		return err
+	}
 	found := false
 	for _, m := range u.Mounts {
 		canonical, err := filepath.EvalSymlinks(m.Source)
 		if err != nil || canonical != m.Source || inside(m.Source, c.root) || inside(c.root, m.Source) || inside(m.Source, socket) {
 			return errors.New("mount aliases or exposes controller state or supervisor socket")
+		}
+		if err := unaliasedSource(m.Source, mounts); err != nil {
+			return err
 		}
 		if m.Type != "bind" || (m.Propagation != "rprivate" && m.Propagation != "") {
 			return errors.New("only private bind mounts are qualified")
@@ -152,21 +159,6 @@ func (c *Controller) validateProfile(u *container, owner, workspace string) erro
 	}
 	if !found {
 		return errors.New("missing exact retained workspace bind")
-	}
-	// Nested host mounts could expose another filesystem or controller data.
-	mounts, err := os.ReadFile(filepath.Join(c.procRoot, "self/mountinfo"))
-	if err != nil {
-		return err
-	}
-	for _, line := range strings.Split(string(mounts), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 5 {
-			continue
-		}
-		point := strings.NewReplacer(`\040`, " ", `\011`, "\t", `\012`, "\n", `\134`, `\`).Replace(fields[4])
-		if point != workspace && inside(workspace, point) {
-			return errors.New("nested workspace mounts are unqualified")
-		}
 	}
 	return nil
 }

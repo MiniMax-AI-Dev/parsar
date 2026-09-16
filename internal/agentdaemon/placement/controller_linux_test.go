@@ -75,7 +75,7 @@ func newFixture(t *testing.T) *fixture {
 		RW                                     bool
 	}{Type: "bind", Source: f.workspace, Destination: "/workspace", Propagation: "rprivate", RW: true})
 	writeTestFile(t, filepath.Join(f.c.procRoot, "sys/kernel/random/boot_id"), "boot-1")
-	writeTestFile(t, filepath.Join(f.c.procRoot, "self/mountinfo"), "")
+	writeTestFile(t, filepath.Join(f.c.procRoot, "self/mountinfo"), "1 0 8:2 / / rw - ext4 /dev/test rw\n")
 	writeTestFile(t, filepath.Join(f.c.procRoot, "123/stat"), "123 (native (worker)) S "+strings.Repeat("0 ", 18)+"999 0")
 	writeTestFile(t, filepath.Join(f.c.procRoot, "123/cgroup"), "0::/docker-"+testID+".scope\n")
 	writeTestFile(t, filepath.Join(f.c.cgroupRoot, "docker-"+testID+".scope/cgroup.procs"), "123\n")
