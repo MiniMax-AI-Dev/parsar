@@ -21,19 +21,21 @@ import (
 )
 
 type sharedFilesProbeProof struct {
-	Status                string `json:"status"`
-	Transport             string `json:"transport"`
-	Phase                 string `json:"phase"`
-	NativeThreadID        string `json:"native_thread_id"`
-	NativeTurnID          string `json:"native_turn_id"`
-	Marker                string `json:"marker"`
-	HistoryValue          string `json:"history_value"`
-	Answer                string `json:"answer"`
-	TurnStartedCount      int    `json:"turn_started_count"`
-	TurnCompletedCount    int    `json:"turn_completed_count"`
-	CommandStartedCount   int    `json:"command_started_count"`
-	CommandCompletedCount int    `json:"command_completed_count"`
-	ShutdownCompleted     bool   `json:"shutdown_completed"`
+	Status                string                     `json:"status"`
+	Transport             string                     `json:"transport"`
+	Phase                 string                     `json:"phase"`
+	NativeThreadID        string                     `json:"native_thread_id"`
+	NativeTurnID          string                     `json:"native_turn_id"`
+	Marker                string                     `json:"marker"`
+	HistoryValue          string                     `json:"history_value"`
+	Answer                string                     `json:"answer"`
+	TurnStartedCount      int                        `json:"turn_started_count"`
+	TurnCompletedCount    int                        `json:"turn_completed_count"`
+	CommandStartedCount   int                        `json:"command_started_count"`
+	CommandCompletedCount int                        `json:"command_completed_count"`
+	ShutdownCompleted     bool                       `json:"shutdown_completed"`
+	Cancellation          *rawFilesCancellationProof `json:"cancellation,omitempty"`
+	CancellationRecovery  *rawFilesRecoveryProof     `json:"cancellation_recovery,omitempty"`
 	Command               struct {
 		ID               string `json:"id"`
 		Command          string `json:"command"`
@@ -56,10 +58,11 @@ type sharedFilesProbeProof struct {
 }
 
 type sharedFilesProfile struct {
-	probeVariable string
-	status        string
-	transport     string
-	limitations   string
+	probeVariable    string
+	status           string
+	transport        string
+	limitations      string
+	withCancellation bool
 }
 
 func TestNativeSharedEnvironmentFiles(t *testing.T) {
@@ -176,7 +179,7 @@ func testNativeSharedEnvironmentFiles(t *testing.T, profile sharedFilesProfile) 
 	})
 	server.Start()
 	t.Cleanup(func() { registry.Close(); server.Close() })
-	startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, server.URL, environment.ID, credential)
+	container := startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, server.URL, environment.ID, credential)
 	awaitDaemonRemoteCondition(t, ctx, 30*time.Second, "caller executor connection", func() bool {
 		connected, err := registry.Connected(ctx, tenant, environment.ID)
 		return err == nil && connected
@@ -193,7 +196,11 @@ func testNativeSharedEnvironmentFiles(t *testing.T, profile sharedFilesProfile) 
 	defer func() { persistDaemonRemoteProof(t, root, proof, secrets) }()
 	var previous sharedFilesProbeProof
 	processIDs := []int{}
-	for index, phase := range []string{"first", "fresh"} {
+	phases := []string{"first", "fresh"}
+	if profile.withCancellation {
+		phases = []string{"first", "cancel", "fresh"}
+	}
+	for index, phase := range phases {
 		owner, stopOwner := context.WithCancel(ctx)
 		t.Cleanup(stopOwner)
 		harnessToken, releaseHarness, err := registry.IssueHarnessCredential(owner, tenant, environment.ID)
@@ -218,6 +225,11 @@ func testNativeSharedEnvironmentFiles(t *testing.T, profile sharedFilesProfile) 
 		process := startPublicNativeProcess(t, ctx, root, phase, probeEnvironment, probe, phase)
 		processIDs = append(processIDs, process.command.Process.Pid)
 		t.Cleanup(func() {
+			select {
+			case <-process.done:
+				return
+			default:
+			}
 			_ = os.WriteFile(filepath.Join(local, phase+".release"), []byte("cleanup\n"), 0600)
 			_ = os.WriteFile(filepath.Join(root, phase+"-active-observed"), []byte("cleanup\n"), 0600)
 			_ = os.WriteFile(filepath.Join(root, phase+"-release"), []byte("cleanup\n"), 0600)
@@ -227,10 +239,17 @@ func testNativeSharedEnvironmentFiles(t *testing.T, profile sharedFilesProfile) 
 			t.Fatal("native gate released before independent active observation")
 		}
 		proof["relay_observations"].(map[string]map[string]int)[phase+"_active"] = assertSharedFilesPair(t, observation, index+1)
+		if phase == "cancel" {
+			assertRawFilesCancelActive(t, ctx, container, local)
+		}
 		writeSharedFilesSignal(t, filepath.Join(root, phase+"-active-observed"))
 		awaitSharedFilesSignal(t, ctx, process, filepath.Join(root, phase+"-ready.json"), 180*time.Second)
 		checkpoint := readSharedFilesProof(t, filepath.Join(root, phase+"-ready.json"))
 		assertSharedFilesProof(t, checkpoint, phase, workspace, local, profile)
+		if phase == "cancel" {
+			awaitDaemonRemoteExit(t, ctx, container, local)
+			proof["cancel_process_exit_observed"] = true
+		}
 		proof["relay_observations"].(map[string]map[string]int)[phase+"_completed"] = assertSharedFilesPair(t, observation, index+1)
 		writeSharedFilesSignal(t, filepath.Join(root, phase+"-release"))
 		select {
@@ -243,14 +262,19 @@ func testNativeSharedEnvironmentFiles(t *testing.T, profile sharedFilesProfile) 
 		}
 		result := readSharedFilesProof(t, filepath.Join(root, phase+".json"))
 		assertSharedFilesProof(t, result, phase, workspace, local, profile)
-		if !strings.Contains(result.Answer, instruction) {
+		if phase != "cancel" && !strings.Contains(result.Answer, instruction) {
 			t.Fatal("native model did not use executor-side instructions")
 		}
 		if !result.ShutdownCompleted || result.NativeThreadID != checkpoint.NativeThreadID || result.NativeTurnID != checkpoint.NativeTurnID {
 			t.Fatal("shutdown proof changed the completed native identity")
 		}
-		if index == 1 && (result.NativeThreadID != previous.NativeThreadID || result.NativeTurnID == previous.NativeTurnID || result.HistoryValue != previous.HistoryValue || result.Marker == previous.Marker) {
+		if index > 0 && (result.NativeThreadID != previous.NativeThreadID || result.NativeTurnID == previous.NativeTurnID || result.HistoryValue != previous.HistoryValue || result.Marker == previous.Marker) {
 			t.Fatal("fresh native process did not preserve history and distinct Turn/marker identities")
+		}
+		if phase == "fresh" && profile.withCancellation {
+			assertRawFilesRecovery(t, result, previous, local)
+		} else if result.CancellationRecovery != nil {
+			t.Fatal("ordinary Files phase unexpectedly reports cancellation recovery")
 		}
 		proof["phases"].(map[string]sharedFilesProbeProof)[phase] = result
 		previous = result
@@ -266,7 +290,11 @@ func testNativeSharedEnvironmentFiles(t *testing.T, profile sharedFilesProfile) 
 	}
 	for _, name := range []string{"shared-gate-count", "execution-count"} {
 		data, err := os.ReadFile(filepath.Join(local, name))
-		if err != nil || string(data) != "first\nfresh\n" {
+		expected := "first\nfresh\n"
+		if name == "shared-gate-count" {
+			expected = strings.Join(phases, "\n") + "\n"
+		}
+		if err != nil || string(data) != expected {
 			t.Fatal("native command was omitted or repeated", name, err)
 		}
 	}
@@ -276,10 +304,18 @@ func testNativeSharedEnvironmentFiles(t *testing.T, profile sharedFilesProfile) 
 	if _, err := os.Stat(filepath.Join(local, "credential-failure")); !os.IsNotExist(err) {
 		t.Fatal("model command inherited a private credential")
 	}
-	if processIDs[0] == processIDs[1] {
-		t.Fatal("cold continuation did not use a fresh probe process")
+	seenProcesses := map[int]bool{}
+	for _, pid := range processIDs {
+		if seenProcesses[pid] {
+			t.Fatal("cold continuation did not use a fresh probe process")
+		}
+		seenProcesses[pid] = true
 	}
-	for _, name := range []string{"first.log", "fresh.log", "first.json", "fresh.json"} {
+	var evidenceFiles []string
+	for _, phase := range phases {
+		evidenceFiles = append(evidenceFiles, phase+".log", phase+".json")
+	}
+	for _, name := range evidenceFiles {
 		data, err := os.ReadFile(filepath.Join(root, name))
 		if err != nil {
 			t.Fatal(err)
@@ -300,13 +336,14 @@ func testNativeSharedEnvironmentFiles(t *testing.T, profile sharedFilesProfile) 
 const sharedFilesGate = `#!/bin/sh
 set -eu
 phase="$1"
-case "$phase" in first|fresh) ;; *) exit 95 ;; esac
-for name in PARSAR_PROBE_MODEL_KEY PARSAR_PLACEMENT_MODEL_KEY_FILE; do
+case "$phase" in first|cancel|fresh) ;; *) exit 95 ;; esac
+for name in PARSAR_PROBE_MODEL_KEY PARSAR_PLACEMENT_MODEL_KEY_FILE CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN CODEX_API_KEY MINIMAX_VALIDATION_KEY; do
   eval 'value=${'"$name"'-}'
   test -z "$value" || { printf '%s\n' "$name" >> credential-failure; exit 23; }
 done
 pwd > "$phase.cwd"
 printf '%s\n' "$phase" >> shared-gate-count
+if [ "$phase" = cancel ]; then printf '%s\n' "$$" > cancel.pid; fi
 remaining=120
 while [ ! -f "$phase.release" ]; do
   test "$remaining" -gt 0 || { printf 'fixture gate timed out\n' >&2; exit 94; }
@@ -366,6 +403,13 @@ func assertSharedFilesProof(t *testing.T, proof sharedFilesProbeProof, phase, wo
 	}
 	if profile.transport == "raw_unix_socket" && proof.Transport != profile.transport {
 		t.Fatal("raw probe did not identify its qualified transport")
+	}
+	if phase == "cancel" {
+		assertRawFilesCancellation(t, proof, workspace, local)
+		return
+	}
+	if proof.Cancellation != nil {
+		t.Fatal("ordinary Files phase unexpectedly reports cancellation")
 	}
 	if proof.TurnStartedCount != 1 || proof.TurnCompletedCount != 1 || proof.CommandStartedCount != 1 || proof.CommandCompletedCount != 1 {
 		t.Fatal("native probe omitted or repeated principal lifecycle observations")

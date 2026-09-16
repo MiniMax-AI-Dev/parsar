@@ -276,11 +276,18 @@ pub fn annotate(proof: &mut Value) {
     proof["status"] = json!("raw_native_files_characterized");
     proof["transport"] = json!("raw_unix_socket");
     proof["initialize_completed"] = json!(true);
+    let cancellation_limit = if proof["cancellation"].is_object()
+        || proof["cancellation_recovery"].is_object()
+    {
+        "Cancellation observations cover this bounded fixture and its targeted native process only, not universal executor OS quiescence or stale-write fencing."
+    } else {
+        "Native cancellation is a required subsequent composition slice and is not exercised here."
+    };
     proof["limitations"] = json!([
         "The pinned native remote client has an unbounded consumer event queue. This finite workload does not qualify production memory or backpressure.",
         "Readiness-gated output checks do not establish complete native early-output capture; that limitation remains deferred.",
         "This private raw composition does not authorize production adoption, idle ownership or credential lifetime.",
-        "Native cancellation is a required subsequent composition slice and is not exercised here.",
+        cancellation_limit,
         "Native runner shutdown may abort internal tasks; joining it is not proof of executor OS quiescence.",
         "Direct native filesystem checks do not establish authorization, workspace confinement, public pagination or file_id semantics."
     ]);

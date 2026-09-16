@@ -138,6 +138,11 @@ impl Observations {
             .clone())
     }
 
+    pub fn events(&self) -> Result<Vec<Value>> {
+        self.healthy()?;
+        Ok(self.snapshot()?.events)
+    }
+
     pub fn healthy(&self) -> Result<()> {
         let state = self
             .state
@@ -277,7 +282,7 @@ impl Observations {
     }
 }
 
-fn is_gate_command(command: &str, phase: &str) -> bool {
+pub(super) fn is_gate_command(command: &str, phase: &str) -> bool {
     let Some(argv) = shlex::split(command) else {
         return false;
     };

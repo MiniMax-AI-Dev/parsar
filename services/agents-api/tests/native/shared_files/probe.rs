@@ -8,14 +8,14 @@ use serde_json::{Value, json};
 use tokio::time::{sleep, timeout};
 use uuid::Uuid;
 
-use crate::{configuration, files, runtime};
+use crate::{cancellation, configuration, files, runtime};
 
 const PHASE_TIMEOUT: Duration = Duration::from_secs(240);
 // Match pinned codex arg0/src/lib.rs and async-utils/src/lib.rs for native futures.
 const NATIVE_STACK_BYTES: usize = 16 * 1024 * 1024;
 
-pub fn main() -> std::process::ExitCode {
-    match run_native_runtime() {
+pub fn main(allow_cancel: bool) -> std::process::ExitCode {
+    match run_native_runtime(allow_cancel) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
             // Display only the safe outer context, not upstream connection/auth error chains.
@@ -25,27 +25,30 @@ pub fn main() -> std::process::ExitCode {
     }
 }
 
-fn run_native_runtime() -> Result<()> {
+fn run_native_runtime(allow_cancel: bool) -> Result<()> {
     std::thread::Builder::new()
         .name("shared-files-main".to_owned())
         .stack_size(NATIVE_STACK_BYTES)
-        .spawn(|| {
+        .spawn(move || {
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .worker_threads(4)
                 .thread_stack_size(NATIVE_STACK_BYTES)
                 .build()
                 .context("native runtime construction failed")?
-                .block_on(run())
+                .block_on(run(allow_cancel))
         })
         .context("native main thread construction failed")?
         .join()
         .map_err(|_| anyhow::anyhow!("native main thread panicked"))?
 }
 
-async fn run() -> Result<()> {
+async fn run(allow_cancel: bool) -> Result<()> {
     let phase = std::env::args().nth(1).context("phase is required")?;
-    ensure!(matches!(phase.as_str(), "first" | "fresh"), "invalid phase");
+    ensure!(
+        matches!(phase.as_str(), "first" | "fresh") || (allow_cancel && phase == "cancel"),
+        "invalid phase"
+    );
     let root = configuration::proof_root(
         &required_path("PARSAR_SHARED_FILES_ROOT")?,
         &configuration::caller_state_root()?,
@@ -96,15 +99,22 @@ async fn run() -> Result<()> {
             .context("remote readiness timed out")?
             .context("remote readiness failed")?;
         let fs = files::RemoteFiles::new(environment.get_filesystem(), workspace.clone());
-        exercise(&root, &workspace, &phase, &fs, &client, &manager).await
+        if phase == "cancel" {
+            cancellation::exercise(&root, &workspace, &fs, &client).await
+        } else {
+            exercise(&root, &workspace, &phase, &fs, &client, &manager).await
+        }
     })
     .await
     .context("shared-files phase timed out")
     .and_then(|result| result);
     let result = async {
-        let proof = result?;
+        let mut proof = result?;
         save(&root, &format!("{phase}-ready.json"), &proof).await?;
         wait_checkpoint(&root.join(format!("{phase}-release")), &client).await?;
+        if phase == "cancel" {
+            cancellation::refresh(&mut proof, &client)?;
+        }
         Ok::<_, anyhow::Error>(proof)
     }
     .await;
@@ -166,6 +176,11 @@ async fn exercise(
             "cold resume changed thread identity"
         );
     }
+    let recovery = if phase == "fresh" {
+        cancellation::recover(root, &thread_id, fs, client).await?
+    } else {
+        None
+    };
     let memory_instruction = if phase == "first" {
         format!(
             "Remember this prompt-only history value: {history}. Never put that value in a command, tool argument, or file."
@@ -232,6 +247,8 @@ async fn exercise(
     let counts = fs.text("shared-gate-count").await?;
     let expected = if phase == "first" {
         vec!["first"]
+    } else if recovery.is_some() {
+        vec!["first", "cancel", "fresh"]
     } else {
         vec!["first", "fresh"]
     };
@@ -256,11 +273,14 @@ async fn exercise(
         "turn_started_count":1,"turn_completed_count":1,"command_started_count":1,"command_completed_count":1,
         "events":observation.events,"no_lagged_observed":true,"shutdown_completed":false,
     });
+    if let Some(recovery) = recovery {
+        proof["cancellation_recovery"] = recovery;
+    }
     runtime::annotate(&mut proof);
     Ok(proof)
 }
 
-async fn wait_checkpoint(path: &Path, client: &runtime::Runtime) -> Result<()> {
+pub(super) async fn wait_checkpoint(path: &Path, client: &runtime::Runtime) -> Result<()> {
     timeout(Duration::from_secs(90), async {
         loop {
             client.observations.healthy()?;
@@ -283,7 +303,7 @@ fn required_path(name: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
-fn field<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
+pub(super) fn field<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
     value[key]
         .as_str()
         .filter(|value| !value.is_empty())
