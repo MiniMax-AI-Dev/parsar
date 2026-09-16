@@ -10,11 +10,11 @@ Ownership rules remain in [CONTRIBUTING.md](../../CONTRIBUTING.md#environment-ow
 | --- | --- | --- |
 | Native pin | 0.153.4, commit `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a` | SDK 0.3.269, native 2.1.269 |
 | Public execution | `none` and the accepted `self_hosted` remote-executor profile | `none`, with built-in command/file tools disabled |
-| Workspace placement | Separate native executor; harness cwd is not the remote workspace | Isolated co-location is the candidate; changing cwd alone is insufficient |
+| Workspace placement | Separate native executor; harness cwd is not the remote workspace | Private typed factory binding inside a separately qualified outer placement; changing cwd alone is insufficient |
 | Preparation | Ready before input promotion; Start retains the same native preparation | No workspace preparation capability yet |
-| History | Retained native history on the bound device, separately from executor workspace | Managed native state and exact resume for the restrictive profile; workspace continuation needs validation |
+| History | Retained native history on the bound device, separately from executor workspace | Managed native state and exact resume; private workspace continuation has explicit real-provider acceptance |
 | Files | A shared native manager was proven privately; production transport/lifetime composition remains missing | Native tools can access a local workspace; public Files and an authorized idle owner remain missing |
-| Cancellation | Owned-command cancellation verified; auxiliary process cleanup still has a recorded failure | Restrictive-profile process release verified; sandboxed command effects/descendants need validation |
+| Cancellation | Owned-command cancellation verified; auxiliary process cleanup still has a recorded failure | Private workspace factory acceptance checks cancellation and effect cessation; arbitrary escaped descendants are not qualified |
 
 Keep Codex's accepted remote path. Qualify Claude's maintained `query()` entry
 inside a dedicated execution environment, retaining the native model/tool loop.
@@ -92,14 +92,24 @@ process continuation of the same workspace/history, cancellation with separately
 observed process/effect cessation, and missing-history safe failure. This private
 prerequisite does not establish public Session preparation, Files or deployment.
 
-Only after that proof, add the smallest private typed Claude workspace profile
-and native observations while preserving existing `none` behavior. Public
-preparation and an idle Files owner are later independently accepted slices.
+The temporary `mx` placement qualified the pinned native controls and real
+workspace/history continuation under a locked runtime identity and explicit
+mount/PID boundary. It is not a production placement: CPU/memory/pids limits,
+disk quotas, provider-only trusted-harness egress and concurrent tenants remain
+unqualified. Default Docker and the tested gVisor version failed the strict native
+sandbox prerequisite; do not reuse either unchanged as a supported placement.
+
+The private typed Claude factory profile composes those controls in the existing
+bridge, retaining `none` behavior. Its separate acceptance must use that actual
+factory and bridge; the earlier direct native proof alone is insufficient.
+Native command/file observations, public preparation and an idle Files owner
+are later independently accepted slices.
 Use the same fixed SDK/raw HTTP and real execution acceptance for both public
 engines before claiming the complete milestone.
 
-`NATIVE-COMMAND-OUTPUT-001` remains a material Codex output-loss blocker for
-complete retained output and full-loop acceptance. The recorded failed real run
+`NATIVE-COMMAND-OUTPUT-001` remains a material Codex retained-output gap. The user
+has deferred it from the current principal-workflow milestone acceptance on the
+task board; this does not establish complete output fidelity. The recorded failed real run
 is not fixed by a later gated success. No production-ready maintained remedy was
 verified in the checked upstream sources; do not fabricate output, repair model
 prose or silently adopt a native fork. Reassess that dependency from the full

@@ -1,0 +1,158 @@
+package claudesdk
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/paths"
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
+)
+
+// WorkspaceConfig binds one trusted private placement. It does not create an
+// isolation boundary or authorize a public Environment. The operator must place
+// the entire factory inside the qualified outer mount/process boundary first.
+// All directories must already exist, be canonical and be mutually disjoint.
+type WorkspaceConfig struct {
+	Directory      string
+	HomeDir        string
+	ScratchDir     string
+	ProtectedDirs  []string
+	DependencyPath string
+}
+
+type workspaceProfile struct {
+	Home           string   `json:"home"`
+	State          string   `json:"state"`
+	Scratch        string   `json:"scratch"`
+	ProtectedDirs  []string `json:"protected_dirs"`
+	DependencyPath string   `json:"dependency_path"`
+	EnvNames       []string `json:"env_names"`
+}
+
+func prepareWorkspace(config Config, req proto.PromptRequestPayload) (*workspaceProfile, []string, error) {
+	if req.DisableExecutionEnvironment || req.RemoteEnvironment != nil || len(req.FunctionTools) != 0 || req.MCPHTTPServers != nil {
+		return nil, nil, fmt.Errorf("claudesdk: workspace profile does not support the requested execution combination")
+	}
+	if req.WorkDir != "" && req.WorkDir != config.Workspace.Directory {
+		return nil, nil, fmt.Errorf("claudesdk: work_dir conflicts with the trusted workspace binding")
+	}
+	return workspaceEnvironment(config)
+}
+
+// Workspace Env is a replacement, unlike the existing none profile's overlay.
+// Only explicitly selected provider settings reach either readiness or execution.
+func workspaceEnvironment(config Config) (*workspaceProfile, []string, error) {
+	fail := func() (*workspaceProfile, []string, error) {
+		return nil, nil, fmt.Errorf("claudesdk: invalid trusted workspace configuration")
+	}
+	w := config.Workspace
+	if w == nil || !filepath.IsAbs(config.Node) || !filepath.IsAbs(config.Entrypoint) {
+		return fail()
+	}
+	// Keep the exact paths used by execution and readiness outside mutable roots.
+	// A symlinked entrypoint must not select an unchecked sibling companion.
+	codePaths := []string{config.Node, config.Entrypoint, filepath.Join(filepath.Dir(config.Entrypoint), "runtime_check.js")}
+	for _, path := range codePaths {
+		resolved, err := filepath.EvalSymlinks(path)
+		info, statErr := os.Stat(path)
+		if err != nil || resolved != path || statErr != nil || !info.Mode().IsRegular() {
+			return fail()
+		}
+	}
+	roots := append([]string{w.Directory, config.StateDir, w.HomeDir, w.ScratchDir}, w.ProtectedDirs...)
+	for i, dir := range roots {
+		if !canonicalWorkspaceDir(dir) {
+			return fail()
+		}
+		for _, previous := range roots[:i] {
+			if pathContains(previous, dir) || pathContains(dir, previous) {
+				return fail()
+			}
+		}
+		for _, executable := range codePaths {
+			if pathContains(dir, executable) {
+				return fail()
+			}
+		}
+	}
+	managed, err := paths.Root()
+	if err != nil {
+		return fail()
+	}
+	managed, err = filepath.EvalSymlinks(managed)
+	if err != nil || managed == config.StateDir || !pathContains(managed, config.StateDir) {
+		return fail()
+	}
+	if w.DependencyPath == "" {
+		return fail()
+	}
+	var dependencies []string
+	for _, dir := range filepath.SplitList(w.DependencyPath) {
+		info, err := os.Stat(dir)
+		if !workspacePathSyntax(dir) || err != nil || !info.IsDir() {
+			return fail()
+		}
+		resolved, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			return fail()
+		}
+		for _, root := range roots {
+			if pathContains(root, dir) || pathContains(dir, root) || pathContains(root, resolved) || pathContains(resolved, root) {
+				return fail()
+			}
+		}
+		dependencies = append(dependencies, resolved)
+	}
+	dependencyPath := strings.Join(dependencies, string(os.PathListSeparator))
+	profile := &workspaceProfile{Home: w.HomeDir, State: config.StateDir, Scratch: w.ScratchDir,
+		ProtectedDirs: append([]string{}, w.ProtectedDirs...), DependencyPath: dependencyPath, EnvNames: []string{}}
+	env := []string{"PATH=" + dependencyPath, "HOME=" + w.HomeDir, "TMPDIR=" + w.ScratchDir,
+		"CLAUDE_CONFIG_DIR=" + config.StateDir, "DISABLE_TELEMETRY=1", "DISABLE_ERROR_REPORTING=1",
+		"DISABLE_AUTOUPDATER=1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1"}
+	seen := map[string]bool{}
+	for _, entry := range config.Env {
+		name, _, ok := strings.Cut(entry, "=")
+		if !ok || seen[name] || strings.ContainsRune(entry, '\x00') || !workspaceEnvName(name) {
+			return fail()
+		}
+		seen[name] = true
+		profile.EnvNames = append(profile.EnvNames, name)
+		env = append(env, entry)
+	}
+	return profile, env, nil
+}
+
+func workspaceEnvName(name string) bool {
+	switch name {
+	case "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+		"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY":
+		return true
+	default:
+		return false
+	}
+}
+
+func canonicalWorkspaceDir(dir string) bool {
+	if !workspacePathSyntax(dir) {
+		return false
+	}
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil || resolved != dir {
+		return false
+	}
+	info, err := os.Stat(dir)
+	return err == nil && info.IsDir()
+}
+
+func workspacePathSyntax(dir string) bool {
+	return filepath.IsAbs(dir) && filepath.Clean(dir) == dir && dir != string(filepath.Separator) &&
+		!strings.ContainsAny(dir, "*?[]{}():\\") && strings.IndexFunc(dir, func(r rune) bool { return r < 32 || r == 127 }) == -1
+}
+
+func pathContains(parent, child string) bool {
+	rel, err := filepath.Rel(parent, child)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
