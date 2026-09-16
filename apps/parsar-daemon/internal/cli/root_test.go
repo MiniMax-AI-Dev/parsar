@@ -60,12 +60,13 @@ func TestSubcommandsAreRegistered(t *testing.T) {
 	// Guards against dropping a subcommand off the commands slice —
 	// the public CLI surface is the shipped contract.
 	want := map[string]bool{
-		"connect": false,
-		"status":  false,
-		"stop":    false,
-		"logs":    false,
-		"logout":  false,
-		"version": false,
+		"placement": false,
+		"connect":   false,
+		"status":    false,
+		"stop":      false,
+		"logs":      false,
+		"logout":    false,
+		"version":   false,
 	}
 	for _, c := range commands {
 		if _, ok := want[c.name]; !ok {
