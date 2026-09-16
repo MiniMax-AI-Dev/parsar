@@ -12,6 +12,7 @@ import (
 // to that operation. The caller closes abandoned or failed preparations.
 type Prepared interface {
 	Start(context.Context, string, string, chan<- proto.Envelope) (Session, error)
+	// Close retains unused ownership on error; callers may retry settlement.
 	Close() error
 }
 

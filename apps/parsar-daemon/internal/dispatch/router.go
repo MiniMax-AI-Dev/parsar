@@ -43,6 +43,7 @@ type Router struct {
 	permIndex           map[string]string // permID  → RunID
 	askIndex            map[string]string // askID   → RunID
 	applied             map[string]appliedInteractionDecision
+	shutdownAttempt     *shutdownAttempt
 	shutdownCh          chan struct{}  // closed by Shutdown
 	shutdownWG          sync.WaitGroup // waits for all pump goroutines
 	idleTimeout         time.Duration

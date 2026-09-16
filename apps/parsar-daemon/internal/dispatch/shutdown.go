@@ -2,56 +2,86 @@ package dispatch
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
-// Shutdown cancels every active session and waits for pumps to drain.
-// Idempotent. Cancels ctx AND calls Session.Cancel — agents that
-// don't watch ctx (e.g. subprocess wrappers that need SIGTERM via
-// Cancel) leave their out channel open otherwise and the pump's
-// drain blocks forever.
+type shutdownAttempt struct {
+	done chan struct{}
+	err  error
+}
+
+// Shutdown stops admission and waits for owned cleanup; failed preparation cleanup can be retried.
 func (r *Router) Shutdown(ctx context.Context) error {
 	r.mu.Lock()
-	if r.closed {
-		r.mu.Unlock()
-		return nil
-	}
-	r.closed = true
-	close(r.shutdownCh)
-	preparations := r.closePendingPreparationsLocked()
-	victims := make([]sessionCancellation, 0, len(r.sessions))
-	for _, s := range r.sessions {
-		s.retain = false
-		victims = append(victims, sessionCancellation{s.runID, s.ctxCancel, s.session})
-	}
-	for _, states := range r.idle {
-		for s := range states {
-			s.retain = false
-			if s.idleTimer != nil {
-				s.idleTimer.Stop()
+	if previous := r.shutdownAttempt; previous != nil {
+		select {
+		case <-previous.done:
+			if previous.err == nil {
+				r.mu.Unlock()
+				return nil
 			}
-			victims = append(victims, sessionCancellation{s.runID, s.ctxCancel, s.session})
+		default:
+			r.mu.Unlock()
+			return waitShutdown(ctx, previous)
 		}
 	}
-	r.idle = make(map[string]map[*sessionState]struct{})
-	r.mu.Unlock()
-	for _, p := range preparations {
-		go func() { defer r.shutdownWG.Done(); r.closePreparationResource(p) }()
+	var victims []sessionCancellation
+	if !r.closed {
+		r.closed = true
+		close(r.shutdownCh)
+		for _, s := range r.sessions {
+			s.retain = false
+			victims = append(victims, sessionCancellation{s.runID, s.ctxCancel, s.session})
+		}
+		for _, states := range r.idle {
+			for s := range states {
+				s.retain = false
+				if s.idleTimer != nil {
+					s.idleTimer.Stop()
+				}
+				victims = append(victims, sessionCancellation{s.runID, s.ctxCancel, s.session})
+			}
+		}
+		r.idle = make(map[string]map[*sessionState]struct{})
 	}
-
-	cancelSessions(ctx, victims, r.log)
-
-	done := make(chan struct{})
+	preparations := r.closePendingPreparationsLocked()
+	attempt := &shutdownAttempt{done: make(chan struct{})}
+	r.shutdownAttempt = attempt
+	// Keep the wait group active until cancellation dispatch has finished.
+	r.shutdownWG.Add(1)
+	r.mu.Unlock()
 	go func() {
+		for _, p := range preparations {
+			go func() { defer r.shutdownWG.Done(); r.closePreparationResource(p) }()
+		}
+		cancelSessions(ctx, victims, r.log)
+		r.shutdownWG.Done()
 		r.shutdownWG.Wait()
-		close(done)
+		r.mu.Lock()
+		for _, p := range r.preparations {
+			if p.owns {
+				cause := p.closeErr
+				if cause == nil {
+					cause = errors.New("cleanup has not settled")
+				}
+				attempt.err = errors.Join(attempt.err, fmt.Errorf("dispatch: preparation %s: %w", p.status.Handle, cause))
+			}
+		}
+		close(attempt.done)
+		r.mu.Unlock()
 	}()
+	return waitShutdown(ctx, attempt)
+}
+
+func waitShutdown(ctx context.Context, attempt *shutdownAttempt) error {
 	select {
-	case <-done:
-		return nil
+	case <-attempt.done:
+		return attempt.err
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -64,6 +94,10 @@ func (r *Router) handleDeviceShutdown(ctx context.Context, env proto.Envelope) e
 	// Snapshot under lock, cancel outside so a slow Session.Cancel
 	// can't stall other Handle calls.
 	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return ErrRouterClosed
+	}
 	preparations := r.closePendingPreparationsLocked()
 	victims := make([]sessionCancellation, 0, len(r.sessions))
 	for _, s := range r.sessions {

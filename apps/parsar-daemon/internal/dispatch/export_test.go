@@ -1,5 +1,12 @@
 package dispatch
 
+func (r *Router) PreparationOwnershipForTest(handle string) (bool, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p := r.preparations[handle]
+	return p != nil && p.owns, p != nil && p.busy
+}
+
 // Test-only re-exports so router_test.go (package dispatch_test) can
 // peek into internal state without widening the public surface.
 

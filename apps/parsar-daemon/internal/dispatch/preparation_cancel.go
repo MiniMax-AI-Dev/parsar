@@ -86,10 +86,10 @@ func (r *Router) finishPreparedCancellation(p *preparationState, state *sessionS
 	} else {
 		forwardErr = r.forwardSessionOutput(state, false)
 	}
-	r.closePreparationResource(p)
+	closeErr := r.closePreparationResource(p)
 	ack := proto.InteractionDecisionAckPayload{ErrorCode: "cancel_outcome_unavailable"}
 	switch {
-	case pending.cancelErr != nil:
+	case pending.cancelErr != nil || closeErr != nil:
 		ack.ErrorCode = "cancel_failed"
 	case forwardErr != nil:
 		ack.ErrorCode = "cancel_output_unavailable"
