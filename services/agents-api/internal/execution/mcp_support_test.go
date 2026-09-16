@@ -31,7 +31,7 @@ func TestMCPPublicBearerPolicyIsIndependentOfRuntimeCapabilities(t *testing.T) {
 		t.Run(engine, func(t *testing.T) {
 			snapshot, servers, caps := mcpSupportFixture(t)
 			raw, _ := json.Marshal(snapshot)
-			allowed := engine == "codex"
+			allowed := engine == "codex" || engine == "claude_sdk"
 			if err := ValidateSessionConfiguration(engine, raw); (err == nil) != allowed {
 				t.Fatal("creation bypassed public credential policy", err)
 			}
@@ -45,8 +45,11 @@ func TestMCPPublicBearerPolicyIsIndependentOfRuntimeCapabilities(t *testing.T) {
 			if err == nil || request.MCPHTTPServers != nil {
 				t.Fatal("credential execution without a store was admitted")
 			}
-			if engine == "claude_sdk" && err.Error() != "The configured engine currently supports anonymous HTTP MCP only." {
-				t.Fatal("public rejection was deferred until credential lookup", err)
+			if allowed && err.Error() != "authenticated MCP execution is unavailable" {
+				t.Fatal("accepted profile did not reach scoped credential lookup", err)
+			}
+			if !allowed && err.Error() != "The configured engine currently supports anonymous HTTP MCP only." {
+				t.Fatal("unverified profile bypassed public policy", err)
 			}
 		})
 	}

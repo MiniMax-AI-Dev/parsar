@@ -23,7 +23,7 @@ func (s *claudeCredentialStore) ResolveMCPCredentials(_ context.Context, _ strin
 	return []store.MCPCredentialBinding{s.binding}, nil
 }
 
-func TestClaudeMCPRejectsResolvedCredentialsBeforePersistence(t *testing.T) {
+func TestClaudeMCPAdmitsResolvedCredentials(t *testing.T) {
 	for _, selection := range []string{"implicit", "explicit", "unmatched"} {
 		t.Run(selection, func(t *testing.T) {
 			vault, credential := uuid.NewString(), uuid.NewString()
@@ -46,12 +46,8 @@ func TestClaudeMCPRejectsResolvedCredentialsBeforePersistence(t *testing.T) {
 			}
 			body := fmt.Sprintf(`{"agent":{"model":"model","tools":[%s]},"environment":{"type":"none"},"vault_ids":[%q]}`, tool, vault)
 			response := credentialRequest(h, "POST", "/v1/agents/sessions", body)
-			want := 400
-			if selection == "unmatched" {
-				want = 200
-			}
-			if response.Code != want || s.calls != 1 || (s.tenant != "") != (want == 200) {
-				t.Fatal("credential selection bypassed engine admission", response.Code, response.Body, s.calls)
+			if response.Code != 200 || s.calls != 1 || s.tenant == "" {
+				t.Fatal("credential selection or admission failed", response.Code, response.Body, s.calls)
 			}
 		})
 	}

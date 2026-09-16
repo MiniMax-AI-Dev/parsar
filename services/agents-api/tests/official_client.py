@@ -277,6 +277,19 @@ def main():
                     assert restored.beta.agents.sessions.retrieve(first.id) == first
                 process.terminate()
                 process.wait(timeout=15)
+                # Reuse the same credential contract with the second public engine.
+                env["AGENTS_API_ENGINE"] = "claude_sdk"
+                process = start()
+                with client(tokens[0]) as a, client(tokens[1]) as b, client(peer_principal) as peer:
+                    claude_credentials = verify_mcp_credentials(a, b, peer, credential_canary, expect_error)
+                process.terminate()
+                process.wait(timeout=15)
+                process = start()
+                with client(tokens[0]) as a:
+                    verify_mcp_credential_recovery(a, claude_credentials)
+                process.terminate()
+                process.wait(timeout=15)
+                env["AGENTS_API_ENGINE"] = "codex"
                 env.pop("AGENTS_API_CREDENTIAL_KEY_FILE")
                 process = start()
                 with client(tokens[0]) as without_key, client(tokens[1]) as other, client(peer_principal) as peer:

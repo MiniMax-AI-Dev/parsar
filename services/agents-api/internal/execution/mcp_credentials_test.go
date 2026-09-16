@@ -47,8 +47,11 @@ func TestMCPFrozenCredentialAdmission(t *testing.T) {
 			snapshot.Agent.Tools = []json.RawMessage{rawTool}
 			raw, _ := json.Marshal(snapshot)
 			valid := mode == "implicit" || mode == "explicit" || mode == "anonymous" || mode == "self-hosted anonymous" || mode == "self-hosted implicit" || mode == "self-hosted explicit"
-			if err := ValidateSessionConfiguration("codex", raw); (err == nil) != valid {
-				t.Fatal("frozen binding profile decision differs", err)
+			for _, engine := range []string{"codex", "claude_sdk"} {
+				supported := valid && (engine == "codex" || !strings.HasPrefix(mode, "self-hosted"))
+				if err := ValidateSessionConfiguration(engine, raw); (err == nil) != supported {
+					t.Fatal("frozen binding profile decision differs", engine, err)
+				}
 			}
 		})
 	}
