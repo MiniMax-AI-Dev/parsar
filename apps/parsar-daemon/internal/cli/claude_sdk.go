@@ -67,6 +67,7 @@ func discoverClaudeSDK(rc *runContext, profile string, check func(context.Contex
 	}
 	out.Info.Available, out.Info.Version = true, info.SDK
 	out.Info.Capabilities.MCPHTTPTools = info.SupportsHTTPMCP()
+	out.Info.Capabilities.MCPHTTPBearerAuth = info.SupportsHTTPMCPBearer()
 	fmt.Fprintf(rc.stdout, "Claude SDK preflight ok (SDK %s, %s)\n", info.SDK, info.Native)
 	return out
 }

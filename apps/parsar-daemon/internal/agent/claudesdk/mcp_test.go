@@ -47,7 +47,7 @@ func TestHTTPMCPDeclaration(t *testing.T) {
 				req.DisableExecutionEnvironment = false
 			}
 			start, _, err := prepare(config, req)
-			valid := mode == "unrestricted" || mode == "selected" || mode == "empty" || mode == "nil-slice"
+			valid := mode == "unrestricted" || mode == "selected" || mode == "empty" || mode == "nil-slice" || mode == "auth"
 			if (err == nil) != valid {
 				t.Fatalf("unexpected admission: %v", err)
 			}
@@ -69,7 +69,7 @@ func TestHTTPMCPDeclaration(t *testing.T) {
 }
 
 func TestMCPObservationLifecycle(t *testing.T) {
-	start := startRequest{MCPHTTPServers: &[]proto.MCPHTTPServer{{ServerLabel: "fixture"}}, observeFunctions: true}
+	start := startRequest{MCPHTTPServers: &[]mcpHTTPServer{{ServerLabel: "fixture"}}, observeFunctions: true}
 	state := mcpState{calls: map[string]proto.ToolObservation{}}
 	var observations []proto.ToolCallPayload
 	emit := func(kind string, payload any) {

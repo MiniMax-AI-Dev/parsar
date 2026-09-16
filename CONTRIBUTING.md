@@ -1375,12 +1375,21 @@ Thinking/tool-only messages produce no text Items; interrupted messages retain
 their streamed partial text. No phase is inferred from the final result.
 SDK/native child release and output draining precede daemon completion.
 
-The private adapter also accepts typed anonymous HTTP MCP declarations on the
-trusted `environment:none` harness host. The packaged readiness report must include
-`mcp_http_tools`; discovery advertises that feature only when present, and execution
+The private adapter also accepts typed anonymous HTTP and static-bearer HTTPS MCP
+declarations on the trusted `environment:none` harness host. The packaged readiness
+report must include `mcp_http_tools`; discovery advertises that feature only when
+present, and execution
 rechecks the installed bundle before dispatching an MCP request. An unchanged SDK
-version alone cannot qualify an older bridge. Public Claude MCP admission reuses
-the shared resolver, immutable Session snapshots and neutral Item/event projection.
+version alone cannot qualify an older bridge. Authenticated private requests also
+require the packaged `mcp_http_bearer_auth` feature at discovery and dispatch.
+The daemon generates a separate environment reference for each server and launch;
+only those references enter the bridge request and native SDK configuration.
+The native HTTP client expands them from its owned process environment. Literal
+bearers must never enter SDK MCP headers because that configuration enters argv.
+Readiness probes receive no per-request bearer environment. Token validation is
+shared with the Codex adapter; credential storage remains an opaque-string contract.
+Public Claude MCP admission reuses the shared resolver, immutable Session snapshots
+and neutral Item/event projection.
 The API checks the supported profile before persistence, during device selection
 and again before claiming execution; a missing runtime capability leaves work queued.
 
@@ -1400,12 +1409,17 @@ native OAuth and automatic credential injection. Preserve that header; do not er
 native history or credentials to enforce this boundary. Servers that reject a blank
 Authorization header, normalized name collisions and inventory changes during a
 query require separate validation; this profile covers static inventories.
+Private SDK status/control objects can contain expanded authentication headers.
+Read only connection and tool identity fields; never retain, log or publish raw
+status/configuration or control responses. Diagnostic projections must whitelist
+safe fields. This does not permit filtering actual model/tool output to hide a leak.
 The bounded adapter profile currently requires connected servers, reserves the
 `functions` label, accepts alphanumeric/underscore/hyphen server labels and
-alphanumeric/underscore/hyphen/dot selected tool names, and excludes credentials,
-required startup and remote environments. The API rejects selected Vault credentials,
-including implicit URL matches, without falling back to anonymous access; an attached
-Vault with no matching credential may remain anonymous. These are execution limits,
+alphanumeric/underscore/hyphen/dot selected tool names, and excludes required startup
+and remote environments. Public Claude credential admission remains closed pending
+separate official-client/raw-HTTP and Vault execution acceptance. The API rejects
+selected Vault credentials, including implicit URL matches, without falling back to
+anonymous access; an attached Vault with no matching credential may remain anonymous. These are execution limits,
 not saved-Agent schema restrictions or changes to the official protocol.
 
 Root assistant tool calls and live root user results produce the existing neutral

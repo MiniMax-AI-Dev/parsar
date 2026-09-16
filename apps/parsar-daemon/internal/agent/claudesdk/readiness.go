@@ -29,6 +29,10 @@ func (info RuntimeInfo) SupportsHTTPMCP() bool {
 	return slices.Contains(info.Features, "mcp_http_tools")
 }
 
+func (info RuntimeInfo) SupportsHTTPMCPBearer() bool {
+	return info.SupportsHTTPMCP() && slices.Contains(info.Features, "mcp_http_bearer_auth")
+}
+
 // CheckRuntime checks the packaged companion and exact execution entrypoint.
 // It does not create Session state, register an engine or make a model request.
 func CheckRuntime(ctx context.Context, config Config) (RuntimeInfo, error) {

@@ -45,7 +45,7 @@ try {
   assert.equal(smoke.error, undefined, "bridge_unavailable");
   assert.equal(smoke.status, 0, "bridge_unavailable");
   assert.deepEqual(JSON.parse(smoke.stdout), { type: "error", code: "invalid_request" });
-  process.stdout.write(JSON.stringify({ type: "runtime_ready", protocol: 1, features: ["mcp_http_tools"], node: process.versions.node, sdk: sdk.version, mcp: mcp.version, native: nativeVersion }) + "\n");
+  process.stdout.write(JSON.stringify({ type: "runtime_ready", protocol: 1, features: ["mcp_http_tools", "mcp_http_bearer_auth"], node: process.versions.node, sdk: sdk.version, mcp: mcp.version, native: nativeVersion }) + "\n");
 } catch {
   // Native diagnostics can include operator environment; never forward them.
   process.stdout.write(JSON.stringify({ type: "runtime_unavailable" }) + "\n");

@@ -40,6 +40,11 @@ func NewFactory(config Config) agent.Factory {
 			if err != nil || !info.SupportsHTTPMCP() {
 				return nil, fmt.Errorf("claudesdk: packaged runtime does not support HTTP MCP")
 			}
+			for _, server := range *start.MCPHTTPServers {
+				if server.BearerTokenEnvVar != "" && !info.SupportsHTTPMCPBearer() {
+					return nil, fmt.Errorf("claudesdk: packaged runtime does not support authenticated HTTP MCP")
+				}
+			}
 		}
 		binary := config.Node
 		if binary == "" {

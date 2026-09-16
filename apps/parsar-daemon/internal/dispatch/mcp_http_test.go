@@ -13,7 +13,7 @@ import (
 )
 
 func TestMCPHTTPBearerRejectsUnsupportedRequestsBeforeFactory(t *testing.T) {
-	for _, mode := range []string{"supported", "no bearer capability", "no MCP capability", "unavailable", "no none capability", "local", "remote", "other engine", "HTTP", "credential-free", "product", "required", "required old peer", "optional old peer"} {
+	for _, mode := range []string{"supported", "claude", "claude old peer", "claude local", "claude remote", "no bearer capability", "no MCP capability", "unavailable", "no none capability", "local", "remote", "other engine", "HTTP", "credential-free", "product", "required", "required old peer", "optional old peer"} {
 		t.Run(mode, func(t *testing.T) {
 			h := newHarness(t)
 			defer h.router.Shutdown(context.Background())
@@ -22,6 +22,16 @@ func TestMCPHTTPBearerRejectsUnsupportedRequestsBeforeFactory(t *testing.T) {
 			req := proto.PromptRequestPayload{AgentKind: "codex", DisableExecutionEnvironment: true, MCPHTTPServers: &servers}
 			caps := proto.AgentKindCapabilities{EnvironmentNone: true, MCPHTTPTools: true, MCPHTTPBearerAuth: true}
 			switch mode {
+			case "claude", "claude old peer", "claude local", "claude remote":
+				req.AgentKind = "claude_sdk"
+				caps.MCPHTTPBearerAuth = mode != "claude old peer"
+				if mode == "claude local" || mode == "claude remote" {
+					req.DisableExecutionEnvironment = false
+				}
+				if mode == "claude remote" {
+					req.RemoteEnvironment = &proto.RemoteEnvironment{ID: "remote"}
+					caps.RemoteEnvironment, caps.MCPHTTPRemoteEnvironment, caps.MCPHTTPRemoteBearerAuth = true, true, true
+				}
 			case "required", "required old peer", "optional old peer":
 				servers[0].Required = mode != "optional old peer"
 				servers[0].BearerToken = nil
@@ -39,7 +49,7 @@ func TestMCPHTTPBearerRejectsUnsupportedRequestsBeforeFactory(t *testing.T) {
 				req.RemoteEnvironment = &proto.RemoteEnvironment{ID: "remote"}
 				caps.RemoteEnvironment = true
 			case "other engine":
-				req.AgentKind = "claude_sdk"
+				req.AgentKind = "other"
 			case "HTTP":
 				servers[0].ServerURL = "http://tools.example/mcp"
 			}
@@ -56,13 +66,13 @@ func TestMCPHTTPBearerRejectsUnsupportedRequestsBeforeFactory(t *testing.T) {
 					if mode == "required" && !(*got.MCPHTTPServers)[0].Required {
 						t.Error("required initialization lost before adapter")
 					}
-					if mode == "supported" && (got.MCPHTTPServers == nil || (*got.MCPHTTPServers)[0].BearerToken == nil || *(*got.MCPHTTPServers)[0].BearerToken != token) {
+					if (mode == "supported" || mode == "claude") && (got.MCPHTTPServers == nil || (*got.MCPHTTPServers)[0].BearerToken == nil || *(*got.MCPHTTPServers)[0].BearerToken != token) {
 						t.Error("token lost before adapter")
 					}
 					return nil, errors.New("controlled factory stop")
 				})
 			err := h.router.Handle(t.Context(), mustEnv(t, proto.TypePromptRequest, "mcp-bearer", req))
-			if called != (mode == "supported" || mode == "credential-free" || mode == "product" || mode == "required" || mode == "optional old peer") {
+			if called != (mode == "supported" || mode == "claude" || mode == "credential-free" || mode == "product" || mode == "required" || mode == "optional old peer") {
 				t.Fatal("wrong factory admission")
 			}
 			frames := h.sender.snapshot()

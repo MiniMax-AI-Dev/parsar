@@ -8,7 +8,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 )
 
-func TestMCPHTTPBearerDiscoveryIsCodexOnly(t *testing.T) {
+func TestMCPHTTPBearerDiscoveryExcludesUnconfiguredSDK(t *testing.T) {
 	t.Setenv(claudeSDKEntrypointEnv, "")
 	checks := unavailableCLIChecks()
 	checks.Codex = func(context.Context, string) (string, error) { return "codex 0.153.4", nil }
