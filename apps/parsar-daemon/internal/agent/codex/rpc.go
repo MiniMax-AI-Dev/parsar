@@ -27,8 +27,7 @@ const rpcDefaultRequestTimeout = 60 * time.Second
 // Shorter than per-request so misconfigured environments fail fast.
 const rpcInitTimeout = 10 * time.Second
 
-// rpcKillTimeout is the grace period between SIGTERM and SIGKILL when
-// the app-server child is being torn down.
+// rpcKillTimeout bounds child teardown waits.
 const rpcKillTimeout = 3 * time.Second
 
 // rpcStdoutBufferMax caps a single NDJSON line on stdout. Codex's
@@ -235,36 +234,6 @@ func (c *JSONRPCClient) Alive() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.alive
-}
-
-// Close kills the child if still running and rejects every outstanding
-// pending request. Safe to call multiple times.
-func (c *JSONRPCClient) Close() error {
-	var closeErr error
-	c.closeOnce.Do(func() {
-		c.mu.Lock()
-		cmd := c.cmd
-		stdin := c.stdin
-		c.alive = false
-		c.mu.Unlock()
-		if stdin != nil {
-			_ = stdin.Close()
-		}
-		if cmd != nil && cmd.Process != nil {
-			select {
-			case <-c.doneCh:
-			case <-time.After(250 * time.Millisecond):
-				_ = cmd.Process.Kill()
-				select {
-				case <-c.doneCh:
-				case <-time.After(rpcKillTimeout):
-					c.cfg.Logger.Warn("codex rpc child did not exit after kill", "tag", c.cfg.LogTag)
-				}
-			}
-		}
-		closeErr = c.drainPending(errors.New("codex rpc: client closed"))
-	})
-	return closeErr
 }
 
 // Done is closed when the child exits. Use to coordinate teardown.
