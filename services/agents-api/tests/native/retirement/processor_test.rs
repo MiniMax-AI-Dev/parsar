@@ -204,4 +204,5 @@ mod retirement_qualification {
         .await
         .expect("bounded observation");
     }
+    include!("placement_qualification.rs");
 }
