@@ -1,0 +1,55 @@
+--- a/codex-rs/app-server/Cargo.toml
++++ b/codex-rs/app-server/Cargo.toml
+@@ -118,6 +118,7 @@
+ codex-windows-sandbox = { workspace = true }
+
+ [dev-dependencies]
++codex-app-server-client = { workspace = true }
+ app_test_support = { workspace = true }
+ axum = { workspace = true, default-features = false, features = [
+     "http1",
+--- a/codex-rs/Cargo.lock
++++ b/codex-rs/Cargo.lock
+@@ -2032,6 +2032,7 @@
+  "clap",
+  "codex-agent-extension",
+  "codex-analytics",
++ "codex-app-server-client",
+  "codex-app-server-protocol",
+  "codex-app-server-transport",
+  "codex-arg0",
+--- a/codex-rs/exec-server/src/lib.rs
++++ b/codex-rs/exec-server/src/lib.rs
+@@ -208,6 +208,9 @@
+ pub use server::DEFAULT_LISTEN_URL;
+ pub use server::ExecServerListenUrlParseError;
+ pub use server::RequestDispatchMode;
++#[cfg(all(test, target_os = "linux"))]
++mod retirement_gate;
++
+ pub use server::run_main;
+ pub use server::run_main_with_telemetry;
+ pub use telemetry::ExecServerTelemetry;
+--- a/codex-rs/exec-server/src/no_follow/unix.rs
++++ b/codex-rs/exec-server/src/no_follow/unix.rs
+@@ -138,6 +138,8 @@
+                 "path is not a regular file",
+             ));
+         }
++        #[cfg(all(test, target_os = "linux"))]
++        let _retirement_write = crate::retirement_gate::before_write(&path)?;
+         file.set_len(0)?;
+         file.write_all(&contents)
+     })
+--- a/codex-rs/exec-server/src/server/processor.rs
++++ b/codex-rs/exec-server/src/server/processor.rs
+@@ -481,6 +481,9 @@
+             .expect("second processor should join");
+     }
+
++    #[cfg(target_os = "linux")]
++    include!("retirement_qualification.rs");
++
+     fn spawn_test_connection(
+         registry: Arc<SessionRegistry>,
+         label: &str,

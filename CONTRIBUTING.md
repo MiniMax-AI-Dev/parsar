@@ -474,6 +474,15 @@ retirement. Target native background termination only by observed current-Turn
 item/process identity, and verify Files plus retained interrupted history through
 the maintained native client before any production ownership or public admission.
 
+The private [retirement qualification](services/agents-api/tests/native/retirement/README.md)
+separates native connection/processor shutdown from already admitted filesystem
+work. Its hashed test-only scheduling overlay is not a production native patch.
+Do not admit a replacement writer based only on socket closure, task cancellation,
+command exit or a Core lease change. Require an actual executor mutation-drain or
+enforced placement-retirement boundary; retain uncertainty across recovery when
+that boundary cannot be established. Native source evidence, instrumented mechanism
+tests and uninstrumented real execution remain distinct acceptance claims.
+
 Connection observations use the existing execution lease and Session lock. A
 separate `environment_connections` row retains the current generation and revision;
 `environments.status` and its Session Environment-event snapshot commit together.
