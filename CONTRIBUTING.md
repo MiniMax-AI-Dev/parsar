@@ -846,7 +846,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   operator configuration changes. Discovery of a declared deny-all server can still
   contact it; deny-all governs tool exposure. Reuse neutral tool observations and
   the existing public `mcp_call` projection, never add a second MCP/model loop.
-- Private daemon HTTPS MCP bearer authentication additionally requires
+- The private Codex adapter's HTTPS MCP bearer authentication requires
   `mcp_http_bearer_auth` and the existing MCP/environment capabilities, checked
   before the factory. It is restricted to trusted service-side Codex with
   `environment:none` or the explicitly supported authenticated remote combination. A transient
