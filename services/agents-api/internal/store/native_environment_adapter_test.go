@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/executor/codex"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
@@ -27,6 +28,10 @@ func TestNativeDaemonPreparedRemoteEnvironment(t *testing.T) {
 }
 
 func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
+	testNativeDaemonRemoteEnvironmentWithArtifact(t, prepared, "")
+}
+
+func testNativeDaemonRemoteEnvironmentWithArtifact(t *testing.T, prepared bool, artifactPath string) {
 	binary, image := os.Getenv("PARSAR_CODEX_BINARY"), os.Getenv("PARSAR_PLACEMENT_EXECUTOR_IMAGE")
 	keyFile := os.Getenv("PARSAR_PLACEMENT_MODEL_KEY_FILE")
 	if binary == "" || !strings.HasPrefix(image, "sha256:") || keyFile == "" {
@@ -42,6 +47,11 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 	}
 	key := strings.TrimSpace(string(keyBytes))
 	t.Setenv("PARSAR_CODEX_BIN", binary)
+	var artifact *nativeHarnessArtifact
+	if artifactPath != "" {
+		artifact = newNativeHarnessArtifact(t, binary, artifactPath)
+		t.Setenv("PARSAR_CODEX_BIN", artifact.wrapper)
+	}
 	h, ctx, root := nativeDispatchHarnessWithTimeout(t, 8*time.Minute)
 	peer, err := h.registry.LookupDevice(h.device.ID)
 	if err != nil {
@@ -72,6 +82,9 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 	environment, err := h.s.GetSessionEnvironment(ctx, h.tenant, session.ID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if artifact != nil {
+		artifact.bind(t, environment.ID, workspace)
 	}
 	lease, err := h.s.AcquireExecutionLease(ctx)
 	if err != nil {
@@ -112,6 +125,16 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 		RemoteEnvironment: &proto.RemoteEnvironment{ID: environment.ID, WorkspaceDirectory: workspace, ConnectionURL: server.URL, ConnectionToken: harnessToken}}
 	proof := map[string]any{"scope": "authenticated daemon adapter; public Environment admission and dispatcher remain pending", "native_version": string(version), "environment_id": environment.ID, "remote_workspace": workspace, "events": []proto.Envelope{}}
 	proof["prepared_execution"] = prepared
+	phase := "rejected"
+	if artifact != nil {
+		proof["private_harness_artifact"] = artifact.proof
+		prompt = func(t *testing.T, ctx context.Context, peer *gateway.Session, req proto.PromptRequestPayload, cancelWhen func() bool) (proto.DonePayload, []proto.Envelope, *proto.InteractionDecisionAckPayload) {
+			return daemonPreparedRemotePromptWithReady(t, ctx, peer, req, cancelWhen, func() bool {
+				artifact.observeReady(t, ctx, phase, local)
+				return true
+			})
+		}
+	}
 	defer persistDaemonRemoteProof(t, root, proof, []string{key, credential.Token, harnessToken, h.credential})
 	bad := req
 	bad.AgentStateKey += "-rejected"
@@ -125,7 +148,8 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 	}
 	proof["invalid_authorization_rejected"] = true
 	proof["invalid_authorization_events"] = rejected
-	for index, phase := range []string{"first", "resumed"} {
+	for index, currentPhase := range []string{"first", "resumed"} {
+		phase = currentPhase
 		observation.mu.Lock()
 		before := observation.executors
 		observation.mu.Unlock()
@@ -165,10 +189,17 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 		t.Fatal("remote file did not persist")
 	}
 	req.Prompt = "Run the exact command `./long.sh cancel` using the native shell. It deliberately runs until cancelled. Keep waiting or polling; do not finish this Turn or produce a final answer while it is running."
+	phase = "cancel"
+	observation.mu.Lock()
+	beforeCancel := observation.executors
+	observation.mu.Unlock()
 	cancelAt := time.Time{}
 	_, events, ack := prompt(t, ctx, peer, req, func() bool {
 		_, e := os.Stat(filepath.Join(local, "cancel.heartbeat"))
 		if e == nil && cancelAt.IsZero() {
+			if artifact != nil {
+				artifact.observeActive(t, ctx, local)
+			}
 			cancelAt = time.Now()
 			return true
 		}
@@ -181,6 +212,34 @@ func testNativeDaemonRemoteEnvironment(t *testing.T, prepared bool) {
 	}
 	awaitDaemonRemoteExit(t, ctx, container, local)
 	proof["cancel_to_observed_exit_seconds"] = time.Since(cancelAt).Seconds()
+	if artifact != nil {
+		awaitDaemonRemoteCondition(t, ctx, 30*time.Second, "artifact executor reconnect after cancellation", func() bool {
+			observation.mu.Lock()
+			reconnected := observation.executors > beforeCancel
+			observation.mu.Unlock()
+			connected, err := registry.Connected(ctx, h.tenant, environment.ID)
+			return reconnected && err == nil && connected
+		})
+		observation.mu.Lock()
+		beforeRelease := observation.executors
+		observation.mu.Unlock()
+		_, released, _ := daemonPreparedRemotePromptWithReady(t, ctx, peer, req, nil, func() bool {
+			artifact.observeReady(t, ctx, "after_cancel", local)
+			return false
+		})
+		if len(released) == 0 || daemonRemotePreparationFailed(released) {
+			t.Fatal("post-cancel artifact preparation failed")
+		}
+		proof["after_cancel_preparation_events"] = released
+		awaitDaemonRemoteCondition(t, ctx, 30*time.Second, "artifact executor reconnect after unused release", func() bool {
+			observation.mu.Lock()
+			reconnected := observation.executors > beforeRelease
+			observation.mu.Unlock()
+			connected, err := registry.Connected(ctx, h.tenant, environment.ID)
+			return reconnected && err == nil && connected
+		})
+		artifact.assertReleased(t, ctx)
+	}
 	if peer.IsClosed() {
 		t.Fatal("daemon disconnected during cancellation acceptance")
 	}

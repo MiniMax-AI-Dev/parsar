@@ -1,0 +1,25 @@
+{
+  "repository": "https://github.com/openai/codex",
+  "revision": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
+  "native_version": "0.153.4",
+  "rust_toolchain": "1.95.0",
+  "scope": "opt-in private Linux amd64 harness artifact with remote metadata; no public admission",
+  "patch": {
+    "file": "patches/manager-exposure.patch",
+    "sha256": "047e1fe5e267cfc350e0a6373e50eeff5c51581bdaffaf29807430d35b8c8adc"
+  },
+  "cargo_lock": {
+    "original_sha256": "3494b8a78d0f643556a83a9cc184e912bcab9f4c5640288952f4223452ba5dc8",
+    "normalized_sha256": "a2cb91dfb2e8112bc81d05158fa00b9698e2df8cc1ae0547b5dc5606a44904d3",
+    "workspace_packages": 149
+  },
+  "build_overlay": {
+    "file": "patches/artifact-target.patch",
+    "sha256": "18606942555a060f4b626fd1ab5c0e7e6324f118dd13a65f28f546d03c622f1a",
+    "original_manifest_sha256": "687db2b91d42c568dddb09adc5958eff6998008c733af5186e8a6a340ccfa301",
+    "prepared_manifest_sha256": "63113ae56325bea3f42ab2f8b59983ec2a533f6914248ece9238459d97462b53"
+  },
+  "binary": "parsar-codex-harness",
+  "source_directory": "src",
+  "target_directory": "codex-rs/app-server/parsar-harness"
+}

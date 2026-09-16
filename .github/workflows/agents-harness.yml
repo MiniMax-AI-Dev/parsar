@@ -1,0 +1,60 @@
+name: agents-harness
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/codex-harness/**'
+      - 'scripts/*agents-harness.sh'
+      - 'services/agents-api/tests/native/*/source.json'
+      - '.github/workflows/agents-harness.yml'
+      - 'Makefile'
+  pull_request:
+    paths:
+      - 'packages/codex-harness/**'
+      - 'scripts/*agents-harness.sh'
+      - 'services/agents-api/tests/native/*/source.json'
+      - '.github/workflows/agents-harness.yml'
+      - 'Makefile'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agents-harness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      CARGO_HOME: /home/runner/.parsar/cache/agents-harness-cargo
+      CARGO_TARGET_DIR: /home/runner/.parsar/cache/agents-harness-target
+      AGENTS_HARNESS_NATIVE_SOURCE: /home/runner/.parsar/references/codex-native
+      CARGO_BUILD_JOBS: 4
+      CARGO_PROFILE_DEV_DEBUG: 0
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check packaging
+        run: make check-agents-harness
+      - name: Install native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
+      - name: Fetch the pinned upstream source
+        run: |
+          revision="$(python3 -c 'import json; print(json.load(open("packages/codex-harness/source.json"))["revision"])')"
+          git init "$AGENTS_HARNESS_NATIVE_SOURCE"
+          git -C "$AGENTS_HARNESS_NATIVE_SOURCE" fetch --depth 1 https://github.com/openai/codex "$revision"
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.parsar/cache/agents-harness-cargo
+            ~/.parsar/cache/agents-harness-target
+          key: agents-harness-${{ runner.os }}-1.95.0-${{ hashFiles('packages/codex-harness/source.json') }}
+      - name: Check native harness and independent release build
+        run: |
+          make check-agents-harness-native
+          make build-agents-harness

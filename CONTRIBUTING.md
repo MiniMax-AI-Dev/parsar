@@ -463,6 +463,21 @@ Production adoption requires real remote execution/files/history acceptance plus
 bounded idle ownership, caller authorization and stale-write fencing. Connection
 observation generations alone cannot retract already-issued filesystem mutations.
 
+The opt-in [private harness artifact](packages/codex-harness/README.md) consumes
+that same hook in a separately named executable at the unchanged native pin.
+Its canonical patch lives in the package; qualification manifests reference the
+same bytes. Export the exact upstream commit, verify the lock normalization and
+named-binary overlay, and retain source/toolchain/artifact provenance. Do not build
+from a mutable upstream worktree or present this integration as a stock binary.
+The existing Go RPC owns its raw stdio child. A private same-user local socket
+offers metadata only through that runner's manager, with a frozen registry
+Environment UUID, the adapter's native `remote` manager key, and no local fallback.
+Keep socket admission bounded and close it with the runner. The socket directory
+must be new and private under `~/.parsar`; native/helper/socket selectors remain
+operator configuration. Public feature admission and default daemon selection
+are unchanged. Metadata path checks do not qualify filesystem isolation, idle
+ownership, remote retirement, or the existing RPC's full backpressure behavior.
+
 The private [raw Files composition](services/agents-api/tests/native/raw_files/README.md)
 reuses the pinned native socket client and the same typed Files/registry fixture.
 Record its fixture-only workspace dependency patch separately from the manager
@@ -2784,6 +2799,12 @@ Docker-free installer lifecycle checks, plus `make check-agents-api` for the
 execution service. `make check-agents-executor` owns the optional native launcher's
 locked unit tests, formatting and Clippy; `make build-agents-executor` independently
 builds its release artifact. Native/model fixtures remain explicit acceptance checks.
+`make check-agents-harness` adds lightweight exact-patch and packaging checks to
+the full gate. Changes to the optional harness artifact also require
+`make check-agents-harness-native` (locked native tests, formatting and Clippy),
+`make build-agents-harness`, and the applicable actual executor/provider acceptance.
+Those expensive native checks run separately and in path-selected CI; a packaging
+pass alone is not native runtime acceptance.
 Keep the subtargets aligned with
 the full gate whenever the required checks change. Daemon-only changes must
 trigger the same Go checks in CI as server changes.
