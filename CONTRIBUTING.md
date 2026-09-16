@@ -444,6 +444,18 @@ contract and process/authorization ownership before adopting an embedded runtime
 Public workspace paths, file references, live metadata and pagination require
 separate protocol acceptance; no model prompt or shell command implements file IO.
 
+The opt-in [raw manager qualification](services/agents-api/tests/native/raw_manager/README.md)
+tracks an explicit patch against the same native pin. It publishes the raw runner's
+stock-built manager through an additive entrypoint, retaining native configuration,
+processor and transport assembly. The ordinary runner remains unchanged. Handle
+publication is not readiness or revocation; its owner must supervise runner failure,
+gate operations on initialization/readiness and release retained handles on teardown.
+This is a private native dependency experiment, not a production runtime selection.
+Record the patch, build overlay and artifact identities separately from upstream.
+Production adoption requires real remote execution/files/history acceptance plus
+bounded idle ownership, caller authorization and stale-write fencing. Connection
+observation generations alone cannot retract already-issued filesystem mutations.
+
 Connection observations use the existing execution lease and Session lock. A
 separate `environment_connections` row retains the current generation and revision;
 `environments.status` and its Session Environment-event snapshot commit together.

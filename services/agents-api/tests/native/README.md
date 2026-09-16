@@ -255,3 +255,9 @@ without emitting `Lagged`; the dedicated drain and bounded fixture establish onl
 the expected observations of this run. Raw stdio initialization, lossless event
 handling, process/credential lifetime and public path/reference/pagination semantics
 need separate acceptance before adopting this runtime or exposing Environment files.
+
+The separate [raw manager qualification](raw_manager/README.md) investigates an
+explicit, pinned native patch that shares the stock raw runner's manager while
+retaining its transport assembly. Its deterministic no-model checks qualify only
+that seam. They neither replace this real-provider proof nor establish production
+Files ownership or public protocol acceptance.

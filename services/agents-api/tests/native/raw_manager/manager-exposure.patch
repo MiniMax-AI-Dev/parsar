@@ -1,0 +1,91 @@
+diff --git a/codex-rs/app-server/src/lib.rs b/codex-rs/app-server/src/lib.rs
+index 0b4fe17..cdf2280 100644
+--- a/codex-rs/app-server/src/lib.rs
++++ b/codex-rs/app-server/src/lib.rs
+@@ -467,6 +467,68 @@ pub async fn run_main_with_transport_options(
+     session_source: SessionSource,
+     auth: AppServerWebsocketAuthSettings,
+     runtime_options: AppServerRuntimeOptions,
++) -> IoResult<()> {
++    run_main_with_transport_options_inner(
++        arg0_paths,
++        cli_config_overrides,
++        loader_overrides,
++        strict_config,
++        default_analytics_enabled,
++        transport,
++        session_source,
++        auth,
++        runtime_options,
++        None,
++    )
++    .await
++}
++
++/// Runs the stock raw transport and publishes its shared environment manager.
++///
++/// The handle is published after manager construction, before transport startup.
++/// It does not signal successful startup, initialization, or environment readiness.
++/// The caller must supervise this future and release its handle when the runner
++/// stops. A receiver dropped before publication fails startup with `BrokenPipe`.
++#[allow(clippy::too_many_arguments)]
++pub async fn run_main_with_transport_options_and_environment_manager(
++    arg0_paths: Arg0DispatchPaths,
++    cli_config_overrides: CliConfigOverrides,
++    loader_overrides: LoaderOverrides,
++    strict_config: bool,
++    default_analytics_enabled: bool,
++    transport: AppServerTransport,
++    session_source: SessionSource,
++    auth: AppServerWebsocketAuthSettings,
++    runtime_options: AppServerRuntimeOptions,
++    environment_manager_tx: tokio::sync::oneshot::Sender<Arc<EnvironmentManager>>,
++) -> IoResult<()> {
++    run_main_with_transport_options_inner(
++        arg0_paths,
++        cli_config_overrides,
++        loader_overrides,
++        strict_config,
++        default_analytics_enabled,
++        transport,
++        session_source,
++        auth,
++        runtime_options,
++        Some(environment_manager_tx),
++    )
++    .await
++}
++
++#[allow(clippy::too_many_arguments)]
++async fn run_main_with_transport_options_inner(
++    arg0_paths: Arg0DispatchPaths,
++    cli_config_overrides: CliConfigOverrides,
++    loader_overrides: LoaderOverrides,
++    strict_config: bool,
++    default_analytics_enabled: bool,
++    transport: AppServerTransport,
++    session_source: SessionSource,
++    auth: AppServerWebsocketAuthSettings,
++    runtime_options: AppServerRuntimeOptions,
++    environment_manager_tx: Option<tokio::sync::oneshot::Sender<Arc<EnvironmentManager>>>,
+ ) -> IoResult<()> {
+     let loader_overrides = loader_overrides_with_test_user_config_file(
+         loader_overrides,
+@@ -583,6 +645,17 @@ pub async fn run_main_with_transport_options(
+     .map(Arc::new)
+     .map_err(std::io::Error::other)?;
+ 
++    if let Some(environment_manager_tx) = environment_manager_tx {
++        environment_manager_tx
++            .send(Arc::clone(&environment_manager))
++            .map_err(|_| {
++                std::io::Error::new(
++                    ErrorKind::BrokenPipe,
++                    "environment manager receiver dropped before publication",
++                )
++            })?;
++    }
++
+     let otel = codex_core::otel_init::build_provider(
+         &config,
+         env!("CARGO_PKG_VERSION"),
