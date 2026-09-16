@@ -2071,6 +2071,11 @@ or filesystem isolation. Automatic installation remains separate.
   shared deadline-aware writer, then uses existing process cleanup. Cancellation
   remains best-effort: a completed write or applied daemon receipt does not prove
   remote interruption, descendant exit or a global daemon shutdown deadline.
+- Codex RPC Close initiates stdin closure and bounded kill escalation once. Each
+  call waits for the same owned child to be reaped; a timeout wraps
+  `context.DeadlineExceeded`, and later calls can resume waiting. Success means
+  local child reaping (or no child was spawned), regardless of its exit code.
+  It does not acknowledge remote executor retirement or descendant cleanup.
 - Omitted Codex mode means `default`, matching the Agent UI. Send the current
   instructions through that turn mode; cold resume alone may retain old instructions.
 - OpenCode JSON CLI tool parts arrive after execution. Translate each terminal
