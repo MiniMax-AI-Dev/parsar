@@ -17,7 +17,7 @@ func TestPublicMCPHTTPPlanOwnsConfigurationAndPreservesHistory(t *testing.T) {
 	tools := []string{"lookup.docs", `quote"tool`}
 	denyAll := []string{}
 	servers := []proto.MCPHTTPServer{
-		{ServerLabel: "docs.server", ServerURL: "https://docs.example/mcp", AllowedTools: &tools},
+		{ServerLabel: "docs.server", ServerURL: "https://docs.example/mcp", AllowedTools: &tools, Required: true},
 		{ServerLabel: "blocked", ServerURL: "http://127.0.0.1:12345/mcp", AllowedTools: &denyAll},
 	}
 	original := map[string]any{
@@ -48,7 +48,7 @@ func TestPublicMCPHTTPPlanOwnsConfigurationAndPreservesHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{`[mcp_servers."docs.server"]`, `enabled_tools = ["lookup.docs", "quote\"tool"]`, `enabled_tools = []`} {
+	for _, expected := range []string{`[mcp_servers."docs.server"]`, `enabled_tools = ["lookup.docs", "quote\"tool"]`, `enabled_tools = []`, "required = true"} {
 		if !strings.Contains(string(config), expected) {
 			t.Fatalf("missing native config %q", expected)
 		}
@@ -71,7 +71,7 @@ func TestPublicMCPHTTPPlanOwnsConfigurationAndPreservesHistory(t *testing.T) {
 	}
 	defer second.Cleanup()
 	config, err = os.ReadFile(filepath.Join(home, "config.toml"))
-	if err != nil || strings.Contains(string(config), "docs.server") || !strings.Contains(string(config), "replacement") || strings.Contains(string(config), "enabled_tools") {
+	if err != nil || strings.Contains(string(config), "docs.server") || !strings.Contains(string(config), "replacement") || strings.Contains(string(config), "enabled_tools") || strings.Contains(string(config), "required") {
 		t.Fatal("cold configuration retained old servers or changed unrestricted tools", err)
 	}
 	retained, err := os.ReadFile(history)
@@ -124,7 +124,7 @@ func TestPublicMCPHTTPRejectsInvalidProfileAndStoredCredentials(t *testing.T) {
 func mcpHTTPConfigResponse(servers map[string]mcpServerConfig) map[string]any {
 	entries := make(map[string]any, len(servers))
 	for name, server := range servers {
-		entry := map[string]any{"url": server.URL, "environment_id": "local", "enabled": true, "tool_timeout_sec": nil}
+		entry := map[string]any{"url": server.URL, "environment_id": "local", "enabled": true, "tool_timeout_sec": nil, "required": server.Required}
 		if server.EnabledTools != nil {
 			entry["enabled_tools"] = append([]string{}, (*server.EnabledTools)...)
 		}

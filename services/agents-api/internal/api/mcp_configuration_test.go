@@ -9,6 +9,26 @@ import (
 
 const publicMCP = `{"type":"mcp","server_label":"records","connection_origin":"service","transport":{"type":"http","server_url":"https://mcp.example.test/tools"}}`
 
+func TestMCPRequiredSavedAndEffectiveConfiguration(t *testing.T) {
+	for _, value := range []string{"true", "false"} {
+		input := strings.TrimSuffix(publicMCP, "}") + `,"required":` + value + `}`
+		saved, err := resolveMCPTool(json.RawMessage(input), true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		effective, err := resolveSessionTools([]json.RawMessage{saved})
+		if err != nil || len(effective) != 1 {
+			t.Fatal("effective declaration failed", err)
+		}
+		for _, raw := range []json.RawMessage{saved, effective[0]} {
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(raw, &fields) != nil || string(fields["required"]) != value {
+				t.Fatal("required initialization changed", string(raw))
+			}
+		}
+	}
+}
+
 func TestMCPResourceTransportProjections(t *testing.T) {
 	for _, saved := range []bool{false, true} {
 		raw, err := resolveMCPTool(json.RawMessage(publicMCP), saved)
@@ -57,7 +77,7 @@ func TestMCPUnsupportedInputsAreSecretSafe(t *testing.T) {
 		"origin missing":       {"connection_origin": nil},
 		"origin null":          {"connection_origin": json.RawMessage("null")},
 		"environment origin":   {"connection_origin": json.RawMessage(`"environment"`)},
-		"required true":        {"required": json.RawMessage("true")},
+		"required type":        {"required": json.RawMessage(`"true"`)},
 		"required null":        {"required": json.RawMessage("null")},
 		"empty credential":     {"credential_id": json.RawMessage(`""`)},
 		"credential type":      {"credential_id": json.RawMessage(`3`)},

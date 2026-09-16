@@ -29,7 +29,7 @@ func executionTools(raw []json.RawMessage) ([]proto.FunctionTool, []proto.MCPHTT
 		var tool v1.MCPTool
 		decoder := json.NewDecoder(bytes.NewReader(value))
 		decoder.DisallowUnknownFields()
-		if decoder.Decode(&tool) != nil || strings.TrimSpace(tool.ServerLabel) == "" || names[tool.ServerLabel] || tool.ConnectionOrigin != "service" || tool.Required || len(tool.RequestMetadata) != 0 || tool.Transport.Type != "http" || tool.Transport.Headers != nil {
+		if decoder.Decode(&tool) != nil || strings.TrimSpace(tool.ServerLabel) == "" || names[tool.ServerLabel] || tool.ConnectionOrigin != "service" || len(tool.RequestMetadata) != 0 || tool.Transport.Type != "http" || tool.Transport.Headers != nil {
 			return nil, nil, errors.New("unsupported execution MCP configuration")
 		}
 		u, err := url.Parse(tool.Transport.ServerURL)
@@ -45,7 +45,7 @@ func executionTools(raw []json.RawMessage) ([]proto.FunctionTool, []proto.MCPHTT
 		}
 		names[tool.ServerLabel] = true
 		servers = append(servers, proto.MCPHTTPServer{ServerLabel: tool.ServerLabel,
-			ServerURL: tool.Transport.ServerURL, AllowedTools: tool.AllowedTools})
+			ServerURL: tool.Transport.ServerURL, AllowedTools: tool.AllowedTools, Required: tool.Required})
 	}
 	resolved, err := functionTools(functions)
 	return resolved, servers, err

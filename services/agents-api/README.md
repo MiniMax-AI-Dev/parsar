@@ -601,6 +601,13 @@ advertise `mcp_http_tools`; selection waits for a capable device. The native
 harness owns MCP discovery, calls and results. Public `mcp_call` Items use original
 server/tool names; recover missed live events through Session, Turn and Items reads.
 
+Set `required:true` to require initialization before the first native Turn. It
+defaults to false and additionally requires the pinned daemon's `mcp_http_required`
+capability. Native root thread creation and cold resume wait for required servers;
+initialization failure stops execution without replacing retained history. Public
+work can already be accepted or queued during this wait. Exact hosted creation
+timing/errors and continuing MCP health monitoring remain unverified.
+
 For `environment:none` or `self_hosted`, attach tenant-owned `vault_ids` for static
 bearer authentication. An explicit
 `credential_id` selects an attached credential for the exact HTTPS URL; omission/null
@@ -622,8 +629,8 @@ Both native remote readiness and MCP configuration
 checks run before thread creation/resume.
 
 The current subset rejects OAuth, inline authorization, nonempty headers or
-request metadata, URL userinfo/query/fragment, implicit/other origins, stdio,
-`required:true` and other engines. The Codex adapter also
+request metadata, URL userinfo/query/fragment, implicit/other origins, stdio
+and other engines. The Codex adapter also
 rejects reserved native labels and stored native MCP credentials. It verifies
 exact effective MCP configuration before starting/resuming a native thread,
 excludes undeclared servers and disables native apps/plugins. This runs on trusted

@@ -110,13 +110,17 @@ func TestRemoteMCPCredentialAdmissionAndRejectedWrites(t *testing.T) {
 }
 
 func TestRemoteMCPWorkerRequiresCombinationCapability(t *testing.T) {
-	for _, authenticated := range []bool{false, true} {
+	for _, profile := range []string{"anonymous", "bearer", "required", "required bearer"} {
+		authenticated, required := strings.Contains(profile, "bearer"), strings.Contains(profile, "required")
 		for _, bound := range []bool{false, true} {
-			t.Run(map[bool]string{false: "selection", true: "bound"}[bound]+map[bool]string{false: "-anonymous", true: "-bearer"}[authenticated], func(t *testing.T) {
+			t.Run(map[bool]string{false: "selection", true: "bound"}[bound]+"-"+profile, func(t *testing.T) {
 				h := newDispatchHarness(t)
 				configuration, token := mcpWorkerConfiguration, ""
 				if authenticated {
 					configuration, token = mcpBearerWorkerConfiguration(t, h)
+				}
+				if required {
+					configuration = strings.Replace(configuration, `"required":false`, `"required":true`, 1)
 				}
 				enableWorkerEnvironment(t, h)
 				configuration = strings.Replace(configuration, `"type":"none"`, `"type":"self_hosted","workspace_directory":"/remote"`, 1)
@@ -136,7 +140,8 @@ func TestRemoteMCPWorkerRequiresCombinationCapability(t *testing.T) {
 				caps := workerEnvironmentCapabilities()
 				caps.MCPHTTPTools = true
 				caps.MCPHTTPBearerAuth = true
-				caps.MCPHTTPRemoteEnvironment = authenticated
+				caps.MCPHTTPRemoteEnvironment = authenticated || required
+				caps.MCPHTTPRemoteBearerAuth = required && authenticated
 				heartbeat := func() {
 					h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: caps}}})
 				}
@@ -162,6 +167,7 @@ func TestRemoteMCPWorkerRequiresCombinationCapability(t *testing.T) {
 						t.Fatal("old peer bound", err)
 					}
 				}
+				caps.MCPHTTPRequired = required
 				caps.MCPHTTPRemoteEnvironment = true
 				caps.MCPHTTPRemoteBearerAuth = authenticated
 				heartbeat()
@@ -171,7 +177,7 @@ func TestRemoteMCPWorkerRequiresCombinationCapability(t *testing.T) {
 					t.Fatal("combination missing from preparation")
 				}
 				servers := *prepare.Configuration.MCPHTTPServers
-				if len(servers) != 1 || servers[0].ServerLabel != "tickets" || servers[0].AllowedTools == nil || len(*servers[0].AllowedTools) != 0 || (servers[0].BearerToken != nil) != authenticated || authenticated && *servers[0].BearerToken != token {
+				if len(servers) != 1 || servers[0].ServerLabel != "tickets" || servers[0].Required != required || servers[0].AllowedTools == nil || len(*servers[0].AllowedTools) != 0 || (servers[0].BearerToken != nil) != authenticated || authenticated && *servers[0].BearerToken != token {
 					t.Fatal("MCP declaration changed")
 				}
 				handle := acknowledgePreparation(h, frame.ID)

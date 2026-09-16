@@ -16,6 +16,9 @@ func validateMCPHTTP(req proto.PromptRequestPayload, caps proto.AgentKindCapabil
 		return errors.New("engine does not support service-side HTTP MCP with a remote environment")
 	}
 	for _, server := range *req.MCPHTTPServers {
+		if server.Required && (req.AgentKind != "codex" || !caps.MCPHTTPTools || !caps.MCPHTTPRequired || req.DisableExecutionEnvironment == (req.RemoteEnvironment != nil)) {
+			return errors.New("engine does not support required service-side HTTP MCP initialization")
+		}
 		if server.BearerToken == nil {
 			continue
 		}
