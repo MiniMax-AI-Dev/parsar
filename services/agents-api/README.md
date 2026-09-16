@@ -590,7 +590,7 @@ See [Environment contracts and remaining work](../../contracts/agents-api/enviro
 ### HTTP MCP execution
 
 MCP runs on trusted service-side compute. Codex supports `environment:{"type":"none"}`
-or a `self_hosted` Environment; Claude SDK supports anonymous MCP with
+or a `self_hosted` Environment; Claude SDK supports HTTP MCP with
 `environment:{"type":"none"}`. Inline or saved Agent tools may declare:
 
 ```json
@@ -617,8 +617,9 @@ initialization failure stops execution without replacing retained history. Publi
 work can already be accepted or queued during this wait. Exact hosted creation
 timing/errors and continuing MCP health monitoring remain unverified.
 
-With Codex on `environment:none` or `self_hosted`, attach tenant-owned `vault_ids` for static
-bearer authentication. An explicit
+On `environment:none`, both Codex and Claude SDK support tenant-owned `vault_ids`
+for static-bearer HTTPS MCP; Codex also supports the `self_hosted` combination.
+An explicit
 `credential_id` selects an attached credential for the exact HTTPS URL; omission/null
 selects a unique matching credential, or stays anonymous if none matches. Ambiguity
 fails before Session creation. Selection is frozen privately; the public tool keeps
@@ -638,15 +639,17 @@ Both native remote readiness and MCP configuration
 checks run before thread creation/resume.
 
 Claude SDK requires a packaged runtime that reports `mcp_http_tools`; the SDK
-version alone does not qualify an older bundle. Its current anonymous profile
+version alone does not qualify an older bundle. Its current profile
 requires `required:false`, connected servers and static inventories. Server labels
 accept ASCII letters, digits, underscore and hyphen, except reserved `functions`;
 selected tool names additionally accept dots. Declared HTTP MCP tools compose with
 host functions; undeclared servers, built-ins and subagents remain disabled.
-Selected Vault credentials, including implicit matches, fail before Session creation
-without anonymous fallback. A Vault with no matching credential may stay anonymous.
-The adapter suppresses native OAuth/credential injection with a blank Authorization
-header, without deleting native state. Servers rejecting that header, normalized
+Authenticated requests also require `mcp_http_bearer_auth`. The existing Vault
+selection rules apply, including implicit exact-URL matches and immutable private
+bindings. Per-server/per-launch environment references keep bearer values out of
+native argv and stored state. A Vault with no matching credential may stay anonymous.
+Anonymous requests suppress native OAuth/credential injection with a blank
+Authorization header, without deleting native state. Servers rejecting that header, normalized
 name collisions, changing inventories and original MCP metadata fidelity remain
 gaps. Items retain the observed native JSON, which may differ from the original
 MCP envelope. See the [Claude SDK profile](../../CONTRIBUTING.md#claude-sdk-adapter-foundation).

@@ -799,7 +799,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   remain gaps. Unknown/unsupported variants fail explicitly. No product lookup is permitted.
 - Public HTTP MCP uses the native harness client and tool loop. The supported
   execution profiles are Codex with `environment:none` or `self_hosted`, and
-  anonymous Claude SDK with `environment:none`. Both require an explicit `service`
+  Claude SDK with `environment:none`. Both require an explicit `service`
   connection origin and a trusted service-side harness. The execution device is
   part of the service deployment; an arbitrary caller executor cannot be relabeled
   service-origin. Admission requires the advertised `mcp_http_tools` capability
@@ -1424,10 +1424,12 @@ safe fields. This does not permit filtering actual model/tool output to hide a l
 The bounded adapter profile currently requires connected servers, reserves the
 `functions` label, accepts alphanumeric/underscore/hyphen server labels and
 alphanumeric/underscore/hyphen/dot selected tool names, and excludes required startup
-and remote environments. Public Claude credential admission remains closed pending
-separate official-client/raw-HTTP and Vault execution acceptance. The API rejects
-selected Vault credentials, including implicit URL matches, without falling back to
-anonymous access; an attached Vault with no matching credential may remain anonymous. These are execution limits,
+and remote environments. Public Claude static-bearer HTTPS MCP reuses the shared
+Vault attachment, frozen selection and scoped decryption path. Selection and final
+preclaim require the existing bearer capability; shared authentication dispatch
+uses capability/placement checks rather than a Codex-name restriction. Missing keys
+or failed lookup/decryption never fall back to anonymous execution; an attached
+Vault with no matching credential may remain anonymous. These are execution limits,
 not saved-Agent schema restrictions or changes to the official protocol.
 
 Root assistant tool calls and live root user results produce the existing neutral
@@ -1483,7 +1485,7 @@ The server owns no provider credential: operators configure the daemon's native 
 provider environment. Product `claude_code` and product execution are unchanged.
 The public profile accepts only
 text, explicit model/system instructions, managed state, exact native resume and
-declared functions with ordered text results, and the anonymous HTTP MCP subset
+declared functions with ordered text results, and the HTTP MCP subset
 described above. It rejects unsupported request
 options and disables built-in tools and undeclared MCP discovery.
 `DisableExecutionEnvironment` and `DisableSubagents` are accepted assertions about

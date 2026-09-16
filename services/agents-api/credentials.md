@@ -121,8 +121,9 @@ session = client.beta.agents.sessions.create(
 )
 ```
 
-The supported placement is trusted service-side Codex `environment:none`; the
-daemon must advertise both `mcp_http_tools` and `mcp_http_bearer_auth`. The usual
+Trusted service-side Codex and Claude SDK support `environment:none`; Codex also
+supports the documented `self_hosted` combination. The daemon must advertise both
+`mcp_http_tools` and `mcp_http_bearer_auth`. The usual
 [MCP profile limits](README.md#http-mcp-execution) still apply. Without an explicit
 `credential_id`, one exact-URL static credential among attached Vaults is selected;
 zero matches remains anonymous and multiple matches fail. A foreign, missing,

@@ -12,7 +12,7 @@ import (
 // profile requires official-client and real execution validation for that path.
 var publicMCPBearerProfiles = map[string]bool{
 	"codex":      true,
-	"claude_sdk": false,
+	"claude_sdk": true,
 }
 
 func mcpCredentialBindings(engine string, snapshot Snapshot) (map[string]store.MCPCredentialBinding, error) {
