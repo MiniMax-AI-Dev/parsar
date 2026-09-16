@@ -132,6 +132,7 @@ func (s *Session) registerHandlers() {
 	rpc.OnNotification("item/updated", func(_ json.RawMessage) {}) // silenced
 	rpc.OnNotification("item/completed", s.onItemCompleted)
 	rpc.OnNotification("item/agentMessage/delta", s.onAgentDelta)
+	rpc.OnNotification("item/commandExecution/outputDelta", s.onCommandOutput)
 	rpc.OnNotification("item/reasoning/textDelta", s.onReasoningDelta)
 	rpc.OnNotification("item/reasoning/summaryTextDelta", s.onReasoningDelta)
 	rpc.OnNotification("thread/tokenUsage/updated", s.onUsageUpdated)

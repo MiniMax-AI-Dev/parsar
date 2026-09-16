@@ -205,6 +205,14 @@ and native history are retained for execution settlement; physical cleanup remai
 unimplemented. Local repeated deletion returns 404 and creation-key reuse returns
 409; exact hosted errors and overlapping stream timing are unverified.
 
+Codex command Items support live `agent.output.command_execution_output.delta`
+events when emitted by the connected daemon. Queries retain accumulated drafts and
+authoritative completion snapshots, including observed partial output after
+cancellation. Native text conversion/output quotas apply; older peers may provide
+only completion snapshots. Pinned native 0.153.4 may also omit early process
+output from both notifications and its final aggregate; this remains an upstream
+execution gap. Recover missed output with Items queries, not SSE replay.
+
 Non-text message input, Subagents, Environment files/templates and populated
 installation metadata remain unsupported. Saving optional Agent configuration does not make
 it executable. Unsupported requests fail explicitly. `/healthz` reports liveness only.

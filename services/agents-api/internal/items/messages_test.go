@@ -23,7 +23,7 @@ func TestMessageSnapshotsReplaceDeltasAndDoNotRegress(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		previous = Merge(updates[0], previous)
+		previous = mustMerge(t, updates[0], previous)
 	}
 	if previous.Status != "completed" || previous.Phase != "final_answer" || *previous.Content[0].Text != "Revised answer" {
 		t.Fatalf("%+v", previous)
@@ -47,7 +47,7 @@ func TestLegacyDoneDoesNotConfirmSuccessfulAnswer(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, update := range updates {
-			previous = Merge(update, previous)
+			previous = mustMerge(t, update, previous)
 		}
 	}
 	if previous.Status != "in_progress" || *previous.Content[0].Text != "partial answer" {
@@ -57,7 +57,7 @@ func TestLegacyDoneDoesNotConfirmSuccessfulAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	previous = Merge(updates[0], previous)
+	previous = mustMerge(t, updates[0], previous)
 	if previous.Status != "completed" || *previous.Content[0].Text != "complete answer" {
 		t.Fatal(previous)
 	}
@@ -69,7 +69,7 @@ func TestMergePreservesIncomingDeltasAndPreviousSnapshots(t *testing.T) {
 	for i, fragment := range fragments {
 		update := Update{Item: message(testTurn, "message:native", "assistant", fragment, "in_progress"), AppendText: true}
 		before, _ := json.Marshal(previous)
-		merged := Merge(update, previous)
+		merged := mustMerge(t, update, previous)
 		after, _ := json.Marshal(previous)
 		if string(before) != string(after) {
 			t.Fatal("merge mutated the previous snapshot")
@@ -82,4 +82,13 @@ func TestMergePreservesIncomingDeltasAndPreviousSnapshots(t *testing.T) {
 		}
 		previous = merged
 	}
+}
+
+func mustMerge(t *testing.T, update Update, previous v1.Item) v1.Item {
+	t.Helper()
+	item, err := Merge(update, previous)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return item
 }

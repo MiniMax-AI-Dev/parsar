@@ -40,7 +40,10 @@ func projectItemSource(ctx context.Context, q *sqlc.Queries, session, turn pgtyp
 				return err
 			}
 		}
-		item := items.Merge(update, previous)
+		item, err := items.Merge(update, previous)
+		if err != nil {
+			return err
+		}
 		if err := restoreFunctionItemResult(ctx, q, session, turn, &item); err != nil {
 			return err
 		}
@@ -55,6 +58,8 @@ func projectItemSource(ctx context.Context, q *sqlc.Queries, session, turn pgtyp
 		var delta *string
 		if kind == "delta" {
 			delta = update.Item.Content[0].Text
+		} else if kind == "command_output" {
+			delta = update.CommandOutputDelta
 		}
 		if err := recordItemChange(ctx, q, session, stored.OutputIndex, previous, item, delta); err != nil {
 			return err

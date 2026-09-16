@@ -382,8 +382,9 @@ reported changes as arguments; no result is invented when the engine reports non
 Web search exposes its supported action fields.
 
 Terminal Turns make unfinished Items `incomplete`; a failed tool does not imply
-that the Turn failed. Native start/completion snapshots are available, but interim
-tool-output deltas are not yet captured. Tool output is visible to the Session's
+that the Turn failed. Native start/completion snapshots and Codex command-output fragments are
+available when the daemon emits them; other
+tool-output deltas remain unsupported. Tool output is visible to the Session's
 authenticated tenant and may include the command's or tool's own diagnostic text.
 
 Reads use the durable index without reconstructing native journals. Existing
@@ -471,8 +472,16 @@ text-delta/done events. Inputs, including function results, have no output index
 function-result output/error retain the saved submission and field presence;
 native error-to-text translation does not rewrite those fields. Completed text replaces
 accumulated deltas; cancelled unfinished Items retain their partial content and
-`incomplete` status. Tool snapshots are supported; native interim command-output
-and reasoning deltas remain outside the supported surface.
+`incomplete` status. Codex command-output fragments use the pinned
+`agent.output.command_execution_output.delta` event with the command Item ID and
+stable output index. Draft Item output accumulates fragments; a supplied final
+snapshot replaces it and is not emitted as another delta. Native output quotas and
+text conversion apply, so the stream is not a byte-complete stdout/stderr capture.
+Pinned native 0.153.4 can omit output emitted before its streaming subscription,
+including from the eventual aggregate; this bridge cannot recover unobserved bytes.
+That native gap remains open. Older peers may provide completion snapshots only.
+Reasoning summaries and other
+interim tool-output variants remain outside the supported surface.
 
 Events publish only after their transaction commits. An idle Session keeps its
 stream open for later Turns. Reconnection starts at the latest committed position,

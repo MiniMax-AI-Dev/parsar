@@ -1210,6 +1210,20 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   their frame sequence and fields. Agents API requires this capability before
   claiming work and always requests neutral observations. Its Item projector
   validates this shared contract and never decodes engine-native tool snapshots.
+- Codex callers opting into neutral tool observations also receive `command_output`
+  fragments with the existing native command identity. The adapter filters the root
+  Thread/Turn; the service requires an already indexed command in the same Turn.
+  Journal and Item updates commit with `agent.output.command_execution_output.delta`
+  events, retaining original fragments and the command's stable output index.
+  Completion output replaces accumulated drafts; absent completion output retains
+  observed text. Terminal Items ignore late fragments, and cancellation preserves
+  partial output without inventing successful command completion. Native text
+  conversion and output quotas still apply; this is not a byte-complete stdout/stderr
+  guarantee. Pinned native 0.153.4 also has an early-output subscription window;
+  missing native notifications/aggregate bytes remain a separate execution gap,
+  not output to reconstruct from model tool-result prose. Older peers may supply
+  only completion snapshots. Product requests
+  without the observation opt-in retain their existing frames.
 - Execution observations are written to tenant-scoped `turn_events` in ordered,
   idempotent batches before they can back recovery or publication. Keep daemon
   payloads intact; this internal journal is not the public SSE protocol. Flush at
