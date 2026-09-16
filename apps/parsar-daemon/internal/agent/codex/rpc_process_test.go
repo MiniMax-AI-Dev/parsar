@@ -74,7 +74,8 @@ func TestJSONRPCClientFakeCodexProcess(t *testing.T) {
 	if os.Getenv("CODEX_RPC_FAKE_PROCESS") != "1" {
 		return
 	}
-	line, err := bufio.NewReader(os.Stdin).ReadBytes('\n')
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadBytes('\n')
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "read initialize: %v\n", err)
 		os.Exit(2)
@@ -96,6 +97,13 @@ func TestJSONRPCClientFakeCodexProcess(t *testing.T) {
 	}
 	body, _ := json.Marshal(resp)
 	fmt.Printf("%s\n", body)
+	if os.Getenv("CODEX_RPC_FAKE_BLOCK_WRITE") == "1" {
+		// Initialization already completed; consume only a prefix of the next frame.
+		if _, err := reader.ReadByte(); err != nil {
+			os.Exit(4)
+		}
+		fmt.Println(`{"jsonrpc":"2.0","method":"test/write_blocked"}`)
+	}
 	for {
 		time.Sleep(time.Second)
 	}
