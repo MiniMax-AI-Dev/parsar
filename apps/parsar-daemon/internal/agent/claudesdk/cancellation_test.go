@@ -123,6 +123,46 @@ func TestFailureKeepsOnlyVerifiedNativeIdentity(t *testing.T) {
 	}
 }
 
+func TestCancellationDrainsIntoReadyConsumer(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("PARSAR_HOME", root)
+	config := cancellationConfig(root, "wait")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out := make(chan proto.Envelope, 16)
+	running, err := NewFactory(config)(ctx, cancellationRequest(), out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer running.Cancel(ctx)
+	if event := <-out; event.Type != proto.TypeDelta {
+		t.Fatal("missing native readiness barrier")
+	}
+	if err := os.WriteFile(filepath.Join(config.StateDir, "release"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := running.Cancel(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var text string
+	usage := 0
+	for event := range out {
+		if event.Type == proto.TypeDelta {
+			var delta proto.DeltaPayload
+			if err := event.DecodePayload(&delta); err != nil {
+				t.Fatal(err)
+			}
+			text += delta.Delta
+		}
+		if event.Type == proto.TypeUsage {
+			usage++
+		}
+	}
+	if text != "taildrained" || usage != 1 {
+		t.Fatalf("ready consumer lost drained observations: text %q, usage %d", text, usage)
+	}
+}
+
 func cancellationConfig(root, mode string) Config {
 	return Config{Node: os.Args[0], Entrypoint: filepath.Join(root, "worker"), StateDir: filepath.Join(root, "state"), Env: []string{"GO_CLAUDE_SDK_HELPER=1", "SDK_HELPER_MODE=cancellation-" + mode, "GORACE=atexit_sleep_ms=0"}}
 }

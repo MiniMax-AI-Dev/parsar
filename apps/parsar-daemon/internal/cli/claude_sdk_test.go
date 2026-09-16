@@ -122,3 +122,26 @@ func TestClaudeSDKInvalidPathsFailBeforeProbe(t *testing.T) {
 		})
 	}
 }
+
+func TestClaudeSDKMCPFeatureDiscovery(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("PARSAR_HOME", root)
+	t.Setenv(claudeSDKEntrypointEnv, filepath.Join(root, "main.js"))
+	node, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(claudeSDKNodeEnv, node)
+	for _, supported := range []bool{false, true} {
+		out := discoverClaudeSDK(&runContext{stdout: &strings.Builder{}, stderr: &strings.Builder{}}, "default", func(context.Context, claudesdk.Config) (claudesdk.RuntimeInfo, error) {
+			info := claudesdk.RuntimeInfo{SDK: "0.3.269", Native: "2.1.269 (Claude Code)"}
+			if supported {
+				info.Features = []string{"mcp_http_tools"}
+			}
+			return info, nil
+		})
+		if out == nil || !out.Info.Available || out.Info.Capabilities.MCPHTTPTools != supported || out.Info.Capabilities.MCPHTTPBearerAuth || out.Info.Capabilities.MCPHTTPRequired {
+			t.Fatal("MCP feature discovery widened the runtime profile")
+		}
+	}
+}

@@ -18,14 +18,15 @@ type Config struct {
 }
 
 type startRequest struct {
-	Type             string               `json:"type"`
-	Prompt           string               `json:"prompt"`
-	Model            string               `json:"model"`
-	SystemPrompt     string               `json:"system_prompt"`
-	Cwd              string               `json:"cwd"`
-	Resume           string               `json:"resume,omitempty"`
-	ObserveMessages  bool                 `json:"observe_messages,omitempty"`
-	Functions        []proto.FunctionTool `json:"functions,omitempty"`
+	Type             string                 `json:"type"`
+	Prompt           string                 `json:"prompt"`
+	Model            string                 `json:"model"`
+	SystemPrompt     string                 `json:"system_prompt"`
+	Cwd              string                 `json:"cwd"`
+	Resume           string                 `json:"resume,omitempty"`
+	ObserveMessages  bool                   `json:"observe_messages,omitempty"`
+	Functions        []proto.FunctionTool   `json:"functions,omitempty"`
+	MCPHTTPServers   *[]proto.MCPHTTPServer `json:"mcp_http_servers,omitempty"`
 	observeFunctions bool
 }
 
@@ -37,8 +38,22 @@ func prepare(config Config, req proto.PromptRequestPayload) (startRequest, []str
 	if req.RunID == "" || strings.TrimSpace(req.Prompt) == "" {
 		return fail("run id and prompt are required")
 	}
-	if len(req.Attachments) > 0 || req.WorkspaceAuthoring || req.ObserveTools || req.MCPHTTPServers != nil {
+	if len(req.Attachments) > 0 || req.WorkspaceAuthoring || req.ObserveTools {
 		return fail("requested capability is not available in the private SDK adapter")
+	}
+	if err := validateMCP(req); err != nil {
+		return startRequest{}, nil, err
+	}
+	if req.MCPHTTPServers != nil {
+		servers := make([]proto.MCPHTTPServer, len(*req.MCPHTTPServers))
+		copy(servers, *req.MCPHTTPServers)
+		for i := range servers {
+			if servers[i].AllowedTools != nil {
+				tools := append([]string{}, (*servers[i].AllowedTools)...)
+				servers[i].AllowedTools = &tools
+			}
+		}
+		start.MCPHTTPServers = &servers
 	}
 	// Search is disabled by the fixed native tool profile. Medium selects the
 	// SDK's default text generation; it has no native verbosity-level option.
