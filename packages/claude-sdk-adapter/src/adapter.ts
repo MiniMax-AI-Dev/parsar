@@ -83,6 +83,7 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
         tools: [], mcpServers, allowedTools: profile?.allowed ?? names, strictMcpConfig: true, settingSources: [],
         ...(profile ? {
           agent: "parsar_root", disallowedTools: profile.denied,
+          hooks: { PreToolUse: [{ hooks: [profile.beforeTool] }] },
           agents: { parsar_root: { description: "Execution root.", prompt: request.system_prompt,
             model: request.model, tools: profile.allowed } },
         } : {}),
@@ -102,7 +103,7 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
       if (message.type === "system" && message.subtype === "init") {
         nativeID = message.session_id;
         if (!nativeID || (request.resume && nativeID !== request.resume)) throw new Error("unexpected native session");
-        if (profile) profile.verify(message.tools, await stream.mcpServerStatus());
+        if (profile) profile.verify(message.tools, await stream.mcpServerStatus(), nativeID);
         else if (message.tools.length !== names.length || message.tools.some(name => !names.includes(name)) ||
             message.mcp_servers.length !== (definitions.length ? 1 : 0) ||
             message.mcp_servers.some(server => server.name !== "functions" || server.status !== "connected")) {
@@ -127,6 +128,7 @@ export async function execute(request: Start, emit: (event: Event) => Promise<vo
   } catch {
     failed = true;
   } finally {
+    profile?.close();
     inputs.close();
     functions.close();
     stream?.close();

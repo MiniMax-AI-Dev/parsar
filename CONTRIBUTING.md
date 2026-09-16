@@ -1384,9 +1384,17 @@ tools, in addition to empty built-ins, strict MCP configuration, empty setting
 sources and default-deny permissions. Permission allowlists alone do not restrict
 the native model inventory. Null selects all tools from a declared server; an empty
 list selects none. Host functions compose with those selections. Native server
-status supplies original tool identities; initialization verifies the resulting
-inventory. This check diagnoses configuration drift, while the native Agent
-restriction enforces tool availability. It is not a barrier before the model request.
+status supplies original tool identities; map their normalized native aliases while
+preserving the original names in observations. Native status deduplicates aliases,
+so it does not prove a complete original server inventory. A native PreToolUse hook
+waits for inventory verification before admitting root calls and denies unverified,
+mismatched or cancelled calls. The native Agent restriction controls model-visible
+tools; inventory verification is not a barrier before the model request.
+Anonymous HTTP declarations explicitly set an empty Authorization header to disable
+native OAuth and automatic credential injection. Preserve that header; do not erase
+native history or credentials to enforce this boundary. Servers that reject a blank
+Authorization header, normalized name collisions and inventory changes during a
+query require separate validation; this private profile covers static inventories.
 The bounded private profile currently requires connected servers, reserves the
 `functions` label, accepts alphanumeric/underscore/hyphen server labels and
 alphanumeric/underscore/hyphen/dot selected tool names, and excludes credentials,

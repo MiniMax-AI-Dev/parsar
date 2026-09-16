@@ -16,12 +16,12 @@ test("native selection composes unrestricted, selected and empty servers with ho
   for (const selection of [null, ["echo"], []]) {
     const profile = new MCPProfile([declaration(selection)], ["mcp__functions__lookup"]);
     const expected = selection === null ? ["echo", "fail"] : selection;
-    profile.verify([...expected.map(native), "mcp__functions__lookup"], [...statuses, { name: "functions", status: "connected" }]);
+    profile.verify([...expected.map(native), "mcp__functions__lookup"], [...statuses, { name: "functions", status: "connected" }], "session");
     assert.deepEqual([...profile.identities.keys()], expected.map(native));
     assert.equal(profile.allowed.includes("mcp__functions__lookup"), true);
     assert.deepEqual(profile.denied, selection?.length === 0 ? [native("*")] : []);
-    assert.throws(() => profile.verify([...expected.map(native), "Bash"], statuses), /inventory/);
-    assert.throws(() => profile.verify(expected.map(native), [...statuses, { name: "ambient", status: "connected" }]), /undeclared/);
+    assert.throws(() => profile.verify([...expected.map(native), "Bash"], statuses, "session"), /inventory/);
+    assert.throws(() => profile.verify(expected.map(native), [...statuses, { name: "ambient", status: "connected" }], "session"), /undeclared/);
   }
 });
 
@@ -35,6 +35,44 @@ test("invalid remote declarations and wildcard injection fail at the bridge boun
   }
   assert.deepEqual(parseStart(JSON.stringify({ ...start, mcp_http_servers: [declaration(null), { ...declaration([]), server_label: "empty" }] })).mcp_http_servers,
     [declaration(null), { ...declaration([]), server_label: "empty" }]);
+});
+
+test("native tool spelling preserves original identity and rejects ambiguous aliases", () => {
+  for (const tools of [null, ["echo.v1"]]) {
+    const profile = new MCPProfile([declaration(tools)], []);
+    profile.verify([native("echo_v1")], [{ ...statuses[0], tools: [{ name: "echo.v1" }] }], "session");
+    assert.deepEqual(profile.identities.get(native("echo_v1")), { server: "fixture", name: "echo.v1" });
+    if (tools) assert.deepEqual(profile.allowed, [native("echo_v1")]);
+    assert.throws(() => profile.verify([native("echo_v1")], [{ ...statuses[0], tools: [{ name: "echo.v1" }, { name: "echo_v1" }] }], "session"), /ambiguous/);
+  }
+});
+
+test("native pre-tool admission waits for verified inventory and denies unsafe or cancelled setup", async () => {
+  const input = { hook_event_name: "PreToolUse", session_id: "session", tool_name: native("echo"), tool_use_id: "call", tool_input: {} };
+  const signal = new AbortController().signal;
+  const p = new MCPProfile([declaration(["echo"])], []);
+  assert.deepEqual(p.servers.fixture.headers, { Authorization: "" });
+  let released = false;
+  const pending = p.beforeTool(input, "call", { signal }).then(value => { released = true; return value; });
+  await Promise.resolve();
+  assert.equal(released, false);
+  p.verify([native("echo")], statuses, "session");
+  assert.deepEqual(await pending, {});
+  for (const invalid of [{ ...input, session_id: "other" }, { ...input, agent_id: "child" }, { ...input, tool_name: native("fail") }]) {
+    assert.equal((await p.beforeTool(invalid, "call", { signal })).hookSpecificOutput.permissionDecision, "deny");
+  }
+  p.close();
+  assert.equal((await p.beforeTool(input, "call", { signal })).hookSpecificOutput.permissionDecision, "deny");
+  const rejected = new MCPProfile([declaration(["echo_v1"])], []);
+  const waiting = rejected.beforeTool({ ...input, tool_name: native("echo_v1") }, "call", { signal });
+  // Native status may retain only the first of two normalized aliases.
+  assert.throws(() => rejected.verify([native("echo_v1")], [{ ...statuses[0], tools: [{ name: "echo.v1" }] }], "session"), /inventory/);
+  rejected.close();
+  assert.equal((await waiting).hookSpecificOutput.permissionDecision, "deny");
+  const controller = new AbortController();
+  const stopped = new MCPProfile([declaration(null)], []).beforeTool(input, "call", { signal: controller.signal });
+  controller.abort();
+  assert.equal((await stopped).hookSpecificOutput.permissionDecision, "deny");
 });
 
 function observer() { return new MCPObserver(new Map([[native("echo"), { server: "fixture", name: "echo" }]])); }
