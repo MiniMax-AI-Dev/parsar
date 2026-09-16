@@ -115,3 +115,49 @@ undo completed effects; the held old mutation remains unknown and is never
 replayed. No model credentials enter the instrumented unit. Run the ordinary
 real-model Files/cancellation/history fixture separately, and report its outcome
 independently. Production runtime/pins and the earlier negative tests are unchanged.
+
+## Local Runtime operator consumer
+
+Build the existing daemon and pass `--controller /absolute/path/to/parsar-daemon`
+to `placement.py` to exercise the actual local retirement command. The same held
+native write and detached descendant are stopped through that consumer. Separate
+CLI processes race on the binding and recover the identical receipt after removal;
+the fixture independently checks old processes, retained successor bytes and an
+untouched neighboring container. Earlier native negative tests remain unchanged.
+
+Operators explicitly create an owned container with
+`--label parsar.runtime.placement=<owner>`, then run:
+
+```sh
+parsar-daemon placement enroll --container "$FULL_CONTAINER_ID" \
+  --owner "$PLACEMENT_OWNER" --workspace "$ABSOLUTE_HOST_WORKSPACE"
+parsar-daemon placement retire --container "$FULL_CONTAINER_ID"
+```
+
+This initial profile requires local Linux/cgroup v2 and the fixed socket
+`unix:///var/run/docker.sock`; ambient Docker context/host variables do not select
+the target. Use a non-root container user, private PID/IPC/cgroup namespaces,
+`--network none --cap-drop ALL --security-opt no-new-privileges --restart no`,
+no devices, additional capabilities, shared volumes or privileged settings.
+Exactly one writable bind retains workspace/history on ext-family, XFS, Btrfs or
+tmpfs storage without nested mounts; additional binds may only be read-only regular
+files. Every source must be on a whole-filesystem host mount with exactly one mount
+for that device in the controller namespace. Host bind aliases, Btrfs subvolume
+roots, repeated-device or stacked mounts and missing mount evidence are rejected;
+this first profile does not resolve arbitrary backing-path aliases. Controller state and the canonical Docker socket must not be exposed by any mount,
+including ancestor directories and filesystem roots. Use canonical absolute
+workspace paths and a trusted operator account with Docker access. State ancestors
+must be owned by that user or root and not writable by group/others; the placement
+state directory and files require modes 0700/0600. Host administrators remain trusted.
+
+The command persists intent before stop and verifies stopped state, cgroup emptiness
+and old process identities before non-forced container removal. It never removes
+workspace files or Docker volumes, releases an ordinary Turn, or replays unknown
+writes. A saved completed receipt survives controller restart; recovery completes the
+directory-sync barrier before returning success. Unavailable evidence,
+changed incarnations and removal without a durable receipt remain unknown. An
+interrupted stop can reconcile the same still-existing stopped unit. There is no
+clear-unknown shortcut. This consumer does not gate Core dispatch or grant public
+feature admission; remote authority, Claude placement and broader storage remain
+separate work. Run full `make check` and uninstrumented real-provider acceptance
+separately from the credential-free mechanism fixture.

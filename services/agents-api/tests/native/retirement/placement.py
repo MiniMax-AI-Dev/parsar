@@ -10,12 +10,14 @@ import subprocess
 import time
 import uuid
 
+from operator_retirement import OperatorRetirement
+
 TEST = "server::processor::tests::retirement_qualification::native_placement_worker"
 LABEL = "parsar.retirement-qualification"
 
 
 def docker(*args, timeout=15):
-    return subprocess.check_output(["docker", *args], text=True, timeout=timeout).strip()
+    return subprocess.check_output(["docker", "--host", "unix:///var/run/docker.sock", *args], text=True, timeout=timeout).strip()
 
 
 def inspect(instance):
@@ -73,6 +75,8 @@ def qualify(args):
         raise ValueError("this qualification requires a supported local filesystem")
     token = uuid.uuid4().hex
     instances = []
+    removed = set()
+    controller = OperatorRetirement(args.controller, token, workspace) if args.controller else None
     evidence = {"qualified": False, "instrumented": True, "model_calls": 0,
                 "image": args.image, "filesystem": filesystem, "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                 "scope": "task-owned local-filesystem Docker placement; no Core/remote authority claim"}
@@ -81,6 +85,7 @@ def qualify(args):
         name = "parsar-retirement-" + token[:12] + "-" + mode
         container_path = "/qualification/.parsar/task"
         instance = docker("create", "--name", name, "--label", LABEL + "=" + token,
+                          "--label", "parsar.runtime.placement=" + token,
                           "--network", "none", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
                           "--restart", "no", "--user", f"{os.getuid()}:{os.getgid()}",
                           "--env", "HOME=/qualification", "--env", "PARSAR_RETIREMENT_MODE=" + mode,
@@ -94,6 +99,12 @@ def qualify(args):
         return instance
 
     try:
+        neighbor = None
+        if controller:
+            neighbor = docker("run", "-d", "--label", LABEL + "=" + token,
+                              "--network", "none", "--entrypoint", "sleep", args.image, "60")
+            instances.append(neighbor)
+            neighbor_init = inspect(neighbor)["State"]["Pid"]
         old = start("held")
         await_condition(lambda: (workspace / "worker-entered").exists(), 7, "native worker gate")
         state = inspect(old)
@@ -132,14 +143,23 @@ def qualify(args):
             evidence["missing_retirement_observation_rejected"] = True
         else:
             raise AssertionError("missing supervisor evidence cannot authorize a successor")
-        assert len(instances) == 1 and not (workspace / "successor-receipt").exists()
+        assert len(instances) == (2 if controller else 1) and not (workspace / "successor-receipt").exists()
         evidence.update(old_instance=old, cgroup=str(cgroup), observed_members=members,
                         detached_namespace_pid=descendant, live_owner_rejected=True)
         began = time.monotonic()
-        docker("stop", "--timeout", "1", old)
-        await_condition(lambda: observe_retired(old, token, cgroup, members), 3, "placement retirement")
-        stopped = inspect(old)["State"]
-        evidence.update(stop_seconds=time.monotonic() - began, stopped_state=stopped)
+        if controller:
+            controller.enroll(old)
+            evidence.update(controller.retire(old))
+            removed.add(old)
+            settled = lambda: controller.observe(old, cgroup, members, process_identity)
+            assert inspect(neighbor)["State"]["Pid"] == neighbor_init
+            evidence["neighbor_untouched"] = True
+        else:
+            docker("stop", "--timeout", "1", old)
+            settled = lambda: observe_retired(old, token, cgroup, members)
+            evidence["stopped_state"] = inspect(old)["State"]
+        await_condition(settled, 3, "placement retirement")
+        evidence["stop_seconds"] = time.monotonic() - began
         counts = [(workspace / name).stat().st_size for name in ("heartbeat", "descendant-heartbeat")]
         assert (workspace / "write.bin").read_bytes() == b"initial"
         successor = start("successor")
@@ -149,7 +169,7 @@ def qualify(args):
         assert (workspace / "write.bin").read_bytes() == b"new-owner"
         time.sleep(0.2)
         assert [(workspace / name).stat().st_size for name in ("heartbeat", "descendant-heartbeat")] == counts
-        assert observe_retired(old, token, cgroup, members)
+        assert settled()
         assert (workspace / "write.bin").read_bytes() == b"new-owner"
         evidence.update(qualified=True, successor_instance=successor, old_write_receipt="unknown",
                         old_mutation_replayed=False, detached_effects_stopped=True,
@@ -157,6 +177,9 @@ def qualify(args):
     finally:
         cleanup, cleanup_errors = [], []
         for instance in reversed(instances):
+            if instance in removed:
+                cleanup.append(instance)
+                continue
             try:
                 state = inspect(instance)
                 assert state["Config"]["Labels"][LABEL] == token
@@ -179,4 +202,5 @@ if __name__ == "__main__":
     parser.add_argument("--binary", type=Path, required=True, help="exact-manifest codex-exec-server test binary")
     parser.add_argument("--image", required=True, help="existing qualified immutable executor image ID")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--controller", type=Path, help="candidate parsar-daemon for local Runtime retirement acceptance")
     qualify(parser.parse_args())

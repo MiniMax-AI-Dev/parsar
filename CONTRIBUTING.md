@@ -486,6 +486,24 @@ The opt-in whole-placement fixture uses an exact task-owned Docker instance and
 cgroup/process observations before successor writes. This is a local-filesystem
 qualification, not an authenticated remote retirement receipt or public admission.
 
+The explicit `parsar-daemon placement enroll/retire` operator commands own the
+first local Runtime retirement consumer in `internal/agentdaemon/placement`.
+They use a fixed local Docker socket, an exact labeled container/incarnation,
+private durable state under `~/.parsar/placements`, and a per-target process lock.
+Enrollment is limited to the documented unprivileged Linux/cgroup-v2 local-storage
+profile. Keep controller state and the canonical Docker socket outside generated-code mounts,
+including when a workspace source is a filesystem root. Every source must reside
+on a whole-filesystem host mount whose device appears exactly once in the controller
+mount namespace; bind aliases, subvolume roots, stacked mounts and missing mount
+evidence are unqualified. This bounded profile does not resolve arbitrary mount graphs.
+Stopping, independent membership/process observations and non-forced removal must
+precede a durable successful receipt. Recovered receipts must complete their directory-sync barrier before success.
+Missing evidence or a crash after removal
+but before receipt persistence remains unknown; never clear it based on absence.
+Normal harness release is unchanged. This local operator command is not Core
+admission, authenticated remote receipt support, or public Files compatibility.
+See the retirement fixture README for the profile and explicit native acceptance.
+
 Connection observations use the existing execution lease and Session lock. A
 separate `environment_connections` row retains the current generation and revision;
 `environments.status` and its Session Environment-event snapshot commit together.
