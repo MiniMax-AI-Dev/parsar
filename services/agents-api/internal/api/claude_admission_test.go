@@ -26,6 +26,15 @@ func TestClaudeSessionConfigurationAdmission(t *testing.T) {
 				{"object function", `,"tools":[{"type":"function","name":"lookup","description":"Look up a value","parameters":{"type":"object","properties":{}}}]`, true},
 				{"implicit root", `,"tools":[{"type":"function","name":"lookup","description":"Look up a value","parameters":{"properties":{}}}]`, false},
 				{"union root", `,"tools":[{"type":"function","name":"lookup","description":"Look up a value","parameters":{"type":["object","null"]}}]`, false},
+				{"MCP defaults", `,"tools":[` + publicMCP + `]`, true},
+				{"MCP null", `,"tools":[` + strings.TrimSuffix(publicMCP, "}") + `,"allowed_tools":null}]`, true},
+				{"MCP empty", `,"tools":[` + strings.TrimSuffix(publicMCP, "}") + `,"allowed_tools":[]}]`, true},
+				{"MCP selected", `,"tools":[` + strings.TrimSuffix(publicMCP, "}") + `,"allowed_tools":["lookup.v1"]}]`, true},
+				{"MCP required", `,"tools":[` + strings.TrimSuffix(publicMCP, "}") + `,"required":true}]`, false},
+				{"MCP reserved label", `,"tools":[` + strings.Replace(publicMCP, `"records"`, `"functions"`, 1) + `]`, false},
+				{"MCP invalid label", `,"tools":[` + strings.Replace(publicMCP, `"records"`, `"records.v1"`, 1) + `]`, false},
+				{"MCP wildcard name", `,"tools":[` + strings.TrimSuffix(publicMCP, "}") + `,"allowed_tools":["*"]}]`, false},
+				{"MCP empty fragment", `,"tools":[` + strings.Replace(publicMCP, `/tools"`, `/tools#"`, 1) + `]`, false},
 			} {
 				t.Run(fmt.Sprintf("%s/stream=%t/initial=%t", test.name, stream, initial), func(t *testing.T) {
 					digest := sha256.Sum256([]byte("test-api-key"))

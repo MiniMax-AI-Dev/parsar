@@ -589,8 +589,9 @@ See [Environment contracts and remaining work](../../contracts/agents-api/enviro
 
 ### HTTP MCP execution
 
-MCP uses Codex on trusted service-side compute with `environment:{"type":"none"}`
-or a `self_hosted` Environment. Inline or saved Agent tools may declare:
+MCP runs on trusted service-side compute. Codex supports `environment:{"type":"none"}`
+or a `self_hosted` Environment; Claude SDK supports anonymous MCP with
+`environment:{"type":"none"}`. Inline or saved Agent tools may declare:
 
 ```json
 {
@@ -609,14 +610,14 @@ advertise `mcp_http_tools`; selection waits for a capable device. The native
 harness owns MCP discovery, calls and results. Public `mcp_call` Items use original
 server/tool names; recover missed live events through Session, Turn and Items reads.
 
-Set `required:true` to require initialization before the first native Turn. It
+With Codex, set `required:true` to require initialization before the first native Turn. It
 defaults to false and additionally requires the pinned daemon's `mcp_http_required`
 capability. Native root thread creation and cold resume wait for required servers;
 initialization failure stops execution without replacing retained history. Public
 work can already be accepted or queued during this wait. Exact hosted creation
 timing/errors and continuing MCP health monitoring remain unverified.
 
-For `environment:none` or `self_hosted`, attach tenant-owned `vault_ids` for static
+With Codex on `environment:none` or `self_hosted`, attach tenant-owned `vault_ids` for static
 bearer authentication. An explicit
 `credential_id` selects an attached credential for the exact HTTPS URL; omission/null
 selects a unique matching credential, or stays anonymous if none matches. Ambiguity
@@ -636,9 +637,23 @@ public/native history. Unmatched attached Vaults may retain an anonymous selecti
 Both native remote readiness and MCP configuration
 checks run before thread creation/resume.
 
+Claude SDK requires a packaged runtime that reports `mcp_http_tools`; the SDK
+version alone does not qualify an older bundle. Its current anonymous profile
+requires `required:false`, connected servers and static inventories. Server labels
+accept ASCII letters, digits, underscore and hyphen, except reserved `functions`;
+selected tool names additionally accept dots. Declared HTTP MCP tools compose with
+host functions; undeclared servers, built-ins and subagents remain disabled.
+Selected Vault credentials, including implicit matches, fail before Session creation
+without anonymous fallback. A Vault with no matching credential may stay anonymous.
+The adapter suppresses native OAuth/credential injection with a blank Authorization
+header, without deleting native state. Servers rejecting that header, normalized
+name collisions, changing inventories and original MCP metadata fidelity remain
+gaps. Items retain the observed native JSON, which may differ from the original
+MCP envelope. See the [Claude SDK profile](../../CONTRIBUTING.md#claude-sdk-adapter-foundation).
+
 The current subset rejects OAuth, inline authorization, nonempty headers or
 request metadata, URL userinfo/query/fragment, implicit/other origins, stdio
-and other engines. The Codex adapter also
+and engines other than Codex/Claude SDK. The Codex adapter also
 rejects reserved native labels and stored native MCP credentials. It verifies
 exact effective MCP configuration before starting/resuming a native thread,
 excludes undeclared servers and disables native apps/plugins. This runs on trusted

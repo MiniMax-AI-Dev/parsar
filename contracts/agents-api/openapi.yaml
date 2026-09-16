@@ -1510,10 +1510,14 @@ paths:
         advertised combination support; old peers cannot receive unsupported work.
         Omitted/null capability_directories use the empty-list default; self_hosted
         requires configured execution plus executor registry. Claude SDK currently
-        requires medium verbosity and object-root function schemas. Omitted stream
-        defaults to false; stream and agent_id cannot be null. Metadata may be null,
-        but its values must be strings. Initial input accepts a string or user-message
-        array containing text. None initial input atomically starts a Turn; self_hosted
+        requires medium verbosity and object-root function schemas. It supports anonymous
+        service-origin HTTP MCP on none with required=false and separately advertised
+        runtime support; selected Vault credentials (including implicit matches) and
+        unsupported native labels/tool names reject before persistence. An attached
+        Vault with no matching credential may remain anonymous. Omitted stream defaults
+        to false; stream and agent_id cannot be null. Metadata may be null, but its
+        values must be strings. Initial input accepts a string or user-message array
+        containing text. None initial input atomically starts a Turn; self_hosted
         initial input is reserved while returning its Environment connection target,
         with execution deferred to native readiness and Session failure on initial
         timeout. Omitted or null input creates an idle Session. With stream=true,

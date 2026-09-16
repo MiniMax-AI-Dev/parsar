@@ -798,7 +798,8 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   upstream default/error/retry conformance and remaining MCP/web-search variants
   remain gaps. Unknown/unsupported variants fail explicitly. No product lookup is permitted.
 - Public HTTP MCP uses the native harness client and tool loop. The supported
-  execution profiles are Codex with `environment:none` or `self_hosted`, an explicit `service`
+  execution profiles are Codex with `environment:none` or `self_hosted`, and
+  anonymous Claude SDK with `environment:none`. Both require an explicit `service`
   connection origin and a trusted service-side harness. The execution device is
   part of the service deployment; an arbitrary caller executor cannot be relabeled
   service-origin. Admission requires the advertised `mcp_http_tools` capability
@@ -812,6 +813,8 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   cannot execute the authenticated combination. Native remote readiness and exact
   MCP preflight both precede
   thread creation/resume. Other engines and placements remain implementation gaps.
+  Claude SDK admission additionally applies the supported values described in
+  [its adapter profile](#claude-sdk-adapter-foundation), including before persistence.
 - The shared MCP resolver preserves omitted/null `allowed_tools` as unrestricted
   and an explicit empty list as deny-all. Saved HTTP transport output includes
   `headers:{}`; the effective Session transport omits headers, matching the two
@@ -821,7 +824,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   Static bearer authentication requires HTTPS and the attached-Vault rules below.
   Inline authorization, URL userinfo/query/fragment,
   other origins and stdio remain explicitly unsupported.
-- Required MCP initialization additionally needs `mcp_http_required`, advertised
+- Codex required MCP initialization additionally needs `mcp_http_required`, advertised
   only for the verified native pin and checked during selection, final preclaim
   and daemon dispatch/preparation. Preserve the boolean through typed messages,
   native rendering and exact configuration preflight. Reuse native required-server
@@ -831,7 +834,7 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   waits. This is not a continuing health monitor or a new public readiness state;
   exact hosted Session creation timing and initialization errors remain unverified.
 - Send MCP declarations through typed daemon fields, independently of function
-  callbacks. A non-nil declaration replaces operator MCP options; use the existing
+  callbacks. In Codex, a non-nil declaration replaces operator MCP options; use the existing
   native renderer and original tool names for `enabled_tools`, including `[]`.
   Before thread creation/resume, query native `config/read` with the exact cwd and
   reject additional servers or effective configuration differences. Disable native
@@ -1376,8 +1379,10 @@ The private adapter also accepts typed anonymous HTTP MCP declarations on the
 trusted `environment:none` harness host. The packaged readiness report must include
 `mcp_http_tools`; discovery advertises that feature only when present, and execution
 rechecks the installed bundle before dispatching an MCP request. An unchanged SDK
-version alone cannot qualify an older bridge. Public Claude MCP admission remains
-a separate, unimplemented service boundary.
+version alone cannot qualify an older bridge. Public Claude MCP admission reuses
+the shared resolver, immutable Session snapshots and neutral Item/event projection.
+The API checks the supported profile before persistence, during device selection
+and again before claiming execution; a missing runtime capability leaves work queued.
 
 MCP queries use the SDK's main-thread Agent definition to restrict model-visible
 tools, in addition to empty built-ins, strict MCP configuration, empty setting
@@ -1394,11 +1399,14 @@ Anonymous HTTP declarations explicitly set an empty Authorization header to disa
 native OAuth and automatic credential injection. Preserve that header; do not erase
 native history or credentials to enforce this boundary. Servers that reject a blank
 Authorization header, normalized name collisions and inventory changes during a
-query require separate validation; this private profile covers static inventories.
-The bounded private profile currently requires connected servers, reserves the
+query require separate validation; this profile covers static inventories.
+The bounded adapter profile currently requires connected servers, reserves the
 `functions` label, accepts alphanumeric/underscore/hyphen server labels and
 alphanumeric/underscore/hyphen/dot selected tool names, and excludes credentials,
-required startup and remote environments. These remain implementation limits.
+required startup and remote environments. The API rejects selected Vault credentials,
+including implicit URL matches, without falling back to anonymous access; an attached
+Vault with no matching credential may remain anonymous. These are execution limits,
+not saved-Agent schema restrictions or changes to the official protocol.
 
 Root assistant tool calls and live root user results produce the existing neutral
 MCP observations. Correlate actual Session/call identities; exclude replay,
@@ -1453,7 +1461,8 @@ The server owns no provider credential: operators configure the daemon's native 
 provider environment. Product `claude_code` and product execution are unchanged.
 The public profile accepts only
 text, explicit model/system instructions, managed state, exact native resume and
-declared functions with ordered text results. It rejects unsupported request
+declared functions with ordered text results, and the anonymous HTTP MCP subset
+described above. It rejects unsupported request
 options and disables built-in tools and undeclared MCP discovery.
 `DisableExecutionEnvironment` and `DisableSubagents` are accepted assertions about
 this fixed restrictive profile. Omission does not enable built-in tools. New and

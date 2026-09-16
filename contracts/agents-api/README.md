@@ -303,6 +303,7 @@ that immutable choice. The public request supplies a model, not a harness select
 Both no-environment profiles require disabled `multi_agent`, implicit reasoning,
 service tier `auto`, ordinary text and non-deferred functions. Codex additionally
 supports anonymous or attached static-bearer service-origin HTTP MCP on `none`.
+Claude SDK supports the bounded anonymous service-origin HTTP MCP profile on `none`.
 The self-hosted profile supports text/functions and anonymous or attached
 static-bearer service-origin HTTP MCP as described in the Environment contract. See the
 [HTTP MCP profile and limits](../../services/agents-api/README.md#http-mcp-execution).
@@ -310,7 +311,7 @@ static-bearer service-origin HTTP MCP as described in the Environment contract. 
 | Profile | Current limits |
 | --- | --- |
 | `codex` (default) | Native app-server execution, disabled environment/search/subagent tools; low/medium/high verbosity requires the supported Unix adapter and native model policy below; ordered text/image function results |
-| `claude_sdk` (operator opt-in) | Registered packaged SDK runtime; medium verbosity, object-root function schemas and text-only function results; built-in tools and undeclared MCP discovery disabled |
+| `claude_sdk` (operator opt-in) | Registered packaged SDK runtime; medium verbosity, object-root function schemas and text-only function results; anonymous service-origin HTTP MCP with `required:false` and advertised runtime support; built-in tools and undeclared MCP discovery disabled |
 
 The SDK profile rejects unsupported configuration before Session creation and
 non-text function results before any batch write. Host selection and the final

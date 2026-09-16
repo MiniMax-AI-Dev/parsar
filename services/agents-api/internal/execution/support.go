@@ -49,8 +49,11 @@ func validateClaudeConfiguration(snapshot Snapshot) error {
 	if agent.MultiAgent.Enabled || agent.MultiAgent.MaxConcurrentSubagents != nil || agent.Reasoning.Effort != nil || agent.Reasoning.Summary != nil || (agent.ServiceTier != "" && agent.ServiceTier != "auto") || (agent.Text.Format.Type != "" && agent.Text.Format.Type != "text") {
 		return store.ErrInvalidInput
 	}
-	tools, err := functionTools(agent.Tools)
+	tools, mcp, err := executionTools(agent.Tools)
 	if err != nil {
+		return err
+	}
+	if err := validateClaudeMCP(snapshot, mcp); err != nil {
 		return err
 	}
 	for _, tool := range tools {
@@ -136,7 +139,7 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	if len(functions) > 0 && !caps.FunctionTools {
 		return fail("device must advertise function_tools")
 	}
-	if len(mcp) > 0 && (!caps.MCPHTTPTools || engine != "codex" || snapshot.Environment == nil || (snapshot.Environment.Type != "none" && snapshot.Environment.Type != "self_hosted") || snapshot.Daemon != nil) {
+	if len(mcp) > 0 && (!caps.MCPHTTPTools || snapshot.Environment == nil || (snapshot.Environment.Type != "none" && snapshot.Environment.Type != "self_hosted") || snapshot.Daemon != nil) {
 		return fail("device must support the service-side HTTP MCP profile")
 	}
 	selected, err := selectedMCPCredentials(snapshot)
