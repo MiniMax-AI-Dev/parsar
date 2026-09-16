@@ -2,12 +2,15 @@ package claudesdk
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
 	"slices"
+	"strings"
 
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
@@ -26,9 +29,12 @@ func validateMCP(req proto.PromptRequestPayload) error {
 		endpoint, err := url.Parse(server.ServerURL)
 		if !mcpLabel.MatchString(server.ServerLabel) || server.ServerLabel == "functions" || labels[server.ServerLabel] ||
 			err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Hostname() == "" || endpoint.User != nil ||
-			endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" || endpoint.Opaque != "" ||
-			server.Required || server.BearerToken != nil {
-			return fmt.Errorf("claudesdk: unsupported anonymous HTTP MCP declaration")
+			strings.ContainsAny(server.ServerURL, "?#") || endpoint.Opaque != "" ||
+			server.Required {
+			return fmt.Errorf("claudesdk: unsupported HTTP MCP declaration")
+		}
+		if server.BearerToken != nil && (endpoint.Scheme != "https" || !agent.ValidMCPHTTPBearerToken(*server.BearerToken)) {
+			return fmt.Errorf("claudesdk: unsupported HTTPS MCP bearer credential")
 		}
 		labels[server.ServerLabel] = true
 		if server.AllowedTools != nil {
@@ -40,6 +46,36 @@ func validateMCP(req proto.PromptRequestPayload) error {
 		}
 	}
 	return nil
+}
+
+// Only generated references cross the private bridge; secrets stay in the owned
+// process environment and are expanded by the native HTTP client.
+type mcpHTTPServer struct {
+	ServerLabel       string    `json:"server_label"`
+	ServerURL         string    `json:"server_url"`
+	AllowedTools      *[]string `json:"allowed_tools"`
+	BearerTokenEnvVar string    `json:"bearer_token_env_var,omitempty"`
+}
+
+func prepareMCPHTTP(declarations *[]proto.MCPHTTPServer) (*[]mcpHTTPServer, []string) {
+	if declarations == nil {
+		return nil, nil
+	}
+	servers := make([]mcpHTTPServer, len(*declarations))
+	var env []string
+	for i, declaration := range *declarations {
+		server := mcpHTTPServer{ServerLabel: declaration.ServerLabel, ServerURL: declaration.ServerURL}
+		if declaration.AllowedTools != nil {
+			tools := append([]string{}, (*declaration.AllowedTools)...)
+			server.AllowedTools = &tools
+		}
+		if declaration.BearerToken != nil {
+			server.BearerTokenEnvVar = "PARSAR_MCP_BEARER_" + rand.Text()
+			env = append(env, server.BearerTokenEnvVar+"="+*declaration.BearerToken)
+		}
+		servers[i] = server
+	}
+	return &servers, env
 }
 
 type mcpState struct {

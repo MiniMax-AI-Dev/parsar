@@ -18,15 +18,15 @@ type Config struct {
 }
 
 type startRequest struct {
-	Type             string                 `json:"type"`
-	Prompt           string                 `json:"prompt"`
-	Model            string                 `json:"model"`
-	SystemPrompt     string                 `json:"system_prompt"`
-	Cwd              string                 `json:"cwd"`
-	Resume           string                 `json:"resume,omitempty"`
-	ObserveMessages  bool                   `json:"observe_messages,omitempty"`
-	Functions        []proto.FunctionTool   `json:"functions,omitempty"`
-	MCPHTTPServers   *[]proto.MCPHTTPServer `json:"mcp_http_servers,omitempty"`
+	Type             string               `json:"type"`
+	Prompt           string               `json:"prompt"`
+	Model            string               `json:"model"`
+	SystemPrompt     string               `json:"system_prompt"`
+	Cwd              string               `json:"cwd"`
+	Resume           string               `json:"resume,omitempty"`
+	ObserveMessages  bool                 `json:"observe_messages,omitempty"`
+	Functions        []proto.FunctionTool `json:"functions,omitempty"`
+	MCPHTTPServers   *[]mcpHTTPServer     `json:"mcp_http_servers,omitempty"`
 	observeFunctions bool
 }
 
@@ -43,17 +43,6 @@ func prepare(config Config, req proto.PromptRequestPayload) (startRequest, []str
 	}
 	if err := validateMCP(req); err != nil {
 		return startRequest{}, nil, err
-	}
-	if req.MCPHTTPServers != nil {
-		servers := make([]proto.MCPHTTPServer, len(*req.MCPHTTPServers))
-		copy(servers, *req.MCPHTTPServers)
-		for i := range servers {
-			if servers[i].AllowedTools != nil {
-				tools := append([]string{}, (*servers[i].AllowedTools)...)
-				servers[i].AllowedTools = &tools
-			}
-		}
-		start.MCPHTTPServers = &servers
 	}
 	// Search is disabled by the fixed native tool profile. Medium selects the
 	// SDK's default text generation; it has no native verbosity-level option.
@@ -117,5 +106,8 @@ func prepare(config Config, req proto.PromptRequestPayload) (startRequest, []str
 	}
 	env := append(append([]string{}, os.Environ()...), config.Env...)
 	env = append(env, "CLAUDE_CONFIG_DIR="+config.StateDir, "TMPDIR="+filepath.Join(config.StateDir, "tmp"), "DISABLE_TELEMETRY=1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1")
+	var mcpEnv []string
+	start.MCPHTTPServers, mcpEnv = prepareMCPHTTP(req.MCPHTTPServers)
+	env = append(env, mcpEnv...)
 	return start, env, nil
 }
