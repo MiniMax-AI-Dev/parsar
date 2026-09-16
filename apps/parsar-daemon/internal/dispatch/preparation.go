@@ -32,6 +32,7 @@ type preparationState struct {
 	stateKey         string
 	busy             bool
 	owns             bool
+	closeErr         error
 }
 
 func (r *Router) handleExecutionPrepare(ctx context.Context, env proto.Envelope) error {
@@ -157,11 +158,11 @@ func (r *Router) releasePreparation(p *preparationState, state, code string, pub
 		p.status.State, p.status.ErrorCode, p.status.Revision = state, code, p.status.Revision+1
 		p.cancel()
 		p.timer.Stop()
-		if !p.busy {
-			p.busy = true
-			closeResource = true
-			r.shutdownWG.Add(1)
-		}
+	}
+	if p.owns && !p.busy {
+		p.busy = true
+		closeResource = true
+		r.shutdownWG.Add(1)
 	}
 	status := p.status
 	r.mu.Unlock()
@@ -171,34 +172,6 @@ func (r *Router) releasePreparation(p *preparationState, state, code string, pub
 	if publish {
 		r.publishPreparation(p, status)
 	}
-}
-
-func (r *Router) closePreparationResource(p *preparationState) {
-	// Only the operation that owns busy calls this; other paths cancel its owner.
-	if p.prepared != nil {
-		_ = p.prepared.Close()
-	}
-	r.mu.Lock()
-	p.prepared, p.owns, p.busy = nil, false, false
-	r.mu.Unlock()
-}
-
-func (r *Router) closePendingPreparationsLocked() []*preparationState {
-	var closeNow []*preparationState
-	for _, p := range r.preparations {
-		p.timer.Stop()
-		if !p.owns {
-			continue
-		}
-		p.cancel()
-		p.status.State, p.status.ErrorCode, p.status.Revision = "failed", "connection_closed", p.status.Revision+1
-		if !p.busy {
-			p.busy = true
-			r.shutdownWG.Add(1)
-			closeNow = append(closeNow, p)
-		}
-	}
-	return closeNow
 }
 
 func (r *Router) prunePreparationsLocked() {

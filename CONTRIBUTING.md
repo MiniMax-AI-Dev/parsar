@@ -601,7 +601,9 @@ RunID/prompt. Handles belong to one daemon connection. Gateway preparation
 subscriptions do not register Runs. Per-handle revisions order asynchronous status
 snapshots; reject responses describe control errors without inventing run events.
 At most four native preparations may be preparing, ready, starting or closing.
-Ownership expires five minutes after acceptance, and retries do not extend it.
+Start admission expires five minutes after acceptance; retries do not extend it.
+Failed cleanup retains the native resource and its capacity until Close succeeds;
+terminal handles with retained resources cannot be pruned or started again.
 At most 64 request records are retained; retired request IDs may allocate a fresh
 handle, while old handles cannot consume replacements. This is not durable
 exactly-once preparation or cross-connection recovery.
@@ -614,7 +616,12 @@ captures cancellation/session references under the lock. Successful transfer sto
 the preparation deadline and uses the ordinary run pump and completion release;
 later preparation Release cannot cancel that Run. Released/expired status makes
 the handle unusable; asynchronous native cleanup still counts toward capacity and
-does not promise immediate OS quiescence. The public idle-text path uses this
+does not promise immediate OS quiescence. Release retries retained cleanup.
+Concurrent Shutdown calls join one tracked attempt within their caller deadlines;
+a later call retries failed preparation cleanup and reports any remaining error.
+A caller timeout does not discard ownership or repeat in-flight cleanup. These
+records remain connection-local, not a persistent remote retirement fence.
+The public idle-text path uses this
 admission/start wiring; complete Environment lifecycle remains required work.
 
 This daemon slice keeps existing best-effort cancellation and harness cleanup.
