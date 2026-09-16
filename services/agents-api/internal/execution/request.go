@@ -40,15 +40,12 @@ func (d *Dispatcher) executionRequest(ctx context.Context, session store.Session
 		ObserveSubagentIdentities: snapshot.Agent.MultiAgent.Enabled,
 		DisableSubagents:          !snapshot.Agent.MultiAgent.Enabled}
 	if len(mcp) != 0 {
-		selected, err := selectedMCPCredentials(snapshot)
+		selected, err := mcpExecutionCredentials(session.Engine, snapshot, mcp, caps)
 		if err != nil {
 			return proto.PromptRequestPayload{}, err
 		}
-		if len(selected) > 0 {
-			profileSupported := snapshot.Environment != nil && (snapshot.Environment.Type == "none" && caps.EnvironmentNone || snapshot.Environment.Type == "self_hosted" && caps.RemoteEnvironment && caps.Preparation && caps.MCPHTTPRemoteEnvironment && caps.MCPHTTPRemoteBearerAuth)
-			if d.Store == nil || !caps.MCPHTTPBearerAuth || !caps.MCPHTTPTools || session.Engine != "codex" || snapshot.Daemon != nil || !profileSupported {
-				return proto.PromptRequestPayload{}, errors.New("authenticated MCP execution is unavailable")
-			}
+		if len(selected) > 0 && d.Store == nil {
+			return proto.PromptRequestPayload{}, errors.New("authenticated MCP execution is unavailable")
 		}
 		for i := range mcp {
 			if binding, ok := selected[mcp[i].ServerLabel]; ok {

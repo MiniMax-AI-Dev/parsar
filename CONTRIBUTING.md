@@ -815,6 +815,14 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   thread creation/resume. Other engines and placements remain implementation gaps.
   Claude SDK admission additionally applies the supported values described in
   [its adapter profile](#claude-sdk-adapter-foundation), including before persistence.
+- Keep accepted public MCP credential profiles separate from private adapter
+  capabilities. The execution service declares the verified public bearer profiles
+  centrally; a daemon capability alone cannot open a public profile. Reuse frozen
+  binding validation at admission and later input, then the same MCP capability and
+  placement checks at device selection, final preclaim and request construction,
+  before scoped decryption. Native configuration and token injection stay in the
+  adapters. Add bounded shared checks while changing the related execution path;
+  do not defer known duplication to a general engine or plugin framework.
 - The shared MCP resolver preserves omitted/null `allowed_tools` as unrestricted
   and an explicit empty list as deny-all. Saved HTTP transport output includes
   `headers:{}`; the effective Session transport omits headers, matching the two
