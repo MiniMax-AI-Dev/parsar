@@ -17,16 +17,16 @@ func workspaceFixture(t *testing.T) Config {
 		t.Fatal(err)
 	}
 	t.Setenv("PARSAR_HOME", root)
-	for _, name := range []string{"workspace", "home", "state", "scratch", "secrets", "bin"} {
-		if err := os.Mkdir(filepath.Join(root, name), 0o700); err != nil {
+	for _, name := range []string{"workspace", "home", "state", "scratch", "secrets", "bin", "runtime/dist", "runtime/node_modules"} {
+		if err := os.MkdirAll(filepath.Join(root, name), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
-	config := Config{Node: filepath.Join(root, "bin", "node"), Entrypoint: filepath.Join(root, "bin", "main.js"), StateDir: filepath.Join(root, "state"),
+	config := Config{Node: filepath.Join(root, "bin", "node"), Entrypoint: filepath.Join(root, "runtime", "dist", "main.js"), StateDir: filepath.Join(root, "state"),
 		Env: []string{"ANTHROPIC_AUTH_TOKEN=selected-provider-fixture", "ANTHROPIC_BASE_URL=https://example.invalid"},
 		Workspace: &WorkspaceConfig{Directory: filepath.Join(root, "workspace"), HomeDir: filepath.Join(root, "home"),
 			ScratchDir: filepath.Join(root, "scratch"), ProtectedDirs: []string{filepath.Join(root, "secrets")}, DependencyPath: filepath.Join(root, "bin")}}
-	for _, name := range []string{config.Node, config.Entrypoint, filepath.Join(root, "bin", "runtime_check.js")} {
+	for _, name := range []string{config.Node, config.Entrypoint, filepath.Join(filepath.Dir(config.Entrypoint), "runtime_check.js")} {
 		if err := os.WriteFile(name, nil, 0o700); err != nil {
 			t.Fatal(err)
 		}

@@ -51,6 +51,10 @@ func workspaceEnvironment(config Config) (*workspaceProfile, []string, error) {
 	if w == nil || !filepath.IsAbs(config.Node) || !filepath.IsAbs(config.Entrypoint) {
 		return fail()
 	}
+	runtimeDir := filepath.Dir(filepath.Dir(config.Entrypoint))
+	if config.Entrypoint != filepath.Join(runtimeDir, "dist", "main.js") || !canonicalWorkspaceDir(runtimeDir) {
+		return fail()
+	}
 	// Keep the exact paths used by execution and readiness outside mutable roots.
 	// A symlinked entrypoint must not select an unchecked sibling companion.
 	codePaths := []string{config.Node, config.Entrypoint, filepath.Join(filepath.Dir(config.Entrypoint), "runtime_check.js")}
@@ -63,7 +67,7 @@ func workspaceEnvironment(config Config) (*workspaceProfile, []string, error) {
 	}
 	roots := append([]string{w.Directory, config.StateDir, w.HomeDir, w.ScratchDir}, w.ProtectedDirs...)
 	for i, dir := range roots {
-		if !canonicalWorkspaceDir(dir) {
+		if !canonicalWorkspaceDir(dir) || pathContains(runtimeDir, dir) || pathContains(dir, runtimeDir) {
 			return fail()
 		}
 		for _, previous := range roots[:i] {

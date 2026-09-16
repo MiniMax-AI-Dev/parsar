@@ -133,3 +133,44 @@ func TestWorkspaceUsesCanonicalDependencyPaths(t *testing.T) {
 		t.Fatal("trusted launch retained a mutable dependency alias")
 	}
 }
+
+func TestWorkspaceRejectsPackagedRuntimeOverlapBeforeReadiness(t *testing.T) {
+	for _, name := range []string{"workspace", "state", "home", "scratch", "protected", "runtime-root", "runtime-parent", "unexpected-layout"} {
+		t.Run(name, func(t *testing.T) {
+			config := workspaceFixture(t)
+			marker := filepath.Join(filepath.Dir(config.StateDir), "unexpected-launch")
+			if err := os.WriteFile(config.Node, []byte("#!/bin/sh\nprintf started > '"+marker+"'\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			runtimeDir := filepath.Dir(filepath.Dir(config.Entrypoint))
+			dependencies := filepath.Join(runtimeDir, "node_modules")
+			switch name {
+			case "workspace":
+				config.Workspace.Directory = dependencies
+			case "state":
+				config.StateDir = dependencies
+			case "home":
+				config.Workspace.HomeDir = dependencies
+			case "scratch":
+				config.Workspace.ScratchDir = dependencies
+			case "protected":
+				config.Workspace.ProtectedDirs = []string{dependencies}
+			case "runtime-root":
+				config.Workspace.Directory = runtimeDir
+			case "runtime-parent":
+				config.Workspace.Directory = filepath.Dir(runtimeDir)
+			case "unexpected-layout":
+				config.Entrypoint = filepath.Join(filepath.Dir(config.Entrypoint), "other.js")
+				if err := os.WriteFile(config.Entrypoint, nil, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := CheckRuntime(t.Context(), config); err == nil {
+				t.Fatal("invalid runtime binding passed readiness")
+			}
+			if _, err := os.Stat(marker); !os.IsNotExist(err) {
+				t.Fatal("invalid runtime binding launched a credential-bearing child")
+			}
+		})
+	}
+}

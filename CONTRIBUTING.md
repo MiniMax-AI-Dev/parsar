@@ -1404,6 +1404,8 @@ unchanged; cwd and request options cannot select the workspace policy.
 The workspace, managed history, runtime home, scratch and protected secret roots
 must be pre-existing canonical, separate directories. Runtime code and dependency
 search paths must remain outside those roots and be read-only in the placement.
+The complete packaged runtime directory, including `node_modules`, must not
+overlap any bound root. Its bridge uses the packaged `dist/main.js` layout.
 Node, the bridge entrypoint and its readiness companion must use canonical file
 paths. Dependency aliases outside mutable roots are resolved before use in PATH;
 aliases within mutable roots are rejected even if their current target is safe.
