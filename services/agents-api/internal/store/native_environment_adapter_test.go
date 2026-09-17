@@ -116,6 +116,9 @@ func testNativeDaemonRemoteEnvironmentWithArtifact(t *testing.T, prepared bool, 
 	memory, instruction := uuid.NewString(), "REMOTE_"+uuid.NewString()
 	local := prepareDaemonRemoteWorkspace(t, root, instruction)
 	container := startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, server.URL, environment.ID, credential)
+	if artifact != nil {
+		artifact.container = container
+	}
 	awaitDaemonRemoteCondition(t, ctx, 30*time.Second, "executor registration", func() bool {
 		connected, e := registry.Connected(ctx, h.tenant, environment.ID)
 		return e == nil && connected

@@ -37,6 +37,7 @@ type nativeHarnessArtifact struct {
 	proof         map[string]any
 	owners        map[int]bool
 	readyOwners   []nativeHarnessOwner
+	container     string
 }
 
 type nativeHarnessOwner struct {

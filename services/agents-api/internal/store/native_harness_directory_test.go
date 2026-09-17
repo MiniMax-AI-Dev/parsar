@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -19,7 +20,14 @@ func (a *nativeHarnessArtifact) observeDirectories(t *testing.T, ctx context.Con
 		t.Fatal(err)
 	}
 	link := filepath.Join(local, "directory-outside")
-	if err := os.Symlink("/etc", link); err != nil && !os.IsExist(err) {
+	outside := "/tmp/parsar-directory-isolation-" + a.environment
+	if err := exec.CommandContext(ctx, "docker", "exec", a.container, "mkdir", "-p", outside+"/child").Run(); err != nil {
+		t.Fatal("outside directory fixture was not created", err)
+	}
+	if err := exec.CommandContext(ctx, "docker", "exec", a.container, "test", "-d", outside+"/child").Run(); err != nil {
+		t.Fatal("outside directory fixture does not exist", err)
+	}
+	if err := os.Symlink(outside, link); err != nil && !os.IsExist(err) {
 		t.Fatal(err)
 	}
 	type directoryResult struct {
@@ -69,7 +77,7 @@ func (a *nativeHarnessArtifact) observeDirectories(t *testing.T, ctx context.Con
 		observations, _ := a.proof["directory_observations"].([]map[string]any)
 		a.proof["directory_observations"] = append(observations, map[string]any{"phase": phase, "path": check.path, "owner": owner, "result": response.Directory})
 	}
-	for _, path := range []string{"../outside", "/etc", "directory-outside", "directory-outside/ssh"} {
+	for _, path := range []string{"../outside", "/etc", "directory-outside", "directory-outside/child"} {
 		response := a.request(t, ctx, owner, map[string]any{"environment_id": a.environment, "path": path, "operation": "list_directory", "max_entries": 16}, 16<<10)
 		if response.Error == "" || len(response.Directory) != 0 {
 			t.Fatal("directory isolation admitted outside view", path)
