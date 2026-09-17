@@ -1,5 +1,62 @@
 use super::*;
 
+#[tokio::test(start_paused = true)]
+async fn runner_completion_keeps_the_original_admitted_deadline() -> Result<()> {
+    let binding = Binding {
+        native_binary: "/native".into(),
+        environment: "expected".into(),
+        workspace: "/workspace".into(),
+        ipc_root: "/unused".into(),
+    };
+    let stopping = CancellationToken::new();
+    let (server, mut client) = UnixStream::pair()?;
+    client
+        .write_all(b"{\"environment_id\":\"expected\",\"path\":\"file\"}\n")
+        .await?;
+    let (admitted, mut admission) = oneshot::channel();
+    let (complete, completion) = oneshot::channel();
+    let (finish_runner, runner_done) = oneshot::channel();
+    let files = async {
+        exchange(
+            server,
+            &binding,
+            REQUEST_DEADLINE,
+            &stopping,
+            |_path| async {
+                admitted.send(()).expect("observe admission");
+                completion.await.expect("retain native response")
+            },
+        )
+        .await?
+        .require_settled()
+    };
+    let operation = crate::owner::supervise(
+        async { runner_done.await.map_err(Into::into) },
+        files,
+        &stopping,
+    );
+    tokio::pin!(operation);
+    let started = Instant::now();
+    assert!(futures::poll!(&mut operation).is_pending());
+    admission.try_recv()?;
+    tokio::time::advance(Duration::from_secs(6)).await;
+    finish_runner.send(()).expect("runner still owned");
+    assert!(futures::poll!(&mut operation).is_pending());
+    assert!(stopping.is_cancelled());
+    assert!(!complete.is_closed());
+    tokio::time::advance(Duration::from_millis(3999)).await;
+    assert!(futures::poll!(&mut operation).is_pending());
+    tokio::time::advance(Duration::from_millis(1)).await;
+    let error = operation
+        .await
+        .expect_err("original deadline must fail the owner");
+    assert_eq!(Instant::now() - started, REQUEST_DEADLINE);
+    assert_eq!(error.to_string(), "private file operation did not drain");
+    assert!(error.root_cause().to_string().contains("deadline expired"));
+    assert!(complete.send(Ok(json!({"size": 42}))).is_err());
+    Ok(())
+}
+
 #[tokio::test]
 async fn admitted_operation_survives_caller_detach_and_owner_stop() -> Result<()> {
     for stop_owner in [false, true] {
