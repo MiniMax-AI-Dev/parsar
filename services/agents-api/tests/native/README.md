@@ -270,3 +270,40 @@ explicit production-adoption limit. Its dedicated first/cancel/fresh scenario
 checks observed interruption, exact native termination ownership, independent
 command exit, post-cancel Files and retained interrupted history; ordinary
 first/fresh acceptance does not cover cancellation.
+
+
+## Public cancellation with the optional harness
+
+`TestNativePublicSelfHostedCancellationStandalone` can use the separately built
+private harness through the actual daemon adapter. Set
+`PARSAR_PUBLIC_HARNESS_ARTIFACT` to its absolute path, alongside the existing
+built server/daemon, pinned native helper/executor, SDK, image and private key-file
+inputs. `PARSAR_PLACEMENT_MODEL` selects the real model for this fixture (default
+`MiniMax-M3`); `PARSAR_PLACEMENT_MODEL_BASE_URL` selects its native Responses
+provider endpoint (default `https://api.minimax.cn/v1`). These are test inputs,
+not public API fields or production configuration options.
+
+This mode runs the daemon in a task-owned Linux amd64 container using the existing
+exact-digest executor image, which must include `strace` for this opt-in mode. It mounts the three binaries and host CA bundle read-only, uses native
+`/etc/codex/config.toml`, and shares only required task daemon state and a short,
+private HOME. It does not mount the shared operator home, Docker socket, API key
+file or observer directory. Host networking connects to the existing local test
+API/proxy. Explicit process proxy settings override Docker client defaults. This
+is a qualified test placement, not a production isolation profile.
+Provider credentials are passed through a private environment file and removed
+on cleanup. No shell wrapper launches the harness.
+
+`strace` follows the daemon from startup through final retries and records every
+successful harness exec, including short-lived launches, in separate per-process
+files. Owner snapshots do not supply launch counts. The tracer runs with the same
+non-root user, dropped capabilities and default seccomp policy; no ptrace privilege
+or native sandbox relaxation is added. Only exec syscalls are recorded, without
+expanding environment values.
+
+The fixture observes actual executable identity and Environment/workspace binding
+before cancellation and during cold continuation. Existing command, file, history,
+retry, receipt and SDK/raw-event assertions remain in force; native process and
+private IPC release are checked separately. The default stock-helper fixture is
+unchanged. This opt-in currently applies only to the public cancellation fixture.
+Its success does not qualify public Files, interrupted-work replay, general remote
+mutation retirement, other engines or complete protocol compatibility.

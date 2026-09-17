@@ -490,6 +490,11 @@ Prepared-to-Session transfer and RPC child; remove IPC only after that same chil
 has been reaped, including initialization failure and Close timeouts. No wrapper,
 new capability, public Files admission or default daemon selection is introduced. Metadata path checks do not qualify filesystem isolation, idle
 ownership, remote retirement, or the existing RPC's full backpressure behavior.
+Public cancellation qualification for this artifact reuses the fixed SDK/raw HTTP
+fixture with a task-isolated native system configuration and independently observed
+owners. Preserve existing behavioral assertions and keep that test placement
+separate from production isolation or public Files admission; see the
+[native acceptance guide](services/agents-api/tests/native/README.md#public-cancellation-with-the-optional-harness).
 
 The private [raw Files composition](services/agents-api/tests/native/raw_files/README.md)
 reuses the pinned native socket client and the same typed Files/registry fixture.
