@@ -18,6 +18,7 @@ type Worker struct {
 	lease          *store.ExecutionLease
 	directoryReads chan directoryReadRequest
 	stopped        chan struct{}
+	stopOnce       sync.Once
 }
 
 func StartWorker(ctx context.Context, dispatcher *Dispatcher) (*Worker, error) {
@@ -77,7 +78,7 @@ func (w *Worker) CreateSessionStream(ctx context.Context, tenant string, input s
 
 // Run retains queued work across restarts, but never replays an uncertain claim.
 func (w *Worker) Run(ctx context.Context) error {
-	defer close(w.stopped)
+	defer w.stopOnce.Do(func() { close(w.stopped) })
 	ctx, cancel := context.WithCancel(ctx)
 	var running sync.WaitGroup
 	defer func() {
