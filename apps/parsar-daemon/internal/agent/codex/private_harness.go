@@ -70,6 +70,7 @@ func configurePrivateHarness(cfg *JSONRPCConfig, binary string, remote *proto.Re
 	cfg.Binary = binary
 	cfg.Env = append(cfg.Env,
 		"PARSAR_CODEX_HARNESS_NATIVE="+helper,
+		"PARSAR_CODEX_HARNESS_DIRECTORY_HELPER="+os.Getenv("PARSAR_CODEX_DIRECTORY_HELPER"),
 		"PARSAR_CODEX_HARNESS_ENVIRONMENT="+remote.ID,
 		"PARSAR_CODEX_HARNESS_WORKSPACE="+remote.WorkspaceDirectory,
 		"PARSAR_CODEX_HARNESS_IPC_ROOT="+harness.root)

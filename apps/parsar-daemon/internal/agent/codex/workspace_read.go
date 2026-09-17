@@ -46,19 +46,11 @@ func (s *Session) ReadWorkspaceFile(ctx context.Context, path string, maxBytes i
 }
 
 func (s *Session) admitWorkspaceRead(ctx context.Context, path string, maxBytes int) ([]byte, error) {
-	if s.harness == nil {
-		return nil, agent.ErrWorkspaceReadUnsupported
+	if err := s.workspaceReadAvailable(ctx); err != nil {
+		return nil, err
 	}
-	if ctx == nil || ctx.Err() != nil || s.cancelCtx.Err() != nil || s.cancelled.Load() || s.terminal.Load() || !s.rpc.Alive() {
-		return nil, agent.ErrWorkspaceReadUnavailable
-	}
-	if maxBytes < 1 || maxBytes > workspaceReadMaxBytes || path == "" || len(path) > 8192 || strings.ContainsAny(path, "\x00\\\r\n") {
+	if maxBytes < 1 || maxBytes > workspaceReadMaxBytes || !workspaceRelativePath(path, false) {
 		return nil, agent.ErrWorkspaceReadInvalid
-	}
-	for _, part := range strings.Split(path, "/") {
-		if part == "" || part == "." || part == ".." {
-			return nil, agent.ErrWorkspaceReadInvalid
-		}
 	}
 	frame, err := json.Marshal(struct {
 		Environment string `json:"environment_id"`
@@ -66,7 +58,39 @@ func (s *Session) admitWorkspaceRead(ctx context.Context, path string, maxBytes 
 		Path        string `json:"path"`
 		MaxBytes    int    `json:"max_bytes"`
 	}{s.harness.environment, "read", path, maxBytes})
-	if err != nil || len(frame)+1 > 8192 {
+	if err != nil {
+		return nil, agent.ErrWorkspaceReadInvalid
+	}
+	return s.claimWorkspaceRead(frame)
+}
+
+func (s *Session) workspaceReadAvailable(ctx context.Context) error {
+	if s.harness == nil {
+		return agent.ErrWorkspaceReadUnsupported
+	}
+	if ctx == nil || ctx.Err() != nil || s.cancelCtx.Err() != nil || s.cancelled.Load() || s.terminal.Load() || !s.rpc.Alive() {
+		return agent.ErrWorkspaceReadUnavailable
+	}
+	return nil
+}
+
+func workspaceRelativePath(path string, allowRoot bool) bool {
+	if path == "" {
+		return allowRoot
+	}
+	if len(path) > 8192 || strings.ContainsAny(path, "\x00\\\r\n") {
+		return false
+	}
+	for _, part := range strings.Split(path, "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Session) claimWorkspaceRead(frame []byte) ([]byte, error) {
+	if len(frame)+1 > 8192 {
 		return nil, agent.ErrWorkspaceReadInvalid
 	}
 	h := s.harness
@@ -83,6 +107,15 @@ func (s *Session) admitWorkspaceRead(ctx context.Context, path string, maxBytes 
 }
 
 func (h *privateHarness) readWorkspaceFile(ctx context.Context, frame []byte, maxBytes int) (result agent.WorkspaceReadResult, err error) {
+	err = h.exchangeWorkspaceRead(ctx, frame, base64.StdEncoding.EncodedLen(maxBytes)+1024, func(response []byte) error {
+		var decodeErr error
+		result, decodeErr = decodeWorkspaceRead(response, maxBytes)
+		return decodeErr
+	})
+	return result, err
+}
+
+func (h *privateHarness) exchangeWorkspaceRead(ctx context.Context, frame []byte, limit int, decode func([]byte) error) (err error) {
 	defer func() {
 		h.readMu.Lock()
 		h.reading = false
@@ -98,21 +131,20 @@ func (h *privateHarness) readWorkspaceFile(ctx context.Context, frame []byte, ma
 	defer cancel()
 	conn, dialErr := (&net.Dialer{}).DialContext(operation, "unix", filepath.Join(h.root, "files.sock"))
 	if dialErr != nil {
-		return result, agent.ErrWorkspaceReadUnavailable
+		return agent.ErrWorkspaceReadUnavailable
 	}
 	defer conn.Close()
 	if conn.SetDeadline(deadline) != nil {
-		return result, agent.ErrWorkspaceReadUnavailable
+		return agent.ErrWorkspaceReadUnavailable
 	}
 	if n, writeErr := conn.Write(frame); writeErr != nil || n != len(frame) {
-		return result, agent.ErrWorkspaceReadUncertain
+		return agent.ErrWorkspaceReadUncertain
 	}
-	limit := base64.StdEncoding.EncodedLen(maxBytes) + 1024
 	response, readErr := bufio.NewReader(io.LimitReader(conn, int64(limit+1))).ReadBytes('\n')
 	if readErr != nil || len(response) > limit {
-		return result, agent.ErrWorkspaceReadUncertain
+		return agent.ErrWorkspaceReadUncertain
 	}
-	return decodeWorkspaceRead(response, maxBytes)
+	return decode(response)
 }
 
 func decodeWorkspaceRead(frame []byte, maxBytes int) (agent.WorkspaceReadResult, error) {
@@ -130,18 +162,7 @@ func decodeWorkspaceRead(frame []byte, maxBytes int) (agent.WorkspaceReadResult,
 		return agent.WorkspaceReadResult{}, agent.ErrWorkspaceReadUncertain
 	}
 	if response.Error != nil {
-		switch *response.Error {
-		case "not_found":
-			return agent.WorkspaceReadResult{}, fs.ErrNotExist
-		case "permission_denied":
-			return agent.WorkspaceReadResult{}, fs.ErrPermission
-		case "invalid_request", "invalid_path":
-			return agent.WorkspaceReadResult{}, agent.ErrWorkspaceReadInvalid
-		case "environment_unavailable", "wrong_environment", "native_error":
-			return agent.WorkspaceReadResult{}, agent.ErrWorkspaceReadUnavailable
-		default:
-			return agent.WorkspaceReadResult{}, agent.ErrWorkspaceReadUncertain
-		}
+		return agent.WorkspaceReadResult{}, workspaceReadError(*response.Error)
 	}
 	read := response.Read
 	if read.Data == nil || read.Truncated == nil || read.Closed == nil || !*read.Closed {
@@ -152,4 +173,21 @@ func decodeWorkspaceRead(frame []byte, maxBytes int) (agent.WorkspaceReadResult,
 		return agent.WorkspaceReadResult{}, agent.ErrWorkspaceReadUncertain
 	}
 	return agent.WorkspaceReadResult{Data: data, Truncated: *read.Truncated}, nil
+}
+
+func workspaceReadError(code string) error {
+	switch code {
+	case "unsupported":
+		return agent.ErrWorkspaceReadUnsupported
+	case "not_found":
+		return fs.ErrNotExist
+	case "permission_denied":
+		return fs.ErrPermission
+	case "invalid_request", "invalid_path":
+		return agent.ErrWorkspaceReadInvalid
+	case "environment_unavailable", "wrong_environment", "native_error", "too_large":
+		return agent.ErrWorkspaceReadUnavailable
+	default:
+		return agent.ErrWorkspaceReadUncertain
+	}
 }

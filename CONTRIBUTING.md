@@ -532,6 +532,28 @@ interface, without selecting an engine by name. The optional Codex artifact uses
 its existing same-manager socket; stock Codex and other adapters remain unsupported.
 This control is not a public Files endpoint or capability advertisement.
 
+The separate optional `agent.WorkspaceDirectoryLister` observes one workspace-relative
+directory on the existing Prepared/Session owner; empty path selects its root.
+Return single-component names, entry kind, regular-file byte size and explicit
+truncation only after directory/metadata access and handle cleanup settle. Reuse
+byte-read admission, uncertainty and caller-detach ownership where applicable.
+Do not promise a snapshot, recursive traversal or public pagination through this
+private interface. Codex uses the same manager's native process backend to invoke
+an operator-installed `agents-api-codex-directory` through explicit argv, without a
+shell. `PARSAR_CODEX_DIRECTORY_HELPER` selects the executor-side executable and is
+frozen in the private child binding; an absent or invalid selector rejects only
+this operation. Keep that qualified installation outside the writable workspace.
+Require the verified Linux sandbox, read-only workspace/helper runtime access and
+restricted network. The helper anchors all traversal to no-follow descriptors and
+bounds enumeration before collecting names. Accept only a complete versioned result
+after native exit/output close. Account for native output and terminal event
+sequence numbers: retained-output eviction or a capped response's `closed` flag
+cannot establish completeness. Reject missing/oversized/invalid output; terminate
+and confirm exit/output close when rejection precedes settlement. Keep the existing
+retained wait and owner failure on native uncertainty; never retry unknown work.
+Private directory support alone does not enable a
+daemon control operation, public Files route or capability advertisement.
+
 Bound encoded request payloads to 8 KiB and correlation IDs to 128 bytes before
 admission. Do not echo oversized IDs; omit oversized trace metadata in replies.
 Bound raw control results to 1 MiB within the existing 4 MiB transport frame; the

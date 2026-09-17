@@ -25,6 +25,11 @@ func TestNativeDaemonHarnessArtifact(t *testing.T) {
 	if artifact == "" {
 		t.Skip("explicit final private harness artifact required")
 	}
+	helper := os.Getenv("PARSAR_DIRECTORY_HELPER_ARTIFACT")
+	if !filepath.IsAbs(helper) {
+		t.Skip("explicit directory helper artifact required")
+	}
+	t.Setenv("PARSAR_CODEX_DIRECTORY_HELPER", "/usr/local/bin/agents-api-codex-directory")
 	testNativeDaemonRemoteEnvironmentWithArtifact(t, true, artifact)
 }
 
@@ -37,6 +42,7 @@ type nativeHarnessArtifact struct {
 	proof         map[string]any
 	owners        map[int]bool
 	readyOwners   []nativeHarnessOwner
+	container     string
 }
 
 type nativeHarnessOwner struct {
@@ -207,9 +213,10 @@ func (a *nativeHarnessArtifact) expectError(t *testing.T, ctx context.Context, o
 }
 
 type nativeHarnessMetadataResponse struct {
-	Metadata json.RawMessage `json:"metadata"`
-	Read     json.RawMessage `json:"read"`
-	Error    string          `json:"error"`
+	Metadata  json.RawMessage `json:"metadata"`
+	Read      json.RawMessage `json:"read"`
+	Directory json.RawMessage `json:"directory"`
+	Error     string          `json:"error"`
 }
 
 func (a *nativeHarnessArtifact) request(t *testing.T, ctx context.Context, owner nativeHarnessOwner, request map[string]any, responseLimit int64) nativeHarnessMetadataResponse {

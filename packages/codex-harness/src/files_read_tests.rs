@@ -2,6 +2,7 @@ use super::*;
 
 fn binding() -> Binding {
     Binding {
+        directory_helper: Some("/usr/local/bin/agents-api-codex-directory".into()),
         native_binary: "/native".into(),
         environment: "expected".into(),
         workspace: "/workspace".into(),
