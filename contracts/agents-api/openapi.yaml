@@ -1463,7 +1463,8 @@ paths:
         Each page rereads the complete bounded directory; changed file paths/sizes
         invalidate continuation locally with 400. There is no snapshot guarantee.
         Truncated or uncertain native results fail with 503 without returning a partial
-        page. This read never starts a Turn or changes connection state.
+        page. This read never starts a Turn or admits model input. Actual transport
+        disconnect/reconnect events remain observable.
       parameters:
       - description: agents=v1
         in: header
