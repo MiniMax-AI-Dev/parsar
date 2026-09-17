@@ -532,6 +532,18 @@ interface, without selecting an engine by name. The optional Codex artifact uses
 its existing same-manager socket; stock Codex and other adapters remain unsupported.
 This control is not a public Files endpoint or capability advertisement.
 
+The separate optional `agent.WorkspaceDirectoryLister` observes one workspace-relative
+directory on the existing Prepared/Session owner; empty path selects its root.
+Return single-component names, entry kind, regular-file byte size and explicit
+truncation only after directory/metadata access and handle cleanup settle. Reuse
+byte-read admission, uncertainty and caller-detach ownership where applicable.
+Do not promise a snapshot, recursive traversal or public pagination through this
+private interface. Codex uses its same-manager socket, native depth-zero bounded
+walk and metadata with a read-only filesystem context. Its native walk omits
+symlinks and non-regular entries; record that limitation and qualify actual path
+isolation before public use. Private directory support alone does not enable a
+daemon control operation, public Files route or capability advertisement.
+
 Bound encoded request payloads to 8 KiB and correlation IDs to 128 bytes before
 admission. Do not echo oversized IDs; omit oversized trace metadata in replies.
 Bound raw control results to 1 MiB within the existing 4 MiB transport frame; the

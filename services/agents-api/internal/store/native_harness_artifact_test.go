@@ -207,9 +207,10 @@ func (a *nativeHarnessArtifact) expectError(t *testing.T, ctx context.Context, o
 }
 
 type nativeHarnessMetadataResponse struct {
-	Metadata json.RawMessage `json:"metadata"`
-	Read     json.RawMessage `json:"read"`
-	Error    string          `json:"error"`
+	Metadata  json.RawMessage `json:"metadata"`
+	Read      json.RawMessage `json:"read"`
+	Directory json.RawMessage `json:"directory"`
+	Error     string          `json:"error"`
 }
 
 func (a *nativeHarnessArtifact) request(t *testing.T, ctx context.Context, owner nativeHarnessOwner, request map[string]any, responseLimit int64) nativeHarnessMetadataResponse {

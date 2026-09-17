@@ -24,6 +24,9 @@ use crate::options::Binding;
 const MAX_FRAME: usize = 8192;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(10);
 
+#[path = "files_directory.rs"]
+mod directory;
+
 pub struct PrivateSocket {
     listener: UnixListener,
     root: PathBuf,
@@ -123,6 +126,7 @@ struct Request {
     #[serde(default)]
     operation: Operation,
     max_bytes: Option<usize>,
+    max_entries: Option<usize>,
 }
 
 #[derive(Default, Deserialize)]
@@ -131,11 +135,13 @@ enum Operation {
     #[default]
     Metadata,
     Read,
+    ListDirectory,
 }
 
 struct Command {
     path: PathUri,
     read_limit: Option<usize>,
+    directory: Option<(PathUri, usize)>,
 }
 
 fn request_command(frame: &[u8], binding: &Binding) -> Result<Command, &'static str> {
@@ -146,16 +152,31 @@ fn request_command(frame: &[u8], binding: &Binding) -> Result<Command, &'static 
     if request.environment_id != binding.environment {
         return Err("wrong_environment");
     }
-    let read_limit = match (request.operation, request.max_bytes) {
-        (Operation::Metadata, None) => None,
-        (Operation::Read, Some(limit)) if (1..=MAX_BOUNDED_FILE_READ_BYTES).contains(&limit) => {
-            Some(limit)
-        }
-        _ => return Err("invalid_request"),
-    };
+    let (read_limit, directory_limit) =
+        match (request.operation, request.max_bytes, request.max_entries) {
+            (Operation::Metadata, None, None) => (None, None),
+            (Operation::Read, Some(limit), None)
+                if (1..=MAX_BOUNDED_FILE_READ_BYTES).contains(&limit) =>
+            {
+                (Some(limit), None)
+            }
+            (Operation::ListDirectory, None, Some(limit))
+                if (1..=directory::MAX_ENTRIES).contains(&limit) =>
+            {
+                (None, Some(limit))
+            }
+            _ => return Err("invalid_request"),
+        };
     let path = Path::new(&request.path);
-    if request.path.is_empty()
+    if (request.path.is_empty() && directory_limit.is_none())
         || request.path.contains(['\0', '\\'])
+        || (directory_limit.is_some()
+            && (request.path.contains(['\r', '\n'])
+                || (!request.path.is_empty()
+                    && request
+                        .path
+                        .split('/')
+                        .any(|part| part.is_empty() || part == "." || part == ".."))))
         || !path
             .components()
             .all(|part| matches!(part, Component::Normal(_)))
@@ -166,6 +187,13 @@ fn request_command(frame: &[u8], binding: &Binding) -> Result<Command, &'static 
         path: PathUri::from_host_native_path(binding.workspace.join(path))
             .map_err(|_| "invalid_path")?,
         read_limit,
+        directory: directory_limit
+            .map(|limit| {
+                PathUri::from_host_native_path(binding.workspace.clone())
+                    .map(|workspace| (workspace, limit))
+                    .map_err(|_| "invalid_path")
+            })
+            .transpose()?,
     })
 }
 
@@ -196,6 +224,9 @@ async fn execute(manager: &EnvironmentManager, command: Command) -> Result<Value
     let environment = ready_environment(manager)
         .await
         .map_err(OperationError::Rejected)?;
+    if let Some((workspace, limit)) = command.directory {
+        return directory::list(&environment, &workspace, &command.path, limit).await;
+    }
     if let Some(limit) = command.read_limit {
         let read = environment
             .read_file_bounded(&command.path, limit)
@@ -327,3 +358,7 @@ mod tests;
 #[cfg(test)]
 #[path = "files_read_tests.rs"]
 mod read_tests;
+
+#[cfg(test)]
+#[path = "files_directory_tests.rs"]
+mod directory_tests;

@@ -85,7 +85,15 @@ private adapter bound, not a public protocol limit. The response has `read` with
 base64 `data_base64`, `truncated` and `close_acknowledged: true`. Reads use native
 blocks of at most 1 MiB and one extra byte to distinguish an exact-bound file from
 a truncated prefix. No snapshot consistency is promised for a changing file.
-There is no write or listing method.
+An explicit `operation: "list_directory"` requires `max_entries` from 1 through
+4096; an empty relative `path` selects the workspace root. It uses the native
+bounded walk at depth zero and native no-follow metadata in a read-only filesystem
+permission context rooted at the bound workspace. `directory` contains `entries`
+(single-component `name`, `kind`, and `size_bytes` for regular files) and explicit
+`truncated`. The pinned walk omits symlinks and non-regular entries; later metadata
+may observe a type change. This live private observation is not a snapshot or
+complete public Files semantics. Native errors do not return a partial success.
+There is no write method.
 
 The bounded-read hook captures one native RPC connection before opening a handle.
 Open, ordered block reads and cleanup use that exact connection without recovery
@@ -136,7 +144,9 @@ Raw stdio avoids a typed-notification parser and preserves the native transport.
 This does not mean the Go adapter stores unknown notifications or that every
 existing RPC queue/write path is production-qualified. IPC frame, concurrency and
 deadline bounds do not establish general native filesystem resource limits.
-Private metadata and reads do not prove path isolation, public Files semantics, a reusable idle
+Private metadata and byte reads do not prove path isolation. Directory access needs
+separate actual native permission/isolation acceptance. None of these observations
+establishes public Files semantics, a reusable idle
 owner, Core authority, successor safety or complete output fidelity. These remain
 separate admission and acceptance work.
 
