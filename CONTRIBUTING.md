@@ -644,7 +644,11 @@ Require an existing disjoint staging directory on the destination filesystem.
 The operator must protect that directory and its ancestors from native tool and
 background-process writes; same-user mode bits alone do not do so. Use separate
 native filesystem policies for the installer and workspace tools, with a dedicated
-staging directory per Environment. The helper cannot attest that placement rule;
+staging directory per Environment. The qualified installer sees one writable parent
+containing only that Environment's workspace and staging; tools retain workspace-only
+write access. Keep history, credentials and other tenants outside that parent.
+Separate sandbox bind mounts may reject rename even on the same backing filesystem;
+never fall back to copying. The helper cannot attest that placement rule;
 public admission must establish it. Concurrent workspace writers need not be
 globally stopped to protect staged bytes. Temporary-file cleanup is best effort.
 A queued stdin receipt, missing helper result or process termination is not a file

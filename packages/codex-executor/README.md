@@ -72,8 +72,12 @@ The optional `agents-api-codex-write` helper addresses two pinned native write
 limitations: hard-link targets are modified in place, and base64 encoding a
 50 MiB file exceeds the native 64 MiB message bound. Install this helper outside
 the writable workspace and invoke it directly through the native process API,
-with restricted network and a filesystem policy limited to that workspace and
-required helper/runtime reads, plus write access to the private staging directory.
+with restricted network and the required helper/runtime reads. The qualified
+installer policy grants write access to one dedicated per-Environment parent
+containing only workspace and staging; ordinary native tools can write only the
+workspace. Keep credentials, native history and other Environments outside that
+parent. Separate writable mount entries can make rename fail with EXDEV even
+when their backing filesystem matches; the helper must reject that layout.
 It does not authorize callers or enable Files.create.
 
 Arguments are the authorized absolute root, a nonempty relative file path,
@@ -90,9 +94,10 @@ means queued input, not committed file contents.
 
 The helper reuses held-directory no-follow traversal, rejects existing nonregular
 targets and requires an existing parent. It writes a fresh mode-0600 temporary
-file in the held staging directory with the existing rustix openat/renameat operations, checks the declared byte count and
-digest, syncs the file, then replaces the destination directory entry and syncs
-both directories. Existing hard links retain their original inode and contents. This
+file in the held staging directory with existing rustix openat/renameat operations,
+checks the declared byte count and digest, syncs the file, then replaces the
+destination directory entry and syncs both directories. Existing hard links retain
+their original inode and contents. This
 private replacement policy does not preserve destination mode/ownership metadata
 or establish official overwrite semantics. The operator must protect staging and
 its ancestors from native tools and background processes. A dedicated staging
@@ -112,7 +117,8 @@ native exit/output close; exit zero alone is insufficient. Input errors preserve
 the old destination provided staging remains protected; independent workspace
 writers can still change that destination themselves. Temporary-file cleanup
 is best effort: permission or I/O errors, as well as forced termination, can leave
-a `.parsar-upload-*` file in the private staging directory. Never interpret it as a completed upload.
+a `.parsar-upload-*` file in the private staging directory. Never interpret it as a
+completed upload.
 A missing receipt remains unknown and must not trigger automatic replay. This
 helper does not fence a replacement owner after remote transport or service loss;
 public admission still needs operation ownership and recovery handling.
