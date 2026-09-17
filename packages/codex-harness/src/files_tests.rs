@@ -53,7 +53,11 @@ async fn runner_completion_keeps_the_original_admitted_deadline() -> Result<()> 
     let error = operation
         .await
         .expect_err("original deadline must fail the owner");
-    assert_eq!(Instant::now() - started, REQUEST_DEADLINE);
+    // Tokio's timer wheel may round the original deadline up by one millisecond.
+    assert!(
+        (REQUEST_DEADLINE..=REQUEST_DEADLINE + Duration::from_millis(1))
+            .contains(&(Instant::now() - started))
+    );
     assert_eq!(error.to_string(), "private file operation did not drain");
     assert!(error.root_cause().to_string().contains("deadline expired"));
     assert!(complete.send(Ok(json!({"size": 42}))).is_err());
