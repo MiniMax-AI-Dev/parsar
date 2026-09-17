@@ -77,8 +77,15 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	for _, kv := range plan.ExtraConfig {
 		rpcCfg.ExtraArgs = append(rpcCfg.ExtraArgs, "-c", kv[0]+"="+kv[1])
 	}
+	harness, err := configurePrivateHarness(&rpcCfg, cfg.harnessBinary, req.RemoteEnvironment)
+	if err != nil {
+		cancelFn()
+		plan.Cleanup()
+		return nil, err
+	}
 
 	rpc := NewJSONRPCClient(rpcCfg)
+	defer harness.releaseWith(rpc)
 
 	s := &Session{
 		functions:                 functions,
@@ -106,6 +113,12 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 		cancelFn()
 		plan.Cleanup()
 		return nil, fmt.Errorf("codex: rpc start: %w", err)
+	}
+	if err := harness.verify(); err != nil {
+		cancelFn()
+		_ = rpc.Close()
+		plan.Cleanup()
+		return nil, err
 	}
 	if req.DisableExecutionEnvironment {
 		if err := verifyNoExecutionEnvironment(cancelCtx, rpc); err != nil {

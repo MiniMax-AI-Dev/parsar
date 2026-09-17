@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,16 +24,18 @@ const terminalSendTimeout = 2 * time.Second
 // sessionConfig is the cross-cutting knob bag — production callers go
 // through Factory which uses defaults.
 type sessionConfig struct {
-	codexBinary string
-	logger      *slog.Logger
-	killTimeout time.Duration
+	codexBinary   string
+	harnessBinary string
+	logger        *slog.Logger
+	killTimeout   time.Duration
 }
 
 func defaultSessionConfig() sessionConfig {
 	return sessionConfig{
-		codexBinary: defaultBinary(),
-		logger:      obslog.Bg(),
-		killTimeout: rpcKillTimeout,
+		codexBinary:   defaultBinary(),
+		harnessBinary: os.Getenv("PARSAR_CODEX_HARNESS_BIN"),
+		logger:        obslog.Bg(),
+		killTimeout:   rpcKillTimeout,
 	}
 }
 

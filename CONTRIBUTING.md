@@ -481,8 +481,14 @@ response future with remote settlement. Bound Tokio runtime shutdown so an
 uncancellable native stdin read cannot hide local process exit from the RPC owner.
 The socket directory
 must be new and private under `~/.parsar`; native/helper/socket selectors remain
-operator configuration. Public feature admission and default daemon selection
-are unchanged. Metadata path checks do not qualify filesystem isolation, idle
+operator configuration. `PARSAR_CODEX_HARNESS_BIN` opts the native Codex adapter
+into this artifact for validated remote preparations only; stock helper discovery
+and all nonremote execution remain unchanged. The adapter derives each private
+Environment/workspace binding and owns a short IPC directory under canonical
+`~/.parsar`, independently of deeper `PARSAR_HOME` profiles. Reuse the existing
+Prepared-to-Session transfer and RPC child; remove IPC only after that same child
+has been reaped, including initialization failure and Close timeouts. No wrapper,
+new capability, public Files admission or default daemon selection is introduced. Metadata path checks do not qualify filesystem isolation, idle
 ownership, remote retirement, or the existing RPC's full backpressure behavior.
 
 The private [raw Files composition](services/agents-api/tests/native/raw_files/README.md)

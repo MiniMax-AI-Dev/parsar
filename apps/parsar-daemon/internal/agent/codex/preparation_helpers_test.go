@@ -132,6 +132,7 @@ func TestPreparationFakeCodexProcess(t *testing.T) {
 			os.Exit(0)
 		}
 	}
+	fakePrivateHarnessEndpoint()
 	log, err := os.OpenFile(os.Getenv("PARSAR_PREPARATION_FRAMES"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		os.Exit(2)
