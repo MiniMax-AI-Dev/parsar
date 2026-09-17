@@ -56,7 +56,8 @@ export class WorkspaceDirectories {
         parent = await open(`${anchored(parent)}/${component}`, flags);
         handles.push(parent);
       }
-      const dir = await opendir(anchored(parent), { encoding: "buffer" });
+      // Node supports byte names, but its opendir typings omit the buffer encoding.
+      const dir = await opendir(anchored(parent), { encoding: "buffer" as BufferEncoding });
       try {
         const entries: WorkspaceDirectoryEntry[] = [];
         while (true) {
