@@ -62,6 +62,7 @@ dependencies = [
  "codex-exec-server",
  "codex-http-client",
  "http",
+ "rustix",
  "serde",
  "serde_json",
  "tokio",

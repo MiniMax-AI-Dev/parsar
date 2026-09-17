@@ -632,6 +632,18 @@ OpenAI login credentials. HTTPS certificate/hostname verification remains enable
 The separately named command does not establish stock-command compatibility or
 enable public Environment admission. Linux x86_64 is its initial deployment target.
 
+The executor build also provides a small `agents-api-codex-directory` helper for
+bounded, descriptor-scoped directory observations where the pinned native walk
+cannot maintain path isolation during concurrent ancestor replacement. Use the
+existing native process API, explicit argv and a qualified read-only sandbox;
+keep the executable at a trusted operator path outside the writable workspace.
+The adapter supplies its frozen workspace root. Enumerate and stat using retained
+no-follow directory descriptors, bound scanning before collecting all names, and
+require complete output plus native exit/close settlement. This is a private
+adapter prerequisite, not a new public protocol, transport or filesystem framework.
+The helper alone grants no tenant authority, public Files admission, snapshot or
+workspace-replacement guarantee. Preserve the stock executor/model loop.
+
 Native app-server placement is a prerequisite to typed dispatch. The pinned Codex
 app-server accepts registry configuration at startup; use explicit native Environment
 selections for the first thread and every Turn. Resume does not restore selections

@@ -36,6 +36,36 @@ argv0 and sandbox helper modes execute that official binary; none are copied int
 the launcher. System/container sandbox permissions must support the requested
 native policy. Do not interpret an unsandboxed command test as sandbox validation.
 
+## Scoped directory helper
+
+The build also emits `agents-api-codex-directory` for the current directory-listing
+adapter gap. Install it at an operator-controlled absolute path on the executor,
+outside the writable workspace. Its three argv values are the authorized absolute
+workspace root, a relative directory (empty for the root), and a limit of 1–4096.
+Invoke it directly through the existing authenticated native process API with a
+read-only filesystem policy and restricted network. No shell or model is involved.
+The helper itself is a local program, not an authorization service: the caller
+must bind the root to the exact authorized owner and validate the installation.
+
+It opens every directory component without following symlinks, retains directory
+descriptors for enumeration and metadata, and stops after the limit plus one
+entry. It returns one version-1 JSON response: `directory.entries` contains
+`name`, `kind` (`file`, `directory`, `symlink`, `other`) and nullable `size_bytes`;
+`directory.truncated` reports lookahead. Only regular files have sizes. Errors
+use `error` with no partial entries. Invalid paths/names and oversized responses
+are rejected. Descriptor cleanup precedes output; exit zero alone is not success,
+since a settled error also returns JSON. Require valid complete JSON, a successful
+exit and native output-close receipt before accepting an observation. Unknown
+start/termination/transport results remain uncertain and must not be retried as
+settled reads.
+
+This one-level observation has no order, paging or snapshot guarantee. Renames may
+leave an operation reading the directory it already opened; workspace replacement
+and cross-tenant placement remain the caller's responsibility. The helper does
+not change stock native filesystem methods, create a daemon connection, or enable
+public Files. The [native fixture](../../services/agents-api/tests/native/directory/README.md)
+qualifies the standalone helper independently of later adapter/public wiring.
+
 ## Connect an executor
 
 An operator creates an executor principal key with
