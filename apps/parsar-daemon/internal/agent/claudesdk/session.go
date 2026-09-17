@@ -14,13 +14,14 @@ import (
 )
 
 type session struct {
-	reads     workspaceReadState
-	process   *clirunner.Process
-	writeMu   sync.Mutex
-	functions functionState
-	steering  steeringState
-	settled   chan struct{}
-	outcome   proto.DonePayload
+	reads       workspaceReadState
+	directories workspaceDirectoryState
+	process     *clirunner.Process
+	writeMu     sync.Mutex
+	functions   functionState
+	steering    steeringState
+	settled     chan struct{}
+	outcome     proto.DonePayload
 }
 
 func NewFactory(config Config) agent.Factory {
@@ -96,6 +97,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	defer s.stopFunctions()
 	defer s.stopSteering()
 	defer s.stopWorkspaceReads()
+	defer s.stopWorkspaceDirectories()
 	emit := func(kind string, payload any) {
 		event, err := proto.NewEnvelope(kind, runID, payload)
 		if err != nil {
@@ -285,6 +287,7 @@ func (s *session) drain(scanner *bridgeOutput, stderrDone <-chan struct{}, failu
 	}
 	<-stderrDone
 	s.stopWorkspaceReads()
+	s.stopWorkspaceDirectories()
 	if err := s.process.Wait(); err != nil && failure == nil {
 		failure = fmt.Errorf("claudesdk: SDK process failed")
 	}

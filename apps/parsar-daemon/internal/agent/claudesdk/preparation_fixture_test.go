@@ -38,7 +38,7 @@ func preparationRequest() proto.PromptRequestPayload {
 func runPreparationHelper() {
 	mode := os.Getenv("SDK_HELPER_MODE")
 	if len(os.Args) > 1 && strings.HasSuffix(os.Args[1], "runtime_check.js") {
-		features := []string{"workspace_tools", "workspace_prepare", "workspace_command_observations", "workspace_read"}
+		features := []string{"workspace_tools", "workspace_prepare", "workspace_command_observations", "workspace_read", "workspace_directory"}
 		if mode == "old-runtime" {
 			features = []string{"workspace_tools"}
 		} else if mode == "old-command-runtime" {
@@ -79,6 +79,10 @@ func runPreparationHelper() {
 		}
 	}
 	emit(bridgeEvent{Type: "prepared"})
+	if strings.HasPrefix(mode, "directory-") {
+		runWorkspaceDirectoryHelper(scanner, state, mode)
+		return
+	}
 	if strings.HasPrefix(mode, "read-") {
 		runWorkspaceReadHelper(scanner, state, mode)
 		return

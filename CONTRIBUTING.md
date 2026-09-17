@@ -1628,6 +1628,27 @@ The qualified live workspace fixture also checks binary, empty and bounded reads
 before input and during real execution, plus effects before cancellation and reads
 on fresh-process history continuation.
 
+The optional private `agent.WorkspaceDirectoryLister` requires the Linux-only
+`workspace_directory` bridge feature on the same preparation or transferred Session.
+The pinned SDK has no directory-enumeration control; its fuzzy file suggestions are
+not an inventory. This narrow adapter operation therefore reads metadata inside the
+already qualified co-located mount/process boundary. It pins the configured workspace
+root and opens each relative directory component with `O_DIRECTORY | O_NOFOLLOW`,
+using `/proc/self/fd` paths anchored to held descriptors. It rejects directory symlink
+traversal; `lstat` reports a symlink entry itself without following its target.
+The fixed workspace policy requires canonical, disjoint protected roots and excludes
+dynamic permission replacement and remote-workspace fallback. It does not implement
+an additional permission engine or authorize an unqualified placement.
+
+Directory requests are bounded to 8 KiB and 1,000 immediate entries, with explicit
+truncation, literal names, kinds, and sizes only for regular files. They do not promise
+ordering, snapshots, recursion, or public pagination. Missing and permission errors
+are returned only from distinguishable filesystem outcomes; unknown results stop the
+owner. Each operation closes its directory and intermediate descriptors before a
+successful receipt; the root descriptor remains owned until bridge release.
+Caller cancellation, Start transfer and owner shutdown retain the existing workspace
+read settlement rules. This adapter gap fill does not enable public Claude Files.
+
 With `ObserveToolObservations`, private workspace execution requires the packaged
 `workspace_command_observations` feature and emits the existing neutral command
 snapshots. Match root, current-query native Bash call/result identities after input;

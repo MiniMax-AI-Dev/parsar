@@ -61,6 +61,7 @@ func NewPreparationFactory(config Config) agent.PreparationFactory {
 			return nil, err
 		}
 		s.reads.supported = slices.Contains(info.Features, "workspace_read")
+		s.directories.supported = slices.Contains(info.Features, "workspace_directory")
 		p := &prepared{session: s, ready: make(chan struct{}), started: make(chan struct{})}
 		go s.run(owner, "", start, nil, p)
 		select {
