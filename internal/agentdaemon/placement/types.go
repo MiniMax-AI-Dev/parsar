@@ -10,13 +10,14 @@ const BindingLabel = "parsar.runtime.placement"
 // Receipt is durable local evidence for one exact placement incarnation.
 // Only State == "retired" reports qualified settlement; other states are unknown.
 type Receipt struct {
-	Version     int        `json:"version"`
-	State       string     `json:"state"`
-	Owner       string     `json:"owner"`
-	Target      Target     `json:"target"`
-	Members     []Process  `json:"members"`
-	RequestedAt time.Time  `json:"requested_at"`
-	RetiredAt   *time.Time `json:"retired_at,omitempty"`
+	EnvironmentID string     `json:"environment_id,omitempty"`
+	Version       int        `json:"version"`
+	State         string     `json:"state"`
+	Owner         string     `json:"owner"`
+	Target        Target     `json:"target"`
+	Members       []Process  `json:"members"`
+	RequestedAt   time.Time  `json:"requested_at"`
+	RetiredAt     *time.Time `json:"retired_at,omitempty"`
 }
 
 // Target binds local supervisor, immutable container and observed incarnation.

@@ -571,6 +571,13 @@ Stopping, independent membership/process observations and non-forced removal mus
 precede a durable successful receipt. Recovered receipts must complete their directory-sync barrier before success.
 Missing evidence or a crash after removal
 but before receipt persistence remains unknown; never clear it based on absence.
+Optional `--environment` enrollment freezes one canonical Environment UUID in a
+version-2 local receipt. Every scoped retire/reconcile must match it before any
+supervisor access or completed-receipt recovery; omission cannot bypass the check.
+Version-1 unscoped records remain unscoped and cannot be adopted by a scoped retry.
+Older controllers reject version-2 records. Enrollment is trusted operator consent,
+not verification of Core resource existence or tenant ownership; the future Core
+consumer must validate those using its existing authenticated associations.
 Normal harness release is unchanged. This local operator command is not Core
 admission, authenticated remote receipt support, or public Files compatibility.
 See the retirement fixture README for the profile and explicit native acceptance.
