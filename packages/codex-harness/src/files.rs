@@ -12,6 +12,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::oneshot;
 use tokio::time::{Instant, timeout_at};
+use tokio_util::sync::CancellationToken;
 
 use crate::options::Binding;
 
@@ -76,18 +77,25 @@ impl PrivateSocket {
         &self,
         published: oneshot::Receiver<Arc<EnvironmentManager>>,
         binding: &Binding,
+        stopping: &CancellationToken,
     ) -> Result<()> {
-        let manager = published
-            .await
-            .context("native manager was not published")?;
+        let manager = tokio::select! {
+            biased;
+            _ = stopping.cancelled() => return Ok(()),
+            result = published => result.context("native manager was not published")?,
+        };
         loop {
             // A native deadline ends this owner: dropping a response future
             // does not settle the remote operation or authorize another one.
-            let (stream, _) = self.listener.accept().await?;
+            let (stream, _) = tokio::select! {
+                biased;
+                _ = stopping.cancelled() => return Ok(()),
+                result = self.listener.accept() => result?,
+            };
             if stream.peer_cred()?.uid() != self.uid {
                 continue;
             }
-            if let Ok(outcome) = serve_connection(stream, &manager, binding).await {
+            if let Ok(outcome) = serve_connection(stream, &manager, binding, stopping).await {
                 outcome.require_settled()?;
             }
         }
@@ -183,8 +191,9 @@ async fn serve_connection(
     stream: UnixStream,
     manager: &EnvironmentManager,
     binding: &Binding,
+    stopping: &CancellationToken,
 ) -> Result<ConnectionOutcome> {
-    exchange(stream, binding, REQUEST_DEADLINE, |path| {
+    exchange(stream, binding, REQUEST_DEADLINE, stopping, |path| {
         metadata(manager, path)
     })
     .await
@@ -194,6 +203,7 @@ async fn exchange<F, R>(
     stream: UnixStream,
     binding: &Binding,
     duration: Duration,
+    stopping: &CancellationToken,
     operation: F,
 ) -> Result<ConnectionOutcome>
 where
@@ -204,12 +214,19 @@ where
     let (read, mut write) = stream.into_split();
     let mut reader = BufReader::new(read.take((MAX_FRAME + 1) as u64));
     let mut frame = Vec::new();
-    match timeout_at(deadline, reader.read_until(b'\n', &mut frame)).await {
+    let frame_result = tokio::select! {
+        biased;
+        _ = stopping.cancelled() => return Ok(ConnectionOutcome::Settled),
+        result = timeout_at(deadline, reader.read_until(b'\n', &mut frame)) => result,
+    };
+    match frame_result {
         Ok(result) => {
             result?;
         }
         Err(_) => return Ok(ConnectionOutcome::Settled),
     }
+    // From admission until the native response/deadline, only this owner holds
+    // the operation. Caller disconnect and runner shutdown do not drop its wait.
     let result = match request_path(&frame, binding) {
         Ok(path) => match timeout_at(deadline, operation(path)).await {
             Ok(result) => result,
@@ -223,150 +240,19 @@ where
     };
     let mut bytes = serde_json::to_vec(&response)?;
     bytes.push(b'\n');
-    // The native result has settled. A failed or stalled response writer can
-    // close this connection without leaving another native operation outstanding.
-    let _ = timeout_at(deadline, async {
-        write.write_all(&bytes).await?;
-        write.shutdown().await
-    })
-    .await;
+    // The native future returned. Response delivery no longer owns that wait;
+    // a transport error still cannot establish remote operation retirement.
+    tokio::select! {
+        biased;
+        _ = stopping.cancelled() => {},
+        _ = timeout_at(deadline, async {
+            write.write_all(&bytes).await?;
+            write.shutdown().await
+        }) => {},
+    }
     Ok(ConnectionOutcome::Settled)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn private_socket_collision_never_removes_the_original() -> Result<()> {
-        let state =
-            PathBuf::from(std::env::var_os("HOME").context("HOME missing")?).join(".parsar");
-        let parent = tempfile::Builder::new().prefix("hm-").tempdir_in(state)?;
-        std::fs::set_permissions(parent.path(), std::fs::Permissions::from_mode(0o700))?;
-        let root = parent.path().join("owner");
-        let socket = PrivateSocket::bind(&root)?;
-        assert_eq!(std::fs::metadata(&root)?.mode() & 0o777, 0o700);
-        assert_eq!(
-            std::fs::metadata(root.join("files.sock"))?.mode() & 0o777,
-            0o600
-        );
-        assert!(PrivateSocket::bind(&root).is_err());
-        let client = UnixStream::connect(root.join("files.sock")).await?;
-        let (server, _) = socket.listener.accept().await?;
-        assert_eq!(server.peer_cred()?.uid(), socket.uid);
-        drop((client, server, socket));
-        assert!(!root.exists());
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn invalid_requests_and_local_manager_never_reach_host_metadata() -> Result<()> {
-        let manager = EnvironmentManager::default_for_tests();
-        let binding = Binding {
-            native_binary: "/native".into(),
-            environment: "expected".into(),
-            workspace: "/".into(),
-            ipc_root: "/unused".into(),
-        };
-        for (request, expected) in [
-            (
-                b"{\"environment_id\":\"expected\",\"path\":\"etc/passwd\"}\n".to_vec(),
-                "environment_unavailable",
-            ),
-            (
-                b"{\"environment_id\":\"wrong\",\"path\":\"etc/passwd\"}\n".to_vec(),
-                "wrong_environment",
-            ),
-            (vec![b'x'; MAX_FRAME + 1], "invalid_request"),
-        ] {
-            let (server, mut client) = UnixStream::pair()?;
-            let exchange = async {
-                client.write_all(&request).await?;
-                let mut response = Vec::new();
-                client.read_to_end(&mut response).await?;
-                anyhow::Ok(serde_json::from_slice::<Value>(&response)?)
-            };
-            let (_, response) =
-                tokio::try_join!(serve_connection(server, &manager, &binding), exchange)?;
-            assert_eq!(response, json!({"error":expected}));
-        }
-        let (server, mut client) = UnixStream::pair()?;
-        assert!(
-            tokio::time::timeout(
-                Duration::from_millis(20),
-                serve_connection(server, &manager, &binding)
-            )
-            .await
-            .is_err()
-        );
-        assert_eq!(client.read(&mut [0; 1]).await?, 0);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn pending_native_response_requires_owner_failure() -> Result<()> {
-        let binding = Binding {
-            native_binary: "/native".into(),
-            environment: "expected".into(),
-            workspace: "/workspace".into(),
-            ipc_root: "/unused".into(),
-        };
-        let (server, mut client) = UnixStream::pair()?;
-        client
-            .write_all(b"{\"environment_id\":\"expected\",\"path\":\"file\"}\n")
-            .await?;
-        let (dispatched, observed) = oneshot::channel();
-        let (response, received) = oneshot::channel();
-        let outcome = exchange(server, &binding, Duration::from_millis(20), |_path| async {
-            dispatched.send(()).unwrap();
-            // The remote side has accepted work but has not settled its reply.
-            received.await.unwrap()
-        })
-        .await?;
-        observed.await?;
-        assert_eq!(outcome, ConnectionOutcome::UnsettledNativeOperation);
-        assert!(outcome.require_settled().is_err());
-        assert_eq!(client.read(&mut [0; 1]).await?, 0);
-        // A response producer can still complete after its receiver was dropped;
-        // this is why timeout must fail the owner rather than release admission.
-        assert!(response.send(Ok(json!({"size": 1}))).is_err());
-
-        let (server, mut client) = UnixStream::pair()?;
-        let outcome = exchange(server, &binding, Duration::from_millis(20), |_path| async {
-            panic!("a stalled frame must not dispatch native work")
-        })
-        .await?;
-        outcome.require_settled()?;
-        assert_eq!(client.read(&mut [0; 1]).await?, 0);
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_wrong_identity_and_nonrelative_paths() {
-        let binding = Binding {
-            native_binary: "/native".into(),
-            environment: "expected".into(),
-            workspace: "/workspace".into(),
-            ipc_root: "/unused".into(),
-        };
-        for path in ["", "/etc/passwd", "../file", "a/../file", "a\\b"] {
-            let frame = format!("{}\n", json!({"environment_id":"expected","path":path}));
-            assert!(request_path(frame.as_bytes(), &binding).is_err());
-        }
-        assert!(
-            request_path(
-                b"{\"environment_id\":\"wrong\",\"path\":\"file\"}\n",
-                &binding
-            )
-            .is_err()
-        );
-        assert!(
-            request_path(
-                b"{\"environment_id\":\"expected\",\"path\":\"file\"}\n",
-                &binding
-            )
-            .is_ok()
-        );
-        assert!(request_path(&vec![b'x'; MAX_FRAME + 1], &binding).is_err());
-    }
-}
+#[path = "files_tests.rs"]
+mod tests;

@@ -87,7 +87,17 @@ guard lives until runtime teardown; explicit child re-execution uses the pinned
 stock helper.
 
 The request shares one ten-second deadline. A stalled frame or response writer
-closes its connection. If the native operation has not settled by the deadline,
+closes its connection. Caller disconnect does not cancel an admitted native wait.
+When the raw runner ends, stop new admission and pending frames, then drain the
+admitted operation within its original deadline. A stopped owner need not deliver
+the result to the caller. Preserve runner failures after a successful drain, and
+report an unresolved drain as failure even if the runner exited normally. This
+only accounts for the native future; it does not prove remote effect retirement.
+The existing daemon RPC `Close` can force-kill this child after its 250 ms grace,
+interrupting the drain. A daemon/Core file consumer must reconcile that boundary
+and retain uncertainty before treating release as operation settlement; this
+artifact change does not alter the RPC's existing local-reap contract.
+If the native operation has not settled by the deadline,
 the artifact exits with an error and closes admission; dropping the native wait
 does not cancel remote work. Recovery must retain that uncertainty and must not
 infer remote retirement from this local failure. Runtime shutdown waits at most

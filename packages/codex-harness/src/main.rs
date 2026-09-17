@@ -1,5 +1,6 @@
 mod files;
 mod options;
+mod owner;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -13,6 +14,7 @@ use codex_protocol::protocol::SessionSource;
 use std::future::Future;
 use std::time::Duration;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 
 fn main() -> Result<()> {
     let (binding, _native_paths) = prepare_native();
@@ -64,12 +66,13 @@ async fn run_harness(cli: options::Cli, binding: options::Binding) -> Result<()>
     );
     // The stock single-client runner owns stdin/stdout. No typed event client or
     // forwarding queue is inserted between it and the existing Go RPC caller.
-    tokio::select! {
-        biased;
-        result = runner => result.context("native harness stopped"),
-        result = socket.serve(published, &binding) => result.context("private metadata endpoint stopped"),
-    }
-    // Dropping the other future stops local admission and releases its manager.
+    let stopping = CancellationToken::new();
+    owner::supervise(
+        async { runner.await.context("native harness stopped") },
+        socket.serve(published, &binding, &stopping),
+        &stopping,
+    )
+    .await
     // Process exit is not evidence that remote mutations or descendants retired.
 }
 

@@ -474,7 +474,13 @@ initialization before threads and its alias guard until runtime teardown.
 The existing Go RPC owns its raw stdio child. A private same-user local socket
 offers metadata only through that runner's manager, with a frozen registry
 Environment UUID, the adapter's native `remote` manager key, and no local fallback.
-Keep socket admission bounded and close it with the runner. An unresolved native
+Keep socket admission bounded and stop it when the runner ends. Caller disconnect
+only stops response delivery. Runner completion stops pending frames/new admission
+and drains the already admitted operation within its original deadline before local
+release; an unresolved drain remains an owner failure. This retains a native wait,
+not a remote retirement guarantee. External forced child exit can interrupt the
+drain; the existing daemon RPC's short grace/local-reap contract must be reconciled
+before a file consumer can infer settlement from release. An unresolved native
 metadata timeout must stop the owner before admitting another operation; client
 frame/response timeouts are connection-local. Never equate dropping the native
 response future with remote settlement. Bound Tokio runtime shutdown so an
