@@ -6,11 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -29,7 +29,6 @@ func TestNativeDaemonHarnessArtifact(t *testing.T) {
 
 type nativeHarnessArtifact struct {
 	root          string
-	wrapper       string
 	environment   string
 	configuration map[string]string
 	proof         map[string]any
@@ -56,56 +55,76 @@ func newNativeHarnessArtifact(t *testing.T, native, artifact string) *nativeHarn
 	if err != nil {
 		t.Fatal(err)
 	}
-	root, err := os.MkdirTemp(state, "hf-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	configuration := map[string]string{"native": native, "artifact": artifact, "root": root}
+	configuration := map[string]string{"native": native, "artifact": artifact, "root": state}
 	configuration["artifact_sha256"] = nativeHarnessFileHash(t, artifact)
-	path, _ := json.Marshal(filepath.Join(root, "binding.json"))
-	nativePath, _ := json.Marshal(native)
-	wrapper := filepath.Join(root, "codex")
-	script := fmt.Sprintf(nativeHarnessWrapper, nativePath, path)
-	if err := os.WriteFile(wrapper, []byte(script), 0700); err != nil {
-		t.Fatal(err)
-	}
 	proof := map[string]any{
 		"artifact": artifact, "artifact_sha256": configuration["artifact_sha256"],
 		"native_helper": native, "native_helper_sha256": nativeHarnessFileHash(t, native),
-		"wrapper": wrapper, "wrapper_sha256": nativeHarnessFileHash(t, wrapper),
-		"execution_caller":      "existing daemon Go JSONRPCClient through private operator fixture wrapper",
-		"preflight":             "stock helper --version; app-server executes the final private artifact",
+		"execution_caller":      "existing daemon Codex adapter and Go JSONRPCClient; no launch wrapper",
+		"preflight":             "stock helper discovery; opt-in artifact selected by the native adapter",
 		"metadata_observations": []map[string]any{},
 	}
-	return &nativeHarnessArtifact{root: root, wrapper: wrapper, configuration: configuration, proof: proof, owners: make(map[int]bool)}
+	return &nativeHarnessArtifact{root: state, configuration: configuration, proof: proof, owners: make(map[int]bool)}
 }
 
 func (a *nativeHarnessArtifact) bind(t *testing.T, environment, workspace string) {
 	t.Helper()
 	a.environment = environment
-	a.configuration["environment"] = environment
 	a.configuration["workspace"] = workspace
-	data, err := json.Marshal(a.configuration)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(filepath.Join(a.root, "binding.json"), data, 0600); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func (a *nativeHarnessArtifact) current(t *testing.T) nativeHarnessOwner {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(a.root, "owners.jsonl"))
+	artifact, err := os.Stat(a.configuration["artifact"])
 	if err != nil {
 		t.Fatal(err)
 	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	var owner nativeHarnessOwner
-	if json.Unmarshal([]byte(lines[len(lines)-1]), &owner) != nil || owner.PID <= 1 || owner.ArtifactSHA256 != a.configuration["artifact_sha256"] || filepath.Dir(owner.IPCRoot) != a.root {
-		t.Fatal("invalid private artifact owner record")
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		t.Fatal(err)
 	}
-	return owner
+	var owners []nativeHarnessOwner
+	for _, entry := range entries {
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil || pid <= 1 {
+			continue
+		}
+		process := filepath.Join("/proc", entry.Name())
+		executable, err := os.Stat(filepath.Join(process, "exe"))
+		if err != nil || !os.SameFile(executable, artifact) {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(process, "environ"))
+		if err != nil {
+			continue
+		}
+		var environment, workspace, root string
+		for _, value := range strings.Split(string(data), "\x00") {
+			switch {
+			case strings.HasPrefix(value, "PARSAR_CODEX_HARNESS_ENVIRONMENT="):
+				environment = strings.TrimPrefix(value, "PARSAR_CODEX_HARNESS_ENVIRONMENT=")
+			case strings.HasPrefix(value, "PARSAR_CODEX_HARNESS_WORKSPACE="):
+				workspace = strings.TrimPrefix(value, "PARSAR_CODEX_HARNESS_WORKSPACE=")
+			case strings.HasPrefix(value, "PARSAR_CODEX_HARNESS_IPC_ROOT="):
+				root = strings.TrimPrefix(value, "PARSAR_CODEX_HARNESS_IPC_ROOT=")
+			}
+		}
+		if environment != a.environment {
+			continue
+		}
+		if workspace != a.configuration["workspace"] || filepath.Dir(filepath.Dir(root)) != a.root || !strings.HasPrefix(filepath.Base(filepath.Dir(root)), "ch-") {
+			t.Fatal("adapter private binding differs from the requested Environment")
+		}
+		digest := nativeHarnessFileHash(t, filepath.Join(process, "exe"))
+		if digest != a.configuration["artifact_sha256"] {
+			t.Fatal("executing artifact identity differs")
+		}
+		owners = append(owners, nativeHarnessOwner{PID: pid, IPCRoot: root, ArtifactSHA256: digest})
+	}
+	if len(owners) != 1 {
+		t.Fatal("expected one actual adapter-owned artifact process", len(owners))
+	}
+	return owners[0]
 }
 
 func (a *nativeHarnessArtifact) observeReady(t *testing.T, ctx context.Context, phase, local string) {
@@ -218,37 +237,3 @@ func nativeHarnessFileHash(t *testing.T, path string) string {
 	}
 	return hex.EncodeToString(hash.Sum(nil))
 }
-
-const nativeHarnessWrapper = `#!/usr/bin/env python3
-import hashlib
-import json
-import os
-import pathlib
-import sys
-import uuid
-
-native = %s
-if "app-server" not in sys.argv[1:]:
-    os.execv(native, [native, *sys.argv[1:]])
-binding = json.loads(pathlib.Path(%s).read_text())
-with open(binding["artifact"], "rb") as source:
-    hasher = hashlib.sha256()
-    for block in iter(lambda: source.read(1024 * 1024), b""):
-        hasher.update(block)
-    digest = hasher.hexdigest()
-if digest != binding["artifact_sha256"]:
-    raise SystemExit("private artifact identity changed")
-ipc = str(pathlib.Path(binding["root"]) / ("p-" + uuid.uuid4().hex[:12]))
-environment = dict(os.environ)
-environment.update({
-    "PARSAR_CODEX_HARNESS_NATIVE": binding["native"],
-    "PARSAR_CODEX_HARNESS_ENVIRONMENT": binding["environment"],
-    "PARSAR_CODEX_HARNESS_WORKSPACE": binding["workspace"],
-    "PARSAR_CODEX_HARNESS_IPC_ROOT": ipc,
-})
-record = json.dumps({"pid": os.getpid(), "ipc_root": ipc, "artifact_sha256": digest}) + "\n"
-fd = os.open(str(pathlib.Path(binding["root"]) / "owners.jsonl"), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-with os.fdopen(fd, "w") as output:
-    output.write(record)
-os.execve(binding["artifact"], [binding["artifact"], *sys.argv[1:]], environment)
-`

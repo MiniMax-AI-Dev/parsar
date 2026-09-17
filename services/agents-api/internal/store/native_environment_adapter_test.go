@@ -50,7 +50,7 @@ func testNativeDaemonRemoteEnvironmentWithArtifact(t *testing.T, prepared bool, 
 	var artifact *nativeHarnessArtifact
 	if artifactPath != "" {
 		artifact = newNativeHarnessArtifact(t, binary, artifactPath)
-		t.Setenv("PARSAR_CODEX_BIN", artifact.wrapper)
+		t.Setenv("PARSAR_CODEX_HARNESS_BIN", artifactPath)
 	}
 	h, ctx, root := nativeDispatchHarnessWithTimeout(t, 8*time.Minute)
 	peer, err := h.registry.LookupDevice(h.device.ID)

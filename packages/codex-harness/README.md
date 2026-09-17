@@ -111,3 +111,14 @@ deadline bounds do not establish general native filesystem resource limits.
 Metadata does not prove path isolation, public Files semantics, a reusable idle
 owner, Core authority, successor safety or complete output fidelity. These remain
 separate admission and acceptance work.
+
+## Opt-in adapter launch
+
+Set `PARSAR_CODEX_HARNESS_BIN` to the absolute integrated artifact path and keep
+`PARSAR_CODEX_BIN` pointing to the stock helper. The daemon uses the artifact only
+for validated remote Codex preparations. It supplies the frozen binding and a new
+private socket directory, retains the existing Prepared/Session/RPC lifecycle,
+and cleans the directory after the child is reaped. Nonremote Codex and Claude
+keep their current launch paths. No wrapper or new public capability is required.
+The private metadata socket remains operator infrastructure; public Files and
+Core ownership/retirement gates are separate work.
