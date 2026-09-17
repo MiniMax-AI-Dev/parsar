@@ -1,9 +1,9 @@
 # Private Codex harness artifact
 
 `parsar-codex-harness` is an opt-in Linux amd64 executable. It embeds the pinned
-Codex raw stdio runner and exposes one private remote metadata operation through
+Codex raw stdio runner and exposes private remote metadata and bounded reads through
 the runner's own `EnvironmentManager`. The existing Go `JSONRPCClient` owns the
-child and native execution transport. The metadata socket is local control IPC,
+child and native execution transport. The file socket is local control IPC,
 not another executor/Noise connection. Default daemon installation and public
 feature admission are unchanged.
 
@@ -12,7 +12,8 @@ feature admission are unchanged.
 Parsar maintains this integration artifact. It is not the stock upstream binary.
 `source.json` pins Codex 0.153.4 at
 `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`, Rust 1.95.0, the manager hook and a
-separate named-binary manifest overlay. The hook's canonical copy is
+separate named-binary manifest overlay. A separately hashed bounded-read patch
+exposes one native operation without exposing the general RPC client. The hook's canonical copy is
 `patches/manager-exposure.patch`; the older native qualifications reference the
 same file. Maintain its qualification and hash with every deliberate change.
 Replace the hook when an equivalent maintained upstream entrypoint is selected
@@ -20,7 +21,7 @@ and independently accepted; never silently change the native pin.
 
 Preparation exports that exact Git commit, ignoring checkout modifications. It
 checks the original lock, normalizes only the 149 upstream workspace package
-versions, checks the resulting lock, applies the two hashed patches and injects
+versions, checks the resulting lock, applies the hashed patches and injects
 `src/` into `codex-rs/app-server/parsar-harness/`. The named binary uses existing
 app-server dependencies. No dependency resolution, client dependency or
 third-party version change is part of the overlay. Mismatched identities fail.
@@ -78,7 +79,22 @@ Each bounded connection carries one JSON line with `environment_id` and a relati
 be remote and ready. Startup also matches the operator UUID to the native registry
 Environment variable. The native manager uses its fixed `remote` key, independently
 of that UUID. A response reports native metadata or a safe error. There is
-no local filesystem fallback and no read, write or listing method.
+no local filesystem fallback. Omitting `operation` selects metadata. An explicit
+`operation: "read"` requires an integer `max_bytes` from 1 through 8 MiB; this is a
+private adapter bound, not a public protocol limit. The response has `read` with
+base64 `data_base64`, `truncated` and `close_acknowledged: true`. Reads use native
+blocks of at most 1 MiB and one extra byte to distinguish an exact-bound file from
+a truncated prefix. No snapshot consistency is promised for a changing file.
+There is no write or listing method.
+
+The bounded-read hook captures one native RPC connection before opening a handle.
+Open, ordered block reads and cleanup use that exact connection without recovery
+or replay. A successful result requires a successful close response after all
+reads. A server rejection settles that particular request; it does not establish
+successful close. Ambiguous transport/protocol outcomes and unconfirmed close
+stop the owner without delivering partial bytes or admitting another request.
+Closing a replacement connection cannot settle an old handle. The native stock
+stream remains unchanged; its asynchronous Drop cleanup is not used as a receipt.
 
 Startup freezes the operator binding before calling native `arg0_dispatch`. This
 preserves native `CODEX_HOME/.env` credential loading and helper dispatch before
@@ -109,8 +125,10 @@ guarantee.
 
 Qualification must use this final binary through the existing Go RPC caller and
 an actual authenticated remote executor. Native execution creates a file; metadata
-is observed while idle, during execution, after cancellation and following fresh
-process history continuation. Controlled tests cover startup/EOF, identity errors,
+and bounded bytes are observed while idle, during execution, after cancellation
+and following fresh process history continuation. Synthetic binary and empty files
+supplement native-created files to check byte fidelity, exact bounds and truncation.
+Each successful read must include its ordered close acknowledgment. Controlled tests cover startup/EOF, identity errors,
 socket collision, oversized frames, stalled peers and early runner exit. Preserve
 failed evidence and distinguish local child exit from remote mutation retirement.
 
@@ -118,7 +136,7 @@ Raw stdio avoids a typed-notification parser and preserves the native transport.
 This does not mean the Go adapter stores unknown notifications or that every
 existing RPC queue/write path is production-qualified. IPC frame, concurrency and
 deadline bounds do not establish general native filesystem resource limits.
-Metadata does not prove path isolation, public Files semantics, a reusable idle
+Private metadata and reads do not prove path isolation, public Files semantics, a reusable idle
 owner, Core authority, successor safety or complete output fidelity. These remain
 separate admission and acceptance work.
 
@@ -130,5 +148,5 @@ for validated remote Codex preparations. It supplies the frozen binding and a ne
 private socket directory, retains the existing Prepared/Session/RPC lifecycle,
 and cleans the directory after the child is reaped. Nonremote Codex and Claude
 keep their current launch paths. No wrapper or new public capability is required.
-The private metadata socket remains operator infrastructure; public Files and
+The private file socket remains operator infrastructure; public Files and
 Core ownership/retirement gates are separate work.

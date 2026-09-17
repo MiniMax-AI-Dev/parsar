@@ -472,7 +472,7 @@ from a mutable upstream worktree or present this integration as a stock binary.
 Capture operator selectors before native bootstrap; retain native dotenv/helper
 initialization before threads and its alias guard until runtime teardown.
 The existing Go RPC owns its raw stdio child. A private same-user local socket
-offers metadata only through that runner's manager, with a frozen registry
+offers metadata and bounded reads through that runner's manager, with a frozen registry
 Environment UUID, the adapter's native `remote` manager key, and no local fallback.
 Keep socket admission bounded and stop it when the runner ends. Caller disconnect
 only stops response delivery. Runner completion stops pending frames/new admission
@@ -481,10 +481,17 @@ release; an unresolved drain remains an owner failure. This retains a native wai
 not a remote retirement guarantee. External forced child exit can interrupt the
 drain; the existing daemon RPC's short grace/local-reap contract must be reconciled
 before a file consumer can infer settlement from release. An unresolved native
-metadata timeout must stop the owner before admitting another operation; client
+file timeout must stop the owner before admitting another operation; client
 frame/response timeouts are connection-local. Never equate dropping the native
 response future with remote settlement. Bound Tokio runtime shutdown so an
 uncancellable native stdin read cannot hide local process exit from the RPC owner.
+The separately hashed bounded-read hook pins one existing native RPC connection
+for open, sequential block reads and acknowledged close. It retains the pinned
+native wire and stock stream behavior. Bound returned bytes and use one-byte
+lookahead for exact/truncated results; do not promise a file snapshot. Uncertain
+open/read results remain uncertain even if a later close replies. Unconfirmed
+close fails the owner, with no partial success or connection replacement retry.
+These are private adapter outcomes, not new official Files fields or error semantics.
 The socket directory
 must be new and private under `~/.parsar`; native/helper/socket selectors remain
 operator configuration. `PARSAR_CODEX_HARNESS_BIN` opts the native Codex adapter
@@ -494,7 +501,7 @@ Environment/workspace binding and owns a short IPC directory under canonical
 `~/.parsar`, independently of deeper `PARSAR_HOME` profiles. Reuse the existing
 Prepared-to-Session transfer and RPC child; remove IPC only after that same child
 has been reaped, including initialization failure and Close timeouts. No wrapper,
-new capability, public Files admission or default daemon selection is introduced. Metadata path checks do not qualify filesystem isolation, idle
+new capability, public Files admission or default daemon selection is introduced. Private file path checks do not qualify filesystem isolation, idle
 ownership, remote retirement, or the existing RPC's full backpressure behavior.
 Public cancellation qualification for this artifact reuses the fixed SDK/raw HTTP
 fixture with a task-isolated native system configuration and independently observed

@@ -1,5 +1,10 @@
 use anyhow::{Context, Result, ensure};
-use codex_exec_server::{EnvironmentManager, EnvironmentObservedStatus, GetMetadataOptions};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
+use codex_exec_server::{
+    Environment, EnvironmentManager, EnvironmentObservedStatus, GetMetadataOptions,
+    MAX_BOUNDED_FILE_READ_BYTES,
+};
 use codex_utils_path_uri::PathUri;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -115,9 +120,25 @@ impl Drop for PrivateSocket {
 struct Request {
     environment_id: String,
     path: String,
+    #[serde(default)]
+    operation: Operation,
+    max_bytes: Option<usize>,
 }
 
-fn request_path(frame: &[u8], binding: &Binding) -> Result<PathUri, &'static str> {
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum Operation {
+    #[default]
+    Metadata,
+    Read,
+}
+
+struct Command {
+    path: PathUri,
+    read_limit: Option<usize>,
+}
+
+fn request_command(frame: &[u8], binding: &Binding) -> Result<Command, &'static str> {
     if frame.len() > MAX_FRAME || !frame.ends_with(b"\n") {
         return Err("invalid_request");
     }
@@ -125,6 +146,13 @@ fn request_path(frame: &[u8], binding: &Binding) -> Result<PathUri, &'static str
     if request.environment_id != binding.environment {
         return Err("wrong_environment");
     }
+    let read_limit = match (request.operation, request.max_bytes) {
+        (Operation::Metadata, None) => None,
+        (Operation::Read, Some(limit)) if (1..=MAX_BOUNDED_FILE_READ_BYTES).contains(&limit) => {
+            Some(limit)
+        }
+        _ => return Err("invalid_request"),
+    };
     let path = Path::new(&request.path);
     if request.path.is_empty()
         || request.path.contains(['\0', '\\'])
@@ -134,10 +162,14 @@ fn request_path(frame: &[u8], binding: &Binding) -> Result<PathUri, &'static str
     {
         return Err("invalid_path");
     }
-    PathUri::from_host_native_path(binding.workspace.join(path)).map_err(|_| "invalid_path")
+    Ok(Command {
+        path: PathUri::from_host_native_path(binding.workspace.join(path))
+            .map_err(|_| "invalid_path")?,
+        read_limit,
+    })
 }
 
-async fn metadata(manager: &EnvironmentManager, path: PathUri) -> Result<Value, &'static str> {
+async fn ready_environment(manager: &EnvironmentManager) -> Result<Arc<Environment>, &'static str> {
     // The native manager key is distinct from the registry's Environment UUID;
     // startup validates that UUID against the frozen operator binding.
     let environment = manager
@@ -149,26 +181,60 @@ async fn metadata(manager: &EnvironmentManager, path: PathUri) -> Result<Value, 
     {
         return Err("environment_unavailable");
     }
+    Ok(environment)
+}
+
+fn file_error(error: std::io::Error) -> &'static str {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => "not_found",
+        std::io::ErrorKind::PermissionDenied => "permission_denied",
+        _ => "native_error",
+    }
+}
+
+async fn execute(manager: &EnvironmentManager, command: Command) -> Result<Value, OperationError> {
+    let environment = ready_environment(manager)
+        .await
+        .map_err(OperationError::Rejected)?;
+    if let Some(limit) = command.read_limit {
+        let read = environment
+            .read_file_bounded(&command.path, limit)
+            .await
+            .map_err(|failure| {
+                if failure.unsettled {
+                    OperationError::Unsettled
+                } else {
+                    OperationError::Rejected(file_error(failure.error))
+                }
+            })?;
+        return Ok(json!({"read": {
+            "data_base64": STANDARD.encode(read.bytes),
+            "truncated": read.truncated,
+            "close_acknowledged": true,
+        }}));
+    }
     // This private operator endpoint does not establish public path isolation.
     // Native parent-component traversal remains subject to deployment policy.
     let metadata = environment
         .get_filesystem()
         .get_metadata(
-            &path,
+            &command.path,
             GetMetadataOptions {
                 follow_symlinks: false,
             },
             None,
         )
         .await
-        .map_err(|error| match error.kind() {
-            std::io::ErrorKind::NotFound => "not_found",
-            std::io::ErrorKind::PermissionDenied => "permission_denied",
-            _ => "native_error",
-        })?;
+        .map_err(|error| OperationError::Rejected(file_error(error)))?;
     Ok(
-        json!({"size":metadata.size,"is_file":metadata.is_file,"is_directory":metadata.is_directory,"is_symlink":metadata.is_symlink,"created_at_ms":metadata.created_at_ms,"modified_at_ms":metadata.modified_at_ms}),
+        json!({"metadata":{"size":metadata.size,"is_file":metadata.is_file,"is_directory":metadata.is_directory,"is_symlink":metadata.is_symlink,"created_at_ms":metadata.created_at_ms,"modified_at_ms":metadata.modified_at_ms}}),
     )
+}
+
+#[derive(Debug)]
+enum OperationError {
+    Rejected(&'static str),
+    Unsettled,
 }
 
 #[derive(Debug, PartialEq)]
@@ -181,7 +247,7 @@ impl ConnectionOutcome {
     fn require_settled(self) -> Result<()> {
         ensure!(
             self == Self::Settled,
-            "native metadata deadline expired; owner stopped with remote operation unresolved"
+            "native file deadline expired or settlement unconfirmed; owner stopped with remote operation unresolved"
         );
         Ok(())
     }
@@ -193,8 +259,8 @@ async fn serve_connection(
     binding: &Binding,
     stopping: &CancellationToken,
 ) -> Result<ConnectionOutcome> {
-    exchange(stream, binding, REQUEST_DEADLINE, stopping, |path| {
-        metadata(manager, path)
+    exchange(stream, binding, REQUEST_DEADLINE, stopping, |command| {
+        execute(manager, command)
     })
     .await
 }
@@ -207,8 +273,8 @@ async fn exchange<F, R>(
     operation: F,
 ) -> Result<ConnectionOutcome>
 where
-    F: FnOnce(PathUri) -> R,
-    R: Future<Output = Result<Value, &'static str>>,
+    F: FnOnce(Command) -> R,
+    R: Future<Output = Result<Value, OperationError>>,
 {
     let deadline = Instant::now() + duration;
     let (read, mut write) = stream.into_split();
@@ -227,16 +293,17 @@ where
     }
     // From admission until the native response/deadline, only this owner holds
     // the operation. Caller disconnect and runner shutdown do not drop its wait.
-    let result = match request_path(&frame, binding) {
+    let result = match request_command(&frame, binding) {
         Ok(path) => match timeout_at(deadline, operation(path)).await {
             Ok(result) => result,
             Err(_) => return Ok(ConnectionOutcome::UnsettledNativeOperation),
         },
-        Err(error) => Err(error),
+        Err(error) => Err(OperationError::Rejected(error)),
     };
     let response = match result {
-        Ok(value) => json!({"metadata":value}),
-        Err(error) => json!({"error":error}),
+        Ok(value) => value,
+        Err(OperationError::Rejected(error)) => json!({"error":error}),
+        Err(OperationError::Unsettled) => return Ok(ConnectionOutcome::UnsettledNativeOperation),
     };
     let mut bytes = serde_json::to_vec(&response)?;
     bytes.push(b'\n');
@@ -256,3 +323,7 @@ where
 #[cfg(test)]
 #[path = "files_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "files_read_tests.rs"]
+mod read_tests;

@@ -1,0 +1,551 @@
+diff --git a/codex-rs/exec-server/src/bounded_file_read.rs b/codex-rs/exec-server/src/bounded_file_read.rs
+new file mode 100644
+index 0000000..c3e8535
+--- /dev/null
++++ b/codex-rs/exec-server/src/bounded_file_read.rs
+@@ -0,0 +1,183 @@
++use std::io;
++use std::sync::Arc;
++
++use codex_utils_path_uri::PathUri;
++use uuid::Uuid;
++
++use super::ExecServerClient;
++use super::ExecServerError;
++use super::LazyRemoteExecServerClient;
++use crate::FILE_READ_CHUNK_SIZE;
++use crate::protocol::FS_CLOSE_METHOD;
++use crate::protocol::FS_OPEN_METHOD;
++use crate::protocol::FS_READ_BLOCK_METHOD;
++use crate::protocol::FsCloseParams;
++use crate::protocol::FsCloseResponse;
++use crate::protocol::FsOpenParams;
++use crate::protocol::FsOpenResponse;
++use crate::protocol::FsReadBlockParams;
++use crate::protocol::FsReadBlockResponse;
++use crate::remote_file_system::map_remote_error;
++use crate::rpc::RpcClient;
++
++pub const MAX_BOUNDED_FILE_READ_BYTES: usize = 8 * 1024 * 1024;
++
++#[derive(Debug)]
++pub struct BoundedFileRead {
++    pub bytes: Vec<u8>,
++    pub truncated: bool,
++}
++
++#[derive(Debug, thiserror::Error)]
++#[error("{error}")]
++pub struct BoundedFileReadError {
++    #[source]
++    pub error: io::Error,
++    pub unsettled: bool,
++}
++
++impl BoundedFileReadError {
++    fn local(message: &str) -> Self {
++        Self {
++            error: io::Error::new(io::ErrorKind::InvalidInput, message),
++            unsettled: false,
++        }
++    }
++
++    fn rpc(error: ExecServerError) -> Self {
++        let unsettled = !matches!(error, ExecServerError::Server { .. });
++        Self {
++            error: map_remote_error(error),
++            unsettled,
++        }
++    }
++}
++
++impl LazyRemoteExecServerClient {
++    pub(crate) async fn read_file_bounded(
++        &self,
++        path: &PathUri,
++        max_bytes: usize,
++    ) -> Result<BoundedFileRead, BoundedFileReadError> {
++        validate_bound(max_bytes)?;
++        let client = self
++            .fail_fast()
++            .get()
++            .await
++            .map_err(|error| BoundedFileReadError {
++                error: map_remote_error(error),
++                unsettled: false,
++            })?;
++        client.read_file_bounded(path, max_bytes).await
++    }
++}
++
++fn validate_bound(max_bytes: usize) -> Result<(), BoundedFileReadError> {
++    if !(1..=MAX_BOUNDED_FILE_READ_BYTES).contains(&max_bytes) {
++        return Err(BoundedFileReadError::local(
++            "file read bound must be between 1 and 8388608 bytes",
++        ));
++    }
++    Ok(())
++}
++
++impl ExecServerClient {
++    async fn read_file_bounded(
++        &self,
++        path: &PathUri,
++        max_bytes: usize,
++    ) -> Result<BoundedFileRead, BoundedFileReadError> {
++        validate_bound(max_bytes)?;
++        let rpc = self
++            .rpc_client_without_recovery()
++            .map_err(|error| BoundedFileReadError {
++                error: map_remote_error(error),
++                unsettled: false,
++            })?;
++        let handle_id = Uuid::new_v4().simple().to_string();
++        let opened: Result<FsOpenResponse, ExecServerError> = self
++            .call_rpc(
++                &rpc,
++                FS_OPEN_METHOD,
++                &FsOpenParams {
++                    handle_id: handle_id.clone(),
++                    path: path.clone(),
++                    sandbox: None,
++                },
++            )
++            .await;
++        let result = match opened {
++            Ok(response) if response.handle_id == handle_id => {
++                self.read_bounded_blocks(&rpc, &handle_id, max_bytes).await
++            }
++            Ok(_) => Err(BoundedFileReadError {
++                error: io::Error::new(
++                    io::ErrorKind::InvalidData,
++                    "file open returned an unexpected handle",
++                ),
++                unsettled: true,
++            }),
++            Err(error @ ExecServerError::Server { .. }) => {
++                return Err(BoundedFileReadError::rpc(error));
++            }
++            Err(error) => Err(BoundedFileReadError::rpc(error)),
++        };
++        // Keep cleanup on the original connection, even if the Environment has recovered.
++        let closed: Result<FsCloseResponse, ExecServerError> = self.map_rpc_call_result(
++            rpc.call_for_cleanup(FS_CLOSE_METHOD, &FsCloseParams { handle_id })
++                .await,
++        );
++        match closed {
++            Ok(_) => result,
++            Err(error) => Err(BoundedFileReadError {
++                error: map_remote_error(error),
++                unsettled: true,
++            }),
++        }
++    }
++
++    async fn read_bounded_blocks(
++        &self,
++        rpc: &Arc<RpcClient>,
++        handle_id: &str,
++        max_bytes: usize,
++    ) -> Result<BoundedFileRead, BoundedFileReadError> {
++        let limit = max_bytes + 1;
++        let mut bytes = Vec::with_capacity(limit);
++        loop {
++            let len = FILE_READ_CHUNK_SIZE.min(limit - bytes.len());
++            let response: FsReadBlockResponse = self
++                .call_rpc(
++                    rpc,
++                    FS_READ_BLOCK_METHOD,
++                    &FsReadBlockParams {
++                        handle_id: handle_id.to_owned(),
++                        offset: bytes.len() as u64,
++                        len,
++                    },
++                )
++                .await
++                .map_err(BoundedFileReadError::rpc)?;
++            let chunk = response.chunk.into_inner();
++            if chunk.len() > len || (chunk.is_empty() && !response.eof) {
++                return Err(BoundedFileReadError {
++                    error: io::Error::new(
++                        io::ErrorKind::InvalidData,
++                        "file read returned an invalid block",
++                    ),
++                    unsettled: true,
++                });
++            }
++            bytes.extend_from_slice(&chunk);
++            if response.eof || bytes.len() == limit {
++                let truncated = bytes.len() > max_bytes;
++                bytes.truncate(max_bytes);
++                return Ok(BoundedFileRead { bytes, truncated });
++            }
++        }
++    }
++}
++
++#[cfg(test)]
++#[path = "bounded_file_read_tests.rs"]
++mod tests;
+diff --git a/codex-rs/exec-server/src/bounded_file_read_tests.rs b/codex-rs/exec-server/src/bounded_file_read_tests.rs
+new file mode 100644
+index 0000000..2d5f568
+--- /dev/null
++++ b/codex-rs/exec-server/src/bounded_file_read_tests.rs
+@@ -0,0 +1,282 @@
++use codex_exec_server_protocol::JSONRPCError;
++use codex_exec_server_protocol::JSONRPCMessage;
++use codex_exec_server_protocol::JSONRPCRequest;
++use codex_exec_server_protocol::JSONRPCResponse;
++use codex_exec_server_protocol::RequestId;
++use serde_json::Value;
++use serde_json::json;
++use tokio::sync::mpsc;
++use tokio::sync::watch;
++use tokio::time::Duration;
++use tokio::time::timeout;
++
++use super::*;
++use crate::ExecServerClientConnectOptions;
++use crate::client::ConnectionStatus;
++use crate::connection::JsonRpcConnection;
++use crate::connection::JsonRpcConnectionEvent;
++use crate::connection::JsonRpcTransport;
++use crate::rpc::not_found;
++
++struct Peer {
++    requests: mpsc::Receiver<JSONRPCMessage>,
++    responses: mpsc::Sender<JsonRpcConnectionEvent>,
++    _disconnected: watch::Sender<bool>,
++}
++
++fn connection() -> (JsonRpcConnection, Peer) {
++    let (outgoing_tx, requests) = mpsc::channel(8);
++    let (responses, incoming_rx) = mpsc::channel(8);
++    let (disconnected, disconnected_rx) = watch::channel(false);
++    (
++        JsonRpcConnection {
++            outgoing_tx,
++            incoming_rx,
++            disconnected_rx,
++            task_handles: Vec::new(),
++            transport: JsonRpcTransport::Plain,
++        },
++        Peer {
++            requests,
++            responses,
++            _disconnected: disconnected,
++        },
++    )
++}
++
++impl Peer {
++    async fn request(&mut self, method: &str) -> JSONRPCRequest {
++        let message = timeout(Duration::from_secs(2), self.requests.recv())
++            .await
++            .expect("request deadline")
++            .expect("request channel");
++        let JSONRPCMessage::Request(request) = message else {
++            panic!("expected request: {message:?}")
++        };
++        assert_eq!(request.method, method);
++        request
++    }
++
++    async fn respond(&self, id: RequestId, result: Value) {
++        self.responses
++            .send(JsonRpcConnectionEvent::Message(JSONRPCMessage::Response(
++                JSONRPCResponse { id, result },
++            )))
++            .await
++            .expect("send response");
++    }
++
++    async fn reject(&self, id: RequestId) {
++        self.responses
++            .send(JsonRpcConnectionEvent::Message(JSONRPCMessage::Error(
++                JSONRPCError {
++                    id,
++                    error: not_found("missing".to_owned()),
++                },
++            )))
++            .await
++            .expect("send rejection");
++    }
++}
++
++async fn connected() -> (ExecServerClient, Peer) {
++    let (connection, mut peer) = connection();
++    let bootstrap = tokio::spawn(async move {
++        let request = peer.request("initialize").await;
++        peer.respond(
++            request.id,
++            json!({"sessionId":"bounded-reader","environmentInfo":null}),
++        )
++        .await;
++        assert!(matches!(
++            peer.requests.recv().await,
++            Some(JSONRPCMessage::Notification(_))
++        ));
++        peer
++    });
++    let client = ExecServerClient::connect(connection, ExecServerClientConnectOptions::default())
++        .await
++        .expect("connect native client");
++    (client, bootstrap.await.expect("bootstrap"))
++}
++
++fn path() -> PathUri {
++    PathUri::parse("file:///workspace/artifact.bin").expect("file URI")
++}
++
++#[tokio::test]
++async fn bounded_read_binary_limits_and_pinned_connection() {
++    for (size, bound, replace) in [
++        (0, 10, false),
++        (10, 10, false),
++        (11, 10, false),
++        (FILE_READ_CHUNK_SIZE, FILE_READ_CHUNK_SIZE, false),
++        (FILE_READ_CHUNK_SIZE + 37, FILE_READ_CHUNK_SIZE + 100, true),
++        (FILE_READ_CHUNK_SIZE + 37, FILE_READ_CHUNK_SIZE + 36, false),
++    ] {
++        let data: Vec<u8> = (0..size).map(|index| (index % 256) as u8).collect();
++        let (client, mut peer) = connected().await;
++        let owner = client.clone();
++        let read = tokio::spawn(async move { owner.read_file_bounded(&path(), bound).await });
++        let opened = peer.request(FS_OPEN_METHOD).await;
++        let params: FsOpenParams =
++            serde_json::from_value(opened.params.expect("open params")).expect("open type");
++        assert_eq!(params.path, path());
++        assert!(params.sandbox.is_none());
++        let (replacement, mut replacement_peer) = connection();
++        let (replacement, _events) = RpcClient::new(replacement);
++        if replace {
++            client
++                .inner
++                .connection
++                .lock()
++                .expect("connection lock")
++                .status = ConnectionStatus::Connected(Arc::new(replacement));
++        }
++        peer.respond(opened.id, json!({"handleId":params.handle_id}))
++            .await;
++        let mut offset = 0;
++        loop {
++            let request = peer.request(FS_READ_BLOCK_METHOD).await;
++            let block: FsReadBlockParams =
++                serde_json::from_value(request.params.expect("block params")).expect("block type");
++            assert_eq!(block.handle_id, params.handle_id);
++            assert_eq!(block.offset, offset as u64);
++            assert_eq!(block.len, FILE_READ_CHUNK_SIZE.min(bound + 1 - offset));
++            let end = size.min(offset + block.len);
++            let eof = end - offset < block.len;
++            peer.respond(
++                request.id,
++                serde_json::to_value(FsReadBlockResponse {
++                    chunk: data[offset..end].to_vec().into(),
++                    eof,
++                })
++                .expect("block response"),
++            )
++            .await;
++            offset = end;
++            if eof || offset == bound + 1 {
++                break;
++            }
++        }
++        let closed = peer.request(FS_CLOSE_METHOD).await;
++        assert_eq!(closed.params, Some(json!({"handleId":params.handle_id})));
++        assert!(
++            !read.is_finished(),
++            "read must retain ownership until close acknowledgement"
++        );
++        peer.respond(closed.id, json!({})).await;
++        let result = read.await.expect("read task").expect("bounded bytes");
++        assert_eq!(result.bytes, data[..size.min(bound)]);
++        assert_eq!(result.truncated, size > bound);
++        assert!(
++            replacement_peer.requests.try_recv().is_err(),
++            "read or close moved to replacement"
++        );
++        assert!(peer.requests.try_recv().is_err());
++    }
++}
++
++#[tokio::test]
++async fn bounded_read_errors_require_ordered_close_and_preserve_uncertainty() {
++    for fault in [
++        "open_server",
++        "open_json",
++        "open_handle",
++        "read_server",
++        "read_json",
++        "read_oversize",
++        "read_empty",
++        "close_server",
++        "close_json",
++        "close_disconnect",
++        "read_disconnect",
++    ] {
++        let (client, mut peer) = connected().await;
++        let read = tokio::spawn(async move { client.read_file_bounded(&path(), 8).await });
++        let opened = peer.request(FS_OPEN_METHOD).await;
++        let params: FsOpenParams =
++            serde_json::from_value(opened.params.expect("open params")).expect("open type");
++        if fault == "open_server" {
++            peer.reject(opened.id).await;
++        } else if fault == "open_json" {
++            peer.respond(opened.id, json!({})).await;
++        } else if fault == "open_handle" {
++            peer.respond(opened.id, json!({"handleId":"wrong"})).await;
++        } else {
++            peer.respond(opened.id, json!({"handleId":params.handle_id}))
++                .await;
++            let block = peer.request(FS_READ_BLOCK_METHOD).await;
++            match fault {
++                "read_server" => peer.reject(block.id).await,
++                "read_json" => peer.respond(block.id, json!({})).await,
++                "read_disconnect" => {
++                    peer.responses
++                        .send(JsonRpcConnectionEvent::Disconnected { reason: None })
++                        .await
++                        .expect("disconnect");
++                }
++                _ => {
++                    let (bytes, eof) = match fault {
++                        "read_oversize" => (vec![0; 10], true),
++                        "read_empty" => (vec![], false),
++                        _ => (vec![0, 255, 128], true),
++                    };
++                    peer.respond(
++                        block.id,
++                        serde_json::to_value(FsReadBlockResponse {
++                            chunk: bytes.into(),
++                            eof,
++                        })
++                        .expect("block response"),
++                    )
++                    .await;
++                }
++            }
++        }
++        if fault != "open_server" && fault != "read_disconnect" {
++            let closed = peer.request(FS_CLOSE_METHOD).await;
++            assert_eq!(closed.params, Some(json!({"handleId":params.handle_id})));
++            assert!(!read.is_finished());
++            match fault {
++                "close_server" => peer.reject(closed.id).await,
++                "close_json" => peer.respond(closed.id, json!(null)).await,
++                "close_disconnect" => {
++                    peer.responses
++                        .send(JsonRpcConnectionEvent::Disconnected { reason: None })
++                        .await
++                        .expect("disconnect");
++                }
++                _ => peer.respond(closed.id, json!({})).await,
++            }
++        }
++        let failure = timeout(Duration::from_secs(2), read)
++            .await
++            .expect("read deadline")
++            .expect("read task")
++            .expect_err("read fails");
++        let settled = matches!(fault, "open_server" | "read_server");
++        assert_eq!(failure.unsettled, !settled, "{fault}");
++        if matches!(fault, "open_server" | "read_server") {
++            assert_eq!(failure.error.kind(), io::ErrorKind::NotFound);
++        }
++        assert!(
++            peer.requests.try_recv().is_err(),
++            "extra request after {fault}"
++        );
++    }
++}
++
++#[tokio::test]
++async fn bounded_read_invalid_bound_sends_no_requests() {
++    let (client, mut peer) = connected().await;
++    for bound in [0, MAX_BOUNDED_FILE_READ_BYTES + 1, usize::MAX] {
++        let error = client
++            .read_file_bounded(&path(), bound)
++            .await
++            .expect_err("invalid bound");
++        assert_eq!(error.error.kind(), io::ErrorKind::InvalidInput);
++        assert!(!error.unsettled);
++        assert!(peer.requests.try_recv().is_err());
++    }
++}
+diff --git a/codex-rs/exec-server/src/client.rs b/codex-rs/exec-server/src/client.rs
+index bd758cd..a87df97 100644
+--- a/codex-rs/exec-server/src/client.rs
++++ b/codex-rs/exec-server/src/client.rs
+@@ -1,3 +1,10 @@
++#[path = "bounded_file_read.rs"]
++mod bounded_file_read;
++
++pub use bounded_file_read::BoundedFileRead;
++pub use bounded_file_read::BoundedFileReadError;
++pub use bounded_file_read::MAX_BOUNDED_FILE_READ_BYTES;
++
+ use std::collections::BTreeMap;
+ use std::collections::HashMap;
+ use std::sync::Arc;
+diff --git a/codex-rs/exec-server/src/environment.rs b/codex-rs/exec-server/src/environment.rs
+index 953f8d4..9362a0a 100644
+--- a/codex-rs/exec-server/src/environment.rs
++++ b/codex-rs/exec-server/src/environment.rs
+@@ -796,6 +796,25 @@ impl Environment {
+         }
+     }
+ 
++    /// Reads bounded remote bytes on one current connection and awaits its close acknowledgement.
++    pub async fn read_file_bounded(
++        &self,
++        path: &codex_utils_path_uri::PathUri,
++        max_bytes: usize,
++    ) -> Result<crate::BoundedFileRead, crate::BoundedFileReadError> {
++        let client = self
++            .remote_client
++            .as_ref()
++            .ok_or_else(|| crate::BoundedFileReadError {
++                error: std::io::Error::new(
++                    std::io::ErrorKind::Unsupported,
++                    "bounded reads require a remote environment",
++                ),
++                unsettled: false,
++            })?;
++        client.read_file_bounded(path, max_bytes).await
++    }
++
+     pub fn is_remote(&self) -> bool {
+         self.remote_client.is_some()
+     }
+diff --git a/codex-rs/exec-server/src/lib.rs b/codex-rs/exec-server/src/lib.rs
+index f0e2303..c0b20ba 100644
+--- a/codex-rs/exec-server/src/lib.rs
++++ b/codex-rs/exec-server/src/lib.rs
+@@ -54,8 +54,11 @@ pub use arg0_exec_helper::main as run_arg0_exec_helper_main;
+ pub use capability_discovery::CapabilityDiscoveryError;
+ pub use capability_discovery::discover_capability_roots;
+ pub use capability_discovery_cache::ExecutorCapabilityDiscoveryCache;
++pub use client::BoundedFileRead;
++pub use client::BoundedFileReadError;
+ pub use client::ExecServerClient;
+ pub use client::ExecServerError;
++pub use client::MAX_BOUNDED_FILE_READ_BYTES;
+ pub use client::http_client::HttpResponseBodyStream;
+ pub use client::http_client::RouteAwareHttpClient;
+ pub use client_api::ExecServerClientConnectOptions;
+diff --git a/codex-rs/exec-server/src/remote_file_system.rs b/codex-rs/exec-server/src/remote_file_system.rs
+index d574cec..28ad6ba 100644
+--- a/codex-rs/exec-server/src/remote_file_system.rs
++++ b/codex-rs/exec-server/src/remote_file_system.rs
+@@ -415,7 +415,7 @@ fn remote_sandbox_context(
+         .map(FileSystemSandboxContext::drop_cwd_if_unused)
+ }
+ 
+-fn map_remote_error(error: ExecServerError) -> io::Error {
++pub(crate) fn map_remote_error(error: ExecServerError) -> io::Error {
+     match error {
+         ExecServerError::Server { code, message } if code == NOT_FOUND_ERROR_CODE => {
+             io::Error::new(io::ErrorKind::NotFound, message)

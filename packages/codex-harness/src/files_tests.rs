@@ -172,6 +172,10 @@ async fn invalid_requests_and_local_manager_never_reach_host_metadata() -> Resul
             "environment_unavailable",
         ),
         (
+            b"{\"environment_id\":\"expected\",\"path\":\"etc/passwd\",\"operation\":\"read\",\"max_bytes\":1}\n".to_vec(),
+            "environment_unavailable",
+        ),
+        (
             b"{\"environment_id\":\"wrong\",\"path\":\"etc/passwd\"}\n".to_vec(),
             "wrong_environment",
         ),
@@ -262,21 +266,21 @@ fn rejects_wrong_identity_and_nonrelative_paths() {
     };
     for path in ["", "/etc/passwd", "../file", "a/../file", "a\\b"] {
         let frame = format!("{}\n", json!({"environment_id":"expected","path":path}));
-        assert!(request_path(frame.as_bytes(), &binding).is_err());
+        assert!(request_command(frame.as_bytes(), &binding).is_err());
     }
     assert!(
-        request_path(
+        request_command(
             b"{\"environment_id\":\"wrong\",\"path\":\"file\"}\n",
             &binding
         )
         .is_err()
     );
     assert!(
-        request_path(
+        request_command(
             b"{\"environment_id\":\"expected\",\"path\":\"file\"}\n",
             &binding
         )
         .is_ok()
     );
-    assert!(request_path(&vec![b'x'; MAX_FRAME + 1], &binding).is_err());
+    assert!(request_command(&vec![b'x'; MAX_FRAME + 1], &binding).is_err());
 }

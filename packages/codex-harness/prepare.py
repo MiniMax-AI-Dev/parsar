@@ -34,7 +34,7 @@ def load_manifest():
     package = Path(__file__).resolve().parent
     raw = (package / "source.json").read_bytes()
     manifest = json.loads(raw)
-    for key in ("patch", "build_overlay"):
+    for key in ("patch", "bounded_read_patch", "build_overlay"):
         checked_bytes(package / manifest[key]["file"], manifest[key]["sha256"])
     sources = sorted((package / manifest["source_directory"]).rglob("*.rs"))
     if not sources or not (package / manifest["source_directory"] / "main.rs").is_file():
@@ -85,7 +85,7 @@ def prepare(source, output):
     lock.write_bytes(normalize_lock(lock.read_bytes(), manifest["cargo_lock"], manifest["native_version"]))
     cargo_manifest = output / "codex-rs/app-server/Cargo.toml"
     checked_bytes(cargo_manifest, manifest["build_overlay"]["original_manifest_sha256"])
-    for key in ("patch", "build_overlay"):
+    for key in ("patch", "bounded_read_patch", "build_overlay"):
         patch = package / manifest[key]["file"]
         subprocess.run(["git", "apply", "--check", str(patch)], cwd=output, check=True)
         subprocess.run(["git", "apply", str(patch)], cwd=output, check=True)
@@ -102,6 +102,7 @@ def prepare(source, output):
         "revision": revision,
         "manifest_sha256": sha(raw),
         "patch_sha256": manifest["patch"]["sha256"],
+        "bounded_read_patch_sha256": manifest["bounded_read_patch"]["sha256"],
         "build_overlay_sha256": manifest["build_overlay"]["sha256"],
         "prepared_manifest_sha256": sha(cargo_manifest.read_bytes()),
         "prepared_lock_sha256": sha(lock.read_bytes()),

@@ -60,9 +60,11 @@ func newNativeHarnessArtifact(t *testing.T, native, artifact string) *nativeHarn
 	proof := map[string]any{
 		"artifact": artifact, "artifact_sha256": configuration["artifact_sha256"],
 		"native_helper": native, "native_helper_sha256": nativeHarnessFileHash(t, native),
-		"execution_caller":      "existing daemon Codex adapter and Go JSONRPCClient; no launch wrapper",
-		"preflight":             "stock helper discovery; opt-in artifact selected by the native adapter",
-		"metadata_observations": []map[string]any{},
+		"execution_caller":        "existing daemon Codex adapter and Go JSONRPCClient; no launch wrapper",
+		"preflight":               "stock helper discovery; opt-in artifact selected by the native adapter",
+		"metadata_observations":   []map[string]any{},
+		"read_observations":       []map[string]any{},
+		"read_error_observations": []map[string]any{},
 	}
 	return &nativeHarnessArtifact{root: state, configuration: configuration, proof: proof, owners: make(map[int]bool)}
 }
@@ -144,6 +146,10 @@ func (a *nativeHarnessArtifact) observeReady(t *testing.T, ctx context.Context, 
 	}
 	a.expectError(t, ctx, owner, uuid.NewString(), "placement.sh", "wrong_environment")
 	a.expectError(t, ctx, owner, a.environment, "missing-"+uuid.NewString(), "not_found")
+	if phase == "first" {
+		seedNativeHarnessReadFiles(t, local)
+	}
+	a.observeReads(t, ctx, owner, "ready_"+phase, local, phase != "first")
 }
 
 func (a *nativeHarnessArtifact) observeActive(t *testing.T, ctx context.Context, local string) {
@@ -154,6 +160,7 @@ func (a *nativeHarnessArtifact) observeActive(t *testing.T, ctx context.Context,
 	}
 	a.metadata(t, ctx, owner, "active_cancel", "retained.txt", local)
 	a.metadata(t, ctx, owner, "active_cancel", "cancel.started", local)
+	a.observeReads(t, ctx, owner, "active_cancel", local, true)
 }
 
 func (a *nativeHarnessArtifact) assertReleased(t *testing.T, ctx context.Context) {
@@ -173,14 +180,14 @@ func (a *nativeHarnessArtifact) assertReleased(t *testing.T, ctx context.Context
 
 func (a *nativeHarnessArtifact) metadata(t *testing.T, ctx context.Context, owner nativeHarnessOwner, phase, path, local string) {
 	t.Helper()
-	response := a.request(t, ctx, owner, a.environment, path)
+	response := a.request(t, ctx, owner, map[string]any{"environment_id": a.environment, "path": path}, 16*1024)
 	var metadata struct {
 		Size      int64 `json:"size"`
 		IsFile    bool  `json:"is_file"`
 		IsSymlink bool  `json:"is_symlink"`
 	}
 	info, err := os.Stat(filepath.Join(local, path))
-	if err != nil || json.Unmarshal(response.Metadata, &metadata) != nil || response.Error != "" || !metadata.IsFile || metadata.IsSymlink || metadata.Size != info.Size() {
+	if err != nil || json.Unmarshal(response.Metadata, &metadata) != nil || response.Error != "" || len(response.Read) != 0 || !metadata.IsFile || metadata.IsSymlink || metadata.Size != info.Size() {
 		t.Fatal("artifact metadata differs from independently observed remote file", phase, path)
 	}
 	observations := a.proof["metadata_observations"].([]map[string]any)
@@ -189,8 +196,8 @@ func (a *nativeHarnessArtifact) metadata(t *testing.T, ctx context.Context, owne
 
 func (a *nativeHarnessArtifact) expectError(t *testing.T, ctx context.Context, owner nativeHarnessOwner, environment, path, expected string) {
 	t.Helper()
-	response := a.request(t, ctx, owner, environment, path)
-	if response.Error != expected || len(response.Metadata) != 0 {
+	response := a.request(t, ctx, owner, map[string]any{"environment_id": environment, "path": path}, 16*1024)
+	if response.Error != expected || len(response.Metadata) != 0 || len(response.Read) != 0 {
 		t.Fatal("private artifact metadata error differs", expected, response.Error)
 	}
 	a.proof[expected+"_verified"] = true
@@ -198,28 +205,29 @@ func (a *nativeHarnessArtifact) expectError(t *testing.T, ctx context.Context, o
 
 type nativeHarnessMetadataResponse struct {
 	Metadata json.RawMessage `json:"metadata"`
+	Read     json.RawMessage `json:"read"`
 	Error    string          `json:"error"`
 }
 
-func (a *nativeHarnessArtifact) request(t *testing.T, ctx context.Context, owner nativeHarnessOwner, environment, path string) nativeHarnessMetadataResponse {
+func (a *nativeHarnessArtifact) request(t *testing.T, ctx context.Context, owner nativeHarnessOwner, request map[string]any, responseLimit int64) nativeHarnessMetadataResponse {
 	t.Helper()
 	requestCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	conn, err := (&net.Dialer{}).DialContext(requestCtx, "unix", filepath.Join(owner.IPCRoot, "files.sock"))
 	if err != nil {
-		t.Fatal("private artifact metadata connection failed", err)
+		t.Fatal("private artifact file connection failed", err)
 	}
 	defer conn.Close()
 	deadline, _ := requestCtx.Deadline()
 	if err = conn.SetDeadline(deadline); err != nil {
 		t.Fatal(err)
 	}
-	if err = json.NewEncoder(conn).Encode(map[string]string{"environment_id": environment, "path": path}); err != nil {
+	if err = json.NewEncoder(conn).Encode(request); err != nil {
 		t.Fatal(err)
 	}
 	var response nativeHarnessMetadataResponse
-	if err = json.NewDecoder(io.LimitReader(conn, 16*1024)).Decode(&response); err != nil {
-		t.Fatal("private artifact metadata response failed", err)
+	if err = json.NewDecoder(io.LimitReader(conn, responseLimit)).Decode(&response); err != nil {
+		t.Fatal("private artifact file response failed", err)
 	}
 	return response
 }

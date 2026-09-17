@@ -3,7 +3,7 @@
   "revision": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
   "native_version": "0.153.4",
   "rust_toolchain": "1.95.0",
-  "scope": "opt-in private Linux amd64 harness artifact with remote metadata; no public admission",
+  "scope": "opt-in private Linux amd64 harness artifact with remote metadata and bounded reads; no public admission",
   "patch": {
     "file": "patches/manager-exposure.patch",
     "sha256": "047e1fe5e267cfc350e0a6373e50eeff5c51581bdaffaf29807430d35b8c8adc"
@@ -21,5 +21,9 @@
   },
   "binary": "parsar-codex-harness",
   "source_directory": "src",
-  "target_directory": "codex-rs/app-server/parsar-harness"
+  "target_directory": "codex-rs/app-server/parsar-harness",
+  "bounded_read_patch": {
+    "file": "patches/bounded-read.patch",
+    "sha256": "5a6a49ac0b9b9398b772bc27c6256eb11af64487427bc57715d7800178c2e5dc"
+  }
 }
