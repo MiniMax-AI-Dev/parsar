@@ -151,6 +151,9 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" && (!caps.Preparation || !caps.RemoteEnvironment) {
 		return fail("device must advertise preparation and remote_environment")
 	}
+	if snapshot.Environment != nil && snapshot.Environment.Type == "openai_hosted" && (!caps.Preparation || !caps.LocalEnvironment) {
+		return fail("device must advertise preparation and local_environment")
+	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "none" && !caps.EnvironmentNone {
 		return fail("device must advertise environment_none")
 	}

@@ -26,6 +26,11 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 		return errors.New("dispatch: prompt_request missing run id (Envelope.ID and Payload.RunID both empty)")
 	}
 	req.RunID = runID
+	var err error
+	if req, err = r.localWorkspace.Configure(req); err != nil {
+		r.emitTerminalError(callerCtx, runID, err.Error())
+		return err
+	}
 	if req.AgentKind == "" {
 		r.log.ErrorContext(callerCtx, "handlePromptRequest: missing agent_kind", "run_id", runID)
 		return errors.New("dispatch: prompt_request missing agent_kind")
@@ -85,6 +90,7 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 	out := make(chan proto.Envelope, 64)
 	state := &sessionState{
 		runID:               runID,
+		environmentID:       req.EnvironmentID(),
 		stateKey:            stateKey,
 		out:                 out,
 		ctx:                 sessionCtx,

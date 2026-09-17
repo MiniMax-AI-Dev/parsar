@@ -1,5 +1,20 @@
 package proto
 
+// LocalEnvironment references a deployment-bound workspace; it never supplies a path.
+type LocalEnvironment struct {
+	ID string `json:"id"`
+}
+
+func (r PromptRequestPayload) EnvironmentID() string {
+	if r.LocalEnvironment != nil {
+		return r.LocalEnvironment.ID
+	}
+	if r.RemoteEnvironment != nil {
+		return r.RemoteEnvironment.ID
+	}
+	return ""
+}
+
 // RemoteEnvironment is a transient execution binding, not a public Environment
 // resource. WorkDir remains the harness-local cwd. The selected AgentKind owns
 // the native connection protocol; no native selector or configuration-variable name is shared.

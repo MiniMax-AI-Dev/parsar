@@ -76,6 +76,9 @@ func (r *Router) workspaceResourceLocked(request proto.WorkspaceReadPayload) (an
 		}
 		resource = s.session
 	}
+	if r.localWorkspace != nil {
+		resource = r.localWorkspace
+	}
 	return resource, ""
 }
 

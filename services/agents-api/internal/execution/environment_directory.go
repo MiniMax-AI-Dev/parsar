@@ -2,7 +2,6 @@ package execution
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
@@ -69,11 +68,8 @@ func (w *Worker) runDirectoryRead(owner context.Context, request directoryReadRe
 		result.err = store.ErrNotFound
 		return
 	}
-	var configuration struct {
-		Type               string `json:"type"`
-		WorkspaceDirectory string `json:"workspace_directory"`
-	}
-	if json.Unmarshal(environment.Configuration, &configuration) != nil || configuration.Type != "self_hosted" || configuration.WorkspaceDirectory == "" {
+	placement, err := parseEnvironmentPlacement(environment.Configuration)
+	if err != nil {
 		return
 	}
 	session, err := w.dispatcher.Store.GetSession(check, environment.TenantID, environment.SessionID)
@@ -89,13 +85,13 @@ func (w *Worker) runDirectoryRead(owner context.Context, request directoryReadRe
 		return
 	}
 	if reserved {
-		ready, err := w.bindSessionDevice(check, session, func(id string) bool { return w.directoryDeviceReady(id, session.Engine, true) })
+		ready, err := w.bindSessionDevice(check, session, func(id string) bool { return w.directoryDeviceReady(id, session.Engine, placement, true) })
 		if err != nil || !ready {
 			return
 		}
 	}
 	bound, err := w.dispatcher.Store.GetSessionDevice(check, session.TenantID, session.ID)
-	if err != nil || !w.directoryDeviceReady(bound.ID, session.Engine, reserved) {
+	if err != nil || !environmentDeviceMatches(session, environment, bound, placement) || !w.directoryDeviceReady(bound.ID, session.Engine, placement, reserved) {
 		return
 	}
 	peer, err := w.dispatcher.Registry.LookupDevice(bound.ID)
@@ -107,11 +103,11 @@ func (w *Worker) runDirectoryRead(owner context.Context, request directoryReadRe
 		result = readEnvironmentDirectory(owner, peer, read)
 		return
 	}
-	result = w.dispatcher.readPreparedDirectory(owner, peer, session, environment, configuration.WorkspaceDirectory, read)
+	result = w.dispatcher.readPreparedDirectory(owner, peer, session, environment, bound, read)
 	return
 }
 
-func (w *Worker) directoryDeviceReady(id, engine string, prepare bool) bool {
+func (w *Worker) directoryDeviceReady(id, engine string, placement environmentPlacement, prepare bool) bool {
 	if w.dispatcher.Registry == nil {
 		return false
 	}
@@ -120,7 +116,11 @@ func (w *Worker) directoryDeviceReady(id, engine string, prepare bool) bool {
 		return false
 	}
 	info, found, known := peer.AgentKindStatus(engine)
-	return known && found && info.Available && info.Capabilities.RemoteEnvironment && (!prepare || (info.Capabilities.Preparation && info.Capabilities.WorkspaceReadPreparation))
+	placementReady := info.Capabilities.RemoteEnvironment
+	if placement.Type == "openai_hosted" {
+		placementReady = info.Capabilities.LocalEnvironment
+	}
+	return known && found && info.Available && placementReady && (!prepare || (info.Capabilities.Preparation && info.Capabilities.WorkspaceReadPreparation))
 }
 
 func readEnvironmentDirectory(ctx context.Context, peer *gateway.Session, request proto.WorkspaceReadPayload) directoryReadResult {

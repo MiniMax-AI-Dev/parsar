@@ -16,6 +16,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/authoring"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/daemonize"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/dispatch"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/localworkspace"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/paths"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/transport"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -349,12 +350,17 @@ func mainLoop(rc *runContext, profile string, prof auth.Profile, agentCLIs agent
 // graceful router.Shutdown on exit so any in-flight subprocesses get
 // SIGTERM.
 func pumpConn(parentCtx context.Context, conn *transport.Conn, registry *agent.Registry, boot *transport.BootstrapResponse, agentCLIs agentCLIDiscovery) error {
+	local, err := localworkspace.Load()
+	if err != nil {
+		return err
+	}
 	bridge := authoring.New(conn)
 	registry = authoringRegistry(registry, bridge)
 	router, err := dispatch.New(dispatch.Config{
-		Registry: registry,
-		Sender:   conn,
-		Log:      obslog.Bg(),
+		Registry:       registry,
+		Sender:         conn,
+		Log:            obslog.Bg(),
+		LocalWorkspace: local,
 	})
 	if err != nil {
 		return fmt.Errorf("router init: %w", err)

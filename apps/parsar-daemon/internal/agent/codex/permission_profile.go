@@ -11,6 +11,9 @@ import (
 // Native managed requirements must constrain its definition and allowed profiles.
 // This selection does not establish workspace authority or public admission.
 func validatePermissionProfile(req proto.PromptRequestPayload, profile string) error {
+	if req.LocalEnvironment != nil && profile == "" {
+		return errors.New("codex: local Environment requires deployment-managed permissions")
+	}
 	if profile == "" {
 		return nil
 	}

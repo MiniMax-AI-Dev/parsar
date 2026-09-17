@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/localworkspace"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 )
@@ -52,6 +53,7 @@ type Router struct {
 	preparationRequests map[string]*preparationState
 	preparationTimeout  time.Duration
 	workspaceReads      map[string]struct{}
+	localWorkspace      *localworkspace.Binding
 }
 
 type appliedInteractionDecision struct {
@@ -96,6 +98,7 @@ type Config struct {
 	Log                *slog.Logger
 	IdleTimeout        time.Duration
 	PreparationTimeout time.Duration
+	LocalWorkspace     *localworkspace.Binding
 }
 
 const defaultIdleTimeout = time.Hour
@@ -135,6 +138,7 @@ func New(cfg Config) (*Router, error) {
 		preparations:        make(map[string]*preparationState),
 		preparationRequests: make(map[string]*preparationState),
 		preparationTimeout:  preparationTimeout,
+		localWorkspace:      cfg.LocalWorkspace,
 	}, nil
 }
 
