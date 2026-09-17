@@ -36,6 +36,23 @@ class PreparationTests(unittest.TestCase):
                 with self.subTest(value=value), self.assertRaises(ValueError):
                     private_path(value)
 
+    def test_bounded_read_patch_has_separate_identity_and_native_scope(self):
+        package = Path(__file__).resolve().parent
+        manifest = json.loads((package / "source.json").read_text())
+        patch = manifest["bounded_read_patch"]
+        data = checked_bytes(package / patch["file"], patch["sha256"])
+        with self.assertRaises(ValueError):
+            checked_bytes(package / patch["file"], manifest["patch"]["sha256"])
+        paths = [line.split()[2][2:] for line in data.decode().splitlines() if line.startswith("diff --git ")]
+        self.assertEqual(set(paths), {
+            "codex-rs/exec-server/src/bounded_file_read.rs",
+            "codex-rs/exec-server/src/bounded_file_read_tests.rs",
+            "codex-rs/exec-server/src/client.rs",
+            "codex-rs/exec-server/src/environment.rs",
+            "codex-rs/exec-server/src/lib.rs",
+            "codex-rs/exec-server/src/remote_file_system.rs",
+        })
+
     def test_shared_patch_identity_and_fixture_references(self):
         package = Path(__file__).resolve().parent
         root = package.parents[1]

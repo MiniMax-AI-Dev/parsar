@@ -33,7 +33,9 @@ trap 'rm -rf "$build_context"' EXIT
 python3 "$package/prepare.py" --source "$native_source" --output "$build_context/upstream"
 cd "$build_context/upstream/codex-rs"
 if [[ "$mode" == check ]]; then
-  rustfmt --check --edition 2024 app-server/parsar-harness/*.rs
+  rustfmt --check --edition 2024 app-server/parsar-harness/*.rs exec-server/src/bounded_file_read*.rs
+  cargo test --locked -p codex-exec-server --lib bounded_file_read
+  cargo clippy --locked -p codex-exec-server --lib --tests -- -D warnings
   cargo test --locked -p codex-app-server --bin parsar-codex-harness
   cargo clippy --locked -p codex-app-server --bin parsar-codex-harness -- -D warnings
   exit 0
