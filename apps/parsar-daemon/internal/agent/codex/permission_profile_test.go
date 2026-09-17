@@ -42,13 +42,14 @@ func TestPermissionProfileSelectsNativeStartupConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer plan.Cleanup()
-	found := false
+	config := map[string]string{}
 	for _, kv := range plan.ExtraConfig {
-		if kv[0] == "default_permissions" {
-			found = kv[1] == `"managed-workspace"`
-		}
+		config[kv[0]] = kv[1]
 	}
-	if !found || plan.Sandbox != "" || plan.Permissions != "managed-workspace" {
+	if config["default_permissions"] != `"managed-workspace"` || plan.Sandbox != "" || plan.Permissions != "managed-workspace" {
 		t.Fatal("native managed selection missing")
+	}
+	if config["shell_environment_policy.inherit"] != `"core"` || config["shell_environment_policy.ignore_default_excludes"] != "false" {
+		t.Fatal("shell can inherit model credentials")
 	}
 }

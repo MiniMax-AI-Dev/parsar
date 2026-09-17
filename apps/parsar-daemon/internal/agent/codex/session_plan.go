@@ -27,6 +27,7 @@ func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg
 		plan.Sandbox = ""
 		plan.Permissions = cfg.permissionProfile
 		plan.ExtraConfig = append(plan.ExtraConfig, [2]string{"default_permissions", tomlQuoteString(cfg.permissionProfile)})
+		configureRestrictedShellEnvironment(&plan)
 	}
 
 	if req.DisableSubagents {

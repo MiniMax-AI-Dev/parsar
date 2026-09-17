@@ -11,6 +11,8 @@ requirements file at `/etc/codex/requirements.toml`, mount only the authorized
 workspace at `/workspace`, and retain daemon/native state beneath `/home`. Set
 `PARSAR_CODEX_PERMISSION_PROFILE=managed-workspace` on the daemon. This operator
 setting selects the native profile at startup and on both new/resumed threads;
+it also filters native shell inheritance to process essentials, retaining default
+secret exclusions. Model credentials remain available to the trusted harness;
 it is not a request option or a public capability. Missing/invalid native profiles
 must fail, without falling back to an unrestricted run. Ordinary deployments leave
 this setting unset. It is incompatible with remote/none/read-only preparations.

@@ -33,6 +33,10 @@ func configureRemoteEnvironment(plan *SessionPlan, environment proto.RemoteEnvir
 		EnvironmentID: "remote", Cwd: environment.WorkspaceDirectory,
 		RuntimeWorkspaceRoots: []string{environment.WorkspaceDirectory},
 	}}
+	configureRestrictedShellEnvironment(plan)
+}
+
+func configureRestrictedShellEnvironment(plan *SessionPlan) {
 	plan.ExtraConfig = append(plan.ExtraConfig,
 		[2]string{"shell_environment_policy.inherit", `"core"`},
 		[2]string{"shell_environment_policy.ignore_default_excludes", "false"})
