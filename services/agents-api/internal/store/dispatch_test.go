@@ -35,17 +35,30 @@ type dispatchHarness struct {
 
 func newDispatchHarness(t *testing.T) *dispatchHarness {
 	t.Helper()
+	return newDispatchHarnessForSession(t, []byte(`{"agent":{"model":"test-model","instructions":"Keep this instruction."},"daemon":{"work_dir":"/tmp"}}`), false)
+}
+
+func newDispatchHarnessForSession(t *testing.T, configuration []byte, local bool) *dispatchHarness {
+	t.Helper()
 	s, _ := store.NewTestStore(t)
 	h := &dispatchHarness{t: t, s: s, tenant: uuid.NewString()}
 	ctx := context.Background()
 	var err error
-	h.session, err = s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "session", Configuration: []byte(`{"agent":{"model":"test-model","instructions":"Keep this instruction."},"daemon":{"work_dir":"/tmp"}}`)})
+	h.session, err = s.CreateSession(ctx, h.tenant, store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: "session", Configuration: configuration})
 	if err != nil {
 		t.Fatal(err)
 	}
 	secret := uuid.NewString()
 	h.credential = secret
-	h.device, err = s.CreateDevice(ctx, h.tenant, "isolated executor", device.HashCredential(secret))
+	if local {
+		environment, getErr := s.GetSessionEnvironment(ctx, h.tenant, h.session.ID)
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		h.device, err = s.CreateEnvironmentDevice(ctx, h.tenant, environment.ID, "local runtime", device.HashCredential(secret))
+	} else {
+		h.device, err = s.CreateDevice(ctx, h.tenant, "isolated executor", device.HashCredential(secret))
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

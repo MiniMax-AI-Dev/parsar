@@ -275,6 +275,12 @@ existing bounded workspace controls for directory access. Local idle directory
 reads use the existing filesystem helper directly, with no model credentials or
 temporary harness. These private capabilities do not admit public hosted requests,
 establish Provider lifecycle, or define the official `self_hosted` mapping.
+Core rechecks the persisted Environment/device binding for preparation and active
+reads; capability discovery cannot select or authorize a general device for this
+placement. Local work uses the existing pending-input reservation and Worker
+ownership without a remote connection resolver. The currently qualified private
+hosted configuration requires explicit `network.access: disabled`; omitted network
+settings mean enabled upstream and must not be silently treated as disabled.
 
 Core and Runtime use common preparation, start, input-receipt, cancellation,
 release and recovery semantics for Codex and Claude. Retain each harness's native

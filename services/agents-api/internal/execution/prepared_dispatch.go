@@ -3,7 +3,6 @@ package execution
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -38,12 +37,7 @@ func (d *Dispatcher) RunEnvironmentInput(ctx context.Context, tenantID, sessionI
 		return run, err
 	}
 	var snapshot Snapshot
-	var configuration struct {
-		Type                  string   `json:"type"`
-		WorkspaceDirectory    string   `json:"workspace_directory"`
-		CapabilityDirectories []string `json:"capability_directories"`
-	}
-	if json.Unmarshal(session.Configuration, &snapshot) != nil || snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" || json.Unmarshal(environment.Configuration, &configuration) != nil || configuration.Type != "self_hosted" || configuration.WorkspaceDirectory == "" || len(configuration.CapabilityDirectories) != 0 {
+	if json.Unmarshal(session.Configuration, &snapshot) != nil || snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
 		return run, store.ErrInvalidInput
 	}
 	bound, err := d.Store.GetSessionDevice(ctx, tenantID, sessionID)
@@ -57,9 +51,6 @@ func (d *Dispatcher) RunEnvironmentInput(ctx context.Context, tenantID, sessionI
 	caps, err := engineCapabilities(peer, session.Engine, snapshot)
 	if err != nil {
 		return run, err
-	}
-	if d.EnvironmentConnection == nil {
-		return run, errors.New("environment connection resolver is not configured")
 	}
 	owner, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -78,17 +69,13 @@ func (d *Dispatcher) RunEnvironmentInput(ctx context.Context, tenantID, sessionI
 		}
 		messages = append(messages, text)
 	}
-	connection, err := d.EnvironmentConnection(owner, session, environment)
-	if connection.Release != nil {
-		defer connection.Release()
+	release, err := d.configurePreparedEnvironment(owner, session, environment, bound, &req)
+	if release != nil {
+		defer release()
 	}
 	if err != nil {
 		return run, err
 	}
-	if connection.URL == "" || connection.Token == "" || connection.Release == nil {
-		return run, errors.New("environment connection is incomplete")
-	}
-	req.RemoteEnvironment = &proto.RemoteEnvironment{ID: environment.ID, WorkspaceDirectory: configuration.WorkspaceDirectory, ConnectionURL: connection.URL, ConnectionToken: connection.Token}
 	prepared, err := newPreparedStart(peer)
 	if err != nil {
 		return run, err

@@ -32,13 +32,35 @@ func (w *Worker) bindDevice(ctx context.Context, tenantID, sessionID string) (bo
 	if err := json.Unmarshal(session.Configuration, &snapshot); err != nil {
 		return false, err
 	}
+	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" && w.dispatcher.EnvironmentConnection == nil {
+		return false, nil
+	}
 	return w.bindSessionDevice(ctx, session, func(id string) bool { return w.ready(id, session.Engine, snapshot) })
 }
 
 func (w *Worker) bindSessionDevice(ctx context.Context, session store.Session, ready func(string) bool) (bool, error) {
+	var snapshot Snapshot
+	if json.Unmarshal(session.Configuration, &snapshot) != nil {
+		return false, store.ErrInvalidInput
+	}
+	if snapshot.Environment != nil && snapshot.Environment.Type == "openai_hosted" {
+		environment, err := w.dispatcher.Store.GetSessionEnvironment(ctx, session.TenantID, session.ID)
+		if err != nil {
+			return false, err
+		}
+		placement, err := parseEnvironmentPlacement(environment.Configuration)
+		if err != nil {
+			return false, nil
+		}
+		bound, err := w.dispatcher.Store.GetSessionDevice(ctx, session.TenantID, session.ID)
+		if errors.Is(err, store.ErrNotFound) {
+			return false, nil
+		}
+		return err == nil && environmentDeviceMatches(session, environment, bound, placement) && ready(bound.ID), err
+	}
 	bound, err := w.dispatcher.Store.GetSessionDevice(ctx, session.TenantID, session.ID)
 	if err == nil {
-		return ready(bound.ID), nil
+		return bound.EnvironmentID == "" && ready(bound.ID), nil
 	}
 	if !errors.Is(err, store.ErrNotFound) {
 		return false, err

@@ -18,7 +18,7 @@ func TestDirectoryPreparationBoundsConnectionResolution(t *testing.T) {
 			return EnvironmentConnection{}, ctx.Err()
 		}}
 		started := time.Now()
-		result := d.readPreparedDirectory(context.Background(), nil, store.Session{}, store.Environment{}, "/workspace", proto.WorkspaceReadPayload{})
+		result := d.readPreparedDirectory(context.Background(), nil, store.Session{}, store.Environment{Configuration: []byte(`{"type":"self_hosted","workspace_directory":"/workspace"}`)}, store.ExecutionDevice{}, proto.WorkspaceReadPayload{})
 		if !errors.Is(result.err, ErrExecutionUnavailable) || time.Since(started) <= 0 || time.Since(started) > 45*time.Second {
 			t.Fatal("connection resolution did not have a bounded owner lifetime")
 		}

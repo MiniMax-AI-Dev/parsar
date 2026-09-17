@@ -9,18 +9,16 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
 
-func (d *Dispatcher) readPreparedDirectory(ctx context.Context, peer *gateway.Session, session store.Session, environment store.Environment, workspace string, read proto.WorkspaceReadPayload) directoryReadResult {
+func (d *Dispatcher) readPreparedDirectory(ctx context.Context, peer *gateway.Session, session store.Session, environment store.Environment, bound store.ExecutionDevice, read proto.WorkspaceReadPayload) directoryReadResult {
 	unavailable := directoryReadResult{err: ErrExecutionUnavailable}
-	if d.EnvironmentConnection == nil {
-		return unavailable
-	}
 	owner, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	connection, err := d.EnvironmentConnection(owner, session, environment)
-	if connection.Release != nil {
-		defer connection.Release()
+	req := proto.PromptRequestPayload{AgentKind: session.Engine, AgentStateKey: "agents-api-" + session.ID, StrictResume: true, ReleaseOnCompletion: true, WorkspaceReadOnly: true}
+	release, err := d.configurePreparedEnvironment(owner, session, environment, bound, &req)
+	if release != nil {
+		defer release()
 	}
-	if err != nil || connection.URL == "" || connection.Token == "" || connection.Release == nil {
+	if err != nil {
 		return unavailable
 	}
 	prepared, err := newPreparedStart(peer)
@@ -35,8 +33,6 @@ func (d *Dispatcher) readPreparedDirectory(ctx context.Context, peer *gateway.Se
 			peer.UnsubscribePreparation(prepared.requestID)
 		}
 	}()
-	req := proto.PromptRequestPayload{AgentKind: session.Engine, AgentStateKey: "agents-api-" + session.ID, StrictResume: true, ReleaseOnCompletion: true, WorkspaceReadOnly: true,
-		RemoteEnvironment: &proto.RemoteEnvironment{ID: environment.ID, WorkspaceDirectory: workspace, ConnectionURL: connection.URL, ConnectionToken: connection.Token}}
 	prepare, stop := context.WithTimeout(owner, 10*time.Second)
 	err = send(prepare, peer, proto.TypeExecutionPrepare, prepared.requestID, proto.ExecutionPreparePayload{Configuration: req})
 	if err == nil {

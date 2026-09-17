@@ -29,7 +29,7 @@ func (s *workerSchedule) selectWork(ctx context.Context, w *Worker, devices []st
 		s.turnCursor = ""
 	}
 	var environments []store.EnvironmentInputWork
-	if w.dispatcher.EnvironmentConnection != nil && !time.Now().Before(s.nextEnvironmentScan) {
+	if !time.Now().Before(s.nextEnvironmentScan) {
 		environments, err = w.dispatcher.Store.ListEnvironmentInputWork(ctx, s.environmentCursor, devices)
 		if err != nil {
 			return nil, err
