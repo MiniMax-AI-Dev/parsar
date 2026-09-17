@@ -73,10 +73,15 @@ limitations: hard-link targets are modified in place, and base64 encoding a
 50 MiB file exceeds the native 64 MiB message bound. Install this helper outside
 the writable workspace and invoke it directly through the native process API,
 with restricted network and a filesystem policy limited to that workspace and
-required helper/runtime reads. It does not authorize callers or enable Files.create.
+required helper/runtime reads, plus write access to the private staging directory.
+It does not authorize callers or enable Files.create.
 
-Arguments are the authorized absolute root, a nonempty relative file path and
-its declared byte count (0–50 MiB). Stream those bytes in bounded native stdin
+Arguments are the authorized absolute root, a nonempty relative file path,
+its declared byte count (0–50 MiB), and an existing absolute staging directory.
+The staging directory must be outside the workspace, not its ancestor, and on
+the destination filesystem. Symlink traversal and cross-filesystem replacement
+are rejected; there is no copy fallback. The former three-argument private CLI
+is no longer accepted. Stream those bytes in bounded native stdin
 chunks, followed by their 32-byte binary SHA-256 digest. This is one private frame;
 there is no second request on that process. The native process protocol has no
 stdin-close method, so the digest terminates the frame without waiting for EOF.
@@ -85,25 +90,29 @@ means queued input, not committed file contents.
 
 The helper reuses held-directory no-follow traversal, rejects existing nonregular
 targets and requires an existing parent. It writes a fresh mode-0600 temporary
-file with the existing rustix openat/renameat operations, checks the declared byte count and
+file in the held staging directory with the existing rustix openat/renameat operations, checks the declared byte count and
 digest, syncs the file, then replaces the destination directory entry and syncs
-the parent. Existing hard links retain their original inode and contents. This
+both directories. Existing hard links retain their original inode and contents. This
 private replacement policy does not preserve destination mode/ownership metadata
-or establish official overwrite semantics. The caller must prevent concurrent
-workspace writers throughout installation, including native tools and background
-processes that can modify the staging file or its directory entry. The digest
-checks streamed input; it does not protect against another process replacing the
-staging name or modifying its inode before commit. This prerequisite is not yet
-established for public uploads. Later writers can change the installed file;
-no snapshot or exactly-once guarantee is implied.
+or establish official overwrite semantics. The operator must protect staging and
+its ancestors from native tools and background processes. A dedicated staging
+directory per Environment, with native tool write access limited to the workspace
+and separate installer access, is the qualified mechanism. Directory naming or
+mode 0700 alone does not isolate processes running as the same user. The helper
+cannot verify other processes' policies; public admission must bind and validate
+this condition. Broad read permission may still expose staging bytes; confidentiality
+requires its own placement policy. Concurrent workspace changes do not gain access
+to protected staging, but later writers can change the installed file. No snapshot
+or exactly-once guarantee is implied.
 
 One version-1 JSON response reports `outcome: completed` with `size_bytes`,
-`failed` before replacement, or `unknown` if the parent sync fails after replacement.
+`failed` before replacement, or `unknown` if either directory sync fails after replacement.
 Errors contain only a fixed safe code. Require a complete response plus observed
 native exit/output close; exit zero alone is insufficient. Input errors preserve
-the old destination under that concurrency prerequisite. Temporary-file cleanup
+the old destination provided staging remains protected; independent workspace
+writers can still change that destination themselves. Temporary-file cleanup
 is best effort: permission or I/O errors, as well as forced termination, can leave
-a `.parsar-upload-*` staging file. Never interpret it as a completed upload.
+a `.parsar-upload-*` file in the private staging directory. Never interpret it as a completed upload.
 A missing receipt remains unknown and must not trigger automatic replay. This
 helper does not fence a replacement owner after remote transport or service loss;
 public admission still needs operation ownership and recovery handling.

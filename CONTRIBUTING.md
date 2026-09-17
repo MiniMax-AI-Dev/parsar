@@ -640,10 +640,13 @@ the demonstrated native hard-link overwrite and whole-message size gaps; it is
 not a second filesystem service or public admission. Reuse held-directory traversal
 and existing rustix directory-relative operations for replacement. Keep preparation, caller
 authorization and uncertain mutation recovery in their existing owning layers.
-The caller must prevent concurrent workspace writers during installation; native
-tools and background processes can otherwise interfere with staging. Public upload
-admission must establish this prerequisite or provide a separately verified safe
-commit mechanism. Temporary-file cleanup is best effort.
+Require an existing disjoint staging directory on the destination filesystem.
+The operator must protect that directory and its ancestors from native tool and
+background-process writes; same-user mode bits alone do not do so. Use separate
+native filesystem policies for the installer and workspace tools, with a dedicated
+staging directory per Environment. The helper cannot attest that placement rule;
+public admission must establish it. Concurrent workspace writers need not be
+globally stopped to protect staged bytes. Temporary-file cleanup is best effort.
 A queued stdin receipt, missing helper result or process termination is not a file
 commit receipt. See the [installer contract](packages/codex-executor/README.md#scoped-file-installer)
 for private limits, cleanup, metadata and concurrency semantics.
