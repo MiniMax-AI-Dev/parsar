@@ -129,6 +129,9 @@ func (r *Router) prepareExecution(p *preparationState, req proto.PromptRequestPa
 	r.mu.Unlock()
 	if !ready {
 		r.closePreparationResource(p)
+		if p.workspaceReadOnly {
+			return
+		}
 		r.mu.Lock()
 		status = p.status
 		r.mu.Unlock()
