@@ -13,6 +13,7 @@ func (s *Session) startThread(plan SessionPlan) error {
 		ModelProvider:         plan.ModelProvider,
 		ApprovalPolicy:        plan.ApprovalPolicy,
 		Sandbox:               plan.Sandbox,
+		Permissions:           plan.Permissions,
 		DeveloperInstructions: plan.SystemPrompt,
 	}
 	if s.functions != nil {
@@ -35,6 +36,7 @@ func (s *Session) startThread(plan SessionPlan) error {
 func (s *Session) resumeThread(threadID string, plan SessionPlan) error {
 	params := ThreadResumeParams{
 		ThreadID: threadID, ApprovalPolicy: plan.ApprovalPolicy, Sandbox: plan.Sandbox,
+		Permissions:           plan.Permissions,
 		DeveloperInstructions: plan.SystemPrompt,
 	}
 	if plan.mcpHTTPServers != nil {

@@ -1,0 +1,16 @@
+default_permissions = "managed-workspace"
+allowed_approval_policies = ["never"]
+[allowed_permission_profiles]
+managed-workspace = true
+[permissions.managed-workspace.filesystem]
+":minimal" = "read"
+"/workspace" = "write"
+[permissions.managed-workspace.network]
+enabled = false
+[permissions.filesystem]
+deny_read = [
+  "/home/*/.parsar/parsar-daemon/*/auth.json",
+  "/home/*/.parsar/parsar-daemon/agent-sessions/*/config.toml",
+  "/home/*/.parsar/parsar-daemon/agent-sessions/*/sessions",
+  "/home/*/.parsar/parsar-daemon/agent-sessions/*/archived_sessions",
+]
