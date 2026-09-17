@@ -1,3 +1,4 @@
+import { WorkspaceDirectories, type WorkspaceDirectoryEvent } from "./workspace_directories.js";
 import { getSessionInfo, query, startup, type McpServerConfig, type Options, type WarmQuery } from "@anthropic-ai/claude-agent-sdk";
 import { WorkspaceReads, type WorkspaceReadEvent } from "./workspace_reads.js";
 import { Inputs, type InputEvent } from "./inputs.js";
@@ -14,6 +15,7 @@ import type { Prepare, Start } from "./request.js";
 export { parseStart, type Start } from "./request.js";
 
 export type Event =
+  | WorkspaceDirectoryEvent
   | WorkspaceReadEvent
   | MessageEvent
   | InputEvent
@@ -26,7 +28,7 @@ export type Event =
   | { type: "result"; session_id: string; text: string }
   | { type: "error"; code: "invalid_request" | "history_unavailable" | "execution_failed" | "cancelled" };
 
-export async function execute(request: Start | Prepare, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit), inputs = new Inputs(request.type === "start" ? request.prompt : undefined), reads = new WorkspaceReads(emit, abort)): Promise<void> {
+export async function execute(request: Start | Prepare, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit), inputs = new Inputs(request.type === "start" ? request.prompt : undefined), reads = new WorkspaceReads(emit, abort), directories = new WorkspaceDirectories(emit, abort)): Promise<void> {
   const workspace = request.workspace === undefined ? undefined : new WorkspaceProfile(request.cwd, request.workspace);
   const commands = workspace ? new CommandObserver() : undefined;
   if (request.type === "prepare" && !workspace) throw new Error("invalid_request");
@@ -87,6 +89,7 @@ export async function execute(request: Start | Prepare, emit: (event: Event) => 
         throw new Error("preparation unavailable");
       }
       reads.bind(stream, request.cwd);
+      if (process.platform === "linux") await directories.bind(request.cwd);
       await emit({ type: "prepared" });
     } else stream = query({ prompt: inputs, options });
     for await (const message of stream) {
@@ -127,6 +130,7 @@ export async function execute(request: Start | Prepare, emit: (event: Event) => 
     profile?.close();
     inputs.close();
     functions.close();
+    try { await directories.close(); } catch { failed = true; }
     await reads.close();
     stream?.close();
     warm?.close();

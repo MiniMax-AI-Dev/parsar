@@ -1,3 +1,4 @@
+import { WorkspaceDirectories } from "./workspace_directories.js";
 import { WorkspaceReads } from "./workspace_reads.js";
 import { Inputs } from "./inputs.js";
 import { FunctionBridge } from "./function_bridge.js";
@@ -27,6 +28,7 @@ try {
   };
   const functions = new FunctionBridge(output);
   const reads = new WorkspaceReads(output, abort);
+  const directories = new WorkspaceDirectories(output, abort);
   const prompts = new Inputs(request.type === "start" ? request.prompt : undefined);
   const incoming = (async () => {
     try {
@@ -35,6 +37,8 @@ try {
         const value: unknown = JSON.parse(line);
         if (value && typeof value === "object" && "type" in value && value.type === "workspace_read") {
           reads.submit(value as Record<string, unknown>);
+        } else if (value && typeof value === "object" && "type" in value && value.type === "workspace_directory") {
+          directories.submit(value as Record<string, unknown>);
         } else if (request.type === "prepare" && phase !== "running") {
           if (phase !== "prepared" || abort.signal.aborted) throw new Error("invalid_request");
           prompts.release(preparedPrompt(value));
@@ -46,7 +50,7 @@ try {
     }
     catch { invalid = request.type === "prepare"; abort.abort(); }
   })();
-  try { await execute(request, output, abort, functions, prompts, reads); }
+  try { await execute(request, output, abort, functions, prompts, reads, directories); }
   catch { await output({ type: "error", code: "execution_failed" }); }
   finally {
     prompts.close();

@@ -24,6 +24,7 @@ type liveWorkspaceRead struct {
 
 func liveWorkspaceReadFixtures(t *testing.T, root string) {
 	t.Helper()
+	liveWorkspaceDirectoryFixtures(t, root)
 	for path, data := range map[string][]byte{"read-binary.bin": bytes.Repeat([]byte{0, 255, 128, 1}, 64), "read-empty.bin": {}, "read-large.bin": bytes.Repeat([]byte{0, 255, 128, 1}, (workspaceReadMaxBytes+40)/4)} {
 		if err := os.WriteFile(filepath.Join(root, path), data, 0600); err != nil {
 			t.Fatal(err)
@@ -33,6 +34,7 @@ func liveWorkspaceReadFixtures(t *testing.T, root string) {
 
 func liveWorkspaceReads(t *testing.T, ctx context.Context, reader agent.WorkspaceReader, root, stage string, paths ...string) []liveWorkspaceRead {
 	t.Helper()
+	liveWorkspaceDirectories(t, ctx, reader, root, stage)
 	var proof []liveWorkspaceRead
 	for _, path := range paths {
 		expected, err := os.ReadFile(filepath.Join(root, path))

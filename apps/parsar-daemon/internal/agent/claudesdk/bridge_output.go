@@ -16,7 +16,7 @@ func (s *session) bridgeOutput() *bridgeOutput {
 		scanner.Buffer(make([]byte, 64*1024), 2*1024*1024)
 		for scanner.Scan() {
 			raw := append([]byte(nil), scanner.Bytes()...)
-			if !s.receiveWorkspaceRead(raw) {
+			if !s.receiveWorkspaceRead(raw) && !s.receiveWorkspaceDirectory(raw) {
 				output.frames <- raw
 			}
 		}
