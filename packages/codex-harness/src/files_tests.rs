@@ -1,6 +1,6 @@
 use super::*;
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn runner_completion_keeps_the_original_admitted_deadline() -> Result<()> {
     let binding = Binding {
         native_binary: "/native".into(),
@@ -13,7 +13,10 @@ async fn runner_completion_keeps_the_original_admitted_deadline() -> Result<()> 
     client
         .write_all(b"{\"environment_id\":\"expected\",\"path\":\"file\"}\n")
         .await?;
-    let (admitted, admission) = oneshot::channel();
+    // Establish actual socket readiness before using the controlled clock.
+    server.readable().await?;
+    tokio::time::pause();
+    let (admitted, mut admission) = oneshot::channel();
     let (complete, completion) = oneshot::channel();
     let (finish_runner, runner_done) = oneshot::channel();
     let files = async {
@@ -37,10 +40,8 @@ async fn runner_completion_keeps_the_original_admitted_deadline() -> Result<()> 
     );
     tokio::pin!(operation);
     let started = Instant::now();
-    tokio::select! {
-        result = &mut operation => panic!("operation ended before native admission: {result:?}"),
-        result = admission => result?,
-    }
+    assert!(futures::poll!(&mut operation).is_pending());
+    admission.try_recv()?;
     tokio::time::advance(Duration::from_secs(6)).await;
     finish_runner.send(()).expect("runner still owned");
     assert!(futures::poll!(&mut operation).is_pending());
