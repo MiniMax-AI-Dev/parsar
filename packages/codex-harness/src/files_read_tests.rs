@@ -53,7 +53,7 @@ async fn read_wait_includes_close_after_caller_detaches() -> Result<()> {
         &binding,
         REQUEST_DEADLINE,
         &stopping,
-        |command| async {
+        |command| async move {
             assert_eq!(command.read_limit, Some(4));
             admitted.send(()).expect("admission observed");
             read_result.await.expect("read wait retained");
