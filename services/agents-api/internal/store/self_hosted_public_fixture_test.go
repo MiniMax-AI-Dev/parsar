@@ -26,11 +26,15 @@ type publicSelfHostedFixture struct {
 	reservation                                                      store.EnvironmentInputReservation
 	executor                                                         store.IssuedExecutorCredential
 	daemonEnvironment, secrets                                       []string
+	harness                                                          *publicHarnessProfile
 }
 
 // This fixture provisions credentials and transport only; the Python client owns public Session/input requests.
 func newPublicSelfHostedFixture(t *testing.T, mode, script string) *publicSelfHostedFixture {
 	t.Helper()
+	if os.Getenv("PARSAR_PUBLIC_HARNESS_ARTIFACT") != "" && script != "official_self_hosted_cancel_native.py" {
+		t.Fatal("public harness qualification currently requires the cancellation fixture")
+	}
 	serverBinary, nativeBinary := os.Getenv("PARSAR_AGENTS_API_SERVER_BIN"), os.Getenv("PARSAR_CODEX_BINARY")
 	image, keyFile := os.Getenv("PARSAR_PLACEMENT_EXECUTOR_IMAGE"), os.Getenv("PARSAR_PLACEMENT_MODEL_KEY_FILE")
 	proofRoot, daemonBinary := os.Getenv("PARSAR_NATIVE_PROOF_DIR"), os.Getenv("PARSAR_NATIVE_DAEMON_BIN")
@@ -98,6 +102,7 @@ func newPublicSelfHostedFixture(t *testing.T, mode, script string) *publicSelfHo
 	observer := startPublicNativeClientScript(t, ctx, root, script, map[string]string{
 		"base": base, "token": caller, "foreign_token": foreign, "workspace_directory": workspace,
 		"remote_url": base, "memory": memory, "instruction": instruction, "creation_mode": mode,
+		"model": os.Getenv("PARSAR_PLACEMENT_MODEL"),
 	})
 	waiting := awaitPublicNativeSignal(t, ctx, observer, "waiting", 70*time.Second)
 	sessionID, environmentID := waiting["session_id"], waiting["environment_id"]
@@ -145,24 +150,31 @@ func newPublicSelfHostedFixture(t *testing.T, mode, script string) *publicSelfHo
 	})
 	wrapper := filepath.Join(root, "codex-minimax")
 	wrapperText := "#!/bin/sh\nfor argument in \"$@\"; do\n  if [ \"$argument\" = app-server ]; then printf '%s\\n' \"$$\" >> \"$PARSAR_PUBLIC_NATIVE_LAUNCH_LOG\"; fi\ndone\nexec \"$PARSAR_PUBLIC_NATIVE_CODEX\" -c 'model_provider=\"minimax_validation\"' -c 'model_providers.minimax_validation.name=\"MiniMax validation\"' -c 'model_providers.minimax_validation.base_url=\"https://api.minimax.cn/v1\"' -c 'model_providers.minimax_validation.env_key=\"MINIMAX_VALIDATION_KEY\"' -c 'model_providers.minimax_validation.wire_api=\"responses\"' \"$@\"\n"
-	if err := os.WriteFile(wrapper, []byte(wrapperText), 0700); err != nil {
-		t.Fatal(err)
+	if os.Getenv("PARSAR_PUBLIC_HARNESS_ARTIFACT") == "" {
+		if err := os.WriteFile(wrapper, []byte(wrapperText), 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	daemonEnvironment := publicNativeEnvironment(map[string]string{
 		"PARSAR_HOME": root, "PARSAR_CODEX_BIN": wrapper, "PARSAR_PUBLIC_NATIVE_CODEX": nativeBinary, "MINIMAX_VALIDATION_KEY": key,
 		"PARSAR_PUBLIC_NATIVE_LAUNCH_LOG": filepath.Join(root, "native-starts"),
 	})
-	return &publicSelfHostedFixture{
+	fixture := &publicSelfHostedFixture{
 		ctx: ctx, store: s, observer: observer, root: root, local: local, workspace: workspace,
 		serverBinary: serverBinary, daemonBinary: daemonBinary, version: strings.TrimSpace(string(version)),
 		tenant: tenant, sessionID: sessionID, environmentID: environmentID, deviceID: daemonDevice.ID,
 		remoteURL: waiting["remote_url"], container: container, reservation: reservation, executor: executor,
 		daemonEnvironment: daemonEnvironment, secrets: []string{key, caller, foreign, deviceToken, executor.Token},
 	}
+	fixture.harness = newPublicHarnessProfile(t, fixture, nativeBinary, image, key)
+	return fixture
 }
 
 func (f *publicSelfHostedFixture) startDaemon(t *testing.T) *relayProcess {
 	t.Helper()
+	if f.harness != nil {
+		return f.harness.start(t, f)
+	}
 	return startPublicNativeProcess(t, f.ctx, f.root, "daemon", f.daemonEnvironment, f.daemonBinary, "connect", "--profile", "execution")
 }
 

@@ -107,7 +107,7 @@ def main():
             sessions = api.beta.agents.sessions
             environment = {"type": "self_hosted", "workspace_directory": settings["workspace_directory"]}
             instructions = "Use the native shell for exact requested commands. Do not add wrappers, separators or recovery. Wait or poll a running command; never finish the Turn while it is still running."
-            creation = {"agent": {"model": "MiniMax-M3", "instructions": instructions, "tools": []}, "environment": environment}
+            creation = {"agent": {"model": settings.get("model") or "MiniMax-M3", "instructions": instructions, "tools": []}, "environment": environment}
             creation_key = str(uuid.uuid4())
             created = sessions.create(**creation, extra_headers={"Idempotency-Key": creation_key})
             session_id, environment_id = created.id, created.environment.id

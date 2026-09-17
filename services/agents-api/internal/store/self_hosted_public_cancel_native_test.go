@@ -32,6 +32,7 @@ exec ./placement.sh resumed
 		_, err := os.Stat(filepath.Join(f.local, "cancel.heartbeat"))
 		return err == nil
 	})
+	f.observeHarnessOwner(t)
 	writePublicNativeJSON(t, filepath.Join(f.observer.directory, "cancel-ready.json"), map[string]string{"environment_id": f.environmentID})
 	requested := awaitPublicNativeSignal(t, f.ctx, f.observer, "cancel-requested", 150*time.Second)
 	unix, err := strconv.ParseFloat(requested["request_started_unix"], 64)
@@ -81,6 +82,7 @@ exec ./placement.sh resumed
 		_, err := os.Stat(filepath.Join(f.local, "resumed.heartbeat"))
 		return err == nil
 	})
+	f.observeHarnessOwner(t)
 	writePublicNativeJSON(t, filepath.Join(f.observer.directory, "resumed-active.json"), map[string]string{"session_id": f.sessionID})
 	second := awaitPublicNativeSignal(t, f.ctx, f.observer, "old-cancel-retried", 30*time.Second)
 	before, err := os.ReadFile(filepath.Join(f.local, "resumed.heartbeat"))
@@ -167,6 +169,7 @@ exec ./placement.sh resumed
 		"public_evidence": filepath.Join(f.observer.directory, "public-cancellation-proof.json"),
 		"limits":          "Observed native cleanup timing is scenario-specific; no general OS quiescence, pre-Start Outcome or complete final usage claim.",
 	}
+	f.assertHarnessReleased(t, proof)
 	persistDaemonRemoteProof(t, f.root, proof, f.secrets)
 	t.Log("built standalone public cancellation real-provider evidence", f.root)
 }
