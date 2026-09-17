@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -74,4 +75,36 @@ func (a *Authenticator) principal(r *http.Request) (identity.Principal, bool) {
 func matchesScopeHeader(r *http.Request, name, expected string) bool {
 	values := r.Header.Values(name)
 	return len(values) == 0 || (len(values) == 1 && values[0] == expected)
+}
+
+type principalContextKey struct{}
+
+func (h *Handler) authenticate(next http.Handler) http.Handler {
+	return h.authenticateProject(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("OpenAI-Beta") != "agents=v1" {
+			writeError(w, http.StatusBadRequest, "invalid_beta_header", "OpenAI-Beta: agents=v1 is required.")
+			return
+		}
+		next.ServeHTTP(w, r)
+	}))
+}
+
+func (h *Handler) authenticateProject(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := h.auth.principal(r)
+		if !ok {
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			writeError(w, http.StatusUnauthorized, "invalid_api_key", "A valid Agents API bearer key is required.")
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalContextKey{}, principal)))
+	})
+}
+
+func tenantID(r *http.Request) string {
+	return r.Context().Value(principalContextKey{}).(identity.Principal).TenantID
+}
+
+func sessionCreator(r *http.Request) identity.Subject {
+	return r.Context().Value(principalContextKey{}).(identity.Principal).Subject()
 }

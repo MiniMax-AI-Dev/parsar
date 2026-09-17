@@ -35,7 +35,7 @@ func (f *environmentFileCreateFixture) WriteEnvironmentFile(_ context.Context, e
 	return int64(len(data)), f.err
 }
 
-func environmentFileCreateHandler(t *testing.T) (http.Handler, *environmentFileCreateFixture) {
+func environmentFileCreateHandler(t *testing.T, extra ...Option) (http.Handler, *environmentFileCreateFixture) {
 	t.Helper()
 	_, base := environmentFilesHandler(t, false)
 	base.environment.Configuration = json.RawMessage(`{"type":"openai_hosted","network":{"access":"disabled"}}`)
@@ -47,7 +47,8 @@ func environmentFileCreateHandler(t *testing.T) (http.Handler, *environmentFileC
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := NewHandler(f, auth, "codex", WithEnvironmentFileWriter(f), WithEnvironmentDirectoryReader(f))
+	options := append([]Option{WithEnvironmentFileWriter(f), WithEnvironmentDirectoryReader(f)}, extra...)
+	h, err := NewHandler(f, auth, "codex", options...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +99,7 @@ func TestEnvironmentFileCreateRejectsInvalidUnionAndPath(t *testing.T) {
 		`{"type":"inline","data":"","path":"/workspace/../secret"}`,
 		`{"type":"inline","data":"","path":"/workspace/a/"}`,
 		`{"type":"inline","data":"","path":"/workspace/a","file_id":"x"}`,
-		`{"type":"file_id","file_id":"x","path":"/workspace/a"}`,
+		`{"type":"file_id","file_id":null,"path":"/workspace/a"}`,
 		`{"type":"inline","data":"","path":"/workspace/a"} {}`,
 	} {
 		h, f := environmentFileCreateHandler(t)

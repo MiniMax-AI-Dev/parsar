@@ -30,6 +30,8 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 
 func writeStoreError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, store.ErrSourceFileTooLarge):
+		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "File exceeds this operation's content limit.")
 	case errors.Is(err, store.ErrCredentialStorageUnavailable):
 		writeError(w, http.StatusServiceUnavailable, "credential_storage_unavailable", "Credential encryption is not configured on this service.")
 	case errors.Is(err, execution.ErrEnvironmentInputExpired):

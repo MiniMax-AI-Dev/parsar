@@ -1,4 +1,4 @@
-"""Opt-in inline upload acceptance for a preconfigured local Environment.
+"""Opt-in inline/source upload acceptance for a preconfigured local Environment.
 
 Private Environment provisioning and subsequent real-model execution belong to
 the invoking native fixture. This does not prove public hosted Session admission.
@@ -17,6 +17,7 @@ import httpx2
 from openai import OpenAI
 from official_environment_files import verify_environment_files, verify_file_tenant_isolation
 from official_environment_files_native import caller_token
+from official_source_files import verify_source_files
 
 
 def main():
@@ -55,6 +56,9 @@ def main():
             assert receipt == {"environment_id": environment, "object": "agent.environment.file", "path": path, "size_bytes": len(content)}, "Wrong upload metadata"
             expected[path] = len(content)
             receipts.append({"path": path, "size": len(content), "sha256": hashlib.sha256(content).hexdigest()})
+        source_expected, source_receipts, source_proof = verify_source_files(client, foreign, http, environment, directory, cases)
+        expected.update(source_expected)
+        receipts.extend(source_receipts)
         pages, continuation = verify_environment_files(client, http, environment, directory, expected)
         verify_file_tenant_isolation(client, foreign, http, environment, directory, continuation, list(expected))
         target = directory + "/model-input.txt"
@@ -63,16 +67,17 @@ def main():
             {"type": "inline", "data": "", "path": "/workspace/../escape"},
             {"type": "inline", "data": "", "path": "/environment/staging/canary"},
             {"type": "inline", "data": "", "path": "/workspace/stage-link/canary"},
-            {"type": "file_id", "file_id": "unimplemented", "path": target},
         ):
             response = http.post(endpoint, headers=headers, json=body)
             assert response.status_code == 400 and "error" in response.json(), "Invalid/unsupported upload accepted"
+        response = http.post(endpoint, headers=headers, json={"type": "file_id", "file_id": "missing", "path": target})
+        assert response.status_code == 404, "Unknown source accepted"
         response = http.post(endpoint, headers={**headers, "Authorization": "Bearer " + foreign_token},
                              json={"type": "inline", "data": "", "path": target})
         assert response.status_code == 404, "Foreign tenant upload accepted"
         assert token not in response.text and foreign_token not in response.text, "Credential leaked in error"
-    print(json.dumps({"sdk": pin["sdk_version"], "commit": pin["commit"], "uploads": receipts, "listing": pages,
-                      "limits": ["Private Environment setup", "file_id unimplemented", "Overwrite metadata/error parity unverified", "Real-model consumption verified by invoking fixture"]}))
+    print(json.dumps({"sdk": pin["sdk_version"], "commit": pin["commit"], "uploads": receipts, "listing": pages, "sources": source_proof,
+                      "limits": ["Private Environment setup", "Other source purposes/expiration/listing unimplemented", "Overwrite metadata/error parity unverified", "Real-model consumption verified by invoking fixture"]}))
 
 
 if __name__ == "__main__":

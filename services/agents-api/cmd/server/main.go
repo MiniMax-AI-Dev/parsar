@@ -81,7 +81,7 @@ func run() error {
 	}
 	var workerDone chan error
 	var worker *execution.Worker
-	var options []api.Option
+	options := []api.Option{api.WithSourceFiles(executionStore)}
 	var daemonHandler http.Handler
 	var registry *gateway.Registry
 	var checkOwnership func(context.Context) error

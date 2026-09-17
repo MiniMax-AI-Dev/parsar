@@ -132,6 +132,17 @@ type SessionItem struct {
 	OutputIndex pgtype.Int4        `json:"output_index"`
 }
 
+type SourceFile struct {
+	ID        pgtype.UUID        `json:"id"`
+	TenantID  pgtype.UUID        `json:"tenant_id"`
+	Filename  string             `json:"filename"`
+	Purpose   string             `json:"purpose"`
+	BodyOid   pgtype.Uint32      `json:"body_oid"`
+	SizeBytes int64              `json:"size_bytes"`
+	Sha256    string             `json:"sha256"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type SubagentIdentity struct {
 	ID                pgtype.UUID `json:"id"`
 	SessionID         pgtype.UUID `json:"session_id"`

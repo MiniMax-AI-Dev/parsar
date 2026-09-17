@@ -2,8 +2,9 @@
 
 The complete protocol target remains the SDK pinned in [upstream.json](upstream.json).
 The public GET and POST `/agents/environments/{id}/files` have partial coverage.
-Inline creation targets a preconfigured V1 local Environment. Source-file (`file_id`)
-resolution, Artifacts and public hosted Session provisioning remain unimplemented.
+Inline and source-file (`file_id`) creation target a preconfigured V1 local
+Environment. [Source Files](source-files.md) have their own project-owned lifecycle.
+Artifacts and public hosted Session provisioning remain unimplemented.
 
 ## Pinned contract
 
@@ -60,15 +61,16 @@ local policies or remaining gaps, not verified hosted semantics. The pinned sour
 does not establish them. Do not interpret the bounded direct-file implementation
 as complete Files.list compatibility.
 
-## Inline creation and remaining union member
+## Inline and source-file creation
 
 The pinned create union requires `type: inline`, standard Base64 `data` and an
 absolute destination `path` under `/workspace`, or `type: file_id`, `file_id` and
-that path. The current implementation accepts inline only and explicitly rejects
-`file_id` as an implementation gap. Required null/omitted fields, extra fields,
+that path. Source IDs resolve only within the authenticated execution project;
+filenames, URLs and filesystem paths cannot substitute for an ID. Both members
+use the same destination writer. Required null/omitted fields, extra fields,
 query parameters and invalid Base64 are rejected. Empty bytes are valid. Inline
 paths must be canonical and cannot name the workspace root; the parent must exist.
-The current decoded-content limit is 50 MiB, with bounded JSON and 64 KiB daemon
+The current destination limit is 50 MiB for either source, with bounded JSON and 64 KiB daemon
 frames. These are local limits and policies, not verified upstream restrictions.
 
 Creation uses the same tenant Environment lookup as listing. The Worker checks the
@@ -97,8 +99,14 @@ operation, not independent workspace writers. Temporary-file cleanup is best eff
 
 Successful creation returns only the four EnvironmentFile fields. Reuse the common
 safe error mapper; current 400/409/413/503 policies and error timing are not evidence
-of exact upstream parity. This inline milestone cannot close the complete Files
+of exact upstream parity. This referenced-source milestone cannot close the complete Files
 resource or Environment lifecycle requirements.
+
+Source resolution reads an immutable snapshot before destination admission. A
+source deleted before that lookup is unavailable; an already-resolved copy may
+finish. Deleting a source never deletes a copied workspace file. A larger general
+Files upload can be downloaded but is rejected before Environment dispatch when
+it exceeds the destination limit. Exact hosted delete/copy timing is unverified.
 
 ## Acceptance boundary
 
@@ -114,6 +122,8 @@ the pinned SDK and raw HTTP listing assertions. Its stdin supplies the base URL,
 preconfigured Environment ID, model-input text, and two private caller token
 sources (`token_env` or `token_file`). The invoking native fixture supplies an
 existing `uploads` directory and a staging symlink rejection probe, verifies exact
-installed hashes, and has a real model consume the uploaded text. This distinction
+installed hashes, and has a real model consume source-copied text after source
+deletion. Its source fixture also streams a 512 MiB upload/download and verifies
+that it cannot bypass the smaller destination bound. This distinction
 keeps private setup separate from public hosted creation acceptance. Mechanism tests
 exercise detached/unknown outcomes and durable gates independently of model output.

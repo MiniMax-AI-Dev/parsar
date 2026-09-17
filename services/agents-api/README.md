@@ -174,15 +174,19 @@ access. `AGENTS_API_ENGINE` defaults to `codex`; set it to `claude_sdk` for the
 registered SDK profile. It selects new Sessions independently of the requested
 model. Existing Sessions retain their stored engine.
 
-The SDK base URL is `http://127.0.0.1:8091/v1`. Requests require a bearer key and
-`OpenAI-Beta: agents=v1` (set by the official SDK). Supported operations include:
+The SDK base URL is `http://127.0.0.1:8091/v1`. Requests require a bearer key.
+Agents and Vault routes also require `OpenAI-Beta: agents=v1` (set by their SDK
+resources); general Files routes do not. Supported operations include:
 
 - Saved Agent create/retrieve/update/list/delete.
 - Session create/retrieve/list and metadata-only update. Creation supports inline
   configuration or a saved `agent_id`, field replacements, optional initial text
   and ordinary or streaming responses.
 - Session event submission and live streaming, Turn retrieve/list and Items list.
-- Environment retrieve for the supported self-hosted profile.
+- Environment retrieve for the supported self-hosted profile, bounded live file
+  listing, and inline/source copies into a preconfigured qualified local workspace.
+- Project-owned `user_data` source file upload, metadata/content retrieval and
+  deletion; see [source Files](../../contracts/agents-api/source-files.md).
 - Vault create/retrieve/list (project-scoped pagination and stored active/archived
   filtering; no public archive/delete lifecycle) and static-bearer Credential create/retrieve/list/token replacement,
   with Session attachments for
@@ -191,7 +195,8 @@ The SDK base URL is `http://127.0.0.1:8091/v1`. Requests require a bearer key an
 Execution uses the selected
 [engine profile](../../contracts/agents-api/README.md#public-engine-profiles),
 including `none` and the Codex self-hosted idle-text profile described below.
-Requests have a 1 MiB body limit. Session lists support `after`, `limit` (1..100),
+Ordinary JSON requests have a 1 MiB body limit; file transfers use the separate
+bounds in the Files contracts. Session lists support `after`, `limit` (1..100),
 `order` (`asc`/`desc`) and optional immutable root `agent_id`. The local defaults
 are 20 and descending order; exact hosted limits/error semantics remain unverified.
 Metadata updates preserve omission, clear on null/empty and replace supplied pairs.
@@ -213,7 +218,7 @@ only completion snapshots. Pinned native 0.153.4 may also omit early process
 output from both notifications and its final aggregate; this remains an upstream
 execution gap. Recover missed output with Items queries, not SSE replay.
 
-Non-text message input, Subagents, Environment files/templates and populated
+Non-text message input, Subagents, Environment templates and populated
 installation metadata remain unsupported. Saving optional Agent configuration does not make
 it executable. Unsupported requests fail explicitly. `/healthz` reports liveness only.
 
