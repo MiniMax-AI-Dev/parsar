@@ -22,6 +22,10 @@ import (
 )
 
 func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
+	testNativePreparedWorkerRemoteEnvironment(t, false)
+}
+
+func testNativePreparedWorkerRemoteEnvironment(t *testing.T, directoryReads bool) {
 	binary, image := os.Getenv("PARSAR_CODEX_BINARY"), os.Getenv("PARSAR_PLACEMENT_EXECUTOR_IMAGE")
 	keyFile := os.Getenv("PARSAR_PLACEMENT_MODEL_KEY_FILE")
 	if binary == "" || !strings.HasPrefix(image, "sha256:") || keyFile == "" || os.Getenv("PARSAR_EXECUTOR_LAUNCHER") == "" || os.Getenv("PARSAR_OFFICIAL_SDK_PYTHON") == "" {
@@ -37,6 +41,10 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	}
 	key := strings.TrimSpace(string(keyBytes))
 	t.Setenv("PARSAR_CODEX_BIN", binary)
+	var directoryArtifact *nativeHarnessArtifact
+	if directoryReads {
+		directoryArtifact = prepareWorkerDirectoryArtifact(t, binary)
+	}
 	h, ctx, root := nativeDispatchHarnessWithTimeout(t, 8*time.Minute)
 	principal := store.FixtureExecutorPrincipal(t, h.s, h.tenant)
 	credential, err := h.s.IssueExecutorCredential(ctx, principal, uuid.NewString(), "")
@@ -167,7 +175,11 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 			if connection.RemoteURL != registry.PublicURL() || connection.EnvironmentID != environment.ID {
 				t.Fatal("public Environment identity differs from the provisioned target")
 			}
-			startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, connection.RemoteURL, connection.EnvironmentID, credential)
+			container := startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, connection.RemoteURL, connection.EnvironmentID, credential)
+			if directoryArtifact != nil {
+				directoryArtifact.container = container
+				directoryArtifact.installDirectoryHelper(t, ctx)
+			}
 			awaitEnvironmentConnectionState(t, ctx, h.s, h.tenant, environment.ID, "connected")
 			proof["launcher_remote_url"] = connection.RemoteURL
 			proof["launcher_environment_id"] = connection.EnvironmentID
@@ -208,6 +220,9 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 		if err != nil || len(retry.Receipts) != 1 || !retry.Receipts[0].Replayed || retry.Receipts[0].TurnID != run.Turn.ID {
 			t.Fatal("reservation retry allocated or executed another native preparation")
 		}
+		if directoryArtifact != nil && index == 0 {
+			proof["core_directory_reads"] = verifyWorkerDirectoryReads(t, ctx, h, worker, registry, environment, root)
+		}
 	}
 	observer.finish(t)
 	credentialData, err := os.ReadFile(filepath.Join(root, "executor", "credential.json"))
@@ -238,7 +253,11 @@ func TestNativePreparedWorkerRemoteEnvironment(t *testing.T) {
 	tokenMu.Lock()
 	tokens := append([]string(nil), harnessTokens...)
 	tokenMu.Unlock()
-	if len(tokens) != 2 {
+	expectedTokens := 2
+	if directoryArtifact != nil {
+		expectedTokens += 2
+	}
+	if len(tokens) != expectedTokens {
 		t.Fatal("worker prepared a reservation more than once")
 	}
 	for _, token := range tokens {

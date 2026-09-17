@@ -18,7 +18,7 @@ type directoryResult struct {
 	err   error
 }
 
-func directoryWorker(t *testing.T) (*dispatchHarness, *execution.Worker, store.Environment, *atomic.Int32) {
+func directoryWorker(t *testing.T, execute ...bool) (*dispatchHarness, *execution.Worker, store.Environment, *atomic.Int32) {
 	t.Helper()
 	h := newDispatchHarness(t)
 	var err error
@@ -41,6 +41,9 @@ func directoryWorker(t *testing.T) (*dispatchHarness, *execution.Worker, store.E
 	})
 	released := &atomic.Int32{}
 	h.d.Options = func(context.Context, store.Session) (map[string]any, error) {
+		if len(execute) > 0 && execute[0] {
+			return nil, nil
+		}
 		t.Error("read resolved model credentials")
 		return nil, errors.New("no credentials")
 	}
