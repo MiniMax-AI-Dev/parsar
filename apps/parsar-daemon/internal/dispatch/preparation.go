@@ -168,16 +168,20 @@ func (r *Router) releasePreparation(p *preparationState, state, code string, pub
 		p.timer.Stop()
 	}
 	if p.owns && !p.busy {
+		if p.workspaceReadOnly && state == "released" && p.status.ErrorCode == "cleanup_unconfirmed" {
+			p.status.State, p.status.ErrorCode, p.status.Revision = state, "", p.status.Revision+1
+		}
 		p.busy = true
 		closeResource = true
 		r.shutdownWG.Add(1)
 	}
 	status := p.status
+	settled := !p.owns && !p.busy
 	r.mu.Unlock()
 	if closeResource {
 		go func() { defer r.shutdownWG.Done(); r.closePreparationResource(p) }()
 	}
-	if publish && !p.workspaceReadOnly {
+	if publish && (!p.workspaceReadOnly || settled) {
 		r.publishPreparation(p, status)
 	}
 }
@@ -203,9 +207,11 @@ func (r *Router) prunePreparationsLocked() {
 
 func (r *Router) publishPreparation(p *preparationState, status proto.PreparationStatusPayload) {
 	r.mu.Lock()
-	if p.workspaceReadOnly && p.owns && p.busy && status.State != "preparing" && status.State != "ready" {
-		r.mu.Unlock()
-		return
+	if p.workspaceReadOnly {
+		if status.Revision != p.status.Revision || (p.owns && (p.busy || status.State == "released" || status.State == "expired") && status.State != "preparing" && status.State != "ready") {
+			r.mu.Unlock()
+			return
+		}
 	}
 	if r.closed {
 		r.mu.Unlock()

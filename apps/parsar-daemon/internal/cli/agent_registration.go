@@ -19,10 +19,10 @@ func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery, s
 	if agentCLIs.Codex.Available && agentCLIs.Codex.Capabilities.RemoteEnvironment {
 		registry.RegisterPreparation("codex", codex.SupportsWorkspaceReadPreparation(), func(ctx context.Context, req proto.PromptRequestPayload) (agent.Prepared, error) {
 			prepared, err := codex.Prepare(ctx, req)
-			if err != nil {
+			if prepared == nil {
 				return nil, err
 			}
-			return prepared, nil
+			return prepared, err
 		})
 	}
 	registerProductAgentKind(registry, agentCLIs.Pi, withSkillUploadServer(withCapabilityDownloads(pi.Factory, serverURL), serverURL))

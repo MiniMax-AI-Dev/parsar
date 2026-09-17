@@ -1,12 +1,14 @@
 mod files;
 mod options;
 mod owner;
+mod read_profile;
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use codex_app_server::{
     AppServerRuntimeOptions, AppServerTransport, AppServerWebsocketAuthSettings,
-    RemoteControlStartupMode, run_main_with_transport_options_and_environment_manager,
+    PluginStartupTasks, RemoteControlStartupMode,
+    run_main_with_transport_options_and_environment_manager,
 };
 use codex_arg0::{Arg0DispatchPaths, Arg0PathEntryGuard, arg0_dispatch};
 use codex_config::LoaderOverrides;
@@ -42,6 +44,14 @@ fn run_owned_runtime(operation: impl Future<Output = Result<()>>) -> Result<()> 
 }
 
 async fn run_harness(cli: options::Cli, binding: options::Binding) -> Result<()> {
+    let read_only = cli.workspace_read_only;
+    let loader = if read_only {
+        read_profile::loader(&std::path::PathBuf::from(
+            std::env::var_os("CODEX_HOME").context("read preparation requires CODEX_HOME")?,
+        ))?
+    } else {
+        LoaderOverrides::default()
+    };
     let overrides = cli.overrides()?;
     binding.check_native().await?;
     let socket = files::PrivateSocket::bind(&binding.ipc_root)?;
@@ -52,13 +62,18 @@ async fn run_harness(cli: options::Cli, binding: options::Binding) -> Result<()>
             ..Default::default()
         },
         overrides,
-        LoaderOverrides::default(),
+        loader,
         false,
         false,
         AppServerTransport::Stdio,
         SessionSource::VSCode,
         AppServerWebsocketAuthSettings::default(),
         AppServerRuntimeOptions {
+            plugin_startup_tasks: if read_only {
+                PluginStartupTasks::Skip
+            } else {
+                PluginStartupTasks::Start
+            },
             remote_control_startup_mode: RemoteControlStartupMode::DisabledEphemeral,
             ..Default::default()
         },

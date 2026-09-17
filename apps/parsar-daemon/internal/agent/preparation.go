@@ -24,6 +24,8 @@ type PreparedCancellation interface {
 	CancellationOutcome() proto.DonePayload
 }
 
+// A factory may return both a resource and an error when construction failed but
+// cleanup remains unconfirmed. The caller must retain and close that resource.
 type PreparationFactory func(context.Context, proto.PromptRequestPayload) (Prepared, error)
 
 // RegisterPreparation installs a separate execution-only path. Product factory

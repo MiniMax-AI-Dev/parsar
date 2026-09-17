@@ -3,6 +3,8 @@ package dispatch_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -46,6 +48,37 @@ func TestWorkspaceReadPreparationRejectsStartAndWaitsForClose(t *testing.T) {
 	}
 }
 
+func TestReadPreparationConstructionFailureRetainsCapacity(t *testing.T) {
+	var settled atomic.Bool
+	sender := &recSender{}
+	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) {
+		return &retryablePreparation{close: func(int32) error {
+			if !settled.Load() {
+				return errors.New("unreaped child")
+			}
+			return nil
+		}}, errors.New("initialization failed")
+	})
+	defer settled.Store(true)
+	request := preparationRequest()
+	request.Configuration.WorkspaceReadOnly = true
+	for i := range 4 {
+		id := fmt.Sprint("failed-read-", i)
+		if err := r.Handle(t.Context(), mustEnv(t, proto.TypeExecutionPrepare, id, request)); err != nil {
+			t.Fatal(err)
+		}
+		failed := waitPreparationStatus(t, sender, id, "failed", "")
+		if owned, _ := r.PreparationOwnershipForTest(failed.Handle); !owned || failed.ErrorCode != "cleanup_unconfirmed" {
+			t.Fatal("failed constructor did not retain cleanup ownership")
+		}
+	}
+	_ = r.Handle(t.Context(), mustEnv(t, proto.TypeExecutionPrepare, "fifth", request))
+	status := waitPreparationStatus(t, sender, "fifth", "rejected", "")
+	if status.ErrorCode != "preparation_capacity" {
+		t.Fatal("unreaped readers exceeded preparation capacity")
+	}
+}
+
 func TestWorkspaceReadPreparationRetainsFailedCleanup(t *testing.T) {
 	sender := &recSender{}
 	p := &retryablePreparation{close: func(call int32) error {
@@ -70,5 +103,15 @@ func TestWorkspaceReadPreparationRetainsFailedCleanup(t *testing.T) {
 	}
 	if owned, _ := r.PreparationOwnershipForTest(ready.Handle); !owned {
 		t.Fatal("uncertain cleanup discarded ownership")
+	}
+	if err := r.Handle(t.Context(), mustEnv(t, proto.TypeExecutionRelease, "read", proto.ExecutionReleasePayload{Handle: ready.Handle})); err != nil {
+		t.Fatal(err)
+	}
+	released := waitPreparationStatus(t, sender, "read", "released", "")
+	if released.ErrorCode != "" || released.Revision <= failed.Revision {
+		t.Fatal("successful cleanup retry did not report confirmation")
+	}
+	if owned, _ := r.PreparationOwnershipForTest(ready.Handle); owned {
+		t.Fatal("confirmed retry retained ownership")
 	}
 }

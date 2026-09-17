@@ -79,6 +79,10 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 		LogTag:          "codex-preparation",
 		Logger:          cfg.logger,
 	}
+	if req.WorkspaceReadOnly {
+		rpcCfg.Env = append(workspaceReadEnvironment(os.Environ()), plan.Env...)
+		rpcCfg.ExtraArgs = []string{"--workspace-read-only"}
+	}
 	for _, kv := range plan.ExtraConfig {
 		rpcCfg.ExtraArgs = append(rpcCfg.ExtraArgs, "-c", kv[0]+"="+kv[1])
 	}
@@ -113,21 +117,21 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 		s.cleanup = readPreparationCleanup(rpc, s.cleanup)
 	}
 	plan.Cleanup = s.cleanup
+	p := &Prepared{
+		session: s, plan: plan, remote: req.RemoteEnvironment != nil, workspaceReadOnly: req.WorkspaceReadOnly,
+		resumeID: req.AgentSessionID, strictResume: req.StrictResume,
+		transferred: make(chan struct{}),
+	}
 
 	initParams := InitializeParams{
 		ClientInfo:   InitializeClientInfo{Name: "parsar-daemon", Version: "0.0.0"},
 		Capabilities: &InitializeCapabilities{ExperimentalAPI: true},
 	}
 	if _, err := rpc.Start(cancelCtx, initParams); err != nil {
-		cancelFn()
-		plan.Cleanup()
-		return nil, fmt.Errorf("codex: rpc start: %w", err)
+		return p.preparationFailed(fmt.Errorf("codex: rpc start: %w", err))
 	}
 	if err := harness.verify(); err != nil {
-		cancelFn()
-		_ = rpc.Close()
-		plan.Cleanup()
-		return nil, err
+		return p.preparationFailed(err)
 	}
 	if req.DisableExecutionEnvironment {
 		if err := verifyNoExecutionEnvironment(cancelCtx, rpc); err != nil {
@@ -139,10 +143,7 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	}
 	if req.RemoteEnvironment != nil {
 		if err := verifyRemoteEnvironment(cancelCtx, rpc); err != nil {
-			cancelFn()
-			_ = rpc.Close()
-			plan.Cleanup()
-			return nil, err
+			return p.preparationFailed(err)
 		}
 	}
 	if plan.mcpHTTPServers != nil {
@@ -162,11 +163,6 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 		}
 	}
 
-	p := &Prepared{
-		session: s, plan: plan, remote: req.RemoteEnvironment != nil, workspaceReadOnly: req.WorkspaceReadOnly,
-		resumeID: req.AgentSessionID, strictResume: req.StrictResume,
-		transferred: make(chan struct{}),
-	}
 	go p.watchOwner()
 	return p, nil
 }

@@ -1,13 +1,38 @@
 package codex
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/paths"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
+
+// Preserve only process/transport essentials, never ambient model credentials,
+// native configuration selectors or runtime injection variables.
+func workspaceReadEnvironment(environment []string) []string {
+	var result []string
+	for _, value := range environment {
+		key, _, _ := strings.Cut(value, "=")
+		switch key {
+		case "HOME", "PATH", "TMPDIR", "LANG", "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR",
+			"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy":
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func (p *Prepared) preparationFailed(cause error) (*Prepared, error) {
+	if err := p.Close(); err != nil && p.workspaceReadOnly {
+		// A failed constructor still returns its cleanup owner to the dispatcher.
+		return p, errors.Join(cause, err)
+	}
+	return nil, cause
+}
 
 // SupportsWorkspaceReadPreparation checks local prerequisites, not public admission.
 // Native connection and the installed executor helper are verified per operation.

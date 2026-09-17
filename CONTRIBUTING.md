@@ -216,9 +216,15 @@ through the existing preparation factory and verified `workspace_read_preparatio
 capability. It accepts only the bound Environment and resource identity; execution
 options, model/MCP credentials, native Session continuation and model/tool input are excluded.
 The Codex adapter creates temporary local state, reuses its native connection and
-directory transport, and rejects Start. Ordinary execution keeps its stable state.
+directory transport, and rejects Start. Its child inherits only process/transport
+essentials. The private native read mode excludes system, managed, user and project
+execution configuration and plugin startup while preserving native security
+requirements. Ordinary execution keeps its stable state and configuration.
 For this read profile, `released` is published only after local Close succeeds;
-cleanup errors retain ownership and report `cleanup_unconfirmed`. A release request,
+cleanup errors retain ownership and report `cleanup_unconfirmed`. A failed factory
+must return its resource with the error if cleanup remains unconfirmed; wrappers
+must preserve both values. Successful cleanup retries publish confirmed release,
+and stale status snapshots cannot publish success. A release request,
 HTTP disconnect or remote socket closure alone is not cleanup confirmation. This
 profile does not establish remote mutation quiescence or public Files admission.
 

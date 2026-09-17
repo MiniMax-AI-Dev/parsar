@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -13,7 +14,18 @@ func TestWorkspaceReadPreparationLeavesExecutionStateUntouched(t *testing.T) {
 	privateHarnessTestHome(t)
 	request, cfg, root := preparationFixture(t)
 	cfg.harnessBinary = cfg.codexBinary
-	t.Setenv("PARSAR_PRIVATE_HARNESS_FAKE", "1")
+	// Put fixture controls in the executable, not in the sanitized child environment.
+	body, err := os.ReadFile(cfg.codexBinary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	controls := "export PARSAR_PREPARATION_FAKE=1 PARSAR_PRIVATE_HARNESS_FAKE=1\n"
+	for _, key := range []string{"PARSAR_PREPARATION_FRAMES", "PARSAR_PREPARATION_STATUS"} {
+		controls += "export " + key + "='" + strings.ReplaceAll(os.Getenv(key), "'", "'\\''") + "'\n"
+	}
+	if err := os.WriteFile(cfg.codexBinary, []byte(strings.Replace(string(body), "exec ", controls+"exec ", 1)), 0700); err != nil {
+		t.Fatal(err)
+	}
 	request.WorkspaceReadOnly = true
 	request.WorkDir, request.AgentOptions, request.FunctionTools = "", nil, nil
 	stable, err := allocCodexHome(request.AgentStateKey)
@@ -48,6 +60,14 @@ func TestWorkspaceReadPreparationLeavesExecutionStateUntouched(t *testing.T) {
 	}
 	if _, err := os.Stat(p.plan.Cwd); !os.IsNotExist(err) {
 		t.Fatal("successful close left read state", err)
+	}
+}
+
+func TestWorkspaceReadEnvironmentExcludesAmbientCredentials(t *testing.T) {
+	input := []string{"PATH=/usr/bin", "HOME=/operator", "HTTPS_PROXY=http://proxy", "OPENAI_API_KEY=sentinel", "ANTHROPIC_API_KEY=sentinel", "CUSTOM_PROVIDER_SECRET=sentinel", "CODEX_HOME=/execution", "LD_PRELOAD=/inject", "CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN=old"}
+	got := workspaceReadEnvironment(input)
+	if strings.Join(got, "\n") != strings.Join(input[:3], "\n") {
+		t.Fatal("read child inherited execution configuration or credentials")
 	}
 }
 
