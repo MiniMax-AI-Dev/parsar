@@ -34,18 +34,29 @@ func (p *preparedStart) close() {
 	p.peer.UnsubscribePreparation(p.requestID)
 }
 
-func (p *preparedStart) observation(env proto.Envelope) (proto.PreparationStatusPayload, error) {
+func (p *preparedStart) controlStatus(env proto.Envelope) (proto.PreparationStatusPayload, error) {
 	var status proto.PreparationStatusPayload
 	if env.Type != proto.TypePreparationStatus || env.ID != p.requestID || env.DecodePayload(&status) != nil {
 		return status, errors.New("invalid preparation control response")
 	}
 	if status.State == "rejected" {
-		return status, errors.New("preparation control rejected")
+		return status, nil
 	}
 	if status.Handle == "" || status.Revision == 0 || (p.handle != "" && p.handle != status.Handle) {
 		return status, errors.New("preparation identity changed")
 	}
 	p.handle = status.Handle
+	return status, nil
+}
+
+func (p *preparedStart) observation(env proto.Envelope) (proto.PreparationStatusPayload, error) {
+	status, err := p.controlStatus(env)
+	if err != nil {
+		return status, err
+	}
+	if status.State == "rejected" {
+		return status, errors.New("preparation control rejected")
+	}
 	switch status.State {
 	case "preparing", "ready", "starting", "started":
 		return status, nil

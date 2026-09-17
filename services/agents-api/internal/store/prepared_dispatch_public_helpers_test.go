@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/api"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/execution"
@@ -116,6 +117,24 @@ func (o *preparedPublicObserver) finish(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("public Environment observer did not finish", o.directory)
 	}
+}
+
+func (o *preparedPublicObserver) environmentEvents(t *testing.T) []v1.SessionEvent {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(o.directory, "public-environment-proof.json"))
+	var proof struct {
+		Events []v1.SessionEvent `json:"sdk_events"`
+	}
+	if err != nil || json.Unmarshal(raw, &proof) != nil {
+		t.Fatal("public Environment event evidence unavailable")
+	}
+	events := []v1.SessionEvent{}
+	for _, event := range proof.Events {
+		if event.Environment != nil {
+			events = append(events, event)
+		}
+	}
+	return events
 }
 
 func (o *preparedPublicObserver) close() {

@@ -13,9 +13,12 @@ import (
 
 // Worker owns queued work; the database lease excludes a second execution service.
 type Worker struct {
-	dispatcher *Dispatcher
-	admission  *store.Store
-	lease      *store.ExecutionLease
+	dispatcher     *Dispatcher
+	admission      *store.Store
+	lease          *store.ExecutionLease
+	directoryReads chan directoryReadRequest
+	stopped        chan struct{}
+	stopOnce       sync.Once
 }
 
 func StartWorker(ctx context.Context, dispatcher *Dispatcher) (*Worker, error) {
@@ -25,7 +28,7 @@ func StartWorker(ctx context.Context, dispatcher *Dispatcher) (*Worker, error) {
 	}
 	owned := *dispatcher
 	owned.Store = lease.Store()
-	worker := &Worker{dispatcher: &owned, admission: dispatcher.Store, lease: lease}
+	worker := &Worker{dispatcher: &owned, admission: dispatcher.Store, lease: lease, directoryReads: make(chan directoryReadRequest), stopped: make(chan struct{})}
 	if err := owned.Store.ReconcileEnvironmentConnections(ctx); err != nil {
 		_ = lease.Close(context.Background())
 		return nil, err
@@ -75,6 +78,7 @@ func (w *Worker) CreateSessionStream(ctx context.Context, tenant string, input s
 
 // Run retains queued work across restarts, but never replays an uncertain claim.
 func (w *Worker) Run(ctx context.Context) error {
+	defer w.stopOnce.Do(func() { close(w.stopped) })
 	ctx, cancel := context.WithCancel(ctx)
 	var running sync.WaitGroup
 	defer func() {
@@ -93,6 +97,8 @@ func (w *Worker) Run(ctx context.Context) error {
 		err error
 	}
 	completed := make(chan completion, 4)
+	readsCompleted := make(chan string, 4)
+	reads := 0
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	schedule := workerSchedule{}
@@ -100,6 +106,31 @@ func (w *Worker) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case request := <-w.directoryReads:
+			if request.ctx.Err() != nil || reads == 4 || (!active[request.environment.SessionID] && len(active) == 4) {
+				request.reply(directoryReadResult{err: ErrExecutionUnavailable})
+				continue
+			}
+			reserved := !active[request.environment.SessionID]
+			if reserved {
+				active[request.environment.SessionID] = true
+			}
+			reads++
+			running.Add(1)
+			go func() {
+				defer running.Done()
+				w.runDirectoryRead(ctx, request, reserved)
+				id := ""
+				if reserved {
+					id = request.environment.SessionID
+				}
+				readsCompleted <- id
+			}()
+		case id := <-readsCompleted:
+			reads--
+			if id != "" {
+				delete(active, id)
+			}
 		case result := <-completed:
 			delete(active, result.id)
 			if result.err != nil {
