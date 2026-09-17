@@ -66,6 +66,48 @@ not change stock native filesystem methods, create a daemon connection, or enabl
 public Files. The [native fixture](../../services/agents-api/tests/native/directory/README.md)
 qualifies the standalone helper independently of later adapter/public wiring.
 
+## Scoped file installer
+
+The optional `agents-api-codex-write` helper addresses two pinned native write
+limitations: hard-link targets are modified in place, and base64 encoding a
+50 MiB file exceeds the native 64 MiB message bound. Install this helper outside
+the writable workspace and invoke it directly through the native process API,
+with restricted network and a filesystem policy limited to that workspace and
+required helper/runtime reads. It does not authorize callers or enable Files.create.
+
+Arguments are the authorized absolute root, a nonempty relative file path and
+its declared byte count (0–50 MiB). Stream those bytes in bounded native stdin
+chunks, followed by their 32-byte binary SHA-256 digest. This is one private frame;
+there is no second request on that process. The native process protocol has no
+stdin-close method, so the digest terminates the frame without waiting for EOF.
+Extra bytes after the frame are not consumed. A process/write accepted receipt
+means queued input, not committed file contents.
+
+The helper reuses held-directory no-follow traversal, rejects existing nonregular
+targets and requires an existing parent. It writes a fresh mode-0600 temporary
+file with the existing rustix openat/renameat operations, checks the declared byte count and
+digest, syncs the file, then replaces the destination directory entry and syncs
+the parent. Existing hard links retain their original inode and contents. This
+private replacement policy does not preserve destination mode/ownership metadata
+or establish official overwrite semantics. The caller must prevent concurrent
+workspace writers throughout installation, including native tools and background
+processes that can modify the staging file or its directory entry. The digest
+checks streamed input; it does not protect against another process replacing the
+staging name or modifying its inode before commit. This prerequisite is not yet
+established for public uploads. Later writers can change the installed file;
+no snapshot or exactly-once guarantee is implied.
+
+One version-1 JSON response reports `outcome: completed` with `size_bytes`,
+`failed` before replacement, or `unknown` if the parent sync fails after replacement.
+Errors contain only a fixed safe code. Require a complete response plus observed
+native exit/output close; exit zero alone is insufficient. Input errors preserve
+the old destination under that concurrency prerequisite. Temporary-file cleanup
+is best effort: permission or I/O errors, as well as forced termination, can leave
+a `.parsar-upload-*` staging file. Never interpret it as a completed upload.
+A missing receipt remains unknown and must not trigger automatic replay. This
+helper does not fence a replacement owner after remote transport or service loss;
+public admission still needs operation ownership and recovery handling.
+
 ## Connect an executor
 
 An operator creates an executor principal key with
