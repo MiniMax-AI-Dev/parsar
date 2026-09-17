@@ -7,6 +7,7 @@ from pathlib import Path, PurePosixPath
 import shlex
 import sys
 import time
+import traceback
 import uuid
 
 sys.dont_write_bytecode = True
@@ -113,5 +114,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
-        raise SystemExit("Files.list acceptance failed; inspect the current stage privately (response bodies withheld).") from None
+    except Exception as error:
+        locations = " -> ".join(f"{Path(frame.filename).name}:{frame.lineno}" for frame in traceback.extract_tb(error.__traceback__))
+        raise SystemExit(f"Files.list acceptance failed ({type(error).__name__} at {locations}); response bodies withheld.") from None
