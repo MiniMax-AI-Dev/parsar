@@ -1,12 +1,21 @@
 use super::OperationError;
-use codex_exec_server::{Environment, FileSystemSandboxContext, GetMetadataOptions, WalkOptions};
+use codex_exec_server::{
+    Environment, ExecParams, ExecProcess, FileSystemSandboxContext, ProcessId,
+};
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::permissions::{
     FileSystemAccessMode, FileSystemPath, FileSystemSandboxEntry, FileSystemSandboxPolicy,
-    NetworkSandboxPolicy,
+    FileSystemSpecialPath, NetworkSandboxPolicy,
 };
+use codex_sandboxing::SandboxType;
 use codex_utils_path_uri::PathUri;
-use serde_json::{Value, json};
+use serde_json::Value;
+use std::collections::HashMap;
+use std::path::{Component, Path};
+use uuid::Uuid;
+
+#[path = "files_directory_output.rs"]
+mod output;
 
 pub(super) const MAX_ENTRIES: usize = 4096;
 
@@ -15,117 +24,133 @@ pub(super) async fn list(
     workspace: &PathUri,
     path: &PathUri,
     limit: usize,
+    helper: Option<&Path>,
 ) -> Result<Value, OperationError> {
-    let policy = FileSystemSandboxPolicy::restricted(vec![FileSystemSandboxEntry::new(
-        FileSystemPath::Path {
-            path: workspace.clone(),
-        },
-        FileSystemAccessMode::Read,
-    )]);
+    let invalid = || OperationError::Rejected("unsupported");
+    let root = workspace.to_abs_path().map_err(|_| invalid())?;
+    let target = path.to_abs_path().map_err(|_| invalid())?;
+    let helper = helper
+        .filter(|helper| qualified_path(helper, root.as_path()))
+        .ok_or_else(invalid)?;
+    let relative = target
+        .as_path()
+        .strip_prefix(root.as_path())
+        .ok()
+        .and_then(Path::to_str)
+        .ok_or_else(invalid)?;
+    let policy = FileSystemSandboxPolicy::restricted(vec![
+        FileSystemSandboxEntry::new(
+            FileSystemPath::Path {
+                path: workspace.clone(),
+            },
+            FileSystemAccessMode::Read,
+        ),
+        FileSystemSandboxEntry::new(
+            FileSystemPath::Path {
+                path: PathUri::from_host_native_path(helper).map_err(|_| invalid())?,
+            },
+            FileSystemAccessMode::Read,
+        ),
+        FileSystemSandboxEntry::new(
+            FileSystemPath::Special {
+                value: FileSystemSpecialPath::Minimal,
+            },
+            FileSystemAccessMode::Read,
+        ),
+    ]);
     let sandbox = FileSystemSandboxContext::from_permission_profile_with_cwd(
         PermissionProfile::from_runtime_permissions(&policy, NetworkSandboxPolicy::Restricted),
         workspace.clone(),
     );
-    let filesystem = environment.get_filesystem();
-    let no_follow = GetMetadataOptions {
-        follow_symlinks: false,
-    };
-    let root = workspace.to_abs_path().map_err(operation_error)?;
-    let target = path.to_abs_path().map_err(operation_error)?;
-    let relative = target
-        .as_path()
-        .strip_prefix(root.as_path())
-        .map_err(|_| OperationError::Rejected("invalid_path"))?;
-    let mut parent = root.as_path().to_path_buf();
-    // Reject symlink ancestors before native traversal can erase its typed error.
-    for component in relative
-        .components()
-        .take(relative.components().count().saturating_sub(1))
-    {
-        parent.push(component);
-        let parent_path = PathUri::from_host_native_path(&parent).map_err(operation_error)?;
-        let metadata = filesystem
-            .get_metadata(&parent_path, no_follow, Some(&sandbox))
+    let started = environment
+        .get_exec_backend()
+        .start(ExecParams {
+            process_id: ProcessId::from(format!("directory-{}", Uuid::new_v4())),
+            argv: vec![
+                helper.to_string_lossy().into_owned(),
+                root.to_string_lossy().into_owned(),
+                relative.into(),
+                limit.to_string(),
+            ],
+            cwd: workspace.clone(),
+            shell_snapshot: None,
+            env_policy: None,
+            env: HashMap::new(),
+            tty: false,
+            pipe_stdin: false,
+            arg0: None,
+            sandbox: Some(sandbox),
+            enforce_managed_network: false,
+            managed_network: None,
+            network_proxy: None,
+        })
+        .await
+        .map_err(|_| OperationError::Unsettled)?;
+    let process = started.process.as_ref();
+    if !matches!(started.sandbox_type, Some(SandboxType::LinuxSeccomp)) {
+        return stop_and_reject(process).await;
+    }
+    let mut output = output::Output::default();
+    loop {
+        // Uncapped snapshots expose the native global cursor. Capped reads can
+        // report closed while omitting chunks, and retained history can evict data.
+        let response = process
+            .read(Some(output.after()), None, Some(1000))
             .await
-            .map_err(operation_error)?;
-        if metadata.is_symlink || !metadata.is_directory {
-            return Err(OperationError::Rejected("invalid_path"));
+            .map_err(|_| OperationError::Unsettled)?;
+        if response.failure.is_some() {
+            return Err(OperationError::Unsettled);
+        }
+        let settled = response.closed && response.exited;
+        if output.append(&response).is_err() {
+            return if settled {
+                Err(OperationError::Rejected("native_error"))
+            } else {
+                stop_and_reject(process).await
+            };
+        }
+        if settled {
+            if response.exit_code != Some(0) || response.sandbox_denied == Some(true) {
+                return Err(OperationError::Rejected("native_error"));
+            }
+            return output::decode(&output.bytes, limit);
         }
     }
-    let metadata = filesystem
-        .get_metadata(path, no_follow, Some(&sandbox))
-        .await
-        .map_err(operation_error)?;
-    if metadata.is_symlink || !metadata.is_directory {
-        return Err(OperationError::Rejected("invalid_path"));
-    }
-    // Use the native bounded walk at depth zero, without directory symlink traversal.
-    // Its pinned implementation omits symlinks and non-regular entries; this private
-    // observation alone cannot establish complete public Files type semantics.
-    let outcome = filesystem
-        .walk(
-            path,
-            WalkOptions {
-                max_depth: 0,
-                max_directories: 1,
-                max_entries: limit,
-                follow_directory_symlinks: false,
-                prune_hidden_directories: false,
-            },
-            Some(&sandbox),
-        )
-        .await
-        .map_err(operation_error)?;
-    if !outcome.errors.is_empty() {
-        return Err(OperationError::Rejected("native_error"));
-    }
-    let root = path.to_abs_path().map_err(operation_error)?;
-    let mut entries = Vec::with_capacity(outcome.entries.len());
-    for entry in outcome.entries {
-        let absolute = entry.path.to_abs_path().map_err(operation_error)?;
-        let relative = absolute
-            .as_path()
-            .strip_prefix(root.as_path())
-            .map_err(|_| OperationError::Rejected("native_error"))?;
-        let name = relative
-            .to_str()
-            .filter(|name| {
-                !name.is_empty()
-                    && !name.contains(['/', '\\', '\0', '\r', '\n'])
-                    && *name != "."
-                    && *name != ".."
-            })
-            .ok_or(OperationError::Rejected("native_error"))?;
-        let metadata = filesystem
-            .get_metadata(&entry.path, no_follow, Some(&sandbox))
-            .await
-            .map_err(operation_error)?;
-        let (kind, size) = if metadata.is_symlink {
-            ("symlink", None)
-        } else if metadata.is_file {
-            (
-                "file",
-                Some(
-                    i64::try_from(metadata.size)
-                        .map_err(|_| OperationError::Rejected("native_error"))?,
-                ),
-            )
-        } else if metadata.is_directory {
-            ("directory", None)
-        } else {
-            ("other", None)
-        };
-        entries.push(json!({"name":name,"kind":kind,"size_bytes":size}));
-    }
-    Ok(json!({"directory":{"entries":entries,"truncated":outcome.truncated}}))
 }
 
-pub(super) fn operation_error(error: std::io::Error) -> OperationError {
-    match error.kind() {
-        std::io::ErrorKind::NotFound => OperationError::Rejected("not_found"),
-        std::io::ErrorKind::PermissionDenied => OperationError::Rejected("permission_denied"),
-        std::io::ErrorKind::InvalidInput => OperationError::Rejected("invalid_path"),
-        // Native transport errors do not confirm remote operation cleanup.
-        _ => OperationError::Unsettled,
+fn qualified_path(helper: &Path, workspace: &Path) -> bool {
+    let Some(value) = helper.to_str() else {
+        return false;
+    };
+    helper.is_absolute()
+        && !helper.starts_with(workspace)
+        && value
+            .split('/')
+            .skip(1)
+            .all(|part| !part.is_empty() && part != "." && part != "..")
+        && !value.contains(['\\', '\0', '\r', '\n'])
+        && helper
+            .components()
+            .all(|part| matches!(part, Component::RootDir | Component::Normal(_)))
+}
+
+async fn stop_and_reject(process: &dyn ExecProcess) -> Result<Value, OperationError> {
+    process
+        .terminate()
+        .await
+        .map_err(|_| OperationError::Unsettled)?;
+    loop {
+        let response = process
+            .read(None, None, Some(1000))
+            .await
+            .map_err(|_| OperationError::Unsettled)?;
+        if response.failure.is_some() {
+            return Err(OperationError::Unsettled);
+        }
+        // A terminate reply alone is not cleanup. The enclosing retained wait
+        // bounds this drain and fails the owner if exit/output close stay unknown.
+        if response.exited && response.closed {
+            return Err(OperationError::Rejected("native_error"));
+        }
     }
 }

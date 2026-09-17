@@ -87,3 +87,20 @@ func (a *nativeHarnessArtifact) observeDirectories(t *testing.T, ctx context.Con
 		t.Fatal("directory operation replaced native execution owner")
 	}
 }
+
+func (a *nativeHarnessArtifact) installDirectoryHelper(t *testing.T, ctx context.Context) {
+	t.Helper()
+	helper := os.Getenv("PARSAR_DIRECTORY_HELPER_ARTIFACT")
+	if helper == "" {
+		return
+	}
+	installed := "/usr/local/bin/agents-api-codex-directory"
+	if err := exec.CommandContext(ctx, "docker", "cp", helper, a.container+":"+installed).Run(); err != nil {
+		t.Fatal("install directory helper", err)
+	}
+	if err := exec.CommandContext(ctx, "docker", "exec", a.container, "chmod", "0555", installed).Run(); err != nil {
+		t.Fatal("protect directory helper", err)
+	}
+	a.proof["directory_helper_sha256"] = nativeHarnessFileHash(t, helper)
+	a.proof["directory_helper_installed"] = installed
+}

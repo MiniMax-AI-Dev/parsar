@@ -85,12 +85,16 @@ func TestPrivateHarnessBindingAndDefaultSelection(t *testing.T) {
 		t.Fatal("missing helper admitted")
 	}
 	cfg.Binary = binary
-	cfg.Env = append(cfg.Env, "PARSAR_CODEX_HARNESS_ENVIRONMENT=wrong", "PARSAR_CODEX_HARNESS_IPC_ROOT=/wrong")
+	t.Setenv("PARSAR_CODEX_DIRECTORY_HELPER", "/trusted/directory-helper")
+	cfg.Env = append(cfg.Env, "PARSAR_CODEX_HARNESS_DIRECTORY_HELPER=/caller/override", "PARSAR_CODEX_HARNESS_ENVIRONMENT=wrong", "PARSAR_CODEX_HARNESS_IPC_ROOT=/wrong")
 	h, err := configurePrivateHarness(&cfg, binary, remote)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer h.cleanup()
+	if privateHarnessEnv(cfg.Env, "PARSAR_CODEX_HARNESS_DIRECTORY_HELPER") != "/trusted/directory-helper" {
+		t.Fatal("directory helper was not selected by operator")
+	}
 	if cfg.Binary != binary || privateHarnessEnv(cfg.Env, "PARSAR_CODEX_HARNESS_NATIVE") != binary || privateHarnessEnv(cfg.Env, "PARSAR_CODEX_HARNESS_ENVIRONMENT") != remote.ID || privateHarnessEnv(cfg.Env, "PARSAR_CODEX_HARNESS_WORKSPACE") != remote.WorkspaceDirectory || privateHarnessEnv(cfg.Env, "PARSAR_CODEX_HARNESS_IPC_ROOT") != h.root {
 		t.Fatal("private binding not derived from operator and request")
 	}

@@ -3,6 +3,7 @@ use super::*;
 #[test]
 fn directory_root_and_limits_are_operation_specific() {
     let binding = Binding {
+        directory_helper: Some("/usr/local/bin/agents-api-codex-directory".into()),
         native_binary: "/native".into(),
         environment: "expected".into(),
         workspace: "/workspace".into(),
@@ -12,7 +13,7 @@ fn directory_root_and_limits_are_operation_specific() {
         let request = json!({"environment_id":"expected", "operation":"list_directory", "path":path, "max_entries":2});
         let command = request_command(format!("{request}\n").as_bytes(), &binding)
             .expect("directory request");
-        let (root, limit) = command.directory.expect("directory operation");
+        let (root, limit, _) = command.directory.expect("directory operation");
         assert_eq!(
             root.to_abs_path().expect("absolute root").as_path(),
             Path::new("/workspace")
@@ -50,6 +51,7 @@ fn directory_root_and_limits_are_operation_specific() {
 #[tokio::test]
 async fn directory_transport_loss_fences_the_owner_after_dispatch() -> Result<()> {
     let binding = Binding {
+        directory_helper: Some("/usr/local/bin/agents-api-codex-directory".into()),
         native_binary: "/native".into(),
         environment: "expected".into(),
         workspace: "/workspace".into(),
@@ -71,22 +73,14 @@ async fn directory_transport_loss_fences_the_owner_after_dispatch() -> Result<()
             &stopping,
             |command| async move {
                 assert!(command.directory.is_some());
-                Err(directory::operation_error(std::io::Error::from(kind)))
+                let _ = kind;
+                Err(OperationError::Unsettled)
             },
         )
         .await?;
         assert_eq!(outcome, ConnectionOutcome::UnsettledNativeOperation);
         assert!(outcome.require_settled().is_err());
         assert_eq!(client.read(&mut [0; 1]).await?, 0);
-    }
-    for (kind, code) in [
-        (std::io::ErrorKind::NotFound, "not_found"),
-        (std::io::ErrorKind::PermissionDenied, "permission_denied"),
-        (std::io::ErrorKind::InvalidInput, "invalid_path"),
-    ] {
-        assert!(
-            matches!(directory::operation_error(std::io::Error::from(kind)), OperationError::Rejected(value) if value == code)
-        );
     }
     Ok(())
 }

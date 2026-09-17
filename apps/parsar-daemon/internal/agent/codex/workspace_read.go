@@ -177,13 +177,15 @@ func decodeWorkspaceRead(frame []byte, maxBytes int) (agent.WorkspaceReadResult,
 
 func workspaceReadError(code string) error {
 	switch code {
+	case "unsupported":
+		return agent.ErrWorkspaceReadUnsupported
 	case "not_found":
 		return fs.ErrNotExist
 	case "permission_denied":
 		return fs.ErrPermission
 	case "invalid_request", "invalid_path":
 		return agent.ErrWorkspaceReadInvalid
-	case "environment_unavailable", "wrong_environment", "native_error":
+	case "environment_unavailable", "wrong_environment", "native_error", "too_large":
 		return agent.ErrWorkspaceReadUnavailable
 	default:
 		return agent.ErrWorkspaceReadUncertain

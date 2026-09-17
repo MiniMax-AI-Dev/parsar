@@ -86,17 +86,23 @@ base64 `data_base64`, `truncated` and `close_acknowledged: true`. Reads use nati
 blocks of at most 1 MiB and one extra byte to distinguish an exact-bound file from
 a truncated prefix. No snapshot consistency is promised for a changing file.
 An explicit `operation: "list_directory"` requires `max_entries` from 1 through
-4096; an empty relative `path` selects the workspace root. It uses the native
-walk at depth zero with a result limit and native no-follow metadata in a read-only
-filesystem permission context rooted at the bound workspace. `directory` contains `entries`
-(single-component `name`, `kind`, and `size_bytes` for regular files) and explicit
-`truncated`. The pinned walk omits symlinks and non-regular entries; later metadata
-may observe a type change. This live private observation is not a snapshot or
-complete public Files semantics. The native implementation collects and sorts all
-names before applying its entry limit: this bounds responses, not enumeration work
-or memory. Large-directory resource qualification remains open. Native errors do
-not return a partial success; ambiguous transport failures stop this owner without
-claiming remote cleanup or admitting another read. There is no write method.
+4096 and allows an empty path for the bound workspace root. The native process
+backend invokes the executor's qualified `agents-api-codex-directory` helper with
+explicit argv, a read-only Linux sandbox and restricted network. Set the daemon's
+operator-only `PARSAR_CODEX_DIRECTORY_HELPER` to its clean absolute executor path;
+the daemon freezes it as `PARSAR_CODEX_HARNESS_DIRECTORY_HELPER`, overriding any
+caller environment value. Missing/invalid selection rejects directory operations
+without changing preparation, byte reads or model execution. The installation must
+remain trusted and outside the workspace's writable tree, including aliases.
+`directory` contains `entries` (`name`, `kind`, nullable `size_bytes`) and explicit
+`truncated`, without ordering, pagination or snapshot guarantees. The helper uses
+bounded descriptor-scoped enumeration, including symlinks without following them.
+Only successful exit/output close with a complete version-1 frame yields a result.
+The native retained output window is 1 MiB; event-sequence gaps reject lost output
+rather than accepting a parseable tail. Aggregate output is capped at 4 MiB.
+Rejection before closure terminates and drains the process; unknown cleanup fails
+the existing owner without replay. These are private adapter semantics and do not
+qualify a public Files endpoint.
 
 The bounded-read hook captures one native RPC connection before opening a handle.
 Open, ordered block reads and cleanup use that exact connection without recovery

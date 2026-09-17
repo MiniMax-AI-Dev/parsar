@@ -118,6 +118,7 @@ func testNativeDaemonRemoteEnvironmentWithArtifact(t *testing.T, prepared bool, 
 	container := startDaemonRemoteExecutor(t, ctx, root, local, workspace, binary, image, server.URL, environment.ID, credential)
 	if artifact != nil {
 		artifact.container = container
+		artifact.installDirectoryHelper(t, ctx)
 	}
 	awaitDaemonRemoteCondition(t, ctx, 30*time.Second, "executor registration", func() bool {
 		connected, e := registry.Connected(ctx, h.tenant, environment.ID)

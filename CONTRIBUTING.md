@@ -538,12 +538,19 @@ Return single-component names, entry kind, regular-file byte size and explicit
 truncation only after directory/metadata access and handle cleanup settle. Reuse
 byte-read admission, uncertainty and caller-detach ownership where applicable.
 Do not promise a snapshot, recursive traversal or public pagination through this
-private interface. Codex uses its same-manager socket, native depth-zero walk
-with a result limit and metadata with a read-only filesystem context. The native
-walk omits symlinks/non-regular entries and collects all names before applying its
-limit; response bounds do not qualify enumeration work or memory. Record those
-gaps and qualify actual isolation/resource conditions before public use. Ambiguous
-native transport outcomes stop further owner access without claiming cleanup.
+private interface. Codex uses the same manager's native process backend to invoke
+an operator-installed `agents-api-codex-directory` through explicit argv, without a
+shell. `PARSAR_CODEX_DIRECTORY_HELPER` selects the executor-side executable and is
+frozen in the private child binding; an absent or invalid selector rejects only
+this operation. Keep that qualified installation outside the writable workspace.
+Require the verified Linux sandbox, read-only workspace/helper runtime access and
+restricted network. The helper anchors all traversal to no-follow descriptors and
+bounds enumeration before collecting names. Accept only a complete versioned result
+after native exit/output close. Account for native output and terminal event
+sequence numbers: retained-output eviction or a capped response's `closed` flag
+cannot establish completeness. Reject missing/oversized/invalid output; terminate
+and confirm exit/output close when rejection precedes settlement. Keep the existing
+retained wait and owner failure on native uncertainty; never retry unknown work.
 Private directory support alone does not enable a
 daemon control operation, public Files route or capability advertisement.
 

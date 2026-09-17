@@ -25,6 +25,11 @@ func TestNativeDaemonHarnessArtifact(t *testing.T) {
 	if artifact == "" {
 		t.Skip("explicit final private harness artifact required")
 	}
+	helper := os.Getenv("PARSAR_DIRECTORY_HELPER_ARTIFACT")
+	if !filepath.IsAbs(helper) {
+		t.Skip("explicit directory helper artifact required")
+	}
+	t.Setenv("PARSAR_CODEX_DIRECTORY_HELPER", "/usr/local/bin/agents-api-codex-directory")
 	testNativeDaemonRemoteEnvironmentWithArtifact(t, true, artifact)
 }
 

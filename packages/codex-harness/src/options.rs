@@ -44,6 +44,7 @@ impl Cli {
 
 pub struct Binding {
     pub native_binary: PathBuf,
+    pub directory_helper: Option<PathBuf>,
     pub environment: String,
     pub workspace: PathBuf,
     pub ipc_root: PathBuf,
@@ -57,6 +58,9 @@ impl Binding {
         }
         let binding = Self {
             native_binary: PathBuf::from(required("NATIVE")?),
+            directory_helper: std::env::var_os("PARSAR_CODEX_HARNESS_DIRECTORY_HELPER")
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from),
             environment: required("ENVIRONMENT")?,
             workspace: PathBuf::from(required("WORKSPACE")?),
             ipc_root: PathBuf::from(required("IPC_ROOT")?),

@@ -141,7 +141,7 @@ enum Operation {
 struct Command {
     path: PathUri,
     read_limit: Option<usize>,
-    directory: Option<(PathUri, usize)>,
+    directory: Option<(PathUri, usize, Option<PathBuf>)>,
 }
 
 fn request_command(frame: &[u8], binding: &Binding) -> Result<Command, &'static str> {
@@ -190,7 +190,7 @@ fn request_command(frame: &[u8], binding: &Binding) -> Result<Command, &'static 
         directory: directory_limit
             .map(|limit| {
                 PathUri::from_host_native_path(binding.workspace.clone())
-                    .map(|workspace| (workspace, limit))
+                    .map(|workspace| (workspace, limit, binding.directory_helper.clone()))
                     .map_err(|_| "invalid_path")
             })
             .transpose()?,
@@ -224,8 +224,15 @@ async fn execute(manager: &EnvironmentManager, command: Command) -> Result<Value
     let environment = ready_environment(manager)
         .await
         .map_err(OperationError::Rejected)?;
-    if let Some((workspace, limit)) = command.directory {
-        return directory::list(&environment, &workspace, &command.path, limit).await;
+    if let Some((workspace, limit, helper)) = command.directory {
+        return directory::list(
+            &environment,
+            &workspace,
+            &command.path,
+            limit,
+            helper.as_deref(),
+        )
+        .await;
     }
     if let Some(limit) = command.read_limit {
         let read = environment
