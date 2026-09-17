@@ -120,8 +120,9 @@ async fn invalid_requests_and_local_manager_never_reach_host_metadata() -> Resul
             client.read_to_end(&mut response).await?;
             anyhow::Ok(serde_json::from_slice::<Value>(&response)?)
         };
+        let stopping = CancellationToken::new();
         let (_, response) = tokio::try_join!(
-            serve_connection(server, &manager, &binding, &CancellationToken::new()),
+            serve_connection(server, &manager, &binding, &stopping),
             exchange
         )?;
         assert_eq!(response, json!({"error":expected}));
