@@ -4,7 +4,9 @@ This assessment covers the fixed [Python SDK contract](upstream.json). It is an
 implementation plan with partial current coverage. Public execution admits
 `environment.type=none` on Codex and Claude SDK, plus the Codex self-hosted
 text/function profile. Environment retrieval supports that profile; populated installation
-metadata, templates and file operations remain missing. See [current coverage](README.md#public-semantics).
+metadata, templates and file uploads remain missing. Direct regular-file listing
+has [partial coverage and explicit local policies](environment-files.md).
+See [current coverage](README.md#public-semantics).
 
 The internal Store now owns a durable Environment association for newly created
 `self_hosted` and `openai_hosted` snapshots, atomically with Session creation.
