@@ -30,6 +30,28 @@ pub(super) async fn list(
     let no_follow = GetMetadataOptions {
         follow_symlinks: false,
     };
+    let root = workspace.to_abs_path().map_err(operation_error)?;
+    let target = path.to_abs_path().map_err(operation_error)?;
+    let relative = target
+        .as_path()
+        .strip_prefix(root.as_path())
+        .map_err(|_| OperationError::Rejected("invalid_path"))?;
+    let mut parent = root.as_path().to_path_buf();
+    // Reject symlink ancestors before native traversal can erase its typed error.
+    for component in relative
+        .components()
+        .take(relative.components().count().saturating_sub(1))
+    {
+        parent.push(component);
+        let parent_path = PathUri::from_host_native_path(&parent).map_err(operation_error)?;
+        let metadata = filesystem
+            .get_metadata(&parent_path, no_follow, Some(&sandbox))
+            .await
+            .map_err(operation_error)?;
+        if metadata.is_symlink || !metadata.is_directory {
+            return Err(OperationError::Rejected("invalid_path"));
+        }
+    }
     let metadata = filesystem
         .get_metadata(path, no_follow, Some(&sandbox))
         .await
@@ -102,6 +124,7 @@ pub(super) fn operation_error(error: std::io::Error) -> OperationError {
     match error.kind() {
         std::io::ErrorKind::NotFound => OperationError::Rejected("not_found"),
         std::io::ErrorKind::PermissionDenied => OperationError::Rejected("permission_denied"),
+        std::io::ErrorKind::InvalidInput => OperationError::Rejected("invalid_path"),
         // Native transport errors do not confirm remote operation cleanup.
         _ => OperationError::Unsettled,
     }

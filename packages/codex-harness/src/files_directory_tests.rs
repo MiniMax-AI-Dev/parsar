@@ -82,6 +82,7 @@ async fn directory_transport_loss_fences_the_owner_after_dispatch() -> Result<()
     for (kind, code) in [
         (std::io::ErrorKind::NotFound, "not_found"),
         (std::io::ErrorKind::PermissionDenied, "permission_denied"),
+        (std::io::ErrorKind::InvalidInput, "invalid_path"),
     ] {
         assert!(
             matches!(directory::operation_error(std::io::Error::from(kind)), OperationError::Rejected(value) if value == code)
