@@ -226,7 +226,9 @@ For this read profile, `released` is published only after local Close succeeds;
 cleanup errors retain ownership and report `cleanup_unconfirmed`. A failed factory
 must return its resource with the error if cleanup remains unconfirmed; wrappers
 must preserve both values. Successful cleanup retries publish confirmed release,
-and stale status snapshots cannot publish success. A release request,
+and stale status snapshots cannot publish success. Failed terminal status delivery
+does not retry cleanup; ownership remains until an explicit release or shutdown retry.
+A release request,
 HTTP disconnect or remote socket closure alone is not cleanup confirmation. This
 profile does not establish remote mutation quiescence or public Files admission.
 

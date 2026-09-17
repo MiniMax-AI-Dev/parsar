@@ -221,7 +221,8 @@ func (r *Router) publishPreparation(p *preparationState, status proto.Preparatio
 	r.mu.Unlock()
 	go func() {
 		defer r.shutdownWG.Done()
-		if !r.sendPreparation(p.requestID, p.trace, status) {
+		// A failed terminal notification must not restart incomplete cleanup.
+		if !r.sendPreparation(p.requestID, p.trace, status) && (!p.workspaceReadOnly || status.State == "preparing" || status.State == "ready") {
 			r.releasePreparation(p, "failed", "status_delivery_failed", false)
 		}
 	}()
