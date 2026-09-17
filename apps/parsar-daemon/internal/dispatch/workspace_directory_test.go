@@ -2,6 +2,7 @@ package dispatch_test
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -61,6 +62,18 @@ func TestWorkspaceDirectoryRetainsEnvironmentAndTransferredOwner(t *testing.T) {
 				t.Fatal(got)
 			}
 			request.Handle, request.RunID = "", "run"
+		}
+	}
+	for index, bad := range []proto.WorkspaceReadPayload{
+		{Operation: "directory", RunID: "run", EnvironmentID: "environment", MaxEntries: 2, MaxBytes: 1},
+		{Operation: "directory", RunID: "run", EnvironmentID: "environment", MaxEntries: proto.WorkspaceDirectoryMaxEntries + 1},
+		{Operation: "directory", Handle: ready.Handle, RunID: "run", EnvironmentID: "environment", MaxEntries: 2},
+		{Operation: "recursive", RunID: "run", EnvironmentID: "environment", MaxEntries: 2},
+	} {
+		id := fmt.Sprintf("invalid-%d", index)
+		_ = r.Handle(t.Context(), mustEnv(t, proto.TypeWorkspaceRead, id, bad))
+		if got := waitWorkspaceRead(t, sender, id); got.Outcome != "rejected" || got.ErrorCode != "invalid_request" || got.Directory != nil {
+			t.Fatal("malformed directory control reached a resource", got)
 		}
 	}
 	if reader.calls.Load() != 2 {
