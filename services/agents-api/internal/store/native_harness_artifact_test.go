@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
 	"github.com/google/uuid"
 )
 
@@ -28,6 +29,8 @@ func TestNativeDaemonHarnessArtifact(t *testing.T) {
 }
 
 type nativeHarnessArtifact struct {
+	peer          *gateway.Session
+	handle, runID string
 	root          string
 	environment   string
 	configuration map[string]string

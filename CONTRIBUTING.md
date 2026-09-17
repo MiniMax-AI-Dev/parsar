@@ -509,6 +509,28 @@ owners. Preserve existing behavioral assertions and keep that test placement
 separate from production isolation or public Files admission; see the
 [native acceptance guide](services/agents-api/tests/native/README.md#public-cancellation-with-the-optional-harness).
 
+The private daemon `workspace_read` control targets an existing preparation handle
+or its transferred active Run on the same authenticated device connection. Require
+the exact frozen Environment identity; callers cannot supply sockets, credentials
+or workspace roots. Shared routing uses the optional `agent.WorkspaceReader`
+interface, without selecting an engine by name. The optional Codex artifact uses
+its existing same-manager socket; stock Codex and other adapters remain unsupported.
+This control is not a public Files endpoint or capability advertisement.
+
+Bound encoded request payloads to 8 KiB and correlation IDs to 128 bytes before
+admission. Do not echo oversized IDs; omit oversized trace metadata in replies.
+Bound raw control results to 1 MiB within the existing 4 MiB transport frame; the
+native hook's separate 8 MiB bound is unchanged. Neither is a pinned public protocol
+limit. Successful reads require complete bytes/truncation and acknowledged native
+close. Safe native rejections carry no bytes; interrupted or ambiguous reads remain
+unknown and stop further reads on that owner. Local RPC reap never establishes file
+settlement. Retain a dispatched read's original bounded waiter across observer
+cancellation and resource transfer/release; stop new admission on resource closure.
+The gateway bounds subscriptions and never retries or replays on reconnect. Duplicate
+pending operation IDs cannot start another read; this control does not promise durable
+idempotency or result recovery. Preparation/Run ownership, public path authorization,
+remote retirement and future Claude placement retain their separate requirements.
+
 The private [raw Files composition](services/agents-api/tests/native/raw_files/README.md)
 reuses the pinned native socket client and the same typed Files/registry fixture.
 Record its fixture-only workspace dependency patch separately from the manager

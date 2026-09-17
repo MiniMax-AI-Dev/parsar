@@ -51,7 +51,7 @@ func (r *Router) handleExecutionStart(_ context.Context, env proto.Envelope) err
 	}
 	p.status.State, p.status.RunID, p.status.Revision = "starting", input.RunID, p.status.Revision+1
 	p.startFingerprint, p.busy = fingerprint, true
-	state := &sessionState{runID: input.RunID, stateKey: p.stateKey, out: make(chan proto.Envelope, 64), ctx: p.ctx, ctxCancel: p.cancel,
+	state := &sessionState{runID: input.RunID, stateKey: p.stateKey, environmentID: p.environmentID, out: make(chan proto.Envelope, 64), ctx: p.ctx, ctxCancel: p.cancel,
 		pendingIDs: make(map[string]struct{}), pendingAsks: make(map[string]struct{}), traceparent: env.Trace, releaseOnCompletion: true,
 		preparationStart: &preparedStartCancellation{prepared: p.prepared, settled: make(chan struct{})}}
 	r.sessions[input.RunID] = state

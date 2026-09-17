@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
@@ -14,8 +15,12 @@ import (
 // privateHarness owns only this child's local IPC directory. It neither grants
 // Files authority nor settles remote operations when the child exits.
 type privateHarness struct {
-	parent string
-	root   string
+	parent      string
+	root        string
+	environment string
+	readMu      sync.Mutex
+	reading     bool
+	uncertain   bool
 }
 
 func configurePrivateHarness(cfg *JSONRPCConfig, binary string, remote *proto.RemoteEnvironment) (*privateHarness, error) {
@@ -57,7 +62,7 @@ func configurePrivateHarness(cfg *JSONRPCConfig, binary string, remote *proto.Re
 	if err != nil {
 		return nil, err
 	}
-	harness := &privateHarness{parent: parent, root: filepath.Join(parent, "native")}
+	harness := &privateHarness{parent: parent, root: filepath.Join(parent, "native"), environment: remote.ID}
 	if len(filepath.Join(harness.root, "files.sock")) >= 104 {
 		harness.cleanup()
 		return nil, errors.New("codex: private harness socket path is too long")

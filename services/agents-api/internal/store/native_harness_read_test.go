@@ -90,6 +90,7 @@ func (a *nativeHarnessArtifact) observeReads(t *testing.T, ctx context.Context, 
 		})
 	}
 	a.observeReadErrors(t, ctx, owner, phase)
+	a.observeDaemonReads(t, ctx, owner, phase, retained)
 	if a.current(t) != owner {
 		t.Fatal("native read phase replaced its prepared execution owner", phase)
 	}
