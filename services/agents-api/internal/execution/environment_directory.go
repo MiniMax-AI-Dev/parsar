@@ -53,9 +53,8 @@ func (w *Worker) ReadEnvironmentDirectory(ctx context.Context, environment store
 	}
 }
 
-func (w *Worker) runDirectoryRead(owner context.Context, request directoryReadRequest, reserved bool) {
-	result := directoryReadResult{err: ErrExecutionUnavailable}
-	defer func() { request.reply(result) }()
+func (w *Worker) runDirectoryRead(owner context.Context, request directoryReadRequest, reserved bool) (result directoryReadResult) {
+	result.err = ErrExecutionUnavailable
 	check, cancel := context.WithTimeout(owner, 5*time.Second)
 	defer cancel()
 	if w.CheckOwnership(check) != nil {
@@ -109,6 +108,7 @@ func (w *Worker) runDirectoryRead(owner context.Context, request directoryReadRe
 		return
 	}
 	result = w.dispatcher.readPreparedDirectory(owner, peer, session, environment, configuration.WorkspaceDirectory, read)
+	return
 }
 
 func (w *Worker) directoryDeviceReady(id, engine string, prepare bool) bool {

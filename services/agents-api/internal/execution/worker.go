@@ -97,7 +97,12 @@ func (w *Worker) Run(ctx context.Context) error {
 		err error
 	}
 	completed := make(chan completion, 4)
-	readsCompleted := make(chan string, 4)
+	type readCompletion struct {
+		id      string
+		request directoryReadRequest
+		result  directoryReadResult
+	}
+	readsCompleted := make(chan readCompletion, 4)
 	reads := 0
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
@@ -119,18 +124,19 @@ func (w *Worker) Run(ctx context.Context) error {
 			running.Add(1)
 			go func() {
 				defer running.Done()
-				w.runDirectoryRead(ctx, request, reserved)
+				result := w.runDirectoryRead(ctx, request, reserved)
 				id := ""
 				if reserved {
 					id = request.environment.SessionID
 				}
-				readsCompleted <- id
+				readsCompleted <- readCompletion{id: id, request: request, result: result}
 			}()
-		case id := <-readsCompleted:
+		case read := <-readsCompleted:
 			reads--
-			if id != "" {
-				delete(active, id)
+			if read.id != "" {
+				delete(active, read.id)
 			}
+			read.request.reply(read.result)
 		case result := <-completed:
 			delete(active, result.id)
 			if result.err != nil {
