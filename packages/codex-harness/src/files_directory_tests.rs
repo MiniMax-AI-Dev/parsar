@@ -46,3 +46,46 @@ fn directory_root_and_limits_are_operation_specific() {
         .is_err()
     );
 }
+
+#[tokio::test]
+async fn directory_transport_loss_fences_the_owner_after_dispatch() -> Result<()> {
+    let binding = Binding {
+        native_binary: "/native".into(),
+        environment: "expected".into(),
+        workspace: "/workspace".into(),
+        ipc_root: "/unused".into(),
+    };
+    for kind in [
+        std::io::ErrorKind::BrokenPipe,
+        std::io::ErrorKind::ConnectionReset,
+        std::io::ErrorKind::TimedOut,
+        std::io::ErrorKind::Other,
+    ] {
+        let (server, mut client) = UnixStream::pair()?;
+        client.write_all(b"{\"environment_id\":\"expected\",\"operation\":\"list_directory\",\"path\":\"\",\"max_entries\":1}\n").await?;
+        let stopping = CancellationToken::new();
+        let outcome = exchange(
+            server,
+            &binding,
+            REQUEST_DEADLINE,
+            &stopping,
+            |command| async move {
+                assert!(command.directory.is_some());
+                Err(directory::operation_error(std::io::Error::from(kind)))
+            },
+        )
+        .await?;
+        assert_eq!(outcome, ConnectionOutcome::UnsettledNativeOperation);
+        assert!(outcome.require_settled().is_err());
+        assert_eq!(client.read(&mut [0; 1]).await?, 0);
+    }
+    for (kind, code) in [
+        (std::io::ErrorKind::NotFound, "not_found"),
+        (std::io::ErrorKind::PermissionDenied, "permission_denied"),
+    ] {
+        assert!(
+            matches!(directory::operation_error(std::io::Error::from(kind)), OperationError::Rejected(value) if value == code)
+        );
+    }
+    Ok(())
+}

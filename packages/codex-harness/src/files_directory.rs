@@ -1,4 +1,4 @@
-use super::{OperationError, file_error};
+use super::OperationError;
 use codex_exec_server::{Environment, FileSystemSandboxContext, GetMetadataOptions, WalkOptions};
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::permissions::{
@@ -33,7 +33,7 @@ pub(super) async fn list(
     let metadata = filesystem
         .get_metadata(path, no_follow, Some(&sandbox))
         .await
-        .map_err(rejected)?;
+        .map_err(operation_error)?;
     if metadata.is_symlink || !metadata.is_directory {
         return Err(OperationError::Rejected("invalid_path"));
     }
@@ -53,14 +53,14 @@ pub(super) async fn list(
             Some(&sandbox),
         )
         .await
-        .map_err(rejected)?;
+        .map_err(operation_error)?;
     if !outcome.errors.is_empty() {
         return Err(OperationError::Rejected("native_error"));
     }
-    let root = path.to_abs_path().map_err(rejected)?;
+    let root = path.to_abs_path().map_err(operation_error)?;
     let mut entries = Vec::with_capacity(outcome.entries.len());
     for entry in outcome.entries {
-        let absolute = entry.path.to_abs_path().map_err(rejected)?;
+        let absolute = entry.path.to_abs_path().map_err(operation_error)?;
         let relative = absolute
             .as_path()
             .strip_prefix(root.as_path())
@@ -77,7 +77,7 @@ pub(super) async fn list(
         let metadata = filesystem
             .get_metadata(&entry.path, no_follow, Some(&sandbox))
             .await
-            .map_err(rejected)?;
+            .map_err(operation_error)?;
         let (kind, size) = if metadata.is_symlink {
             ("symlink", None)
         } else if metadata.is_file {
@@ -98,6 +98,11 @@ pub(super) async fn list(
     Ok(json!({"directory":{"entries":entries,"truncated":outcome.truncated}}))
 }
 
-fn rejected(error: std::io::Error) -> OperationError {
-    OperationError::Rejected(file_error(error))
+pub(super) fn operation_error(error: std::io::Error) -> OperationError {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => OperationError::Rejected("not_found"),
+        std::io::ErrorKind::PermissionDenied => OperationError::Rejected("permission_denied"),
+        // Native transport errors do not confirm remote operation cleanup.
+        _ => OperationError::Unsettled,
+    }
 }

@@ -538,10 +538,13 @@ Return single-component names, entry kind, regular-file byte size and explicit
 truncation only after directory/metadata access and handle cleanup settle. Reuse
 byte-read admission, uncertainty and caller-detach ownership where applicable.
 Do not promise a snapshot, recursive traversal or public pagination through this
-private interface. Codex uses its same-manager socket, native depth-zero bounded
-walk and metadata with a read-only filesystem context. Its native walk omits
-symlinks and non-regular entries; record that limitation and qualify actual path
-isolation before public use. Private directory support alone does not enable a
+private interface. Codex uses its same-manager socket, native depth-zero walk
+with a result limit and metadata with a read-only filesystem context. The native
+walk omits symlinks/non-regular entries and collects all names before applying its
+limit; response bounds do not qualify enumeration work or memory. Record those
+gaps and qualify actual isolation/resource conditions before public use. Ambiguous
+native transport outcomes stop further owner access without claiming cleanup.
+Private directory support alone does not enable a
 daemon control operation, public Files route or capability advertisement.
 
 Bound encoded request payloads to 8 KiB and correlation IDs to 128 bytes before

@@ -87,13 +87,16 @@ blocks of at most 1 MiB and one extra byte to distinguish an exact-bound file fr
 a truncated prefix. No snapshot consistency is promised for a changing file.
 An explicit `operation: "list_directory"` requires `max_entries` from 1 through
 4096; an empty relative `path` selects the workspace root. It uses the native
-bounded walk at depth zero and native no-follow metadata in a read-only filesystem
-permission context rooted at the bound workspace. `directory` contains `entries`
+walk at depth zero with a result limit and native no-follow metadata in a read-only
+filesystem permission context rooted at the bound workspace. `directory` contains `entries`
 (single-component `name`, `kind`, and `size_bytes` for regular files) and explicit
 `truncated`. The pinned walk omits symlinks and non-regular entries; later metadata
 may observe a type change. This live private observation is not a snapshot or
-complete public Files semantics. Native errors do not return a partial success.
-There is no write method.
+complete public Files semantics. The native implementation collects and sorts all
+names before applying its entry limit: this bounds responses, not enumeration work
+or memory. Large-directory resource qualification remains open. Native errors do
+not return a partial success; ambiguous transport failures stop this owner without
+claiming remote cleanup or admitting another read. There is no write method.
 
 The bounded-read hook captures one native RPC connection before opening a handle.
 Open, ordered block reads and cleanup use that exact connection without recovery
