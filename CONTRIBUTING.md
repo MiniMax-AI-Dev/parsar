@@ -188,7 +188,7 @@ the same transaction as its Session and creation identity when this resource is
 implemented. Keep mutable connection/registration state out of immutable
 configuration; replacement ownership must fence stale observations.
 
-The current delivery milestone is the Codex/Claude single-Agent path: Session
+The current delivery milestone is the Codex single-Agent path: Session
 creation, environment preparation, native execution, files/artifacts, cancellation,
 reconnection/recovery queries, and standalone deployment acceptance. Select each
 bounded task from the complete board; nonblocking local improvements stay queued.
