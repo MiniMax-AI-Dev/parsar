@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import uuid
 
 
 class OperatorRetirement:
@@ -12,9 +13,11 @@ class OperatorRetirement:
         self.token = token
         self.workspace = workspace
         self.receipt = None
+        self.environment = str(uuid.uuid4())
 
     def command(self, action, instance, *extra):
-        return [self.binary, "placement", action, "--container", instance, *extra]
+        return [self.binary, "placement", action, "--container", instance,
+                "--environment", self.environment, *extra]
 
     def enroll(self, instance):
         rejected = subprocess.run(self.command("enroll", instance, "--owner", "wrong-owner",
@@ -22,7 +25,16 @@ class OperatorRetirement:
         assert rejected.returncode != 0, "unbound owner was accepted"
         out = subprocess.check_output(self.command("enroll", instance, "--owner", self.token,
                                                   "--workspace", str(self.workspace)), text=True, timeout=10)
-        assert json.loads(out)["state"] == "enrolled"
+        enrolled = json.loads(out)
+        assert enrolled["state"] == "enrolled"
+        assert enrolled["version"] == 2 and enrolled["environment_id"] == self.environment
+        for scope in ([], ["--environment", str(uuid.uuid4())], ["--environment", ""]):
+            rejected = subprocess.run([self.binary, "placement", "retire", "--container", instance, *scope],
+                                      capture_output=True, timeout=10)
+            assert rejected.returncode != 0, "mismatched or omitted Environment was accepted"
+            state = subprocess.check_output(["docker", "--host", "unix:///var/run/docker.sock",
+                                             "inspect", "--format", "{{.State.Running}}", instance], text=True)
+            assert state.strip() == "true", "scope rejection stopped the placement"
 
     def retire(self, instance):
         # Separate controller processes race on the same exact durable binding.
@@ -42,13 +54,14 @@ class OperatorRetirement:
         assert results[0] == results[1]
         self.receipt = results[0]
         assert self.receipt["state"] == "retired"
+        assert self.receipt["environment_id"] == self.environment
         assert self.receipt["target"]["container"] == instance
         assert self.receipt["owner"] == self.token
         again = subprocess.check_output(self.command("retire", instance), text=True, timeout=10)
         assert json.loads(again) == self.receipt
         return {"controller_sha256": hashlib.sha256(Path(self.binary).read_bytes()).hexdigest(),
                 "local_receipt": self.receipt, "concurrent_and_fresh_process_receipts_equal": True,
-                "wrong_owner_rejected": True}
+                "wrong_owner_rejected": True, "wrong_or_missing_environment_rejected": True}
 
     def observe(self, instance, cgroup, members, process_identity):
         assert self.receipt and self.receipt["target"]["container"] == instance

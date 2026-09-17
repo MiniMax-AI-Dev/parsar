@@ -116,7 +116,8 @@ func (c *Controller) load(id string) (*Receipt, error) {
 	if err := json.NewDecoder(f).Decode(&r); err != nil {
 		return nil, err
 	}
-	if r.Version != 1 || r.Target.Container != id || !ownerID.MatchString(r.Owner) ||
+	validScope := (r.Version == 1 && r.EnvironmentID == "") || (r.Version == 2 && validEnvironment(r.EnvironmentID))
+	if !validScope || r.Target.Container != id || !ownerID.MatchString(r.Owner) ||
 		(r.State != "enrolled" && r.State != "stopping" && r.State != "retired") ||
 		(r.State == "retired") != (r.RetiredAt != nil) {
 		return nil, errors.New("invalid placement receipt")

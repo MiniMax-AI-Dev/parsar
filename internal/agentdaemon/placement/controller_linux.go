@@ -37,9 +37,7 @@ func New() (*Controller, error) {
 		procRoot: "/proc", cgroupRoot: "/sys/fs/cgroup", socketPath: localDockerSocket, syncDir: syncDirectory}, nil
 }
 
-// Enroll records a currently running, explicitly labeled, qualified placement.
-// It never changes a container or overwrites an earlier binding or receipt.
-func (c *Controller) Enroll(ctx context.Context, id, owner, workspace string) (*Receipt, error) {
+func (c *Controller) enroll(ctx context.Context, id, owner, workspace, environment string) (*Receipt, error) {
 	if !ownerID.MatchString(owner) {
 		return nil, errors.New("invalid placement owner")
 	}
@@ -80,7 +78,11 @@ func (c *Controller) Enroll(ctx context.Context, id, owner, workspace string) (*
 	if len(members) == 0 {
 		return nil, errors.New("running placement has no observed members")
 	}
-	r := &Receipt{Version: 1, State: "enrolled", Owner: owner, RequestedAt: time.Now().UTC(),
+	version := 1
+	if environment != "" {
+		version = 2
+	}
+	r := &Receipt{Version: version, EnvironmentID: environment, State: "enrolled", Owner: owner, RequestedAt: time.Now().UTC(),
 		Members: members, Target: Target{HostBootID: host, Supervisor: supervisor, Container: id,
 			Created: unit.Created, Started: unit.State.StartedAt, Restarts: unit.RestartCount,
 			Image: unit.Image, Workspace: workspace, Cgroup: group, Init: init}}
@@ -90,9 +92,7 @@ func (c *Controller) Enroll(ctx context.Context, id, owner, workspace string) (*
 	return r, nil
 }
 
-// Retire retries only the enrolled incarnation. Ambiguous outcomes remain
-// persisted as stopping; absence alone cannot manufacture a successful receipt.
-func (c *Controller) Retire(ctx context.Context, id string) (*Receipt, error) {
+func (c *Controller) retirePlacement(ctx context.Context, id, environment string) (*Receipt, error) {
 	unlock, err := c.lock(ctx, id)
 	if err != nil {
 		return nil, err
@@ -101,6 +101,9 @@ func (c *Controller) Retire(ctx context.Context, id string) (*Receipt, error) {
 	r, err := c.load(id)
 	if err != nil {
 		return nil, err
+	}
+	if r.EnvironmentID != environment {
+		return nil, errors.New("placement Environment does not match enrollment")
 	}
 	if r.State == "retired" {
 		// A previous process may have published the rename without completing

@@ -123,15 +123,20 @@ to `placement.py` to exercise the actual local retirement command. The same held
 native write and detached descendant are stopped through that consumer. Separate
 CLI processes race on the binding and recover the identical receipt after removal;
 the fixture independently checks old processes, retained successor bytes and an
-untouched neighboring container. Earlier native negative tests remain unchanged.
+untouched neighboring container. Scoped enrollment includes a generated Environment
+UUID; wrong, missing and explicitly empty scopes must fail without stopping the
+placement. This is operator-confirmed association, not Core resource validation.
+Earlier native negative tests remain unchanged.
 
 Operators explicitly create an owned container with
 `--label parsar.runtime.placement=<owner>`, then run:
 
 ```sh
 parsar-daemon placement enroll --container "$FULL_CONTAINER_ID" \
-  --owner "$PLACEMENT_OWNER" --workspace "$ABSOLUTE_HOST_WORKSPACE"
-parsar-daemon placement retire --container "$FULL_CONTAINER_ID"
+  --owner "$PLACEMENT_OWNER" --workspace "$ABSOLUTE_HOST_WORKSPACE" \
+  --environment "$ENVIRONMENT_ID"
+parsar-daemon placement retire --container "$FULL_CONTAINER_ID" \
+  --environment "$ENVIRONMENT_ID"
 ```
 
 This initial profile requires local Linux/cgroup v2 and the fixed socket
