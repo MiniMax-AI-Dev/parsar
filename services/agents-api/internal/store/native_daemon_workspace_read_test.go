@@ -58,4 +58,5 @@ func (a *nativeHarnessArtifact) observeDaemonReads(t *testing.T, ctx context.Con
 	if a.current(t) != owner {
 		t.Fatal("daemon workspace read replaced the native execution owner")
 	}
+	a.observeDaemonDirectories(t, ctx, owner, phase, retained)
 }

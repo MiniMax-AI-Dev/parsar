@@ -20,8 +20,7 @@ func (r *Router) handleWorkspaceRead(ctx context.Context, env proto.Envelope) er
 	}
 	var request proto.WorkspaceReadPayload
 	if len(env.Payload) > proto.WorkspaceReadMaxRequestBytes || env.DecodePayload(&request) != nil || strings.TrimSpace(env.ID) == "" ||
-		(request.Handle == "") == (request.RunID == "") || request.EnvironmentID == "" ||
-		request.MaxBytes < 1 || request.MaxBytes > proto.WorkspaceReadMaxBytes {
+		!proto.ValidWorkspaceReadRequest(request) {
 		return r.sendWorkspaceRead(ctx, env, rejectedWorkspaceRead("invalid_request"))
 	}
 	r.mu.Lock()
@@ -37,7 +36,7 @@ func (r *Router) handleWorkspaceRead(ctx context.Context, env proto.Envelope) er
 		r.mu.Unlock()
 		return r.sendWorkspaceRead(ctx, env, rejectedWorkspaceRead("read_capacity"))
 	}
-	reader, code := r.workspaceReaderLocked(request)
+	resource, code := r.workspaceResourceLocked(request)
 	if code != "" {
 		r.mu.Unlock()
 		return r.sendWorkspaceRead(ctx, env, rejectedWorkspaceRead(code))
@@ -54,14 +53,13 @@ func (r *Router) handleWorkspaceRead(ctx context.Context, env proto.Envelope) er
 		// Observer loss does not discard an admitted native wait or replay it.
 		operation, cancel := context.WithTimeout(context.WithoutCancel(ctx), 12*time.Second)
 		defer cancel()
-		read, err := reader.ReadWorkspaceFile(operation, request.Path, request.MaxBytes)
-		result := workspaceReadResult(read, err, request.MaxBytes)
+		result := executeWorkspaceRead(operation, resource, request)
 		_ = r.sendWorkspaceRead(context.WithoutCancel(ctx), env, result)
 	}()
 	return nil
 }
 
-func (r *Router) workspaceReaderLocked(request proto.WorkspaceReadPayload) (agent.WorkspaceReader, string) {
+func (r *Router) workspaceResourceLocked(request proto.WorkspaceReadPayload) (any, string) {
 	var resource any
 	if request.Handle != "" {
 		p := r.preparations[request.Handle]
@@ -78,11 +76,37 @@ func (r *Router) workspaceReaderLocked(request proto.WorkspaceReadPayload) (agen
 		}
 		resource = s.session
 	}
+	return resource, ""
+}
+
+func executeWorkspaceRead(ctx context.Context, resource any, request proto.WorkspaceReadPayload) proto.WorkspaceReadResultPayload {
+	if request.Operation == "directory" {
+		reader, ok := resource.(agent.WorkspaceDirectoryLister)
+		if !ok {
+			return rejectedWorkspaceRead("read_unsupported")
+		}
+		read, err := reader.ListWorkspaceDirectory(ctx, request.Path, request.MaxEntries)
+		if err != nil {
+			return workspaceReadResult(agent.WorkspaceReadResult{}, err, 0)
+		}
+		if read.Entries == nil || len(read.Entries) > request.MaxEntries {
+			return workspaceReadResult(agent.WorkspaceReadResult{}, agent.ErrWorkspaceReadUncertain, 0)
+		}
+		directory := &proto.WorkspaceDirectoryResult{Entries: make([]proto.WorkspaceDirectoryEntry, 0, len(read.Entries)), Truncated: read.Truncated}
+		for _, entry := range read.Entries {
+			directory.Entries = append(directory.Entries, proto.WorkspaceDirectoryEntry{Name: entry.Name, Kind: entry.Kind, SizeBytes: entry.SizeBytes})
+		}
+		if !proto.ValidWorkspaceDirectory(directory, request.MaxEntries) {
+			return workspaceReadResult(agent.WorkspaceReadResult{}, agent.ErrWorkspaceReadUncertain, 0)
+		}
+		return proto.WorkspaceReadResultPayload{Outcome: "completed", Directory: directory, CloseAcknowledged: true}
+	}
 	reader, ok := resource.(agent.WorkspaceReader)
 	if !ok {
-		return nil, "read_unsupported"
+		return rejectedWorkspaceRead("read_unsupported")
 	}
-	return reader, ""
+	read, err := reader.ReadWorkspaceFile(ctx, request.Path, request.MaxBytes)
+	return workspaceReadResult(read, err, request.MaxBytes)
 }
 
 func rejectedWorkspaceRead(code string) proto.WorkspaceReadResultPayload {

@@ -11,9 +11,20 @@ import (
 
 // ReadWorkspaceFile observes one private operation; cancellation never retries or cancels native work.
 func (s *Session) ReadWorkspaceFile(ctx context.Context, request proto.WorkspaceReadPayload) (proto.WorkspaceReadResultPayload, error) {
+	if request.Operation != "" {
+		return proto.WorkspaceReadResultPayload{}, errors.New("agentdaemon gateway: invalid byte read operation")
+	}
+	return s.readWorkspace(ctx, request)
+}
+
+func (s *Session) ListWorkspaceDirectory(ctx context.Context, request proto.WorkspaceReadPayload) (proto.WorkspaceReadResultPayload, error) {
+	request.Operation = "directory"
+	return s.readWorkspace(ctx, request)
+}
+
+func (s *Session) readWorkspace(ctx context.Context, request proto.WorkspaceReadPayload) (proto.WorkspaceReadResultPayload, error) {
 	var result proto.WorkspaceReadResultPayload
-	if (request.Handle == "") == (request.RunID == "") || request.EnvironmentID == "" ||
-		request.MaxBytes < 1 || request.MaxBytes > proto.WorkspaceReadMaxBytes {
+	if !proto.ValidWorkspaceReadRequest(request) {
 		return result, errors.New("agentdaemon gateway: invalid workspace read")
 	}
 	id := uuid.NewString()
@@ -47,7 +58,7 @@ func (s *Session) ReadWorkspaceFile(ctx context.Context, request proto.Workspace
 		if !ok {
 			return result, ErrSessionClosed
 		}
-		if reply.DecodePayload(&result) != nil || !validWorkspaceReadResult(result, request.MaxBytes) {
+		if reply.DecodePayload(&result) != nil || !validWorkspaceOperationResult(result, request) {
 			return proto.WorkspaceReadResultPayload{}, errors.New("agentdaemon gateway: invalid workspace read response")
 		}
 		return result, nil
@@ -58,7 +69,17 @@ func (s *Session) ReadWorkspaceFile(ctx context.Context, request proto.Workspace
 	}
 }
 
+func validWorkspaceOperationResult(result proto.WorkspaceReadResultPayload, request proto.WorkspaceReadPayload) bool {
+	if request.Operation == "directory" && result.Outcome == "completed" {
+		return result.CloseAcknowledged && result.ErrorCode == "" && len(result.Data) == 0 && !result.Truncated && proto.ValidWorkspaceDirectory(result.Directory, request.MaxEntries)
+	}
+	return validWorkspaceReadResult(result, request.MaxBytes)
+}
+
 func validWorkspaceReadResult(result proto.WorkspaceReadResultPayload, limit int) bool {
+	if result.Directory != nil {
+		return false
+	}
 	if result.Outcome == "completed" {
 		return result.CloseAcknowledged && result.ErrorCode == "" && len(result.Data) <= limit &&
 			(!result.Truncated || len(result.Data) == limit)
