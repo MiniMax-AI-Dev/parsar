@@ -1,6 +1,8 @@
 package proto
 
 import (
+	"encoding/json"
+	"errors"
 	"strings"
 	"unicode/utf8"
 )
@@ -16,6 +18,21 @@ type WorkspaceDirectoryEntry struct {
 type WorkspaceDirectoryResult struct {
 	Entries   []WorkspaceDirectoryEntry `json:"entries"`
 	Truncated bool                      `json:"truncated"`
+}
+
+func (result *WorkspaceDirectoryResult) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Entries   []WorkspaceDirectoryEntry `json:"entries"`
+		Truncated *bool                     `json:"truncated"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire.Truncated == nil {
+		return errors.New("workspace directory requires explicit truncation")
+	}
+	*result = WorkspaceDirectoryResult{Entries: wire.Entries, Truncated: *wire.Truncated}
+	return nil
 }
 
 func ValidWorkspaceReadRequest(request WorkspaceReadPayload) bool {

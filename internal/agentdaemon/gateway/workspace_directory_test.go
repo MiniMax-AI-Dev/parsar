@@ -62,3 +62,33 @@ func TestWorkspaceDirectoryRejectsContradictoryAndUnboundedMetadata(t *testing.T
 		t.Fatal("contradictory result accepted")
 	}
 }
+
+func TestWorkspaceDirectoryRequiresExplicitWireTruncation(t *testing.T) {
+	for _, tc := range []struct {
+		name, directory string
+		valid           bool
+	}{
+		{"omitted", `{"entries":[]}`, false},
+		{"null", `{"entries":[],"truncated":null}`, false},
+		{"wrong_type", `{"entries":[],"truncated":"false"}`, false},
+		{"complete", `{"entries":[],"truncated":false}`, true},
+		{"truncated", `{"entries":[{"name":"dir","kind":"directory","size_bytes":null}],"truncated":true}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewSession(newFakeConn(), "device", "tenant", "test", nil, nil)
+			defer s.Close("test")
+			done := make(chan error, 1)
+			go func() {
+				_, err := s.ListWorkspaceDirectory(t.Context(), proto.WorkspaceReadPayload{Handle: "prepared", EnvironmentID: "environment", MaxEntries: 1})
+				done <- err
+			}()
+			request := <-s.sendCh
+			reply := proto.Envelope{Type: proto.TypeWorkspaceReadResult, ID: request.ID,
+				Payload: json.RawMessage(`{"outcome":"completed","close_acknowledged":true,"directory":` + tc.directory + `}`)}
+			s.dispatch(reply)
+			if err := <-done; (err == nil) != tc.valid {
+				t.Fatal("directory wire validation differs", err)
+			}
+		})
+	}
+}
