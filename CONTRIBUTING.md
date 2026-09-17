@@ -236,6 +236,16 @@ RunCommand is for initialization only. Daily execution and Files use Runtime and
 native or bounded local capabilities. Docker's lack of a native renewable lease
 does not remove service-owned hosted expiry and cleanup requirements.
 
+The independent Docker Provider consumes an immutable Runtime image and retains
+one caller-owned allocation reference through partial creation and cleanup. Persist
+that reference before Create and serialize its lifecycle; resolve a lost response
+with observed state, without rewriting bootstrap credentials or replaying startup.
+Provider state is compute state, not public Environment readiness. Named Runtime
+volumes need explicit owned cleanup after container removal. Initialization command
+timeouts can leave processes alive and require allocation cleanup before reuse.
+The [managed Runtime build and ownership contract](services/agents-api/deploy/codex/README.md#managed-runtime-image-and-docker-adapter)
+does not itself enable public hosted admission or supply durable expiry.
+
 Qualify the actual Docker/native sandbox before default cutover: real model
 execution, file access, owned cancellation, restart with retained native history
 and files, and rejection when required history is missing. Generated code and file

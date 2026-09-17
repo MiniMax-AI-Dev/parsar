@@ -387,3 +387,7 @@ check-agents-harness:
 
 check-agents-harness-native:
 	./scripts/build-agents-harness.sh check
+
+.PHONY: build-agents-runtime
+build-agents-runtime:
+	./scripts/build-agents-runtime.sh
