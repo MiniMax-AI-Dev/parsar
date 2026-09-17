@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
@@ -27,6 +28,7 @@ type environmentFilesFixture struct {
 	lookups, reads        int
 	directory             string
 	readEnvironment       store.Environment
+	readDelay             time.Duration
 }
 
 func (f *environmentFilesFixture) GetEnvironment(_ context.Context, tenant, id string) (store.Environment, error) {
@@ -40,9 +42,16 @@ func (f *environmentFilesFixture) GetEnvironment(_ context.Context, tenant, id s
 	return f.environment, nil
 }
 
-func (f *environmentFilesFixture) ReadEnvironmentDirectory(_ context.Context, environment store.Environment, directory string) (proto.WorkspaceDirectoryResult, error) {
+func (f *environmentFilesFixture) ReadEnvironmentDirectory(ctx context.Context, environment store.Environment, directory string) (proto.WorkspaceDirectoryResult, error) {
 	f.reads++
 	f.directory, f.readEnvironment = directory, environment
+	if f.readDelay > 0 {
+		select {
+		case <-time.After(f.readDelay):
+		case <-ctx.Done():
+			return proto.WorkspaceDirectoryResult{}, ctx.Err()
+		}
+	}
 	return f.result, f.readError
 }
 
@@ -83,9 +92,13 @@ func requestEnvironmentFiles(h http.Handler, id, query, key string) *httptest.Re
 	r.Header.Set("OpenAI-Beta", "agents=v1")
 	r.Header.Set("X-Tenant-ID", "untrusted")
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, r)
+	h.ServeHTTP(environmentFilesRecorder{w}, r)
 	return w
 }
+
+type environmentFilesRecorder struct{ *httptest.ResponseRecorder }
+
+func (environmentFilesRecorder) SetWriteDeadline(time.Time) error { return nil }
 
 func environmentFileEntry(name string, size int64) proto.WorkspaceDirectoryEntry {
 	return proto.WorkspaceDirectoryEntry{Name: name, Kind: "file", SizeBytes: &size}

@@ -6,6 +6,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -47,6 +48,11 @@ func (h *Handler) listEnvironmentFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.directoryReader == nil {
+		writeStoreError(w, r, execution.ErrExecutionUnavailable)
+		return
+	}
+	// Allow the Worker's 45-second observation budget plus response delivery.
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(50 * time.Second)); err != nil {
 		writeStoreError(w, r, execution.ErrExecutionUnavailable)
 		return
 	}
