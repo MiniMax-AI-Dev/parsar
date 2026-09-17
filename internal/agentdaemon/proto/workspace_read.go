@@ -1,9 +1,11 @@
 package proto
 
 const (
-	TypeWorkspaceRead       = "workspace_read"
-	TypeWorkspaceReadResult = "workspace_read_result"
-	WorkspaceReadMaxBytes   = 1 << 20
+	TypeWorkspaceRead            = "workspace_read"
+	TypeWorkspaceReadResult      = "workspace_read_result"
+	WorkspaceReadMaxBytes        = 1 << 20
+	WorkspaceReadMaxRequestBytes = 8 << 10
+	WorkspaceReadMaxIDBytes      = 128
 )
 
 // WorkspaceReadPayload targets one existing resource on the current daemon connection.

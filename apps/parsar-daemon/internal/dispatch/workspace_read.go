@@ -14,8 +14,12 @@ import (
 const workspaceReadCapacity = 4
 
 func (r *Router) handleWorkspaceRead(ctx context.Context, env proto.Envelope) error {
+	// Never echo an unbounded correlation ID onto the shared connection.
+	if len(env.ID) > proto.WorkspaceReadMaxIDBytes {
+		return errors.New("dispatch: invalid workspace read ID")
+	}
 	var request proto.WorkspaceReadPayload
-	if env.DecodePayload(&request) != nil || strings.TrimSpace(env.ID) == "" ||
+	if len(env.Payload) > proto.WorkspaceReadMaxRequestBytes || env.DecodePayload(&request) != nil || strings.TrimSpace(env.ID) == "" ||
 		(request.Handle == "") == (request.RunID == "") || request.EnvironmentID == "" ||
 		request.MaxBytes < 1 || request.MaxBytes > proto.WorkspaceReadMaxBytes {
 		return r.sendWorkspaceRead(ctx, env, rejectedWorkspaceRead("invalid_request"))
@@ -110,7 +114,11 @@ func workspaceReadResult(read agent.WorkspaceReadResult, err error, limit int) p
 func (r *Router) sendWorkspaceRead(ctx context.Context, request proto.Envelope, result proto.WorkspaceReadResultPayload) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	env, err := proto.NewEnvelopeWithTrace(proto.TypeWorkspaceReadResult, request.ID, result, request.Trace)
+	trace := request.Trace
+	if len(trace) > 256 {
+		trace = ""
+	}
+	env, err := proto.NewEnvelopeWithTrace(proto.TypeWorkspaceReadResult, request.ID, result, trace)
 	if err != nil {
 		return err
 	}

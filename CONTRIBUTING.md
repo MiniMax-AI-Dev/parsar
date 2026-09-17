@@ -517,6 +517,8 @@ interface, without selecting an engine by name. The optional Codex artifact uses
 its existing same-manager socket; stock Codex and other adapters remain unsupported.
 This control is not a public Files endpoint or capability advertisement.
 
+Bound encoded request payloads to 8 KiB and correlation IDs to 128 bytes before
+admission. Do not echo oversized IDs; omit oversized trace metadata in replies.
 Bound raw control results to 1 MiB within the existing 4 MiB transport frame; the
 native hook's separate 8 MiB bound is unchanged. Neither is a pinned public protocol
 limit. Successful reads require complete bytes/truncation and acknowledged native

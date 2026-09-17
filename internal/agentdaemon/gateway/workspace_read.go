@@ -17,6 +17,10 @@ func (s *Session) ReadWorkspaceFile(ctx context.Context, request proto.Workspace
 		return result, errors.New("agentdaemon gateway: invalid workspace read")
 	}
 	id := uuid.NewString()
+	env, err := proto.NewEnvelope(proto.TypeWorkspaceRead, id, request)
+	if err != nil || len(env.Payload) > proto.WorkspaceReadMaxRequestBytes {
+		return result, errors.New("agentdaemon gateway: invalid workspace read")
+	}
 	s.workspaceReadMu.Lock()
 	if s.IsClosed() {
 		s.workspaceReadMu.Unlock()
@@ -35,10 +39,6 @@ func (s *Session) ReadWorkspaceFile(ctx context.Context, request proto.Workspace
 	defer func() { s.workspaceReadMu.Lock(); delete(s.workspaceReads, id); s.workspaceReadMu.Unlock() }()
 	ctx, cancel := context.WithTimeout(ctx, 17*time.Second)
 	defer cancel()
-	env, err := proto.NewEnvelope(proto.TypeWorkspaceRead, id, request)
-	if err != nil {
-		return result, err
-	}
 	if err = s.Send(ctx, env); err != nil {
 		return result, err
 	}

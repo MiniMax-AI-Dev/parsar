@@ -1,9 +1,12 @@
 package dispatch_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -160,5 +163,54 @@ func TestWorkspaceReadCapacityIsConnectionBounded(t *testing.T) {
 		if result := waitWorkspaceRead(t, sender, fmt.Sprint(i)); result.Outcome != "completed" {
 			t.Fatal(result)
 		}
+	}
+}
+
+func TestWorkspaceReadBoundsRequestsAndEchoedMetadata(t *testing.T) {
+	sender := &recSender{}
+	var calls atomic.Int32
+	p := &readablePreparation{controlledPreparation: &controlledPreparation{closed: make(chan struct{})}, workspaceTestReader: &workspaceTestReader{read: func(context.Context, string, int) (agent.WorkspaceReadResult, error) {
+		calls.Add(1)
+		return agent.WorkspaceReadResult{Data: bytes.Repeat([]byte{255}, proto.WorkspaceReadMaxBytes)}, nil
+	}}}
+	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
+	_ = r.Handle(t.Context(), mustEnv(t, proto.TypeExecutionPrepare, "prepare", preparationRequest()))
+	ready := waitPreparationStatus(t, sender, "prepare", "ready", "")
+	request := proto.WorkspaceReadPayload{Handle: ready.Handle, EnvironmentID: "environment", Path: "file", MaxBytes: proto.WorkspaceReadMaxBytes}
+	if err := r.Handle(t.Context(), mustEnv(t, proto.TypeWorkspaceRead, strings.Repeat("x", 3<<20), request)); err == nil {
+		t.Fatal("oversized ID accepted")
+	}
+	bad := request
+	bad.Path = strings.Repeat("x", proto.WorkspaceReadMaxRequestBytes)
+	_ = r.Handle(t.Context(), mustEnv(t, proto.TypeWorkspaceRead, "oversized", bad))
+	if result := waitWorkspaceRead(t, sender, "oversized"); result.ErrorCode != "invalid_request" {
+		t.Fatal(result.Outcome, result.ErrorCode)
+	}
+	if calls.Load() != 0 {
+		t.Fatal("invalid control reached adapter")
+	}
+	id := strings.Repeat("\x00", proto.WorkspaceReadMaxIDBytes)
+	env := mustEnv(t, proto.TypeWorkspaceRead, id, request)
+	env.Trace = strings.Repeat("x", 3<<20)
+	if err := r.Handle(t.Context(), env); err != nil {
+		t.Fatal(err)
+	}
+	if result := waitWorkspaceRead(t, sender, id); result.Outcome != "completed" {
+		t.Fatal(result.Outcome)
+	}
+	for _, reply := range sender.snapshot() {
+		if reply.Type != proto.TypeWorkspaceReadResult {
+			continue
+		}
+		encoded, err := json.Marshal(reply)
+		if err != nil || len(encoded) >= 4<<20 {
+			t.Fatal("oversized response", len(encoded), err)
+		}
+		if reply.Trace != "" {
+			t.Fatal("oversized trace echoed")
+		}
+	}
+	if calls.Load() != 1 {
+		t.Fatal("unexpected read count", calls.Load())
 	}
 }

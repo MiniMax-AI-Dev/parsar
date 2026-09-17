@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,5 +112,36 @@ func TestWorkspaceReadCapacityAndConnectionLoss(t *testing.T) {
 		if err := <-done; !errors.Is(err, ErrSessionClosed) {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestWorkspaceReadRejectsOversizedRequestsBeforeQueueing(t *testing.T) {
+	for _, field := range []string{"path", "handle", "environment", "escaped"} {
+		t.Run(field, func(t *testing.T) {
+			s := NewSession(newFakeConn(), "device", "tenant", "test", nil, nil)
+			defer s.Close("test")
+			request := workspaceReadRequest()
+			oversized := strings.Repeat("x", int(ReadLimit))
+			switch field {
+			case "path":
+				request.Path = oversized
+			case "handle":
+				request.Handle = oversized
+			case "environment":
+				request.EnvironmentID = oversized
+			case "escaped":
+				request.Path = strings.Repeat("\x00", proto.WorkspaceReadMaxRequestBytes/2)
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			if _, err := s.ReadWorkspaceFile(ctx, request); err == nil || errors.Is(err, context.DeadlineExceeded) {
+				t.Fatal("oversized request not rejected before send", err)
+			}
+			select {
+			case <-s.sendCh:
+				t.Fatal("oversized request queued")
+			default:
+			}
+		})
 	}
 }
