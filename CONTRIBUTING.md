@@ -220,6 +220,8 @@ directory transport, and rejects Start. Its child inherits only process/transpor
 essentials. The private native read mode excludes system, managed, user and project
 execution configuration and plugin startup while preserving native security
 requirements. Ordinary execution keeps its stable state and configuration.
+Reject the legacy mixed managed-config profile for reads rather than discarding
+its enforced constraints together with execution settings.
 For this read profile, `released` is published only after local Close succeeds;
 cleanup errors retain ownership and report `cleanup_unconfirmed`. A failed factory
 must return its resource with the error if cleanup remains unconfirmed; wrappers

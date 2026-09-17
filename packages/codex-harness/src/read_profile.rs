@@ -5,6 +5,16 @@ use std::path::Path;
 // Read preparation has no execution configuration. Keep native security
 // requirements, while excluding host/user/project model, MCP and plugin settings.
 pub fn loader(home: &Path) -> Result<LoaderOverrides> {
+    loader_with_legacy_path(home, Path::new("/etc/codex/managed_config.toml"))
+}
+
+fn loader_with_legacy_path(home: &Path, legacy: &Path) -> Result<LoaderOverrides> {
+    // Native legacy config also supplies enforced requirements. Do not silently
+    // remove those constraints while isolating execution configuration.
+    ensure!(
+        !legacy.try_exists()?,
+        "read preparation requires separate native requirements, not legacy managed config"
+    );
     ensure!(
         home.is_absolute(),
         "read preparation requires an absolute home"
@@ -27,6 +37,19 @@ pub fn loader(home: &Path) -> Result<LoaderOverrides> {
 mod tests {
     use super::*;
     use codex_core::config::{ConfigBuilder, ConfigOverrides};
+
+    #[test]
+    fn rejects_legacy_requirements_instead_of_dropping_them() -> Result<()> {
+        let state = std::path::PathBuf::from(std::env::var_os("HOME").unwrap()).join(".parsar");
+        let root = tempfile::Builder::new()
+            .prefix("read-legacy-")
+            .tempdir_in(state)?;
+        let legacy = root.path().join("managed_config.toml");
+        std::fs::write(&legacy, "approval_policy = 'never'\n")?;
+        assert!(loader_with_legacy_path(root.path(), &legacy).is_err());
+        assert!(!root.path().join("read-config.toml").exists());
+        Ok(())
+    }
 
     #[tokio::test]
     async fn ignores_execution_layers_but_keeps_security_requirements() -> Result<()> {

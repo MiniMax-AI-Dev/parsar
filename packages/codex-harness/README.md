@@ -75,7 +75,9 @@ helper or socket targets.
 The private `--workspace-read-only` preparation mode uses a temporary `CODEX_HOME`
 and native loader overrides to exclude system/managed execution configuration,
 user/project configuration and plugin startup. Native security requirements stay
-enabled. The daemon supplies only process/transport environment variables and the
+enabled. The legacy mixed `/etc/codex/managed_config.toml` profile is explicitly
+rejected rather than silently dropping its enforced constraints. The daemon
+supplies only process/transport environment variables and the
 exact remote binding; model/MCP credentials are excluded. This mode is for unused
 preparation and directory reads; daemon and adapter reject Start. It does not grant
 public Files access or prove remote mutation retirement. Ordinary native execution
