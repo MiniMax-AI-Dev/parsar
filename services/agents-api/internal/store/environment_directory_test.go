@@ -176,6 +176,38 @@ func TestEnvironmentDirectoryWorkerRejectsIncompleteOrUnreleasedResults(t *testi
 	}
 }
 
+func TestEnvironmentDirectorySequentialReadsReleaseSchedulingOwnership(t *testing.T) {
+	h, w, environment, released := directoryWorker(t)
+	const pages = 32
+	done := make(chan error, 1)
+	go func() {
+		for range pages {
+			value, err := w.ReadEnvironmentDirectory(t.Context(), environment, "reports")
+			if err != nil {
+				done <- err
+				return
+			}
+			if len(value.Entries) != 1 {
+				done <- errors.New("missing directory page")
+				return
+			}
+		}
+		done <- nil
+	}()
+	for range pages {
+		request, read := prepareDirectoryRead(t, h, environment)
+		completeDirectoryRead(t, h, request, read, false, false)
+	}
+	select {
+	case err := <-done:
+		if err != nil || released.Load() != pages {
+			t.Fatal("sequential reads retained ownership", err, released.Load())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("sequential reads did not finish")
+	}
+}
+
 func TestEnvironmentDirectoryObserverCancellationRetainsReadOwner(t *testing.T) {
 	h, w, environment, released := directoryWorker(t)
 	ctx, cancel := context.WithCancel(t.Context())

@@ -242,10 +242,14 @@ operation-specific capabilities; reading files never resolves model/MCP options
 or creates a Turn. HTTP cancellation ends observation, not an admitted native read.
 Keep the idle reservation through the bounded read and release attempt. Return
 directory data only after confirmed Close; incomplete reads or uncertain cleanup
-return unavailable without data. Revoke the scoped read transport credential on
+return unavailable without data. Release the Worker's scheduling reservation before
+delivering the result so the caller can immediately request the next page.
+Revoke the scoped read transport credential on
 completion or failure. Runtime retains uncertain cleanup ownership and capacity;
 this does not require a second durable Core owner registry or establish remote
-write retirement. Public Files admission and protocol pagination remain separate.
+write retirement. Public Files.list delegates workspace access to this reader;
+the API owns tenant authorization, path validation and protocol pagination. Keep
+partial directory coverage and unverified defaults explicit in the Files contract.
 
 Keep prerequisites specific to the public operation being implemented. Native
 harnesses execute; adapters translate protocols and fill demonstrated capability

@@ -33,11 +33,12 @@ type ResourceStore interface {
 }
 
 type Handler struct {
-	store       ResourceStore
-	auth        *Authenticator
-	engine      string
-	inputs      InputSubmitter
-	executorURL string
+	store           ResourceStore
+	auth            *Authenticator
+	engine          string
+	inputs          InputSubmitter
+	executorURL     string
+	directoryReader EnvironmentDirectoryReader
 }
 
 func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...Option) (http.Handler, error) {
@@ -70,6 +71,7 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 		r.Post("/agents/{agent_id}", h.updateAgent)
 		r.Delete("/agents/{agent_id}", h.deleteAgent)
 		r.Get("/agents/environments/{environment_id}", h.getEnvironment)
+		r.Get("/agents/environments/{environment_id}/files", h.listEnvironmentFiles)
 		r.Post("/agents/sessions", h.createSession)
 		r.Get("/agents/sessions", h.listSessions)
 		r.Get("/agents/sessions/{session_id}", h.getSession)

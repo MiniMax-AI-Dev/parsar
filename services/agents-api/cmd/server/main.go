@@ -125,7 +125,7 @@ func run() error {
 				<-workerDone
 			}
 		}()
-		options = append(options, api.WithExecution(worker))
+		options = append(options, api.WithExecution(worker), api.WithEnvironmentDirectoryReader(worker))
 	}
 	handler, err := api.NewHandler(executionStore, auth, engine, options...)
 	if err != nil {

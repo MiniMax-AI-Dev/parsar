@@ -251,6 +251,37 @@ definitions:
     required:
     - type
     type: object
+  v1.EnvironmentFile:
+    properties:
+      environment_id:
+        type: string
+      object:
+        enum:
+        - agent.environment.file
+        type: string
+      path:
+        type: string
+      size_bytes:
+        minimum: 0
+        type: integer
+    required:
+    - environment_id
+    - object
+    - path
+    - size_bytes
+    type: object
+  v1.EnvironmentFileList:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/v1.EnvironmentFile'
+        type: array
+      next:
+        type: string
+        x-nullable: true
+    required:
+    - data
+    type: object
   v1.EnvironmentInfo:
     properties:
       files:
@@ -1420,6 +1451,83 @@ paths:
       security:
       - BearerAuth: []
       summary: Retrieve an execution Environment
+      tags:
+      - Environments
+  /agents/environments/{environment_id}/files:
+    get:
+      description: Lists direct regular files in one authorized self_hosted workspace
+        directory. This partial implementation defaults to the workspace root and
+        limit 20; recursive scope, directory/symlink treatment and these defaults
+        are not verified upstream semantics. Sorts by case-sensitive path components,
+        descending by default. Keep the same path, order and limit when using page.
+        Each page rereads the complete bounded directory; changed file paths/sizes
+        invalidate continuation locally with 400. There is no snapshot guarantee.
+        Truncated or uncertain native results fail with 503 without returning a partial
+        page. This read never starts a Turn or admits model input. Actual transport
+        disconnect/reconnect events remain observable.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Environment ID
+        in: path
+        name: environment_id
+        required: true
+        type: string
+      - description: Absolute directory inside the Environment workspace
+        in: query
+        name: path
+        type: string
+      - description: Maximum file count; local default 20
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: desc
+        description: Case-sensitive path-component order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - description: Opaque continuation token; keep path, order and limit unchanged
+        in: query
+        name: page
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.EnvironmentFileList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List live Environment files
       tags:
       - Environments
   /agents/sessions:
