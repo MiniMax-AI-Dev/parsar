@@ -89,15 +89,21 @@ file with the existing rustix openat/renameat operations, checks the declared by
 digest, syncs the file, then replaces the destination directory entry and syncs
 the parent. Existing hard links retain their original inode and contents. This
 private replacement policy does not preserve destination mode/ownership metadata
-or establish official overwrite semantics. Concurrent writers can change the file
-after replacement; no snapshot or exactly-once guarantee is implied.
+or establish official overwrite semantics. The caller must prevent concurrent
+workspace writers throughout installation, including native tools and background
+processes that can modify the staging file or its directory entry. The digest
+checks streamed input; it does not protect against another process replacing the
+staging name or modifying its inode before commit. This prerequisite is not yet
+established for public uploads. Later writers can change the installed file;
+no snapshot or exactly-once guarantee is implied.
 
 One version-1 JSON response reports `outcome: completed` with `size_bytes`,
 `failed` before replacement, or `unknown` if the parent sync fails after replacement.
 Errors contain only a fixed safe code. Require a complete response plus observed
 native exit/output close; exit zero alone is insufficient. Input errors preserve
-the old destination and drop temporary state. Forced termination can leave a
-`.parsar-upload-*` staging file; never interpret that file as a completed upload.
+the old destination under that concurrency prerequisite. Temporary-file cleanup
+is best effort: permission or I/O errors, as well as forced termination, can leave
+a `.parsar-upload-*` staging file. Never interpret it as a completed upload.
 A missing receipt remains unknown and must not trigger automatic replay. This
 helper does not fence a replacement owner after remote transport or service loss;
 public admission still needs operation ownership and recovery handling.
