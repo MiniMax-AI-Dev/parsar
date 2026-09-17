@@ -67,6 +67,7 @@ type Session struct {
 	cfg                       sessionConfig
 	out                       chan<- proto.Envelope
 	rpc                       *JSONRPCClient
+	harness                   *privateHarness
 
 	cancelCtx context.Context
 	cancelFn  context.CancelFunc

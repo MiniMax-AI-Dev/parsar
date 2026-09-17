@@ -95,6 +95,7 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 		observeSubagentIdentities: req.ObserveSubagentIdentities && !req.DisableSubagents,
 		cfg:                       cfg,
 		rpc:                       rpc,
+		harness:                   harness,
 		cancelCtx:                 cancelCtx,
 		cancelFn:                  cancelFn,
 		waitDone:                  make(chan struct{}),

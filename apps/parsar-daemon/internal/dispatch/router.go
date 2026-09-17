@@ -51,6 +51,7 @@ type Router struct {
 	preparations        map[string]*preparationState
 	preparationRequests map[string]*preparationState
 	preparationTimeout  time.Duration
+	workspaceReads      map[string]struct{}
 }
 
 type appliedInteractionDecision struct {
@@ -67,6 +68,7 @@ type appliedInteractionDecision struct {
 // frontend → server → daemon → agent → server attribution.
 type sessionState struct {
 	runID               string
+	environmentID       string
 	stateKey            string
 	session             agent.Session
 	out                 chan proto.Envelope
@@ -153,6 +155,8 @@ func (r *Router) Handle(ctx context.Context, env proto.Envelope) error {
 	ctx = adoptEnvelopeTrace(ctx, env)
 
 	switch env.Type {
+	case proto.TypeWorkspaceRead:
+		return r.handleWorkspaceRead(ctx, env)
 	case proto.TypeExecutionPrepare:
 		return r.handleExecutionPrepare(ctx, env)
 	case proto.TypeExecutionStart:

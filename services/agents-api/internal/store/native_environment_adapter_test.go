@@ -129,10 +129,11 @@ func testNativeDaemonRemoteEnvironmentWithArtifact(t *testing.T, prepared bool, 
 	if artifact != nil {
 		proof["private_harness_artifact"] = artifact.proof
 		prompt = func(t *testing.T, ctx context.Context, peer *gateway.Session, req proto.PromptRequestPayload, cancelWhen func() bool) (proto.DonePayload, []proto.Envelope, *proto.InteractionDecisionAckPayload) {
-			return daemonPreparedRemotePromptWithReady(t, ctx, peer, req, cancelWhen, func() bool {
+			return daemonPreparedRemotePromptWithReady(t, ctx, peer, req, cancelWhen, func(handle string) bool {
+				artifact.handle, artifact.runID, artifact.peer = handle, "", peer
 				artifact.observeReady(t, ctx, phase, local)
 				return true
-			})
+			}, func(run string) { artifact.runID = run })
 		}
 	}
 	defer persistDaemonRemoteProof(t, root, proof, []string{key, credential.Token, harnessToken, h.credential})
@@ -223,10 +224,11 @@ func testNativeDaemonRemoteEnvironmentWithArtifact(t *testing.T, prepared bool, 
 		observation.mu.Lock()
 		beforeRelease := observation.executors
 		observation.mu.Unlock()
-		_, released, _ := daemonPreparedRemotePromptWithReady(t, ctx, peer, req, nil, func() bool {
+		_, released, _ := daemonPreparedRemotePromptWithReady(t, ctx, peer, req, nil, func(handle string) bool {
+			artifact.handle, artifact.runID, artifact.peer = handle, "", peer
 			artifact.observeReady(t, ctx, "after_cancel", local)
 			return false
-		})
+		}, nil)
 		if len(released) == 0 || daemonRemotePreparationFailed(released) {
 			t.Fatal("post-cancel artifact preparation failed")
 		}
