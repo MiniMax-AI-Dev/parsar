@@ -70,3 +70,46 @@ Native tools retain their narrower filesystem policy. Qualify direct reads,
 symlink and process-root aliases, attempted staging modification, real uploaded
 bytes consumed by Codex, cancellation and retained-history restart before using
 this writer profile for public admission. Configuration alone is not that proof.
+
+## Managed Runtime image and Docker adapter
+
+Build the existing Rust filesystem helpers with `make build-agents-executor`, and
+extract the official npm package `@openai/codex@0.153.4-linux-x64` beneath
+`~/.parsar/`. Set `AGENTS_RUNTIME_CODEX_PACKAGE` to its extracted `package` directory
+and run `scripts/build-agents-runtime.sh`. It builds the existing daemon and
+prepares a binary-only Docker context at `~/.parsar/build/agents-runtime`; build
+that context with the printed Docker command. This initial image is Linux amd64.
+The package includes the unmodified native executable and matching resources.
+It does not contain the product server, product CLI, credentials or workspace data.
+
+The service's `internal/sandbox` interface has five operations. Its Docker adapter
+uses the official Moby Go client and an operator-selected immutable image digest,
+network, installation UUID and the contents of this directory's `seccomp.json`.
+The Runtime authenticates outward through the ordinary daemon bootstrap path;
+`CoreURL` includes the existing `/api/v1` gateway prefix. The image's default
+entrypoint is the same daemon connect command used by a user-managed Runtime.
+No socket, host home or product configuration is mounted inside the Runtime.
+
+The caller persists a fresh allocation UUID with the authorized tenant and
+Environment before Create, and serializes lifecycle operations for that allocation.
+Create returns the reference even on failure. Duplicate allocation creation does
+not rewrite credentials or restart the container. After a lost response, inspect
+the allocation and reconcile its actual state; do not blindly replay Create.
+This adapter does not supply durable Core reconciliation or public hosted Session
+admission. Those are required before switching the default hosted path.
+
+Two labelled named volumes retain native state and the workspace/staging pair.
+The trusted daemon auth profile is copied with restrictive permissions before
+startup; it does not enter image layers, environment variables, labels or arguments.
+GetInfo describes observed compute state, not daemon or native readiness. Docker
+has no renewable provider lease: Renew verifies the allocation, while future Core
+lifecycle integration must own expiry. Kill verifies allocation ownership, removes
+the container, explicitly removes its named volumes and confirms absence. Keep the
+reference and retry cleanup when an operation fails; an HTTP timeout is not proof
+that a resource disappeared. Never use broad container or volume pruning.
+
+RunCommand is for trusted initialization, using an explicit context deadline,
+argument vector and nonroot user. It preserves nonzero status and limits each
+output stream to1MiB. Disconnecting an exec stream does not stop the command:
+an unconfirmed result requires allocation cleanup before reuse. Routine agent
+execution, cancellation and Files continue through Core/daemon/Runtime.
