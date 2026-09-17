@@ -502,6 +502,9 @@ Record its fixture-only workspace dependency patch separately from the manager
 hook and third-party versions. Its finite real Files/history workflow does not
 qualify the client's internal unbounded event queue for production. Client closure
 is not runner shutdown; join the stock runner before reporting owner teardown.
+Bounded native stream checks retain the original whole-file assertions. A truncated
+read's asynchronous close and stream EOF are not operation-retirement receipts;
+keep production caller-detachment and path-admission qualification separate.
 Its dedicated cancellation scenario distinguishes native interruption from command
 retirement. Target native background termination only by observed current-Turn
 item/process identity, and verify Files plus retained interrupted history through
