@@ -68,22 +68,24 @@ func testLiveClaudeWorkspace(t *testing.T, explicitPreparation bool) {
 			t.Fatal(err)
 		}
 	}
+	liveWorkspaceReadFixtures(t, config.Workspace.Directory)
 	heartbeat := filepath.Join(config.Workspace.Directory, "heartbeat.txt")
 	artifact := filepath.Join(config.Workspace.Directory, "value.txt")
 	type evidence struct {
-		RunID                 string            `json:"run_id"`
-		Events                []proto.Envelope  `json:"events"`
-		Done                  proto.DonePayload `json:"done"`
-		Failure               string            `json:"failure,omitempty"`
-		Cancelled             bool              `json:"cancelled"`
-		CancelMS              int64             `json:"cancel_ms,omitempty"`
-		BridgePID             int               `json:"bridge_pid"`
-		Terminals             int               `json:"terminals"`
-		Heartbeats            []string          `json:"heartbeats,omitempty"`
-		PreparedPID           int               `json:"prepared_pid,omitempty"`
-		NativeBefore          string            `json:"native_before,omitempty"`
-		NativeAfter           string            `json:"native_after,omitempty"`
-		StartContextCancelled bool              `json:"start_context_cancelled,omitempty"`
+		Reads                 []liveWorkspaceRead `json:"reads,omitempty"`
+		RunID                 string              `json:"run_id"`
+		Events                []proto.Envelope    `json:"events"`
+		Done                  proto.DonePayload   `json:"done"`
+		Failure               string              `json:"failure,omitempty"`
+		Cancelled             bool                `json:"cancelled"`
+		CancelMS              int64               `json:"cancel_ms,omitempty"`
+		BridgePID             int                 `json:"bridge_pid"`
+		Terminals             int                 `json:"terminals"`
+		Heartbeats            []string            `json:"heartbeats,omitempty"`
+		PreparedPID           int                 `json:"prepared_pid,omitempty"`
+		NativeBefore          string              `json:"native_before,omitempty"`
+		NativeAfter           string              `json:"native_after,omitempty"`
+		StartContextCancelled bool                `json:"start_context_cancelled,omitempty"`
 	}
 	writeEvidence := func(name string, proof evidence) {
 		t.Helper()
@@ -123,6 +125,7 @@ func testLiveClaudeWorkspace(t *testing.T, explicitPreparation bool) {
 				if !bytes.Equal(before, after) || liveWorkspaceNativeIdentity(t, proof.PreparedPID) != proof.NativeBefore || len(out) != 0 {
 					t.Fatal("prepared resource changed before initial input")
 				}
+				proof.Reads = append(proof.Reads, liveWorkspaceReads(t, ctx, resource.(agent.WorkspaceReader), config.Workspace.Directory, "prepared", "read-binary.bin", "read-empty.bin", "read-large.bin")...)
 				operation, stopOperation := context.WithCancel(ctx)
 				running, err = resource.Start(operation, req.RunID, req.Prompt, out)
 				stopOperation()
@@ -148,6 +151,7 @@ func testLiveClaudeWorkspace(t *testing.T, explicitPreparation bool) {
 		s := running.(*session)
 		defer s.Cancel(context.Background())
 		proof.BridgePID = s.process.Cmd.Process.Pid
+		proof.Reads = append(proof.Reads, liveWorkspaceReads(t, ctx, s, config.Workspace.Directory, "active", "read-binary.bin", "read-empty.bin", "read-large.bin")...)
 		if explicitPreparation && proof.BridgePID != proof.PreparedPID {
 			t.Fatal("Start replaced the prepared bridge")
 		}
@@ -164,6 +168,7 @@ func testLiveClaudeWorkspace(t *testing.T, explicitPreparation bool) {
 			case <-ticker.C:
 				value, _ := os.ReadFile(heartbeat)
 				if cancelOnEffect && !proof.Cancelled && len(value) > 0 && string(value) != "0" && string(value) != "1" {
+					proof.Reads = append(proof.Reads, liveWorkspaceReads(t, ctx, s, config.Workspace.Directory, "effect", "value.txt")...)
 					started := time.Now()
 					if err := cancelOwned(ctx); err != nil {
 						t.Fatal("factory cancellation failed", err)

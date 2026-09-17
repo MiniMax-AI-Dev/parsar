@@ -1,7 +1,6 @@
 package claudesdk
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,6 +14,7 @@ import (
 )
 
 type session struct {
+	reads     workspaceReadState
 	process   *clirunner.Process
 	writeMu   sync.Mutex
 	functions functionState
@@ -95,6 +95,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 	}()
 	defer s.stopFunctions()
 	defer s.stopSteering()
+	defer s.stopWorkspaceReads()
 	emit := func(kind string, payload any) {
 		event, err := proto.NewEnvelope(kind, runID, payload)
 		if err != nil {
@@ -125,8 +126,7 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 		failure = fmt.Errorf("claudesdk: cannot submit SDK input")
 		s.process.Cancel()
 	}
-	scanner := bufio.NewScanner(s.process.Stdout)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	scanner := s.bridgeOutput()
 	if prepared != nil {
 		binding, err := prepared.awaitStart(scanner, failure)
 		if binding == nil {
@@ -135,10 +135,13 @@ func (s *session) run(ctx context.Context, runID string, start startRequest, out
 			return
 		}
 		runID, out = binding.runID, binding.out
-		if err := json.NewEncoder(s.process.Stdin).Encode(struct {
+		s.writeMu.Lock()
+		err = json.NewEncoder(s.process.Stdin).Encode(struct {
 			Type   string `json:"type"`
 			Prompt string `json:"prompt"`
-		}{Type: "start", Prompt: binding.prompt}); err != nil {
+		}{Type: "start", Prompt: binding.prompt})
+		s.writeMu.Unlock()
+		if err != nil {
 			failure = fmt.Errorf("claudesdk: cannot submit SDK input")
 			s.process.Cancel()
 		}
@@ -273,14 +276,15 @@ func launch(ctx context.Context, config Config, start startRequest, env []string
 	return &session{process: process, functions: functionState{calls: map[string]*pendingFunction{}}, settled: make(chan struct{})}, nil
 }
 
-func (s *session) drain(scanner *bufio.Scanner, stderrDone <-chan struct{}, failure error) error {
+func (s *session) drain(scanner *bridgeOutput, stderrDone <-chan struct{}, failure error) error {
+	for scanner.Scan() {
+	}
 	if scanner.Err() != nil {
 		failure = fmt.Errorf("claudesdk: SDK bridge output read failed")
 		s.process.Cancel()
 	}
-	// Drain remaining output before Wait closes the owned readers.
-	_, _ = io.Copy(io.Discard, s.process.Stdout)
 	<-stderrDone
+	s.stopWorkspaceReads()
 	if err := s.process.Wait(); err != nil && failure == nil {
 		failure = fmt.Errorf("claudesdk: SDK process failed")
 	}
