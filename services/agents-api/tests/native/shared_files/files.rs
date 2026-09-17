@@ -6,6 +6,7 @@ use codex_exec_server::{
     ExecutorFileSystem, GetMetadataOptions, ReadFileOptions, WriteFileOptions,
 };
 use codex_utils_path_uri::PathUri;
+use futures::StreamExt;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -37,6 +38,53 @@ impl RemoteFiles {
             .read_file(&self.path(name)?, ReadFileOptions::default(), None)
             .await
             .context("native file read failed")
+    }
+
+    async fn streamed(&self, name: &str, limit: usize) -> Result<(Vec<u8>, bool, usize)> {
+        let mut stream = self.fs.read_file_stream(&self.path(name)?, None).await?;
+        let mut bytes = Vec::new();
+        let mut chunks = 0;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.context("native stream read failed")?;
+            ensure!(
+                chunk.len() <= 1024 * 1024,
+                "native chunk exceeds pinned bound"
+            );
+            chunks += 1;
+            let remaining = limit - bytes.len();
+            bytes.extend_from_slice(&chunk[..remaining.min(chunk.len())]);
+            if chunk.len() > remaining {
+                // Native Drop schedules close; this result is not a close receipt.
+                return Ok((bytes, true, chunks));
+            }
+        }
+        Ok((bytes, false, chunks))
+    }
+
+    async fn verify_stream(&self) -> Result<Value> {
+        let expected: Vec<u8> = (0..2 * 1024 * 1024 + 37)
+            .map(|index| (index % 251) as u8)
+            .collect();
+        let (bytes, truncated, chunks) = self.streamed("stream-binary.bin", expected.len()).await?;
+        ensure!(
+            bytes == expected && !truncated && chunks >= 3,
+            "native multi-chunk bytes differ"
+        );
+        let (prefix, truncated, _) = self.streamed("stream-binary.bin", 4096).await?;
+        ensure!(
+            prefix == expected[..4096] && truncated,
+            "native bounded prefix differs"
+        );
+        let (empty, truncated, _) = self.streamed("stream-empty.bin", 0).await?;
+        ensure!(
+            empty.is_empty() && !truncated,
+            "native empty stream differs"
+        );
+        Ok(json!({
+            "bytes": bytes.len(), "sha256": format!("{:x}", Sha256::digest(&bytes)),
+            "chunks": chunks, "prefix_bytes": prefix.len(), "empty_bytes": empty.len(),
+            "close_receipt_verified": false, "snapshot_consistency_verified": false
+        }))
     }
 
     pub async fn text(&self, name: &str) -> Result<String> {
@@ -75,6 +123,14 @@ impl RemoteFiles {
 
     pub async fn idle(&self, phase: &str, previous: &Value) -> Result<Value> {
         if phase == "first" {
+            self.write(
+                "stream-binary.bin",
+                (0..2 * 1024 * 1024 + 37)
+                    .map(|index| (index % 251) as u8)
+                    .collect(),
+            )
+            .await?;
+            self.write("stream-empty.bin", Vec::new()).await?;
             let seed = Uuid::now_v7();
             let bytes: Vec<u8> = (0..128 * 1024)
                 .map(|index| (index % 251) as u8 ^ seed.as_bytes()[index % 16])
@@ -109,7 +165,7 @@ impl RemoteFiles {
             "native binary metadata differs"
         );
         Ok(
-            json!({"binary_bytes":bytes.len(),"binary_sha256":format!("{:x}",Sha256::digest(&bytes)),"metadata_size":metadata.size,"directory_names":self.names().await?}),
+            json!({"binary_bytes":bytes.len(),"binary_sha256":format!("{:x}",Sha256::digest(&bytes)),"metadata_size":metadata.size,"directory_names":self.names().await?,"stream":self.verify_stream().await?}),
         )
     }
 
@@ -136,6 +192,7 @@ impl RemoteFiles {
             format!("{:x}", Sha256::digest(&bytes)) == expected,
             "retained binary hash differs"
         );
+        self.verify_stream().await?;
         Ok(())
     }
 }

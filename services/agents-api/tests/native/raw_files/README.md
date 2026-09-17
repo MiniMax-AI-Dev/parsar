@@ -67,6 +67,15 @@ prompt-only random value. The legacy in-process fixture remains available throug
 `TestNativeSharedEnvironmentFiles` and `PARSAR_SHARED_FILES_PROBE`; run it with the
 prepared legacy example when shared fixture code changes.
 
+Both fixtures also read a retained 2 MiB + 37-byte binary through the native
+same-manager `read_file_stream`, including a 4096-byte prefix and an empty file.
+The checks run while idle, during execution and after cold continuation, preserving
+the original whole-file, metadata and execution assertions. The retained result is
+bounded, but the native stream may fetch a complete 1 MiB chunk for a short prefix.
+Early drop schedules native close; neither it nor EOF proves a close receipt or
+settlement of all underlying I/O. These checks do not qualify caller detachment,
+path confinement or snapshot consistency for a production Files interface.
+
 The dedicated cancellation workflow preserves that ordinary regression and adds a
 separate `first -> cancel -> fresh` run with the same raw example:
 
