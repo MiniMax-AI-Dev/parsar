@@ -28,7 +28,7 @@ ORDER BY r.id LIMIT 100;
 
 -- name: ListExecutionDevices :many
 SELECT id, name FROM devices
-WHERE tenant_id = $1 AND revoked_at IS NULL
+WHERE tenant_id = $1 AND revoked_at IS NULL AND environment_id IS NULL
 ORDER BY id;
 
 -- name: GetLatestSessionTurn :one

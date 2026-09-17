@@ -70,6 +70,7 @@ type KindCapabilities struct {
 	ToolObservations         bool `json:"tool_observations,omitempty"`
 	EnvironmentNone          bool `json:"environment_none,omitempty"`
 	RemoteEnvironment        bool `json:"remote_environment,omitempty"`
+	LocalEnvironment         bool `json:"local_environment,omitempty"`
 	Preparation              bool `json:"preparation,omitempty"`
 	WorkspaceReadPreparation bool `json:"workspace_read_preparation,omitempty"`
 	WebSearchControl         bool `json:"web_search_control,omitempty"`

@@ -149,6 +149,7 @@ func discoverAgentCLIs(rc *runContext, profile string, checks agentCLIChecks) (a
 		out.Codex.Available = true
 		out.Codex.Version = codexVersion
 		out.Codex.Capabilities.RemoteEnvironment = codex.SupportsRemoteEnvironment(codexVersion)
+		out.Codex.Capabilities.LocalEnvironment = codex.SupportsLocalEnvironment(codexVersion)
 		out.Codex.Capabilities.MCPHTTPRemoteEnvironment = out.Codex.Capabilities.RemoteEnvironment
 		out.Codex.Capabilities.MCPHTTPRequired = out.Codex.Capabilities.RemoteEnvironment
 		out.Codex.Capabilities.MCPHTTPRemoteBearerAuth = out.Codex.Capabilities.RemoteEnvironment

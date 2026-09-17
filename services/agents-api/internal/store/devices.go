@@ -23,6 +23,7 @@ type ExecutionDevice struct {
 	ID              string
 	Name            string
 	NativeSessionID string
+	EnvironmentID   string
 }
 
 // CreateDevice is operator provisioning, not a tenant-facing registration API.
@@ -31,19 +32,25 @@ func (s *Store) CreateDevice(ctx context.Context, tenantID, name, credentialHash
 	if err != nil {
 		return ExecutionDevice{}, err
 	}
-	name = strings.TrimSpace(name)
-	digest, err := hex.DecodeString(credentialHash)
-	if err != nil || len(digest) != 32 || name == "" || len(name) > 256 {
-		return ExecutionDevice{}, fmt.Errorf("%w: device name and SHA-256 credential digest required", ErrInvalidInput)
+	params, err := newDeviceParams(tenant, name, credentialHash)
+	if err != nil {
+		return ExecutionDevice{}, err
 	}
-	id, err := s.queries.CreateDevice(ctx, sqlc.CreateDeviceParams{
-		ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, TenantID: tenant,
-		Name: name, CredentialHash: hex.EncodeToString(digest),
-	})
+	id, err := s.queries.CreateDevice(ctx, params)
 	if err != nil {
 		return ExecutionDevice{}, fmt.Errorf("create execution device: %w", err)
 	}
-	return ExecutionDevice{ID: uuid.UUID(id.Bytes).String(), Name: name}, nil
+	return ExecutionDevice{ID: uuid.UUID(id.Bytes).String(), Name: params.Name}, nil
+}
+
+func newDeviceParams(tenant pgtype.UUID, name, credentialHash string) (sqlc.CreateDeviceParams, error) {
+	name = strings.TrimSpace(name)
+	digest, err := hex.DecodeString(credentialHash)
+	if err != nil || len(digest) != 32 || name == "" || len(name) > 256 {
+		return sqlc.CreateDeviceParams{}, fmt.Errorf("%w: device name and SHA-256 credential digest required", ErrInvalidInput)
+	}
+	return sqlc.CreateDeviceParams{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, TenantID: tenant,
+		Name: name, CredentialHash: hex.EncodeToString(digest)}, nil
 }
 
 // GetDeviceCredential is used only by the shared gateway's credential verifier.
@@ -109,7 +116,11 @@ func (s *Store) GetSessionDevice(ctx context.Context, tenantID, sessionID string
 	if err != nil {
 		return ExecutionDevice{}, err
 	}
-	return ExecutionDevice{ID: uuid.UUID(row.ID.Bytes).String(), Name: row.Name, NativeSessionID: row.NativeSessionID}, nil
+	value := ExecutionDevice{ID: uuid.UUID(row.ID.Bytes).String(), Name: row.Name, NativeSessionID: row.NativeSessionID}
+	if row.EnvironmentID.Valid {
+		value.EnvironmentID = uuid.UUID(row.EnvironmentID.Bytes).String()
+	}
+	return value, nil
 }
 
 func deviceLookup(tenantID, id string) (sqlc.GetDeviceParams, error) {

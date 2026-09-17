@@ -260,6 +260,22 @@ unset for existing deployments. The [co-location qualification inputs](services/
 record the pinned native/Docker prerequisites and limits; this switch alone does
 not admit hosted Environments or authorize a workspace.
 
+A dedicated local Runtime uses one Environment-scoped device credential and an
+immutable binding to that Environment's Session. It is excluded from general
+device selection; another Session cannot claim it, including within the same
+tenant. Deleting its Session invalidates credential lookup and heartbeat renewal.
+Provision a new scoped device atomically rather than widening an existing shared
+device credential. Revocation does not authorize silent placement replacement.
+
+The private local Environment reference contains only an identity. Trusted Runtime
+deployment configuration freezes the Environment, Session and workspace root;
+requests cannot supply a replacement root. Local and remote references are mutually
+exclusive. Use the same preparation/start lifecycle for native execution and the
+existing bounded workspace controls for directory access. Local idle directory
+reads use the existing filesystem helper directly, with no model credentials or
+temporary harness. These private capabilities do not admit public hosted requests,
+establish Provider lifecycle, or define the official `self_hosted` mapping.
+
 Core and Runtime use common preparation, start, input-receipt, cancellation,
 release and recovery semantics for Codex and Claude. Retain each harness's native
 implementation behind its adapter. Core acts on verified capabilities and runtime

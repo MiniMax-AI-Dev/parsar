@@ -82,7 +82,7 @@ func (q *Queries) ListEnvironmentInputWork(ctx context.Context, arg ListEnvironm
 
 const listExecutionDevices = `-- name: ListExecutionDevices :many
 SELECT id, name FROM devices
-WHERE tenant_id = $1 AND revoked_at IS NULL
+WHERE tenant_id = $1 AND revoked_at IS NULL AND environment_id IS NULL
 ORDER BY id
 `
 

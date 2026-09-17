@@ -15,6 +15,9 @@ const bindSessionDevice = `-- name: BindSessionDevice :one
 INSERT INTO session_devices (session_id, device_id)
 SELECT s.id, d.id FROM sessions s JOIN devices d ON d.tenant_id = s.tenant_id
 WHERE s.tenant_id = $1 AND s.id = $2 AND d.id = $3 AND d.revoked_at IS NULL
+AND (d.environment_id IS NULL OR EXISTS (
+    SELECT 1 FROM environments e WHERE e.id = d.environment_id AND e.session_id = s.id
+))
 ON CONFLICT (session_id) DO UPDATE SET device_id = session_devices.device_id
 WHERE session_devices.device_id = EXCLUDED.device_id
 RETURNING device_id
@@ -79,7 +82,11 @@ func (q *Queries) GetDevice(ctx context.Context, arg GetDeviceParams) (GetDevice
 }
 
 const getDeviceCredential = `-- name: GetDeviceCredential :one
-SELECT id, name, credential_hash FROM devices WHERE id = $1 AND revoked_at IS NULL
+SELECT d.id, d.name, d.credential_hash FROM devices d
+WHERE d.id = $1 AND d.revoked_at IS NULL AND (d.environment_id IS NULL OR EXISTS (
+    SELECT 1 FROM environments e JOIN sessions s ON s.id = e.session_id
+    WHERE e.id = d.environment_id AND s.tenant_id = d.tenant_id AND s.deleted_at IS NULL
+))
 `
 
 type GetDeviceCredentialRow struct {
@@ -96,10 +103,13 @@ func (q *Queries) GetDeviceCredential(ctx context.Context, id pgtype.UUID) (GetD
 }
 
 const getSessionDevice = `-- name: GetSessionDevice :one
-SELECT d.id, d.name, b.native_session_id FROM session_devices b
+SELECT d.id, d.name, b.native_session_id, d.environment_id FROM session_devices b
 JOIN sessions s ON s.id = b.session_id
 JOIN devices d ON d.id = b.device_id AND d.tenant_id = s.tenant_id
 WHERE s.tenant_id = $1 AND s.id = $2 AND d.revoked_at IS NULL
+AND (d.environment_id IS NULL OR EXISTS (
+    SELECT 1 FROM environments e WHERE e.id = d.environment_id AND e.session_id = s.id
+))
 `
 
 type GetSessionDeviceParams struct {
@@ -111,12 +121,18 @@ type GetSessionDeviceRow struct {
 	ID              pgtype.UUID `json:"id"`
 	Name            string      `json:"name"`
 	NativeSessionID string      `json:"native_session_id"`
+	EnvironmentID   pgtype.UUID `json:"environment_id"`
 }
 
 func (q *Queries) GetSessionDevice(ctx context.Context, arg GetSessionDeviceParams) (GetSessionDeviceRow, error) {
 	row := q.db.QueryRow(ctx, getSessionDevice, arg.TenantID, arg.ID)
 	var i GetSessionDeviceRow
-	err := row.Scan(&i.ID, &i.Name, &i.NativeSessionID)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.NativeSessionID,
+		&i.EnvironmentID,
+	)
 	return i, err
 }
 
@@ -157,7 +173,10 @@ func (q *Queries) RevokeDevice(ctx context.Context, arg RevokeDeviceParams) (int
 
 const touchDevice = `-- name: TouchDevice :execrows
 UPDATE devices SET last_seen_at = clock_timestamp()
-WHERE id = $1 AND revoked_at IS NULL
+WHERE devices.id = $1 AND devices.revoked_at IS NULL AND (devices.environment_id IS NULL OR EXISTS (
+    SELECT 1 FROM environments e JOIN sessions s ON s.id = e.session_id
+    WHERE e.id = devices.environment_id AND s.tenant_id = devices.tenant_id AND s.deleted_at IS NULL
+))
 `
 
 func (q *Queries) TouchDevice(ctx context.Context, id pgtype.UUID) (int64, error) {

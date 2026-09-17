@@ -16,8 +16,8 @@ func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery, s
 	registerProductAgentKind(registry, agentCLIs.ClaudeCode, withSkillUploadServer(withCapabilityDownloads(claudecode.Factory, serverURL), serverURL))
 	registerProductAgentKind(registry, agentCLIs.OpenCode, withSkillUploadServer(withCapabilityDownloads(opencodeagent.Factory, serverURL), serverURL))
 	registerProductAgentKind(registry, agentCLIs.Codex, withSkillUploadServer(withCapabilityDownloads(codex.Factory, serverURL), serverURL))
-	if agentCLIs.Codex.Available && agentCLIs.Codex.Capabilities.RemoteEnvironment {
-		registry.RegisterPreparation("codex", codex.SupportsWorkspaceReadPreparation(), func(ctx context.Context, req proto.PromptRequestPayload) (agent.Prepared, error) {
+	if agentCLIs.Codex.Available && (agentCLIs.Codex.Capabilities.RemoteEnvironment || agentCLIs.Codex.Capabilities.LocalEnvironment) {
+		registry.RegisterPreparation("codex", codex.SupportsWorkspaceReadPreparation() || agentCLIs.Codex.Capabilities.LocalEnvironment, func(ctx context.Context, req proto.PromptRequestPayload) (agent.Prepared, error) {
 			prepared, err := codex.Prepare(ctx, req)
 			if prepared == nil {
 				return nil, err

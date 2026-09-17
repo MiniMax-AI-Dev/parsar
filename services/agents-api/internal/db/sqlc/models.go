@@ -25,6 +25,7 @@ type Device struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	LastSeenAt     pgtype.Timestamptz `json:"last_seen_at"`
 	RevokedAt      pgtype.Timestamptz `json:"revoked_at"`
+	EnvironmentID  pgtype.UUID        `json:"environment_id"`
 }
 
 type Environment struct {
