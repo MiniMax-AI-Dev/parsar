@@ -350,10 +350,13 @@ where
     let (read, mut write) = stream.into_split();
     let mut reader = BufReader::new(read);
     let mut frame = Vec::new();
-    let frame_result = tokio::select! {
+    let frame_result = {
+        let mut header = (&mut reader).take((MAX_FRAME + 1) as u64);
+        tokio::select! {
         biased;
         _ = stopping.cancelled() => return Ok(ConnectionOutcome::Settled),
-        result = timeout_at(deadline, (&mut reader).take((MAX_FRAME + 1) as u64).read_until(b'\n', &mut frame)) => result,
+        result = timeout_at(deadline, header.read_until(b'\n', &mut frame)) => result,
+        }
     };
     match frame_result {
         Ok(result) => {
