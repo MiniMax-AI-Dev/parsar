@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -43,6 +44,10 @@ func newPublicHarnessProfile(t *testing.T, f *publicSelfHostedFixture, native, i
 			}
 		}
 	})
+	trace := filepath.Join(f.root, "native-exec-trace")
+	if err := os.Mkdir(trace, 0700); err != nil {
+		t.Fatal(err)
+	}
 	state := filepath.Join(home, ".parsar")
 	if err := os.Mkdir(state, 0700); err != nil {
 		t.Fatal(err)
@@ -106,11 +111,12 @@ func newPublicHarnessProfile(t *testing.T, f *publicSelfHostedFixture, native, i
 		{native, "/opt/codex", ",readonly"}, {binary, "/opt/parsar-codex-harness", ",readonly"},
 		{f.daemonBinary, "/opt/parsar-daemon", ",readonly"}, {configPath, "/etc/codex/config.toml", ",readonly"},
 		{caFile, caFile, ",readonly"},
+		{trace, trace, ""},
 		{home, home, ""}, {filepath.Join(f.root, "parsar-daemon"), filepath.Join(f.root, "parsar-daemon"), ""},
 	} {
 		profile.args = append(profile.args, "--mount", "type=bind,source="+mount[0]+",target="+mount[1]+mount[2])
 	}
-	profile.args = append(profile.args, image, "/opt/parsar-daemon", "connect", "--profile", "execution")
+	profile.args = append(profile.args, image, "strace", "-ff", "-e", "trace=execve,execveat", "-s", "256", "-o", filepath.Join(trace, "exec"), "/opt/parsar-daemon", "connect", "--profile", "execution")
 	return profile
 }
 
@@ -141,15 +147,7 @@ func (f *publicSelfHostedFixture) observeHarnessOwner(t *testing.T) {
 	}
 	a.owners[owner.PID] = true
 	a.readyOwners = append(a.readyOwners, owner)
-	file, err := os.OpenFile(filepath.Join(f.root, "native-starts"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, writeErr := fmt.Fprintln(file, strconv.Itoa(owner.PID))
-	closeErr := file.Close()
-	if writeErr != nil || closeErr != nil {
-		t.Fatal("record actual public harness owner", writeErr, closeErr)
-	}
+
 }
 
 func (f *publicSelfHostedFixture) assertHarnessReleased(t *testing.T, proof map[string]any) {
@@ -166,8 +164,41 @@ func (f *publicSelfHostedFixture) assertHarnessReleased(t *testing.T, proof map[
 			return os.IsNotExist(processErr) && os.IsNotExist(ipcErr)
 		})
 	}
+	a.proof["launch_observation"] = "complete execve tracing from daemon startup through final public retries; per-process trace files retained"
 	a.proof["observed_owners"] = a.readyOwners
 	a.proof["container_image"] = os.Getenv("PARSAR_PLACEMENT_EXECUTOR_IMAGE")
 	a.proof["configuration"] = "task-isolated native system configuration; no harness launch wrapper"
 	proof["private_harness_artifact"] = a.proof
+}
+
+func (f *publicSelfHostedFixture) nativeStarts() ([]byte, error) {
+	if f.harness == nil {
+		return os.ReadFile(filepath.Join(f.root, "native-starts"))
+	}
+	paths, err := filepath.Glob(filepath.Join(f.root, "native-exec-trace", "exec.*"))
+	if err != nil {
+		return nil, err
+	}
+	var starts []string
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			if !strings.HasPrefix(line, `execve("/opt/parsar-codex-harness", `) {
+				continue
+			}
+			if !strings.HasSuffix(line, " = 0") {
+				return nil, fmt.Errorf("incomplete or failed native launch observation")
+			}
+			pid := strings.TrimPrefix(filepath.Base(path), "exec.")
+			if _, err := strconv.Atoi(pid); err != nil {
+				return nil, err
+			}
+			starts = append(starts, pid)
+		}
+	}
+	sort.Strings(starts)
+	return []byte(strings.Join(starts, "\n")), nil
 }

@@ -284,7 +284,7 @@ provider endpoint (default `https://api.minimax.cn/v1`). These are test inputs,
 not public API fields or production configuration options.
 
 This mode runs the daemon in a task-owned Linux amd64 container using the existing
-exact-digest executor image. It mounts the three binaries and host CA bundle read-only, uses native
+exact-digest executor image, which must include `strace` for this opt-in mode. It mounts the three binaries and host CA bundle read-only, uses native
 `/etc/codex/config.toml`, and shares only required task daemon state and a short,
 private HOME. It does not mount the shared operator home, Docker socket, API key
 file or observer directory. Host networking connects to the existing local test
@@ -292,6 +292,13 @@ API/proxy. Explicit process proxy settings override Docker client defaults. This
 is a qualified test placement, not a production isolation profile.
 Provider credentials are passed through a private environment file and removed
 on cleanup. No shell wrapper launches the harness.
+
+`strace` follows the daemon from startup through final retries and records every
+successful harness exec, including short-lived launches, in separate per-process
+files. Owner snapshots do not supply launch counts. The tracer runs with the same
+non-root user, dropped capabilities and default seccomp policy; no ptrace privilege
+or native sandbox relaxation is added. Only exec syscalls are recorded, without
+expanding environment values.
 
 The fixture observes actual executable identity and Environment/workspace binding
 before cancellation and during cold continuation. Existing command, file, history,

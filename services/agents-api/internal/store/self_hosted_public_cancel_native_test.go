@@ -67,7 +67,7 @@ exec ./placement.sh resumed
 	if receipt == nil || !receipt.Applied || receipt.Outcome == nil || receipt.ErrorCode != "" || receipt.DeliveryID != "cancel:"+first["turn_id"] || receipt.Outcome.Metadata[proto.DoneMetaAgentSessionID] != binding.NativeSessionID {
 		t.Fatal("public cancellation lacks its actual native outcome/identity")
 	}
-	firstStarts, err := os.ReadFile(filepath.Join(f.root, "native-starts"))
+	firstStarts, err := f.nativeStarts()
 	if err != nil || len(strings.Fields(string(firstStarts))) != 1 {
 		t.Fatal("cancelled input started another native harness")
 	}
@@ -147,7 +147,7 @@ exec ./placement.sh resumed
 	if _, err := os.Stat(filepath.Join(f.local, "credential-failure")); !os.IsNotExist(err) {
 		t.Fatal("native command inherited transport/provider credentials")
 	}
-	starts, err := os.ReadFile(filepath.Join(f.root, "native-starts"))
+	starts, err := f.nativeStarts()
 	processes := strings.Fields(string(starts))
 	if err != nil || len(processes) != 2 || processes[0] == processes[1] {
 		t.Fatal("continuation did not start exactly one fresh harness per Turn")
