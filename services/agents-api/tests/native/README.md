@@ -288,7 +288,8 @@ exact-digest executor image. It mounts the three binaries and host CA bundle rea
 `/etc/codex/config.toml`, and shares only required task daemon state and a short,
 private HOME. It does not mount the shared operator home, Docker socket, API key
 file or observer directory. Host networking connects to the existing local test
-API/proxy. This is a qualified test placement, not a production isolation profile.
+API/proxy. Explicit process proxy settings override Docker client defaults. This
+is a qualified test placement, not a production isolation profile.
 Provider credentials are passed through a private environment file and removed
 on cleanup. No shell wrapper launches the harness.
 

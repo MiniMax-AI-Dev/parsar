@@ -79,11 +79,6 @@ func newPublicHarnessProfile(t *testing.T, f *publicSelfHostedFixture, native, i
 		"PARSAR_CODEX_BIN": "/opt/codex", "PARSAR_CODEX_HARNESS_BIN": "/opt/parsar-codex-harness",
 		"MINIMAX_VALIDATION_KEY": key, "SSL_CERT_FILE": caFile,
 	}
-	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"} {
-		if value := os.Getenv(name); value != "" {
-			environment[name] = value
-		}
-	}
 	var envFile strings.Builder
 	for name, value := range environment {
 		if strings.ContainsAny(value, "\r\n") {
@@ -99,6 +94,14 @@ func newPublicHarnessProfile(t *testing.T, f *publicSelfHostedFixture, native, i
 	profile.args = []string{"run", "--name", profile.name, "--network", "host", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
 		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "--env-file", envPath, "--workdir", home,
 		"--tmpfs", "/tmp:rw,nosuid,nodev,mode=1777"}
+	// Explicit flags override Docker client proxy defaults, including env-file replacements.
+	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"} {
+		argument := name
+		if os.Getenv(name) == "" {
+			argument += "="
+		}
+		profile.args = append(profile.args, "--env", argument)
+	}
 	for _, mount := range [][3]string{
 		{native, "/opt/codex", ",readonly"}, {binary, "/opt/parsar-codex-harness", ",readonly"},
 		{f.daemonBinary, "/opt/parsar-daemon", ",readonly"}, {configPath, "/etc/codex/config.toml", ",readonly"},
