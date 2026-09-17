@@ -1,9 +1,12 @@
 use rustix::fs::FileType;
 #[path = "../directory.rs"]
 mod directory;
-use directory::{anchor, directory, observe};
+use directory::observe;
+#[path = "../workspace_path.rs"]
+mod workspace_path;
 use serde_json::json;
 use std::{io, path::Path};
+use workspace_path::{anchor, directory};
 
 fn run() -> io::Result<serde_json::Value> {
     let args: Vec<_> = std::env::args().skip(1).collect();

@@ -634,6 +634,16 @@ retirement. Target native background termination only by observed current-Turn
 item/process identity, and verify Files plus retained interrupted history through
 the maintained native client before any production ownership or public admission.
 
+The optional Codex file installer runs through the existing native process interface
+with bounded stdin chunks, declared length and a SHA-256 commit trailer. It fills
+the demonstrated native hard-link overwrite and whole-message size gaps; it is
+not a second filesystem service or public admission. Reuse held-directory traversal
+and existing rustix directory-relative operations for replacement. Keep preparation, caller
+authorization and uncertain mutation recovery in their existing owning layers.
+A queued stdin receipt, missing helper result or process termination is not a file
+commit receipt. See the [installer contract](packages/codex-executor/README.md#scoped-file-installer)
+for private limits, cleanup, metadata and concurrency semantics.
+
 The private [retirement qualification](services/agents-api/tests/native/retirement/README.md)
 separates native connection/processor shutdown from already admitted filesystem
 work. Its hashed test-only scheduling overlay is not a production native patch.
