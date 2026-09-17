@@ -212,6 +212,16 @@ future V2 option, to revisit only after V1 is stable and concrete needs justify 
 Do not extend that topology for hosted delivery, maintain two current hosted routes,
 or introduce dormant V2 compatibility scaffolding.
 
+Platform-managed and user-managed deployment reuse this same Runtime. For platform
+management, SandboxProvider creates and reclaims it. For user management, the user
+starts the Runtime and its daemon authenticates and initiates the Core connection;
+Core must verify tenant ownership and the exact Environment binding. These are
+management responsibilities, not separate execution architectures. User-managed
+Runtime does not automatically mean the official `self_hosted` discriminator;
+that mapping needs separate protocol definition and acceptance. User-managed
+installation and enrollment remain later board work, outside the current Docker
+co-location security qualification.
+
 Preserve the accepted official `self_hosted` interoperability path and its native
 executor connection flow. Codex registry/Noise is specific to that path, not the
 V1 hosted backbone or a universal protocol for all engines. A private daemon URL

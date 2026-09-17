@@ -6,6 +6,10 @@ accepted caller-managed `self_hosted` path. Use one dedicated sandbox and retain
 home/workspace per Session. Core stays outside it. Do not mount another Session's
 history, host home, Docker socket, or product/Core credentials.
 
+The shared Runtime and its two management modes are defined in
+[the contributor guide](../../../../CONTRIBUTING.md#product-and-execution-service-separation).
+User-managed installation and enrollment are outside this qualification batch.
+
 Use Codex 0.153.4 and its matching `codex-resources` directory. Install the immutable
 requirements file at `/etc/codex/requirements.toml`, mount only the authorized
 workspace at `/workspace`, and retain daemon/native state beneath `/home`. Set
