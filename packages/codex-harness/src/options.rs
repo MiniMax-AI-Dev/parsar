@@ -44,7 +44,12 @@ impl Cli {
     }
 }
 
+#[path = "options_write.rs"]
+mod write;
+pub use write::WriteBinding;
+
 pub struct Binding {
+    pub write: Option<WriteBinding>,
     pub native_binary: PathBuf,
     pub directory_helper: Option<PathBuf>,
     pub environment: String,
@@ -58,13 +63,15 @@ impl Binding {
             std::env::var(format!("PARSAR_CODEX_HARNESS_{suffix}"))
                 .context("explicit private harness configuration is required")
         }
+        let workspace = PathBuf::from(required("WORKSPACE")?);
         let binding = Self {
+            write: WriteBinding::from_environment(&workspace)?,
             native_binary: PathBuf::from(required("NATIVE")?),
             directory_helper: std::env::var_os("PARSAR_CODEX_HARNESS_DIRECTORY_HELPER")
                 .filter(|value| !value.is_empty())
                 .map(PathBuf::from),
             environment: required("ENVIRONMENT")?,
-            workspace: PathBuf::from(required("WORKSPACE")?),
+            workspace,
             ipc_root: PathBuf::from(required("IPC_ROOT")?),
         };
         let id = Uuid::parse_str(&binding.environment).context("invalid Environment identity")?;
@@ -92,6 +99,12 @@ impl Binding {
             "IPC root requires an absolute path"
         );
         Ok(binding)
+    }
+
+    pub fn restrict_reads(&mut self, read_only: bool) {
+        if read_only {
+            self.write = None;
+        }
     }
 
     pub async fn check_native(&self) -> Result<()> {

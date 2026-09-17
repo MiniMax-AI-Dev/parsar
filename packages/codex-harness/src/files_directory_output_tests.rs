@@ -1,5 +1,6 @@
+use super::super::super::process_output::Output;
 use super::*;
-use codex_exec_server::ProcessOutputChunk;
+use codex_exec_server::{ExecOutputStream, ProcessOutputChunk, ReadResponse};
 
 fn response(next_seq: u64, chunks: &[(u64, &[u8])], exited: bool, closed: bool) -> ReadResponse {
     ReadResponse {

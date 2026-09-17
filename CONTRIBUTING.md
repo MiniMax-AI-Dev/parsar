@@ -655,6 +655,18 @@ A queued stdin receipt, missing helper result or process termination is not a fi
 commit receipt. See the [installer contract](packages/codex-executor/README.md#scoped-file-installer)
 for private limits, cleanup, metadata and concurrency semantics.
 
+The private harness file socket admits writes only with a frozen operator helper
+and staging binding; read-only preparation removes that binding. Workspace and
+staging must be distinct siblings under one non-root Environment parent, and the
+helper must be outside that writable parent. Receive the complete bounded body
+before starting a native process. Transfer 64 KiB chunks plus the digest through
+one captured native process; require Linux sandboxing and an exact versioned
+commit result with successful exit and complete output closure. Native queued
+stdin is not a commit. Caller detach does not cancel admitted work; uncertain
+input, output or deadline stops the existing owner without replay or replacement
+claims. Public Files.create, trusted placement admission and durable mutation
+recovery remain separate work. See the [private transport contract](packages/codex-harness/README.md#private-file-writes).
+
 The private [retirement qualification](services/agents-api/tests/native/retirement/README.md)
 separates native connection/processor shutdown from already admitted filesystem
 work. Its hashed test-only scheduling overlay is not a production native patch.

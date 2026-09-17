@@ -1,4 +1,4 @@
-use super::OperationError;
+use super::{OperationError, process_output::Output};
 use codex_exec_server::{
     Environment, ExecParams, ExecProcess, FileSystemSandboxContext, ProcessId,
 };
@@ -90,7 +90,7 @@ pub(super) async fn list(
     if !matches!(started.sandbox_type, Some(SandboxType::LinuxSeccomp)) {
         return stop_and_reject(process).await;
     }
-    let mut output = output::Output::default();
+    let mut output = Output::default();
     loop {
         // Uncapped snapshots expose the native global cursor. Capped reads can
         // report closed while omitting chunks, and retained history can evict data.
