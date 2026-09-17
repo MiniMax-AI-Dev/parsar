@@ -14,7 +14,7 @@ func (d *Dispatcher) readPreparedDirectory(ctx context.Context, peer *gateway.Se
 	if d.EnvironmentConnection == nil {
 		return unavailable
 	}
-	owner, cancel := context.WithCancel(ctx)
+	owner, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	connection, err := d.EnvironmentConnection(owner, session, environment)
 	if connection.Release != nil {

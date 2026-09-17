@@ -57,7 +57,6 @@ func verifyWorkerDirectoryReads(t *testing.T, ctx context.Context, h *dispatchHa
 	if !found {
 		t.Fatal("Core directory omitted the real-model generated file")
 	}
-	wait()
 	if _, err := w.ReadEnvironmentDirectory(ctx, environment, "missing-directory"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("Core missing directory result", err)
 	}
