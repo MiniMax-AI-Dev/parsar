@@ -4,11 +4,12 @@ allowed_approval_policies = ["never"]
 managed-workspace = true
 [permissions.managed-workspace.filesystem]
 ":minimal" = "read"
-"/workspace" = "write"
+"/environment/workspace" = "write"
 [permissions.managed-workspace.network]
 enabled = false
 [permissions.filesystem]
 deny_read = [
+  "/environment/staging",
   "/home/*/.parsar/parsar-daemon/*/auth.json",
   "/home/*/.parsar/parsar-daemon/agent-sessions/*/config.toml",
   "/home/*/.parsar/parsar-daemon/agent-sessions/*/sessions",

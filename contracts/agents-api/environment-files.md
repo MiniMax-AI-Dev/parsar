@@ -1,8 +1,9 @@
-# Environment Files.list
+# Environment files
 
 The complete protocol target remains the SDK pinned in [upstream.json](upstream.json).
-This is a partial implementation of its public `GET /agents/environments/{id}/files`.
-Uploads, Artifacts and other Files operations are outside this change.
+The public GET and POST `/agents/environments/{id}/files` have partial coverage.
+Inline creation targets a preconfigured V1 local Environment. Source-file (`file_id`)
+resolution, Artifacts and public hosted Session provisioning remain unimplemented.
 
 ## Pinned contract
 
@@ -21,7 +22,9 @@ returns `data` and `next` (null on the final page), with no additional page fiel
 
 ## Current scope and local policies
 
-- Read direct regular files in one authorized self-hosted workspace directory.
+- Read direct regular files in one authorized self-hosted or qualified local workspace
+  directory. Local public paths are rooted at `/workspace`, independently of the
+  physical path frozen into its dedicated Runtime.
   Omitted path selects the workspace root. Do not recurse or follow symlinks;
   directory, symlink and other non-regular entries are omitted.
 - Omitted limit uses 20. Query keys may occur once; empty values, unknown keys and
@@ -57,6 +60,46 @@ local policies or remaining gaps, not verified hosted semantics. The pinned sour
 does not establish them. Do not interpret the bounded direct-file implementation
 as complete Files.list compatibility.
 
+## Inline creation and remaining union member
+
+The pinned create union requires `type: inline`, standard Base64 `data` and an
+absolute destination `path` under `/workspace`, or `type: file_id`, `file_id` and
+that path. The current implementation accepts inline only and explicitly rejects
+`file_id` as an implementation gap. Required null/omitted fields, extra fields,
+query parameters and invalid Base64 are rejected. Empty bytes are valid. Inline
+paths must be canonical and cannot name the workspace root; the parent must exist.
+The current decoded-content limit is 50 MiB, with bounded JSON and 64 KiB daemon
+frames. These are local limits and policies, not verified upstream restrictions.
+
+Creation uses the same tenant Environment lookup as listing. The Worker checks the
+stored local profile, immutable exact device/Environment binding and live capability.
+It never starts a model for upload or supplies a filesystem root from the request.
+The deployment must qualify the protected sibling workspace/staging layout in the
+[Codex profile](../../services/agents-api/deploy/codex/README.md). A capability or
+path declaration alone does not establish isolation or public hosted admission.
+
+Before sending any bytes, persist the mutation identity and request digest under
+the Session lock. Pending input/execution and another unresolved upload exclude a
+new mutation. The Runtime receives the complete body, verifies its digest and uses
+the existing installer to replace the destination with a fresh mode-0600 inode.
+Existing hard-link aliases retain their original contents. Uploads do not create
+parent directories or preserve destination permissions; exact upstream overwrite
+and metadata behavior remain unverified. Later independent tool writes can change
+the installed file; the response does not promise a snapshot.
+
+Only an exact committed/rejected receipt settles durable ownership. Caller detach,
+connection loss, timeout or missing output cannot be treated as rejection. Unknown
+writes remain pending across Core restart and block successor mutation without
+replay; read-only recovery remains available. Automatic uncertain-write recovery
+and placement replacement are outside this batch. Controlled failures preserve
+the destination only when the installer proves rejection, and only against this
+operation, not independent workspace writers. Temporary-file cleanup is best effort.
+
+Successful creation returns only the four EnvironmentFile fields. Reuse the common
+safe error mapper; current 400/409/413/503 policies and error timing are not evidence
+of exact upstream parity. This inline milestone cannot close the complete Files
+resource or Environment lifecycle requirements.
+
 ## Acceptance boundary
 
 API tests cover raw response fields, complete-result validation, filters, sorting,
@@ -65,3 +108,12 @@ official-client fixture exercises flat directories generated through a real mode
 raw HTTP and pinned SDK pagination, sizes, and two-tenant isolation. It does not
 establish unspecified recursive, symlink or snapshot behavior. Runtime availability
 and each engine's isolated placement require their own native and service checks.
+
+The opt-in `services/agents-api/tests/official_environment_files_create.py` reuses
+the pinned SDK and raw HTTP listing assertions. Its stdin supplies the base URL,
+preconfigured Environment ID, model-input text, and two private caller token
+sources (`token_env` or `token_file`). The invoking native fixture supplies an
+existing `uploads` directory and a staging symlink rejection probe, verifies exact
+installed hashes, and has a real model consume the uploaded text. This distinction
+keeps private setup separate from public hosted creation acceptance. Mechanism tests
+exercise detached/unknown outcomes and durable gates independently of model output.

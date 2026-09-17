@@ -39,6 +39,7 @@ type Handler struct {
 	inputs          InputSubmitter
 	executorURL     string
 	directoryReader EnvironmentDirectoryReader
+	fileWriter      EnvironmentFileWriter
 }
 
 func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...Option) (http.Handler, error) {
@@ -72,6 +73,7 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 		r.Delete("/agents/{agent_id}", h.deleteAgent)
 		r.Get("/agents/environments/{environment_id}", h.getEnvironment)
 		r.Get("/agents/environments/{environment_id}/files", h.listEnvironmentFiles)
+		r.Post("/agents/environments/{environment_id}/files", h.createEnvironmentFile)
 		r.Post("/agents/sessions", h.createSession)
 		r.Get("/agents/sessions", h.listSessions)
 		r.Get("/agents/sessions/{session_id}", h.getSession)

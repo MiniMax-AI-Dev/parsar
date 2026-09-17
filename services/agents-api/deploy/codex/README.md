@@ -12,7 +12,8 @@ User-managed installation and enrollment are outside this qualification batch.
 
 Use Codex 0.153.4 and its matching `codex-resources` directory. Install the immutable
 requirements file at `/etc/codex/requirements.toml`, mount only the authorized
-workspace at `/workspace`, and retain daemon/native state beneath `/home`. Set
+Environment parent at `/environment`, containing only `workspace` and `staging`
+directories on one mount. Retain daemon/native state beneath `/home`. Set
 `PARSAR_CODEX_PERMISSION_PROFILE=managed-workspace` on the daemon. This operator
 setting selects the native profile at startup and on both new/resumed threads;
 it also filters native shell inheritance to process essentials, retaining default
@@ -26,7 +27,8 @@ profile and denies reads of daemon authentication, generated provider configurat
 and native history under the declared daemon state layout. Minimal native reads
 exclude other home contents; native helper aliases under the Session tmp directory
 remain readable so the pinned harness can start its sandbox and apply_patch.
-Only `/workspace` is writable. Native commands have no network access in this initial profile; the trusted harness and
+Only `/environment/workspace` is writable by native tools. Staging and its ancestors
+are unavailable for native tool writes; staging is also explicitly denied for reads. Native commands have no network access in this initial profile; the trusted harness and
 daemon still need their model/Core connections. Do not claim upstream network
 configuration support or expose private stock filesystem RPC as public Files.
 Public file access needs the existing bounded, authorized filesystem primitives.
@@ -53,3 +55,18 @@ model execution, cancellation, daemon/container restart with retained history an
 files, and missing-history rejection. An alive container or a selected profile is
 not an isolation or public API acceptance result. Provider admission and lifecycle,
 public Files, source uploads and default deployment cutover remain separate work.
+
+The optional local file writer uses the existing `agents-api-codex-write` binary
+outside `/environment`, with `PARSAR_RUNTIME_WRITE_HELPER` selecting that immutable
+executable and `PARSAR_RUNTIME_STAGING=/environment/staging`. Set
+`PARSAR_RUNTIME_WORKSPACE=/environment/workspace`; the public file path remains
+`/workspace/...` and Core sends only the relative path to the bound Runtime.
+Workspace and staging must share the same mount for atomic rename. Do not mount
+them separately or put daemon/model credentials, native history or other tenants
+inside `/environment`. The read-only Runtime can omit both writer settings.
+
+The installer runs as a trusted bounded daemon child with a minimal environment.
+Native tools retain their narrower filesystem policy. Qualify direct reads,
+symlink and process-root aliases, attempted staging modification, real uploaded
+bytes consumed by Codex, cancellation and retained-history restart before using
+this writer profile for public admission. Configuration alone is not that proof.

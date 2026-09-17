@@ -63,6 +63,9 @@ func (r *Router) Shutdown(ctx context.Context) error {
 		r.shutdownWG.Done()
 		r.shutdownWG.Wait()
 		r.mu.Lock()
+		if r.workspaceWrite != nil && r.workspaceWrite.uncertain {
+			attempt.err = errors.Join(attempt.err, errors.New("dispatch: local workspace write remains uncertain"))
+		}
 		for _, p := range r.preparations {
 			if p.owns {
 				cause := p.closeErr

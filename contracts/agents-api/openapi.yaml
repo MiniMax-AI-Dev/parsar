@@ -364,6 +364,21 @@ definitions:
         type: array
         x-nullable: true
     type: object
+  v1.InlineEnvironmentFileCreateRequest:
+    properties:
+      data:
+        type: string
+      path:
+        type: string
+      type:
+        enum:
+        - inline
+        type: string
+    required:
+    - data
+    - path
+    - type
+    type: object
   v1.InputContent:
     properties:
       text:
@@ -1455,16 +1470,17 @@ paths:
       - Environments
   /agents/environments/{environment_id}/files:
     get:
-      description: Lists direct regular files in one authorized self_hosted workspace
-        directory. This partial implementation defaults to the workspace root and
-        limit 20; recursive scope, directory/symlink treatment and these defaults
-        are not verified upstream semantics. Sorts by case-sensitive path components,
-        descending by default. Keep the same path, order and limit when using page.
-        Each page rereads the complete bounded directory; changed file paths/sizes
-        invalidate continuation locally with 400. There is no snapshot guarantee.
-        Truncated or uncertain native results fail with 503 without returning a partial
-        page. This read never starts a Turn or admits model input. Actual transport
-        disconnect/reconnect events remain observable.
+      description: Lists direct regular files in one authorized self_hosted or qualified
+        preconfigured local workspace directory. Local paths use the public /workspace
+        root. This partial implementation defaults to the workspace root and limit
+        20; recursive scope, directory/symlink treatment and these defaults are not
+        verified upstream semantics. Sorts by case-sensitive path components, descending
+        by default. Keep the same path, order and limit when using page. Each page
+        rereads the complete bounded directory; changed file paths/sizes invalidate
+        continuation locally with 400. There is no snapshot guarantee. Truncated or
+        uncertain native results fail with 503 without returning a partial page. This
+        read never starts a Turn or admits model input. Actual transport disconnect/reconnect
+        events remain observable.
       parameters:
       - description: agents=v1
         in: header
@@ -1528,6 +1544,75 @@ paths:
       security:
       - BearerAuth: []
       summary: List live Environment files
+      tags:
+      - Environments
+    post:
+      consumes:
+      - application/json
+      description: Uploads standard Base64 bytes to a file beneath /workspace in a
+        preconfigured, qualified local Environment. This partial implementation accepts
+        inline only; the pinned file_id union member remains unimplemented. Public
+        hosted Session creation is not enabled. A private 50 MiB decoded-content limit
+        applies. The parent directory must exist. Replacement installs a new mode-0600
+        inode; upstream overwrite metadata semantics remain unverified. Idle writes
+        exclude execution. Missing receipts return unavailable and retain a durable
+        mutation gate without automatic replay. Error/timing parity with upstream
+        remains unverified.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Environment ID
+        in: path
+        name: environment_id
+        required: true
+        type: string
+      - description: Inline file bytes and absolute workspace path
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.InlineEnvironmentFileCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.EnvironmentFile'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create an Environment file from inline bytes
       tags:
       - Environments
   /agents/sessions:

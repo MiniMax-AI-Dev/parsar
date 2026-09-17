@@ -74,6 +74,12 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 		r.log.ErrorContext(callerCtx, "handlePromptRequest: router closed", "run_id", runID)
 		return ErrRouterClosed
 	}
+	if r.workspaceWrite != nil {
+		r.mu.Unlock()
+		err := errors.New("local workspace has an unsettled write")
+		r.emitTerminalError(callerCtx, runID, err.Error())
+		return err
+	}
 	if _, dup := r.sessions[runID]; dup {
 		r.mu.Unlock()
 		r.log.WarnContext(callerCtx, "ignoring duplicate prompt_request", "run_id", runID)

@@ -53,6 +53,16 @@ type EnvironmentExecutorCredential struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
+type EnvironmentFileWrite struct {
+	ID            pgtype.UUID        `json:"id"`
+	EnvironmentID pgtype.UUID        `json:"environment_id"`
+	DeviceID      pgtype.UUID        `json:"device_id"`
+	RequestSha256 string             `json:"request_sha256"`
+	State         string             `json:"state"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	SettledAt     pgtype.Timestamptz `json:"settled_at"`
+}
+
 type EnvironmentInputReservation struct {
 	ID             pgtype.UUID        `json:"id"`
 	SessionID      pgtype.UUID        `json:"session_id"`

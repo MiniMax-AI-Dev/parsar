@@ -16,6 +16,7 @@ type Binding struct {
 	stateKey    string
 	workspace   string
 	helper      string
+	writer      *fileWriter
 }
 
 func New(environment, session, workspace, helper string) (*Binding, error) {
@@ -43,10 +44,20 @@ func New(environment, session, workspace, helper string) (*Binding, error) {
 
 func Load() (*Binding, error) {
 	values := []string{os.Getenv("PARSAR_RUNTIME_ENVIRONMENT_ID"), os.Getenv("PARSAR_RUNTIME_SESSION_ID"), os.Getenv("PARSAR_RUNTIME_WORKSPACE"), os.Getenv("PARSAR_RUNTIME_DIRECTORY_HELPER")}
-	if strings.Join(values, "") == "" {
+	writeHelper, staging := os.Getenv("PARSAR_RUNTIME_WRITE_HELPER"), os.Getenv("PARSAR_RUNTIME_STAGING")
+	if strings.Join(values, "") == "" && writeHelper == "" && staging == "" {
 		return nil, nil
 	}
-	return New(values[0], values[1], values[2], values[3])
+	b, err := New(values[0], values[1], values[2], values[3])
+	if err != nil {
+		return nil, err
+	}
+	if writeHelper != "" || staging != "" {
+		if err := b.bindWriter(writeHelper, staging); err != nil {
+			return nil, err
+		}
+	}
+	return b, nil
 }
 
 // Configure validates the reference before supplying the immutable local cwd.

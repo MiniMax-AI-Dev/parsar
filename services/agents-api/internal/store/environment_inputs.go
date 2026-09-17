@@ -72,6 +72,9 @@ func (s *Store) ReserveEnvironmentInput(ctx context.Context, tenantID, sessionID
 			result = EnvironmentInputReservation{SessionID: sessionID, State: EnvironmentInputAdmitted, Receipts: receipts}
 			return nil
 		}
+		if err := checkEnvironmentFileWriteGate(ctx, q, session); err != nil {
+			return err
+		}
 		if _, err := q.GetSessionEnvironment(ctx, sqlc.GetSessionEnvironmentParams{TenantID: tenant, ID: session}); errors.Is(err, pgx.ErrNoRows) {
 			return ErrInvalidInput
 		} else if err != nil {
@@ -222,6 +225,9 @@ func settleEnvironmentInput(ctx context.Context, q *sqlc.Queries, tenantID strin
 }
 
 func environmentInputMayStart(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
+	if err := checkEnvironmentFileWriteGate(ctx, q, session); err != nil {
+		return err
+	}
 	_, err := q.GetActiveTurn(ctx, session)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil

@@ -16,6 +16,13 @@ type environmentPlacement struct {
 	CapabilityDirectories []string `json:"capability_directories"`
 }
 
+// LocalWorkspaceConfiguration recognizes the qualified stored V1 profile. It
+// does not provision a Runtime, validate live authority, or admit hosted creation.
+func LocalWorkspaceConfiguration(configuration json.RawMessage) bool {
+	placement, err := parseEnvironmentPlacement(configuration)
+	return err == nil && placement.Type == "openai_hosted"
+}
+
 func parseEnvironmentPlacement(configuration json.RawMessage) (environmentPlacement, error) {
 	var placement environmentPlacement
 	if json.Unmarshal(configuration, &placement) != nil {
