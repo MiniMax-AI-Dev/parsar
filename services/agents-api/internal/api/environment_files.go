@@ -23,7 +23,7 @@ func WithEnvironmentDirectoryReader(reader EnvironmentDirectoryReader) Option {
 }
 
 // @Summary List live Environment files
-// @Description Lists direct regular files in one authorized self_hosted workspace directory. This partial implementation defaults to the workspace root and limit 20; recursive scope, directory/symlink treatment and these defaults are not verified upstream semantics. Sorts by case-sensitive path components, descending by default. Keep the same path, order and limit when using page. Each page rereads the complete bounded directory; changed file paths/sizes invalidate continuation locally with 400. There is no snapshot guarantee. Truncated or uncertain native results fail with 503 without returning a partial page. This read never starts a Turn or changes connection state.
+// @Description Lists direct regular files in one authorized self_hosted workspace directory. This partial implementation defaults to the workspace root and limit 20; recursive scope, directory/symlink treatment and these defaults are not verified upstream semantics. Sorts by case-sensitive path components, descending by default. Keep the same path, order and limit when using page. Each page rereads the complete bounded directory; changed file paths/sizes invalidate continuation locally with 400. There is no snapshot guarantee. Truncated or uncertain native results fail with 503 without returning a partial page. This read never starts a Turn or admits model input. Actual transport disconnect/reconnect events remain observable.
 // @Tags Environments
 // @Produce json
 // @Security BearerAuth

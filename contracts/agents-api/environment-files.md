@@ -48,7 +48,8 @@ returns `data` and `next` (null on the final page), with no additional page fiel
   promised; unchanged path/size metadata does not prove unchanged contents.
 - Reader errors reuse the existing safe error mapping: not found 404, invalid input
   400 and unavailable execution 503. Native error text never enters the response.
-  Listing does not create a Turn, prepare execution or change connection status.
+  Listing does not create a Turn or admit model input. Idle reads use temporary
+  read-only preparation; actual transport disconnect/reconnect events remain visible.
 
 Default limit, omitted-path scope, recursion, non-regular entries, exact invalid or
 missing-path errors and cursor invalidation behavior are

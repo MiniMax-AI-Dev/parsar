@@ -245,7 +245,9 @@ directory data only after confirmed Close; incomplete reads or uncertain cleanup
 return unavailable without data. Revoke the scoped read transport credential on
 completion or failure. Runtime retains uncertain cleanup ownership and capacity;
 this does not require a second durable Core owner registry or establish remote
-write retirement. Public Files admission and protocol pagination remain separate.
+write retirement. Public Files.list delegates workspace access to this reader;
+the API owns tenant authorization, path validation and protocol pagination. Keep
+partial directory coverage and unverified defaults explicit in the Files contract.
 
 Keep prerequisites specific to the public operation being implemented. Native
 harnesses execute; adapters translate protocols and fill demonstrated capability
