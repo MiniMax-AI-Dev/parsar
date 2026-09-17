@@ -1,4 +1,4 @@
-use anyhow::{Result, bail, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone)]
@@ -31,12 +31,13 @@ impl WriteBinding {
         );
         let parent = workspace
             .parent()
-            .filter(|parent| *parent != Path::new("/"));
+            .filter(|parent| *parent != Path::new("/"))
+            .context("workspace must have a non-root Environment parent")?;
         ensure!(
-            parent.is_some() && staging.parent() == parent && staging != workspace,
+            staging.parent() == Some(parent) && staging != workspace,
             "workspace and staging must be distinct siblings below one private Environment parent"
         );
-        let parent = parent.expect("validated parent").to_owned();
+        let parent = parent.to_owned();
         ensure!(
             !helper.starts_with(&parent),
             "write helper must be outside the writable Environment parent"
