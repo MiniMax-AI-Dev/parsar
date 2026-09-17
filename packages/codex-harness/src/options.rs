@@ -9,6 +9,8 @@ use uuid::Uuid;
 #[derive(Parser)]
 #[command(version, about = "Private exact-pin Parsar Codex harness integration")]
 pub struct Cli {
+    #[arg(long, global = true)]
+    pub workspace_read_only: bool,
     #[command(flatten)]
     config: CliConfigOverrides,
     #[arg(long, global = true)]

@@ -31,7 +31,7 @@ func TestPreparationRouterRetainsActualNativeChild(t *testing.T) {
 				return nil, errors.New("ordinary Factory must not run")
 			})
 			prepared := make(chan *Prepared, 1)
-			registry.RegisterPreparation("codex", func(ctx context.Context, req proto.PromptRequestPayload) (agent.Prepared, error) {
+			registry.RegisterPreparation("codex", false, func(ctx context.Context, req proto.PromptRequestPayload) (agent.Prepared, error) {
 				p, err := newPreparation(ctx, req, cfg)
 				if err != nil {
 					return nil, err

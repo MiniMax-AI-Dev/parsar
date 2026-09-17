@@ -17,12 +17,12 @@ func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery, s
 	registerProductAgentKind(registry, agentCLIs.OpenCode, withSkillUploadServer(withCapabilityDownloads(opencodeagent.Factory, serverURL), serverURL))
 	registerProductAgentKind(registry, agentCLIs.Codex, withSkillUploadServer(withCapabilityDownloads(codex.Factory, serverURL), serverURL))
 	if agentCLIs.Codex.Available && agentCLIs.Codex.Capabilities.RemoteEnvironment {
-		registry.RegisterPreparation("codex", func(ctx context.Context, req proto.PromptRequestPayload) (agent.Prepared, error) {
+		registry.RegisterPreparation("codex", codex.SupportsWorkspaceReadPreparation(), func(ctx context.Context, req proto.PromptRequestPayload) (agent.Prepared, error) {
 			prepared, err := codex.Prepare(ctx, req)
-			if err != nil {
+			if prepared == nil {
 				return nil, err
 			}
-			return prepared, nil
+			return prepared, err
 		})
 	}
 	registerProductAgentKind(registry, agentCLIs.Pi, withSkillUploadServer(withCapabilityDownloads(pi.Factory, serverURL), serverURL))

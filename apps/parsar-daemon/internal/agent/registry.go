@@ -107,6 +107,7 @@ func (r *Registry) RegisterKind(info proto.SupportedAgentKind, f Factory) {
 	r.factories[kind] = f
 	delete(r.preparers, kind)
 	info.Capabilities.Preparation = false
+	info.Capabilities.WorkspaceReadPreparation = false
 	r.kinds[kind] = info
 }
 

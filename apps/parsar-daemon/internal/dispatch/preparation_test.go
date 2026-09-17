@@ -46,7 +46,7 @@ func preparationRouter(t *testing.T, sender dispatch.Sender, timeout time.Durati
 	reg.RegisterKind(proto.SupportedAgentKind{Kind: "prepared", Available: true, Capabilities: proto.AgentKindCapabilities{RemoteEnvironment: true}}, func(context.Context, proto.PromptRequestPayload, chan<- proto.Envelope) (agent.Session, error) {
 		return nil, errors.New("ordinary Factory must not be used for preparation")
 	})
-	reg.RegisterPreparation("prepared", factory)
+	reg.RegisterPreparation("prepared", true, factory)
 	r, err := dispatch.New(dispatch.Config{Registry: reg, Sender: sender, PreparationTimeout: timeout})
 	if err != nil {
 		t.Fatal(err)

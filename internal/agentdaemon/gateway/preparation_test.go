@@ -77,8 +77,8 @@ func TestPreparationCloseAndOverflowDoNotInventRunEvents(t *testing.T) {
 }
 
 func TestPreparationCapabilitySurvivesHeartbeatMapping(t *testing.T) {
-	kinds := deviceKindsFromHeartbeat(proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Preparation: true, RemoteEnvironment: true}}}})
-	if len(kinds) != 1 || !kinds[0].Capabilities.Preparation {
+	kinds := deviceKindsFromHeartbeat(proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Preparation: true, RemoteEnvironment: true, WorkspaceReadPreparation: true}}}})
+	if len(kinds) != 1 || (!kinds[0].Capabilities.Preparation || !kinds[0].Capabilities.WorkspaceReadPreparation) {
 		t.Fatal("preparation capability lost")
 	}
 }

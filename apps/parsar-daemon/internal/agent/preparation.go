@@ -24,11 +24,13 @@ type PreparedCancellation interface {
 	CancellationOutcome() proto.DonePayload
 }
 
+// A factory may return both a resource and an error when construction failed but
+// cleanup remains unconfirmed. The caller must retain and close that resource.
 type PreparationFactory func(context.Context, proto.PromptRequestPayload) (Prepared, error)
 
 // RegisterPreparation installs a separate execution-only path. Product factory
 // wrappers must not add authoring or capability-download side effects to it.
-func (r *Registry) RegisterPreparation(kind string, prepare PreparationFactory) {
+func (r *Registry) RegisterPreparation(kind string, workspaceRead bool, prepare PreparationFactory) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	info, exists := r.kinds[kind]
@@ -37,6 +39,7 @@ func (r *Registry) RegisterPreparation(kind string, prepare PreparationFactory) 
 	}
 	r.preparers[kind] = prepare
 	info.Capabilities.Preparation = true
+	info.Capabilities.WorkspaceReadPreparation = workspaceRead
 	r.kinds[kind] = info
 }
 

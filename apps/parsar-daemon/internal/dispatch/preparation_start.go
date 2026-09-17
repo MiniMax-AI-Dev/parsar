@@ -27,6 +27,10 @@ func (r *Router) handleExecutionStart(_ context.Context, env proto.Envelope) err
 		r.mu.Unlock()
 		return r.rejectPreparation(env, "unknown_preparation")
 	}
+	if p.workspaceReadOnly {
+		r.mu.Unlock()
+		return r.rejectPreparation(env, "read_only_preparation")
+	}
 	if p.status.State == "starting" || p.status.State == "started" {
 		matches, status := p.startFingerprint == fingerprint, p.status
 		r.mu.Unlock()

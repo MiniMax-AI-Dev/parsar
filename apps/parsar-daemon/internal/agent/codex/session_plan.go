@@ -8,6 +8,10 @@ import (
 )
 
 func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg sessionConfig) (SessionPlan, string, error) {
+	if req.WorkspaceReadOnly {
+		plan, err := workspaceReadPlan(req)
+		return plan, "", err
+	}
 	mcpServers, err := publicMCPHTTPServers(req)
 	if err != nil {
 		return SessionPlan{}, "", err

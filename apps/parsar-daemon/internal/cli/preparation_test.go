@@ -22,7 +22,7 @@ func TestPreparationRegistrationBypassesProductWrappers(t *testing.T) {
 			continue
 		}
 		stop := errors.New("controlled preparation stop")
-		reg.RegisterPreparation("codex", func(_ context.Context, req proto.PromptRequestPayload) (agent.Prepared, error) {
+		reg.RegisterPreparation("codex", true, func(_ context.Context, req proto.PromptRequestPayload) (agent.Prepared, error) {
 			if req.RunID != "" || req.WorkspaceAuthoring || len(req.AgentOptions) != 0 {
 				t.Error("product wrapper injected preparation context")
 			}
@@ -37,7 +37,7 @@ func TestPreparationRegistrationBypassesProductWrappers(t *testing.T) {
 			t.Fatal("raw preparation was lost or wrapped", err)
 		}
 		for _, info := range wrapped.SupportedAgentKinds() {
-			if info.Kind == "codex" && !info.Capabilities.Preparation {
+			if info.Kind == "codex" && (!info.Capabilities.Preparation || !info.Capabilities.WorkspaceReadPreparation) {
 				t.Fatal("real heartbeat registry lost preparation")
 			}
 		}

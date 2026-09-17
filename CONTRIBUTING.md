@@ -211,6 +211,27 @@ conditions; a capability declaration alone never grants public feature admission
 Extend existing interfaces during related functional work and apply common
 acceptance to both engines, without introducing a second framework or a broad rewrite.
 
+Workspace reads may request the private `workspace_read_only` preparation profile
+through the existing preparation factory and verified `workspace_read_preparation`
+capability. It accepts only the bound Environment and resource identity; execution
+options, model/MCP credentials, native Session continuation and model/tool input are excluded.
+The Codex adapter creates temporary local state, reuses its native connection and
+directory transport, and rejects Start. Its child inherits only process/transport
+essentials. The private native read mode excludes system, managed, user and project
+execution configuration and plugin startup while preserving native security
+requirements. Ordinary execution keeps its stable state and configuration.
+Reject the legacy mixed managed-config profile for reads rather than discarding
+its enforced constraints together with execution settings.
+For this read profile, `released` is published only after local Close succeeds;
+cleanup errors retain ownership and report `cleanup_unconfirmed`. A failed factory
+must return its resource with the error if cleanup remains unconfirmed; wrappers
+must preserve both values. Successful cleanup retries publish confirmed release,
+and stale status snapshots cannot publish success. Failed terminal status delivery
+does not retry cleanup; ownership remains until an explicit release or shutdown retry.
+A release request,
+HTTP disconnect or remote socket closure alone is not cleanup confirmation. This
+profile does not establish remote mutation quiescence or public Files admission.
+
 Keep prerequisites specific to the public operation being implemented. Native
 harnesses execute; adapters translate protocols and fill demonstrated capability
 gaps; Core owns public semantics, authorization and resources. Before adding a

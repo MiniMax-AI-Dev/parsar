@@ -36,6 +36,9 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 }
 
 func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg sessionConfig) (*Prepared, error) {
+	if req.WorkspaceReadOnly && (!proto.ValidWorkspaceReadPreparation(req) || cfg.harnessBinary == "") {
+		return nil, errors.New("codex: read-only preparation requires a private harness and a closed read configuration")
+	}
 	if req.RunID != "" || req.Prompt != "" {
 		return nil, errors.New("codex: preparation does not accept a run identity or prompt")
 	}
@@ -57,7 +60,9 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	}
 	req.AgentStateKey = effectiveAgentStateKey(req)
 
-	req.AgentOptions = executionOptions(req)
+	if !req.WorkspaceReadOnly {
+		req.AgentOptions = executionOptions(req)
+	}
 	plan, skillRoot, err := prepareSessionPlan(parent, req, cfg)
 	if err != nil {
 		return nil, err
@@ -73,6 +78,10 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 		Env:             append(os.Environ(), plan.Env...),
 		LogTag:          "codex-preparation",
 		Logger:          cfg.logger,
+	}
+	if req.WorkspaceReadOnly {
+		rpcCfg.Env = append(workspaceReadEnvironment(os.Environ()), plan.Env...)
+		rpcCfg.ExtraArgs = []string{"--workspace-read-only"}
 	}
 	for _, kv := range plan.ExtraConfig {
 		rpcCfg.ExtraArgs = append(rpcCfg.ExtraArgs, "-c", kv[0]+"="+kv[1])
@@ -104,22 +113,25 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 		resolvedModel:             plan.Model,
 		interactions:              newPendingCodexInteractions(),
 	}
+	if req.WorkspaceReadOnly {
+		s.cleanup = readPreparationCleanup(rpc, s.cleanup)
+	}
 	plan.Cleanup = s.cleanup
+	p := &Prepared{
+		session: s, plan: plan, remote: req.RemoteEnvironment != nil, workspaceReadOnly: req.WorkspaceReadOnly,
+		resumeID: req.AgentSessionID, strictResume: req.StrictResume,
+		transferred: make(chan struct{}),
+	}
 
 	initParams := InitializeParams{
 		ClientInfo:   InitializeClientInfo{Name: "parsar-daemon", Version: "0.0.0"},
 		Capabilities: &InitializeCapabilities{ExperimentalAPI: true},
 	}
 	if _, err := rpc.Start(cancelCtx, initParams); err != nil {
-		cancelFn()
-		plan.Cleanup()
-		return nil, fmt.Errorf("codex: rpc start: %w", err)
+		return p.preparationFailed(fmt.Errorf("codex: rpc start: %w", err))
 	}
 	if err := harness.verify(); err != nil {
-		cancelFn()
-		_ = rpc.Close()
-		plan.Cleanup()
-		return nil, err
+		return p.preparationFailed(err)
 	}
 	if req.DisableExecutionEnvironment {
 		if err := verifyNoExecutionEnvironment(cancelCtx, rpc); err != nil {
@@ -131,10 +143,7 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	}
 	if req.RemoteEnvironment != nil {
 		if err := verifyRemoteEnvironment(cancelCtx, rpc); err != nil {
-			cancelFn()
-			_ = rpc.Close()
-			plan.Cleanup()
-			return nil, err
+			return p.preparationFailed(err)
 		}
 	}
 	if plan.mcpHTTPServers != nil {
@@ -154,11 +163,6 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 		}
 	}
 
-	p := &Prepared{
-		session: s, plan: plan, remote: req.RemoteEnvironment != nil,
-		resumeID: req.AgentSessionID, strictResume: req.StrictResume,
-		transferred: make(chan struct{}),
-	}
 	go p.watchOwner()
 	return p, nil
 }
