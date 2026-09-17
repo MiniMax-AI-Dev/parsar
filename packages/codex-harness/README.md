@@ -87,7 +87,13 @@ guard lives until runtime teardown; explicit child re-execution uses the pinned
 stock helper.
 
 The request shares one ten-second deadline. A stalled frame or response writer
-closes its connection. If the native operation has not settled by the deadline,
+closes its connection. Caller disconnect does not cancel an admitted native wait.
+When the raw runner ends, stop new admission and pending frames, then drain the
+admitted operation within its original deadline. A stopped owner need not deliver
+the result to the caller. Preserve runner failures after a successful drain, and
+report an unresolved drain as failure even if the runner exited normally. This
+only accounts for the native response; it does not prove remote effect retirement.
+If the native operation has not settled by the deadline,
 the artifact exits with an error and closes admission; dropping the native wait
 does not cancel remote work. Recovery must retain that uncertainty and must not
 infer remote retirement from this local failure. Runtime shutdown waits at most
