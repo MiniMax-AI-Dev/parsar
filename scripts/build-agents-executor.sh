@@ -35,6 +35,8 @@ cp -R "$repo_root/packages/codex-executor/src" "$build_context/src"
   cargo build --locked --release
 )
 mkdir -p "$output_dir"
-cp "$CARGO_TARGET_DIR/release/agents-api-codex-executor" "$output_dir/agents-api-codex-executor.tmp"
-mv -f "$output_dir/agents-api-codex-executor.tmp" "$output_dir/agents-api-codex-executor"
-printf 'Standalone Codex executor: %s\n' "$output_dir/agents-api-codex-executor"
+for binary in agents-api-codex-executor agents-api-codex-directory; do
+  cp "$CARGO_TARGET_DIR/release/$binary" "$output_dir/$binary.tmp"
+  mv -f "$output_dir/$binary.tmp" "$output_dir/$binary"
+done
+printf 'Standalone Codex executor and directory helper: %s\n' "$output_dir"
