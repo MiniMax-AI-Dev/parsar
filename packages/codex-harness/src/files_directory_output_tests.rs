@@ -16,7 +16,7 @@ fn response(next_seq: u64, chunks: &[(u64, &[u8])], exited: bool, closed: bool) 
         exit_code: exited.then_some(0),
         closed,
         failure: None,
-        sandbox_denied: Some(false),
+        sandbox_denied: false,
     }
 }
 

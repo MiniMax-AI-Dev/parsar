@@ -110,7 +110,7 @@ pub(super) async fn list(
             };
         }
         if settled {
-            if response.exit_code != Some(0) || response.sandbox_denied == Some(true) {
+            if response.exit_code != Some(0) || response.sandbox_denied {
                 return Err(OperationError::Rejected("native_error"));
             }
             return output::decode(&output.bytes, limit);
