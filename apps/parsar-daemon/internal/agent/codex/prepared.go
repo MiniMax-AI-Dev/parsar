@@ -3,6 +3,7 @@ package codex
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -15,16 +16,17 @@ import (
 // It observes owner cancellation and RPC exit, not continuous executor readiness.
 // Remote status is rechecked at Start without reconnecting the prepared resource.
 type Prepared struct {
-	mu           sync.Mutex
-	session      *Session
-	plan         SessionPlan
-	remote       bool
-	resumeID     string
-	strictResume bool
-	claimed      bool
-	closed       bool
-	started      bool
-	transferred  chan struct{}
+	mu                sync.Mutex
+	session           *Session
+	plan              SessionPlan
+	remote            bool
+	workspaceReadOnly bool
+	resumeID          string
+	strictResume      bool
+	claimed           bool
+	closed            bool
+	started           bool
+	transferred       chan struct{}
 }
 
 var _ agent.PreparedCancellation = (*Prepared)(nil)
@@ -41,6 +43,9 @@ func (p *Prepared) Start(ctx context.Context, runID, prompt string, out chan<- p
 }
 
 func (p *Prepared) start(ctx context.Context, runID, prompt string, out chan<- proto.Envelope) (*Session, error) {
+	if p.workspaceReadOnly {
+		return nil, errors.New("codex: read-only preparation cannot start execution")
+	}
 	if out == nil || strings.TrimSpace(runID) == "" || strings.TrimSpace(prompt) == "" {
 		return nil, errors.New("codex: start requires a run identity, prompt and output channel")
 	}
@@ -99,6 +104,9 @@ func (p *Prepared) Close() error {
 	p.session.cancelFn()
 	err := p.session.rpc.Close()
 	p.plan.Cleanup()
+	if err == nil && p.workspaceReadOnly {
+		return os.RemoveAll(p.plan.Cwd)
+	}
 	return err
 }
 

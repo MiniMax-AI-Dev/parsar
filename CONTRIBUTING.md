@@ -211,6 +211,17 @@ conditions; a capability declaration alone never grants public feature admission
 Extend existing interfaces during related functional work and apply common
 acceptance to both engines, without introducing a second framework or a broad rewrite.
 
+Workspace reads may request the private `workspace_read_only` preparation profile
+through the existing preparation factory and verified `workspace_read_preparation`
+capability. It accepts only the bound Environment and resource identity; execution
+options, credentials, native Session continuation and model/tool input are excluded.
+The Codex adapter creates temporary local state, reuses its native connection and
+directory transport, and rejects Start. Ordinary execution keeps its stable state.
+For this read profile, `released` is published only after local Close succeeds;
+cleanup errors retain ownership and report `cleanup_unconfirmed`. A release request,
+HTTP disconnect or remote socket closure alone is not cleanup confirmation. This
+profile does not establish remote mutation quiescence or public Files admission.
+
 Keep prerequisites specific to the public operation being implemented. Native
 harnesses execute; adapters translate protocols and fill demonstrated capability
 gaps; Core owns public semantics, authorization and resources. Before adding a

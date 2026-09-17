@@ -132,7 +132,7 @@ func TestRemoteMCPRejectsBeforePreparationFactory(t *testing.T) {
 				t.Error("ordinary factory called")
 				return nil, errors.New("unexpected")
 			})
-			h.reg.RegisterPreparation(req.Configuration.AgentKind, func(_ context.Context, got proto.PromptRequestPayload) (agent.Prepared, error) {
+			h.reg.RegisterPreparation(req.Configuration.AgentKind, false, func(_ context.Context, got proto.PromptRequestPayload) (agent.Prepared, error) {
 				if mode == "required" && !(*got.MCPHTTPServers)[0].Required {
 					t.Error("required initialization lost before preparation")
 				}

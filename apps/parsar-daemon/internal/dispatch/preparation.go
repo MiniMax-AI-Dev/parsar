@@ -19,21 +19,22 @@ const preparationRecords = 64
 // All mutable fields are protected by Router.mu. owns includes resources whose
 // cancellation is underway; a slow close cannot bypass the capacity bound.
 type preparationState struct {
-	requestID        string
-	trace            string
-	fingerprint      [32]byte
-	startFingerprint [32]byte
-	status           proto.PreparationStatusPayload
-	deadline         time.Time
-	timer            *time.Timer
-	ctx              context.Context
-	cancel           context.CancelFunc
-	prepared         agent.Prepared
-	stateKey         string
-	environmentID    string
-	busy             bool
-	owns             bool
-	closeErr         error
+	requestID         string
+	trace             string
+	fingerprint       [32]byte
+	startFingerprint  [32]byte
+	status            proto.PreparationStatusPayload
+	deadline          time.Time
+	timer             *time.Timer
+	ctx               context.Context
+	cancel            context.CancelFunc
+	prepared          agent.Prepared
+	stateKey          string
+	environmentID     string
+	busy              bool
+	owns              bool
+	closeErr          error
+	workspaceReadOnly bool
 }
 
 func (r *Router) handleExecutionPrepare(ctx context.Context, env proto.Envelope) error {
@@ -46,6 +47,9 @@ func (r *Router) handleExecutionPrepare(ctx context.Context, env proto.Envelope)
 	prepare, err := r.registry.ResolvePreparation(req.AgentKind)
 	if err != nil || !caps.Preparation {
 		return r.rejectPreparation(env, "unsupported_preparation")
+	}
+	if req.WorkspaceReadOnly && (!caps.WorkspaceReadPreparation || !proto.ValidWorkspaceReadPreparation(req)) {
+		return r.rejectPreparation(env, "unsupported_read_preparation")
 	}
 	if req.RunID != "" || req.Prompt != "" || req.ConversationID != "" || req.WorkspaceAuthoring || len(req.Attachments) != 0 || req.RemoteEnvironment == nil || strings.TrimSpace(req.AgentStateKey) == "" || !req.StrictResume || !req.ReleaseOnCompletion {
 		return r.rejectPreparation(env, "invalid_configuration")
@@ -85,7 +89,7 @@ func (r *Router) handleExecutionPrepare(ctx context.Context, env proto.Envelope)
 		return r.rejectPreparation(env, "preparation_capacity")
 	}
 	owner, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	p := &preparationState{requestID: env.ID, trace: env.Trace, fingerprint: fingerprint, ctx: owner, cancel: cancel, stateKey: req.AgentStateKey, environmentID: req.RemoteEnvironment.ID, busy: true, owns: true, deadline: time.Now().Add(r.preparationTimeout)}
+	p := &preparationState{requestID: env.ID, trace: env.Trace, fingerprint: fingerprint, ctx: owner, cancel: cancel, stateKey: req.AgentStateKey, environmentID: req.RemoteEnvironment.ID, workspaceReadOnly: req.WorkspaceReadOnly, busy: true, owns: true, deadline: time.Now().Add(r.preparationTimeout)}
 	p.status = proto.PreparationStatusPayload{Handle: uuid.NewString(), Revision: 1, State: "preparing", ExpiresAt: p.deadline.UnixMilli()}
 	r.preparations[p.status.Handle], r.preparationRequests[p.requestID] = p, p
 	p.timer = time.AfterFunc(r.preparationTimeout, func() { r.releasePreparation(p, "expired", "", true) })
@@ -125,6 +129,9 @@ func (r *Router) prepareExecution(p *preparationState, req proto.PromptRequestPa
 	r.mu.Unlock()
 	if !ready {
 		r.closePreparationResource(p)
+		r.mu.Lock()
+		status = p.status
+		r.mu.Unlock()
 	}
 	if !r.sendPreparation(p.requestID, p.trace, status) && ready {
 		r.releasePreparation(p, "failed", "status_delivery_failed", false)
@@ -170,7 +177,7 @@ func (r *Router) releasePreparation(p *preparationState, state, code string, pub
 	if closeResource {
 		go func() { defer r.shutdownWG.Done(); r.closePreparationResource(p) }()
 	}
-	if publish {
+	if publish && !p.workspaceReadOnly {
 		r.publishPreparation(p, status)
 	}
 }
@@ -196,6 +203,10 @@ func (r *Router) prunePreparationsLocked() {
 
 func (r *Router) publishPreparation(p *preparationState, status proto.PreparationStatusPayload) {
 	r.mu.Lock()
+	if p.workspaceReadOnly && p.owns && p.busy && status.State != "preparing" && status.State != "ready" {
+		r.mu.Unlock()
+		return
+	}
 	if r.closed {
 		r.mu.Unlock()
 		return

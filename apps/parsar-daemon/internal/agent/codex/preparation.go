@@ -36,6 +36,9 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 }
 
 func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg sessionConfig) (*Prepared, error) {
+	if req.WorkspaceReadOnly && (!proto.ValidWorkspaceReadPreparation(req) || cfg.harnessBinary == "") {
+		return nil, errors.New("codex: read-only preparation requires a private harness and a closed read configuration")
+	}
 	if req.RunID != "" || req.Prompt != "" {
 		return nil, errors.New("codex: preparation does not accept a run identity or prompt")
 	}
@@ -57,7 +60,9 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	}
 	req.AgentStateKey = effectiveAgentStateKey(req)
 
-	req.AgentOptions = executionOptions(req)
+	if !req.WorkspaceReadOnly {
+		req.AgentOptions = executionOptions(req)
+	}
 	plan, skillRoot, err := prepareSessionPlan(parent, req, cfg)
 	if err != nil {
 		return nil, err
@@ -103,6 +108,9 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 		bufs:                      NewItemBuffers(),
 		resolvedModel:             plan.Model,
 		interactions:              newPendingCodexInteractions(),
+	}
+	if req.WorkspaceReadOnly {
+		s.cleanup = readPreparationCleanup(rpc, s.cleanup)
 	}
 	plan.Cleanup = s.cleanup
 
@@ -155,7 +163,7 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	}
 
 	p := &Prepared{
-		session: s, plan: plan, remote: req.RemoteEnvironment != nil,
+		session: s, plan: plan, remote: req.RemoteEnvironment != nil, workspaceReadOnly: req.WorkspaceReadOnly,
 		resumeID: req.AgentSessionID, strictResume: req.StrictResume,
 		transferred: make(chan struct{}),
 	}

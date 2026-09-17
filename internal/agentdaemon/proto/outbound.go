@@ -83,6 +83,8 @@ type PromptRequestPayload struct {
 	AgentSessionID string `json:"agent_session_id,omitempty"`
 
 	// AgentStateKey is the stable daemon-side state directory key.
+	// WorkspaceReadOnly prepares temporary native state that cannot start a Run.
+	WorkspaceReadOnly  bool   `json:"workspace_read_only,omitempty"`
 	AgentStateKey      string `json:"agent_state_key,omitempty"`
 	WorkspaceAuthoring bool   `json:"workspace_authoring,omitempty"`
 	// ReleaseOnCompletion closes the native writer before acknowledging Done.

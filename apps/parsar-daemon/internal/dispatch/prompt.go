@@ -30,6 +30,11 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 		r.log.ErrorContext(callerCtx, "handlePromptRequest: missing agent_kind", "run_id", runID)
 		return errors.New("dispatch: prompt_request missing agent_kind")
 	}
+	if req.WorkspaceReadOnly {
+		err := errors.New("read-only preparation cannot accept a prompt")
+		r.emitTerminalError(callerCtx, runID, err.Error())
+		return err
+	}
 	if len(req.FunctionTools) > 0 && !r.availableCapabilities(req.AgentKind).FunctionTools {
 		err := errors.New("engine does not support function tools")
 		r.emitTerminalError(callerCtx, runID, err.Error())

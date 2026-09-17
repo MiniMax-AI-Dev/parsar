@@ -11,7 +11,17 @@ func (r *Router) closePreparationResource(p *preparationState) error {
 	if err == nil {
 		p.prepared, p.owns = nil, false
 	}
+	if p.workspaceReadOnly {
+		p.status.Revision++
+		if err != nil {
+			p.status.State, p.status.ErrorCode = "failed", "cleanup_unconfirmed"
+		}
+	}
+	status := p.status
 	r.mu.Unlock()
+	if p.workspaceReadOnly {
+		r.publishPreparation(p, status)
+	}
 	if err != nil {
 		r.log.Warn("preparation cleanup incomplete", "handle", p.status.Handle)
 	}
