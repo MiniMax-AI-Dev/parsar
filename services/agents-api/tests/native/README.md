@@ -284,7 +284,7 @@ provider endpoint (default `https://api.minimax.cn/v1`). These are test inputs,
 not public API fields or production configuration options.
 
 This mode runs the daemon in a task-owned Linux amd64 container using the existing
-exact-digest executor image. It mounts the three binaries read-only, uses native
+exact-digest executor image. It mounts the three binaries and host CA bundle read-only, uses native
 `/etc/codex/config.toml`, and shares only required task daemon state and a short,
 private HOME. It does not mount the shared operator home, Docker socket, API key
 file or observer directory. Host networking connects to the existing local test

@@ -56,6 +56,10 @@ func newPublicHarnessProfile(t *testing.T, f *publicSelfHostedFixture, native, i
 	if baseURL == "" {
 		baseURL = "https://api.minimax.cn/v1"
 	}
+	caFile := "/etc/ssl/certs/ca-certificates.crt"
+	if info, err := os.Stat(caFile); err != nil || !info.Mode().IsRegular() {
+		t.Fatal("host CA bundle required for real provider TLS")
+	}
 	var config bytes.Buffer
 	if err := toml.NewEncoder(&config).Encode(map[string]any{
 		"model_provider": "public_validation",
@@ -73,7 +77,7 @@ func newPublicHarnessProfile(t *testing.T, f *publicSelfHostedFixture, native, i
 	environment := map[string]string{
 		"HOME": home, "PARSAR_HOME": f.root, "PATH": "/usr/local/bin:/usr/bin:/bin", "TMPDIR": filepath.Join(home, "tmp"),
 		"PARSAR_CODEX_BIN": "/opt/codex", "PARSAR_CODEX_HARNESS_BIN": "/opt/parsar-codex-harness",
-		"MINIMAX_VALIDATION_KEY": key,
+		"MINIMAX_VALIDATION_KEY": key, "SSL_CERT_FILE": caFile,
 	}
 	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"} {
 		if value := os.Getenv(name); value != "" {
@@ -98,6 +102,7 @@ func newPublicHarnessProfile(t *testing.T, f *publicSelfHostedFixture, native, i
 	for _, mount := range [][3]string{
 		{native, "/opt/codex", ",readonly"}, {binary, "/opt/parsar-codex-harness", ",readonly"},
 		{f.daemonBinary, "/opt/parsar-daemon", ",readonly"}, {configPath, "/etc/codex/config.toml", ",readonly"},
+		{caFile, caFile, ",readonly"},
 		{home, home, ""}, {filepath.Join(f.root, "parsar-daemon"), filepath.Join(f.root, "parsar-daemon"), ""},
 	} {
 		profile.args = append(profile.args, "--mount", "type=bind,source="+mount[0]+",target="+mount[1]+mount[2])
