@@ -40,6 +40,13 @@ globalThis.startupFixture = async ({options, initializeTimeoutMs}) => {
       if(mode === "native-exit")setTimeout(()=>child.kill("SIGTERM"),100);
       return {
         close,
+        async readFile(path,{maxBytes,encoding}) {
+          assert.equal(encoding,"base64");
+          assert.equal(path,options.cwd+"/binary");
+          process.send({kind:"read",path,maxBytes});
+          await new Promise(resolve=>setTimeout(resolve,80));
+          return {absPath:path,encoding,contents:Buffer.from([0,255,128,1]).toString("base64")};
+        },
         async initializationResult(){return {hooks_applied:mode !== "missing-hooks"};},
         async *[Symbol.asyncIterator](){
           const command={type:"assistant",session_id:"native",parent_tool_use_id:null,
@@ -197,3 +204,16 @@ for (const mode of ["missing-history", "missing-hooks", "startup-error", "early-
     if (mode === "missing-history") assert.equal(observations.some(value => value.kind === "spawn"), false);
   });
 }
+
+
+test("prepared native reader stays on the same query across Start", { timeout: 10000 }, async t => {
+  const { request, events, observations, send, wait, finish } = await launch(t, "release");
+  send(request); await wait(() => events.some(event => event.type === "prepared"));
+  send({type:"workspace_read",id:"before",path:"binary",max_bytes:4});
+  await wait(()=>observations.some(value=>value.kind === "read"));
+  send({type:"start",prompt:"first"});
+  await wait(()=>events.some(event=>event.type === "workspace_read"));
+  assert.deepEqual(events.find(event=>event.type === "workspace_read"),{type:"workspace_read",id:"before",data_base64:"AP+AAQ==",truncated:false});
+  await finish();
+  assert.equal(observations.filter(value=>value.kind === "spawn").length,1);
+});

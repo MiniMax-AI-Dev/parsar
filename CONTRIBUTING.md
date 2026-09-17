@@ -1609,6 +1609,25 @@ A cancellation deadline cannot establish cleanup completion while cleanup remain
 pending. This adapter ownership seam does not register a daemon capability or
 supply per-Session placement authorization, public admission or an idle Files owner.
 
+The optional private `agent.WorkspaceReader` on this preparation and transferred
+Session requires the packaged `workspace_read` feature. It sends bounded relative
+paths to that same SDK Query's native `readFile` control. Only the adapter combines
+the path with the frozen workspace root; callers cannot replace the placement.
+The pinned native read handler awaits file-handle close before its successful
+base64 response. The adapter validates bytes and truncation, bounds each result
+to 1 MiB and each request to 8 KiB, and admits one read at a time. Its continuous
+bridge output consumer retains read receipts during preparation and across Start.
+Caller cancellation detaches observation without cancelling the Run or discarding
+an admitted waiter; its original deadline still applies. Owner closure stops
+admission. Native null, malformed receipts, timeout and interrupted delivery remain
+uncertain and stop the owner; local reap is not a successful read settlement.
+The SDK's nullable result catches all native/control errors, so it cannot distinguish
+missing files from denial or transport failure. This does not provide a public
+Files endpoint, snapshot consistency, placement registration or idle owner policy.
+The qualified live workspace fixture also checks binary, empty and bounded reads
+before input and during real execution, plus effects before cancellation and reads
+on fresh-process history continuation.
+
 With `ObserveToolObservations`, private workspace execution requires the packaged
 `workspace_command_observations` feature and emits the existing neutral command
 snapshots. Match root, current-query native Bash call/result identities after input;
