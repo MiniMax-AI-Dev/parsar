@@ -537,6 +537,11 @@ UTF-8 names of at most 255 bytes, so escaped metadata stays below the existing
 frame bound. These are private transport limits, not public Files parameters.
 Byte and directory operations share target checks, correlation, capacity and
 retained operation waits; neither creates a Run or selects an engine by name.
+Current bound preparation admission requires `RemoteEnvironment`; the qualified
+co-located Claude workspace profile does not accept that placement. Its private
+directory capability therefore does not establish end-to-end control admission.
+Integrate its verified workspace identity through the existing lifecycle before
+claiming Claude control/public Files acceptance; never fabricate remote bindings.
 This control is not a public Files endpoint or capability advertisement.
 
 The separate optional `agent.WorkspaceDirectoryLister` observes one workspace-relative
