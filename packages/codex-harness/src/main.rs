@@ -43,8 +43,9 @@ fn run_owned_runtime(operation: impl Future<Output = Result<()>>) -> Result<()> 
     result
 }
 
-async fn run_harness(cli: options::Cli, binding: options::Binding) -> Result<()> {
+async fn run_harness(cli: options::Cli, mut binding: options::Binding) -> Result<()> {
     let read_only = cli.workspace_read_only;
+    binding.restrict_reads(read_only);
     let loader = if read_only {
         read_profile::loader(&std::path::PathBuf::from(
             std::env::var_os("CODEX_HOME").context("read preparation requires CODEX_HOME")?,
@@ -105,7 +106,7 @@ mod tests {
         let home = tempfile::Builder::new().prefix("hb-").tempdir_in(state)?;
         std::fs::write(
             home.path().join(".env"),
-            "PARSAR_HARNESS_TEST_PROVIDER_KEY=from-native-dotenv\nPARSAR_CODEX_HARNESS_WORKSPACE=/wrong\nCODEX_EXEC_SERVER_NOISE_ENVIRONMENT_ID=wrong\n",
+            "PARSAR_HARNESS_TEST_PROVIDER_KEY=from-native-dotenv\nPARSAR_CODEX_HARNESS_WORKSPACE=/wrong\nCODEX_EXEC_SERVER_NOISE_ENVIRONMENT_ID=wrong\nPARSAR_CODEX_HARNESS_WRITE_HELPER=/wrong/helper\nPARSAR_CODEX_HARNESS_STAGING=/wrong/staging\n",
         )?;
         let output = Command::new(std::env::current_exe()?)
             .args(["--exact", "tests::native_bootstrap_child", "--nocapture"])
@@ -114,6 +115,8 @@ mod tests {
             .env("CODEX_HOME", home.path())
             .env("PARSAR_CODEX_HARNESS_NATIVE", "/operator/codex")
             .env("PARSAR_CODEX_HARNESS_WORKSPACE", "/operator/workspace")
+            .env("PARSAR_CODEX_HARNESS_WRITE_HELPER", "/trusted/installer")
+            .env("PARSAR_CODEX_HARNESS_STAGING", "/operator/staging")
             .env("PARSAR_CODEX_HARNESS_IPC_ROOT", home.path().join("ipc"))
             .env(
                 "PARSAR_CODEX_HARNESS_ENVIRONMENT",
@@ -149,6 +152,9 @@ mod tests {
             std::env::var("CODEX_EXEC_SERVER_NOISE_ENVIRONMENT_ID")?,
             binding.environment
         );
+        let write = binding.write.context("frozen write binding")?;
+        assert_eq!(write.helper, std::path::Path::new("/trusted/installer"));
+        assert_eq!(write.staging, std::path::Path::new("/operator/staging"));
         println!("native bootstrap verified");
         Ok(())
     }

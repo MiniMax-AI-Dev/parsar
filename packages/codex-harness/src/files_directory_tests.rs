@@ -3,6 +3,7 @@ use super::*;
 #[test]
 fn directory_root_and_limits_are_operation_specific() {
     let binding = Binding {
+        write: None,
         directory_helper: Some("/usr/local/bin/agents-api-codex-directory".into()),
         native_binary: "/native".into(),
         environment: "expected".into(),
@@ -51,6 +52,7 @@ fn directory_root_and_limits_are_operation_specific() {
 #[tokio::test]
 async fn directory_transport_loss_fences_the_owner_after_dispatch() -> Result<()> {
     let binding = Binding {
+        write: None,
         directory_helper: Some("/usr/local/bin/agents-api-codex-directory".into()),
         native_binary: "/native".into(),
         environment: "expected".into(),

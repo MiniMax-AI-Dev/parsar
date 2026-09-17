@@ -115,6 +115,43 @@ Rejection before closure terminates and drains the process; unknown cleanup fail
 the existing owner without replay. These are private adapter semantics and do not
 qualify a public Files endpoint.
 
+### Private file writes
+
+`operation: "write"` requires integer `size_bytes` from 0 through 50 MiB, a
+nonempty clean relative path, and exactly that many raw bytes after the JSON
+header. `max_bytes` and `max_entries` cannot be supplied. One connection carries
+one request; no input EOF is needed, and extra bytes do not create another request.
+The complete bounded body is held in memory before native dispatch. Incomplete
+input closes the connection without starting a remote operation.
+
+This endpoint requires both `PARSAR_CODEX_HARNESS_WRITE_HELPER` and
+`PARSAR_CODEX_HARNESS_STAGING`, frozen before native dotenv loading. Their values
+are clean absolute executor paths. Workspace and staging must be different
+siblings below one non-root Environment parent; the helper must be outside that
+parent. `--workspace-read-only` removes write admission even when these variables
+are configured. No daemon capability or public request enables this profile.
+
+The operator must qualify the [installer placement requirements](../codex-executor/README.md#scoped-file-installer):
+staging and its ancestors cannot be writable through native tools or aliases;
+credentials, native history and other Environments stay outside the shared parent.
+These path checks do not attest remote mounts or isolation. The native installer
+gets one writable parent covering workspace and staging, minimal runtime/helper
+reads, restricted network and a required Linux sandbox. Do not split workspace
+and staging into separate sandbox bind mounts: cross-mount rename must fail
+without a copying fallback.
+
+The same captured native process receives at most 64 KiB per stdin write followed
+by the raw SHA-256 trailer. Native input retries retain the native request identity;
+this wrapper does not replay or start a replacement. A complete version-1 commit
+receipt, exact size, exit zero and output closure without sequence gaps returns
+`{"write":{"size_bytes":N,"committed":true}}`. A confirmed pre-commit helper
+failure returns `native_error`. Missing, invalid or unknown receipts and native
+transport failures stop the owner as unresolved, even if the process exited or
+termination was requested. Detached callers retain the same bounded native wait.
+This does not establish successor safety, durable recovery, snapshot stability or
+public Files.create. The private [native fixture](../../services/agents-api/tests/native/write/README.md)
+qualifies the transport separately from real-model execution regression.
+
 The bounded-read hook captures one native RPC connection before opening a handle.
 Open, ordered block reads and cleanup use that exact connection without recovery
 or replay. A successful result requires a successful close response after all
@@ -130,7 +167,9 @@ threads start, without letting dotenv replace private selectors. The native alia
 guard lives until runtime teardown; explicit child re-execution uses the pinned
 stock helper.
 
-The request shares one ten-second deadline. A stalled frame or response writer
+Metadata, reads and directory requests share one ten-second deadline. Write
+headers have the same limit; a valid write has sixty seconds total from connection
+acceptance for its bounded body, native transfer and receipt. A stalled frame or response writer
 closes its connection. Caller disconnect does not cancel an admitted native wait.
 When the raw runner ends, stop new admission and pending frames, then drain the
 admitted operation within its original deadline. A stopped owner need not deliver

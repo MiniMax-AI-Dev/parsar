@@ -26,6 +26,10 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(10);
 
 #[path = "files_directory.rs"]
 mod directory;
+#[path = "files_process_output.rs"]
+mod process_output;
+#[path = "files_write.rs"]
+mod write;
 
 pub struct PrivateSocket {
     listener: UnixListener,
@@ -127,6 +131,7 @@ struct Request {
     operation: Operation,
     max_bytes: Option<usize>,
     max_entries: Option<usize>,
+    size_bytes: Option<usize>,
 }
 
 #[derive(Default, Deserialize)]
@@ -136,9 +141,11 @@ enum Operation {
     Metadata,
     Read,
     ListDirectory,
+    Write,
 }
 
 struct Command {
+    write: Option<write::Upload>,
     path: PathUri,
     read_limit: Option<usize>,
     directory: Option<(PathUri, usize, Option<PathBuf>)>,
@@ -152,25 +159,32 @@ fn request_command(frame: &[u8], binding: &Binding) -> Result<Command, &'static 
     if request.environment_id != binding.environment {
         return Err("wrong_environment");
     }
-    let (read_limit, directory_limit) =
-        match (request.operation, request.max_bytes, request.max_entries) {
-            (Operation::Metadata, None, None) => (None, None),
-            (Operation::Read, Some(limit), None)
-                if (1..=MAX_BOUNDED_FILE_READ_BYTES).contains(&limit) =>
-            {
-                (Some(limit), None)
-            }
-            (Operation::ListDirectory, None, Some(limit))
-                if (1..=directory::MAX_ENTRIES).contains(&limit) =>
-            {
-                (None, Some(limit))
-            }
-            _ => return Err("invalid_request"),
-        };
+    let (read_limit, directory_limit, write_size) = match (
+        request.operation,
+        request.max_bytes,
+        request.max_entries,
+        request.size_bytes,
+    ) {
+        (Operation::Metadata, None, None, None) => (None, None, None),
+        (Operation::Read, Some(limit), None, None)
+            if (1..=MAX_BOUNDED_FILE_READ_BYTES).contains(&limit) =>
+        {
+            (Some(limit), None, None)
+        }
+        (Operation::ListDirectory, None, Some(limit), None)
+            if (1..=directory::MAX_ENTRIES).contains(&limit) =>
+        {
+            (None, Some(limit), None)
+        }
+        (Operation::Write, None, None, Some(size)) if size <= write::MAX_BYTES => {
+            (None, None, Some(size))
+        }
+        _ => return Err("invalid_request"),
+    };
     let path = Path::new(&request.path);
     if (request.path.is_empty() && directory_limit.is_none())
         || request.path.contains(['\0', '\\'])
-        || (directory_limit.is_some()
+        || ((directory_limit.is_some() || write_size.is_some())
             && (request.path.contains(['\r', '\n'])
                 || (!request.path.is_empty()
                     && request
@@ -184,6 +198,21 @@ fn request_command(frame: &[u8], binding: &Binding) -> Result<Command, &'static 
         return Err("invalid_path");
     }
     Ok(Command {
+        write: write_size
+            .map(|size| {
+                binding
+                    .write
+                    .clone()
+                    .map(|write_binding| write::Upload {
+                        binding: write_binding,
+                        workspace: binding.workspace.clone(),
+                        relative: request.path.clone(),
+                        size,
+                        bytes: Vec::new(),
+                    })
+                    .ok_or("unsupported")
+            })
+            .transpose()?,
         path: PathUri::from_host_native_path(binding.workspace.join(path))
             .map_err(|_| "invalid_path")?,
         read_limit,
@@ -224,6 +253,9 @@ async fn execute(manager: &EnvironmentManager, command: Command) -> Result<Value
     let environment = ready_environment(manager)
         .await
         .map_err(OperationError::Rejected)?;
+    if let Some(upload) = command.write {
+        return write::install(&environment, upload).await;
+    }
     if let Some((workspace, limit, helper)) = command.directory {
         return directory::list(
             &environment,
@@ -314,14 +346,14 @@ where
     F: FnOnce(Command) -> R,
     R: Future<Output = Result<Value, OperationError>>,
 {
-    let deadline = Instant::now() + duration;
+    let mut deadline = Instant::now() + duration;
     let (read, mut write) = stream.into_split();
-    let mut reader = BufReader::new(read.take((MAX_FRAME + 1) as u64));
+    let mut reader = BufReader::new(read);
     let mut frame = Vec::new();
     let frame_result = tokio::select! {
         biased;
         _ = stopping.cancelled() => return Ok(ConnectionOutcome::Settled),
-        result = timeout_at(deadline, reader.read_until(b'\n', &mut frame)) => result,
+        result = timeout_at(deadline, (&mut reader).take((MAX_FRAME + 1) as u64).read_until(b'\n', &mut frame)) => result,
     };
     match frame_result {
         Ok(result) => {
@@ -332,10 +364,26 @@ where
     // From admission until the native response/deadline, only this owner holds
     // the operation. Caller disconnect and runner shutdown do not drop its wait.
     let result = match request_command(&frame, binding) {
-        Ok(path) => match timeout_at(deadline, operation(path)).await {
-            Ok(result) => result,
-            Err(_) => return Ok(ConnectionOutcome::UnsettledNativeOperation),
-        },
+        Ok(mut command) => {
+            if let Some(upload) = &mut command.write {
+                // Writes include bounded transfer; reads keep their original deadline.
+                deadline += duration * 5;
+                upload.bytes.resize(upload.size, 0);
+                let received = tokio::select! {
+                    biased;
+                    _ = stopping.cancelled() => return Ok(ConnectionOutcome::Settled),
+                    result = timeout_at(deadline, reader.read_exact(&mut upload.bytes)) => result,
+                };
+                if !matches!(received, Ok(Ok(_))) {
+                    // No native process exists before the complete bounded body.
+                    return Ok(ConnectionOutcome::Settled);
+                }
+            }
+            match timeout_at(deadline, operation(command)).await {
+                Ok(result) => result,
+                Err(_) => return Ok(ConnectionOutcome::UnsettledNativeOperation),
+            }
+        }
         Err(error) => Err(OperationError::Rejected(error)),
     };
     let response = match result {
@@ -369,3 +417,7 @@ mod read_tests;
 #[cfg(test)]
 #[path = "files_directory_tests.rs"]
 mod directory_tests;
+
+#[cfg(test)]
+#[path = "files_write_tests.rs"]
+mod write_tests;

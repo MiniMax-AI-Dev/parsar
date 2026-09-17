@@ -3,6 +3,7 @@ use super::*;
 #[tokio::test]
 async fn runner_completion_keeps_the_original_admitted_deadline() -> Result<()> {
     let binding = Binding {
+        write: None,
         directory_helper: Some("/usr/local/bin/agents-api-codex-directory".into()),
         native_binary: "/native".into(),
         environment: "expected".into(),
@@ -69,6 +70,7 @@ async fn runner_completion_keeps_the_original_admitted_deadline() -> Result<()> 
 async fn admitted_operation_survives_caller_detach_and_owner_stop() -> Result<()> {
     for stop_owner in [false, true] {
         let binding = Binding {
+            write: None,
             directory_helper: Some("/usr/local/bin/agents-api-codex-directory".into()),
             native_binary: "/native".into(),
             environment: "expected".into(),
@@ -114,6 +116,7 @@ async fn admitted_operation_survives_caller_detach_and_owner_stop() -> Result<()
 #[tokio::test]
 async fn stopped_owner_does_not_admit_even_a_complete_frame() -> Result<()> {
     let binding = Binding {
+        write: None,
         directory_helper: Some("/usr/local/bin/agents-api-codex-directory".into()),
         native_binary: "/native".into(),
         environment: "expected".into(),
@@ -164,6 +167,7 @@ async fn private_socket_collision_never_removes_the_original() -> Result<()> {
 async fn invalid_requests_and_local_manager_never_reach_host_metadata() -> Result<()> {
     let manager = EnvironmentManager::default_for_tests();
     let binding = Binding {
+        write: None,
         directory_helper: Some("/usr/local/bin/agents-api-codex-directory".into()),
         native_binary: "/native".into(),
         environment: "expected".into(),
@@ -215,6 +219,7 @@ async fn invalid_requests_and_local_manager_never_reach_host_metadata() -> Resul
 #[tokio::test]
 async fn pending_native_response_requires_owner_failure() -> Result<()> {
     let binding = Binding {
+        write: None,
         directory_helper: Some("/usr/local/bin/agents-api-codex-directory".into()),
         native_binary: "/native".into(),
         environment: "expected".into(),
@@ -264,6 +269,7 @@ async fn pending_native_response_requires_owner_failure() -> Result<()> {
 #[test]
 fn rejects_wrong_identity_and_nonrelative_paths() {
     let binding = Binding {
+        write: None,
         directory_helper: Some("/usr/local/bin/agents-api-codex-directory".into()),
         native_binary: "/native".into(),
         environment: "expected".into(),
