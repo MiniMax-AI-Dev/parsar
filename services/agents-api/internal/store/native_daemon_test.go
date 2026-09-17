@@ -22,20 +22,28 @@ func nativeDispatchHarnessWithTimeout(t *testing.T, timeout time.Duration) (*dis
 		t.Skip("explicit native daemon binary and evidence directory required")
 	}
 	h := newDispatchHarness(t)
-	oldPeer, _ := h.registry.LookupDevice(h.device.ID)
-	h.conn.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	t.Cleanup(cancel)
 	home, err := os.MkdirTemp(root, "execution-native-")
 	if err != nil {
 		t.Fatal(err)
 	}
+	startNativeDispatchDaemon(t, h, home, binary)
+	return h, ctx, home
+}
+
+func startNativeDispatchDaemon(t *testing.T, h *dispatchHarness, home, binary string) {
+	t.Helper()
+	oldPeer, _ := h.registry.LookupDevice(h.device.ID)
+	if h.conn != nil {
+		_ = h.conn.Close()
+	}
 	profile := filepath.Join(home, "parsar-daemon", "execution")
-	if err = os.MkdirAll(profile, 0700); err != nil {
+	if err := os.MkdirAll(profile, 0700); err != nil {
 		t.Fatal(err)
 	}
 	auth, _ := json.Marshal(map[string]string{"server_url": h.url + "/api/v1", "runtime_id": h.device.ID, "runner_credential": h.credential, "device_name": "native proof"})
-	if err = os.WriteFile(filepath.Join(profile, "auth.json"), auth, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(profile, "auth.json"), auth, 0600); err != nil {
 		t.Fatal(err)
 	}
 	daemonLog, err := os.Create(filepath.Join(home, "daemon.log"))
@@ -73,5 +81,4 @@ func nativeDispatchHarnessWithTimeout(t *testing.T, timeout time.Duration) (*dis
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return h, ctx, home
 }
