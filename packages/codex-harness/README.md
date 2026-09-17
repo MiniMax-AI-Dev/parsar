@@ -119,7 +119,7 @@ qualify a public Files endpoint.
 
 `operation: "write"` requires integer `size_bytes` from 0 through 50 MiB, a
 nonempty clean relative path, and exactly that many raw bytes after the JSON
-header. `max_bytes` and `max_entries` cannot be supplied. One connection carries
+header. `max_bytes` and `max_entries` must be absent or null. One connection carries
 one request; no input EOF is needed, and extra bytes do not create another request.
 The complete bounded body is held in memory before native dispatch. Incomplete
 input closes the connection without starting a remote operation.
