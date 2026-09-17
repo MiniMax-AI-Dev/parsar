@@ -52,6 +52,7 @@ type Router struct {
 	preparations        map[string]*preparationState
 	preparationRequests map[string]*preparationState
 	preparationTimeout  time.Duration
+	workspaceWrite      *workspaceUpload
 	workspaceReads      map[string]struct{}
 	localWorkspace      *localworkspace.Binding
 }
@@ -159,6 +160,8 @@ func (r *Router) Handle(ctx context.Context, env proto.Envelope) error {
 	ctx = adoptEnvelopeTrace(ctx, env)
 
 	switch env.Type {
+	case proto.TypeWorkspaceWrite:
+		return r.handleWorkspaceWrite(ctx, env)
 	case proto.TypeWorkspaceRead:
 		return r.handleWorkspaceRead(ctx, env)
 	case proto.TypeExecutionPrepare:

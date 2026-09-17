@@ -44,12 +44,15 @@ func readEnvironmentFileQuery(w http.ResponseWriter, r *http.Request, environmen
 	if !ok {
 		return options, false
 	}
-	configuration, err := decodeSessionEnvironment(environment.Configuration)
-	if err != nil || configuration.Type != "self_hosted" || len(configuration.CapabilityDirectories) != 0 || !validEnvironmentFilePath(configuration.WorkspaceDirectory) {
-		writeStoreError(w, r, execution.ErrExecutionUnavailable)
-		return options, false
+	root := "/workspace"
+	if !execution.LocalWorkspaceConfiguration(environment.Configuration) {
+		configuration, err := decodeSessionEnvironment(environment.Configuration)
+		if err != nil || configuration.Type != "self_hosted" || len(configuration.CapabilityDirectories) != 0 || !validEnvironmentFilePath(configuration.WorkspaceDirectory) {
+			writeStoreError(w, r, execution.ErrExecutionUnavailable)
+			return options, false
+		}
+		root = path.Clean(configuration.WorkspaceDirectory)
 	}
-	root := path.Clean(configuration.WorkspaceDirectory)
 	directory := root
 	if requested, exists := q["path"]; exists {
 		if !validEnvironmentFilePath(requested[0]) {

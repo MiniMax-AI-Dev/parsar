@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -72,6 +73,11 @@ func (s *Store) SubmitInputs(ctx context.Context, tenantID, sessionID, key strin
 		if len(previous) > 0 {
 			receipts = previous
 			return nil
+		}
+		if slices.ContainsFunc(batch, func(input Input) bool { return input.Kind == "message" }) {
+			if err := checkEnvironmentFileWriteGate(ctx, q, session); err != nil {
+				return err
+			}
 		}
 		if err := checkEnvironmentInputGate(ctx, q, session, key, encoded); err != nil {
 			return err

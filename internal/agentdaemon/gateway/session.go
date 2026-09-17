@@ -100,12 +100,14 @@ type Session struct {
 
 	// Subscribers keyed by runID. The read loop only sends on these
 	// channels; Unsubscribe is the only place that closes them.
-	subsMu          sync.Mutex
-	subs            map[string]*Subscription
-	preparationMu   sync.Mutex
-	preparations    map[string]*preparationSubscription
-	workspaceReadMu sync.Mutex
-	workspaceReads  map[string]chan proto.Envelope
+	subsMu           sync.Mutex
+	subs             map[string]*Subscription
+	preparationMu    sync.Mutex
+	preparations     map[string]*preparationSubscription
+	workspaceWriteMu sync.Mutex
+	workspaceWrites  map[string]chan proto.Envelope
+	workspaceReadMu  sync.Mutex
+	workspaceReads   map[string]chan proto.Envelope
 
 	ackMu      sync.Mutex
 	ackWaiters map[string]chan proto.InteractionDecisionAckPayload
@@ -256,6 +258,7 @@ func (s *Session) Close(reason string) {
 		s.reg.Deregister(s)
 		s.closePreparations()
 		s.closeWorkspaceReads()
+		s.closeWorkspaceWrites()
 		s.markOfflineOnClose()
 		s.releaseOwnerLease()
 	})
@@ -566,6 +569,8 @@ func deviceKindsFromHeartbeat(p proto.HeartbeatPayload) []device.SupportedAgentK
 
 func (s *Session) dispatch(env proto.Envelope) {
 	switch env.Type {
+	case proto.TypeWorkspaceWriteResult:
+		s.dispatchWorkspaceWrite(env)
 	case proto.TypeWorkspaceReadResult:
 		s.dispatchWorkspaceRead(env)
 		return

@@ -17,6 +17,7 @@ type Worker struct {
 	admission      *store.Store
 	lease          *store.ExecutionLease
 	directoryReads chan directoryReadRequest
+	fileWrites     chan fileWriteRequest
 	stopped        chan struct{}
 	stopOnce       sync.Once
 }
@@ -28,7 +29,7 @@ func StartWorker(ctx context.Context, dispatcher *Dispatcher) (*Worker, error) {
 	}
 	owned := *dispatcher
 	owned.Store = lease.Store()
-	worker := &Worker{dispatcher: &owned, admission: dispatcher.Store, lease: lease, directoryReads: make(chan directoryReadRequest), stopped: make(chan struct{})}
+	worker := &Worker{dispatcher: &owned, admission: dispatcher.Store, lease: lease, directoryReads: make(chan directoryReadRequest), fileWrites: make(chan fileWriteRequest), stopped: make(chan struct{})}
 	if err := owned.Store.ReconcileEnvironmentConnections(ctx); err != nil {
 		_ = lease.Close(context.Background())
 		return nil, err
@@ -102,6 +103,11 @@ func (w *Worker) Run(ctx context.Context) error {
 		request directoryReadRequest
 		result  directoryReadResult
 	}
+	type writeCompletion struct {
+		request fileWriteRequest
+		result  fileWriteResult
+	}
+	writesCompleted := make(chan writeCompletion, 4)
 	readsCompleted := make(chan readCompletion, 4)
 	reads := 0
 	ticker := time.NewTicker(250 * time.Millisecond)
@@ -111,6 +117,20 @@ func (w *Worker) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case request := <-w.fileWrites:
+			if request.ctx.Err() != nil || active[request.environment.SessionID] || len(active) == 4 {
+				request.result <- fileWriteResult{err: ErrExecutionUnavailable}
+				continue
+			}
+			active[request.environment.SessionID] = true
+			running.Add(1)
+			go func() {
+				defer running.Done()
+				writesCompleted <- writeCompletion{request: request, result: w.runFileWrite(ctx, request)}
+			}()
+		case write := <-writesCompleted:
+			delete(active, write.request.environment.SessionID)
+			write.request.result <- write.result
 		case request := <-w.directoryReads:
 			if request.ctx.Err() != nil || reads == 4 || (!active[request.environment.SessionID] && len(active) == 4) {
 				request.reply(directoryReadResult{err: ErrExecutionUnavailable})

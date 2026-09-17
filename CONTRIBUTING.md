@@ -330,6 +330,27 @@ write retirement. Public Files.list delegates workspace access to this reader;
 the API owns tenant authorization, path validation and protocol pagination. Keep
 partial directory coverage and unverified defaults explicit in the Files contract.
 
+Local inline file delivery uses the same authenticated daemon connection and exact
+Environment/Session binding. The optional startup-owned `PARSAR_RUNTIME_WRITE_HELPER`
+and `PARSAR_RUNTIME_STAGING` enable only the bounded installer primitive; they do
+not grant public feature admission. Require a canonical executable outside the
+Environment parent, canonical sibling workspace/staging directories on one mount,
+and verified native tool denial of staging and its ancestors. Native credentials
+and history remain outside that parent. Mode bits and path checks alone do not
+qualify this layout. The read-only deployment needs neither writer setting.
+
+Transfer a complete bounded body in acknowledged 64 KiB frames before invoking
+the existing installer, verify the declared digest, and run no model for upload.
+Keep the existing private 50 MiB bound distinct from upstream protocol limits.
+The dedicated Runtime excludes execution while receiving or applying a write;
+malformed, incomplete or expired transfers cannot reach the installer. Exact
+commit/rejection receipts release the mutation owner. Missing or ambiguous
+receipts retain uncertainty; observer cancellation and local process exit cannot
+prove non-mutation. Before public admission, Core must durably reserve the write
+under the Session lock and prevent successor mutation across restart until exact
+settlement. Do not replay the request or introduce general replacement machinery.
+Read-only operations retain their own authority and bounded ownership requirements.
+
 Keep prerequisites specific to the public operation being implemented. Native
 harnesses execute; adapters translate protocols and fill demonstrated capability
 gaps; Core owns public semantics, authorization and resources. Before adding a
