@@ -24,18 +24,20 @@ const terminalSendTimeout = 2 * time.Second
 // sessionConfig is the cross-cutting knob bag — production callers go
 // through Factory which uses defaults.
 type sessionConfig struct {
-	codexBinary   string
-	harnessBinary string
-	logger        *slog.Logger
-	killTimeout   time.Duration
+	codexBinary       string
+	harnessBinary     string
+	permissionProfile string
+	logger            *slog.Logger
+	killTimeout       time.Duration
 }
 
 func defaultSessionConfig() sessionConfig {
 	return sessionConfig{
-		codexBinary:   defaultBinary(),
-		harnessBinary: os.Getenv("PARSAR_CODEX_HARNESS_BIN"),
-		logger:        obslog.Bg(),
-		killTimeout:   rpcKillTimeout,
+		codexBinary:       defaultBinary(),
+		harnessBinary:     os.Getenv("PARSAR_CODEX_HARNESS_BIN"),
+		permissionProfile: os.Getenv("PARSAR_CODEX_PERMISSION_PROFILE"),
+		logger:            obslog.Bg(),
+		killTimeout:       rpcKillTimeout,
 	}
 }
 

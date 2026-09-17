@@ -61,6 +61,7 @@ type SessionPlan struct {
 	// ApprovalPolicy + Sandbox apply to both new and resumed threads.
 	ApprovalPolicy AskForApproval
 	Sandbox        SandboxMode
+	Permissions    string
 
 	// Cleanup is the deferred housekeeping the session must run after the child exits.
 	Cleanup func()

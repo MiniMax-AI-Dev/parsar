@@ -53,8 +53,14 @@ Direct development on `main` is not allowed. Every session honours this rule.
 ## Independent blind review
 
 Each PR should contain one independently verifiable change; a feature may span
-several small PRs. State the expected behavior, acceptance criteria, and explicit
-scope exclusions before implementation. Keep unrelated refactors, features,
+several small PRs. Two or three closely related subtasks may share one functional
+PR; internal wiring steps do not require separate delivery gates. Run focused
+tests during development, then complete the full checks and applicable real
+regression once the batch stabilizes. State the expected behavior, acceptance
+results, stopping conditions and explicit scope exclusions before implementation.
+Check uncertain design choices early. Reassess any new prerequisite against those
+results before adding it; do not let a functional batch grow without a stopping
+point. Keep unrelated refactors, features,
 formatting, and dependency updates in separate PRs.
 
 The developer chooses the review method based on scope, risk, uncertainty and
@@ -196,13 +202,53 @@ Authentication, tenant/credential isolation, state consistency and data loss rem
 material acceptance requirements. Other harnesses and protocol Subagent execution
 are deferred without changing the complete pinned protocol target.
 
-Process placement and native transport are adapter responsibilities. A harness may
-run beside its workspace or use a separate executor; neither arrangement changes
-public ownership or permits a second model/tool loop. Codex registry/Noise support
-is a specific interoperability path, not the universal internal protocol for all
-engines. Public `remote_url` must support the documented executor connection flow;
-a private daemon URL or an additional undocumented installation is not equivalent.
-Keep local harness cwd separate from an executor-only workspace path.
+The current hosted architecture is V1: Core runs independently; each Environment
+sandbox contains its daemon, selected native harness, local tools and workspace.
+Execution and Files use the same authorized workspace through the existing
+Core/Runtime contract. Native tool calls stay local. Process placement and native
+transport remain adapter responsibilities, without a second model/tool loop.
+The former separated Runtime/harness and workspace executor topology is a distant
+future V2 option, to revisit only after V1 is stable and concrete needs justify it.
+Do not extend that topology for hosted delivery, maintain two current hosted routes,
+or introduce dormant V2 compatibility scaffolding.
+
+Preserve the accepted official `self_hosted` interoperability path and its native
+executor connection flow. Codex registry/Noise is specific to that path, not the
+V1 hosted backbone or a universal protocol for all engines. A private daemon URL
+or an undocumented daemon installation requirement cannot replace `remote_url`.
+Keep harness cwd separate from the executor workspace where that accepted remote
+path still requires it.
+
+SandboxProvider has five operations: Create, GetInfo, Renew, Kill and RunCommand.
+Use maintained provider SDKs and thin adapters, Docker first and E2B after the MVP.
+Provider initialization creates the sandbox and starts its daemon/harness;
+RunCommand is for initialization only. Daily execution and Files use Runtime and
+native or bounded local capabilities. Docker's lack of a native renewable lease
+does not remove service-owned hosted expiry and cleanup requirements.
+
+Qualify the actual Docker/native sandbox before default cutover: real model
+execution, file access, owned cancellation, restart with retained native history
+and files, and rejection when required history is missing. Generated code and file
+tools must not read daemon/model credentials, foreign Session history or another
+tenant's workspace. Same-container placement, matching UID, mode bits, directory
+bindings and capability flags do not prove isolation. Retain failed probes and
+unverified limits; private functionality is not public hosted acceptance.
+
+Before migration, archive existing edits and validation evidence. Reuse verified
+authorization, resource/lifecycle ownership and safe filesystem primitives as
+needed by V1. Stop work on separated-only enrollment, mirrored manifests and relay
+mechanisms. Remove superseded unused code, configuration, tests, scripts and
+task-owned temporary resources as each replacement is accepted. Preserve necessary
+regressions, still-used official capabilities, product data and others' work.
+
+The opt-in Codex deployment selector `PARSAR_CODEX_PERMISSION_PROFILE` chooses a
+native named profile at harness startup and on both new/resumed threads, omitting
+the legacy sandbox override. It is operator configuration, never a prompt option,
+and rejects remote, none and temporary read preparations. Native managed
+requirements own allowed profiles and deny-read enforcement. Keep the selector
+unset for existing deployments. The [co-location qualification inputs](services/agents-api/deploy/codex/README.md)
+record the pinned native/Docker prerequisites and limits; this switch alone does
+not admit hosted Environments or authorize a workspace.
 
 Core and Runtime use common preparation, start, input-receipt, cancellation,
 release and recovery semantics for Codex and Claude. Retain each harness's native
@@ -211,7 +257,8 @@ conditions; a capability declaration alone never grants public feature admission
 Extend existing interfaces during related functional work without introducing a
 second framework or a broad rewrite. The current MVP accepts Codex only, with
 Docker-hosted delivery first and E2B afterward. Preserve existing Claude code and
-evidence; further Claude integration and remote-executor separation are deferred.
+evidence; further Claude integration is deferred and hosted remote-executor
+separation is outside the current roadmap.
 Later engines must satisfy the same applicable acceptance contract while keeping
 their suitable native deployment layout.
 

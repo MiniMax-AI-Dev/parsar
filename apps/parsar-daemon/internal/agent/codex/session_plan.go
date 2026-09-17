@@ -8,6 +8,9 @@ import (
 )
 
 func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg sessionConfig) (SessionPlan, string, error) {
+	if err := validatePermissionProfile(req, cfg.permissionProfile); err != nil {
+		return SessionPlan{}, "", err
+	}
 	if req.WorkspaceReadOnly {
 		plan, err := workspaceReadPlan(req)
 		return plan, "", err
@@ -19,6 +22,11 @@ func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg
 	plan, err := BuildSessionPlan(req.RunID, req.AgentStateKey, req.WorkDir, req.AgentOptions)
 	if err != nil {
 		return SessionPlan{}, "", fmt.Errorf("codex: build session plan: %w", err)
+	}
+	if cfg.permissionProfile != "" {
+		plan.Sandbox = ""
+		plan.Permissions = cfg.permissionProfile
+		plan.ExtraConfig = append(plan.ExtraConfig, [2]string{"default_permissions", tomlQuoteString(cfg.permissionProfile)})
 	}
 
 	if req.DisableSubagents {

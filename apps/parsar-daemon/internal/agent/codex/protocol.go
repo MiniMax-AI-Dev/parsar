@@ -169,6 +169,7 @@ type ThreadStartParams struct {
 	// Sending the old object shape causes codex to silently default to
 	// read-only, which terminates the turn before the model can reply.
 	Sandbox               SandboxMode           `json:"sandbox,omitempty"`
+	Permissions           string                `json:"permissions,omitempty"`
 	DeveloperInstructions string                `json:"developerInstructions,omitempty"`
 	RuntimeWorkspaceRoots []string              `json:"runtimeWorkspaceRoots,omitempty"`
 	DynamicTools          []dynamicFunctionTool `json:"dynamicTools,omitempty"`
@@ -197,7 +198,8 @@ type ThreadResumeParams struct {
 	DeveloperInstructions string         `json:"developerInstructions"`
 	ThreadID              string         `json:"threadId"`
 	ApprovalPolicy        AskForApproval `json:"approvalPolicy"`
-	Sandbox               SandboxMode    `json:"sandbox"`
+	Sandbox               SandboxMode    `json:"sandbox,omitempty"`
+	Permissions           string         `json:"permissions,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
