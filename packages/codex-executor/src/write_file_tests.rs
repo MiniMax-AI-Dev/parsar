@@ -14,6 +14,44 @@ fn frame(data: &[u8]) -> impl Read + '_ {
     Cursor::new(data).chain(Cursor::new(Sha256::digest(data).to_vec()))
 }
 
+fn install(root: &Path, relative: &str, size: u64, input: impl Read) -> Result<(), Failure> {
+    let staging = fixture();
+    let result = super::install(root, relative, size, input, staging.path());
+    assert_eq!(fs::read_dir(staging.path()).unwrap().count(), 0);
+    result
+}
+
+#[test]
+fn requires_existing_disjoint_nofollow_staging_before_consuming_input() {
+    let f = fixture();
+    let root = f.path().join("workspace");
+    let staging = f.path().join("private");
+    fs::create_dir_all(root.join("nested")).unwrap();
+    fs::create_dir(&staging).unwrap();
+    fs::write(root.join("file"), b"old").unwrap();
+    symlink(&staging, f.path().join("link")).unwrap();
+    struct Unread;
+    impl Read for Unread {
+        fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+            panic!("invalid staging must be rejected before reading input")
+        }
+    }
+    for invalid in [
+        root.clone(),
+        root.join("nested"),
+        f.path().to_path_buf(),
+        f.path().join("missing"),
+        f.path().join("link"),
+        staging.join("../private"),
+        Path::new("relative").to_path_buf(),
+    ] {
+        let failure = super::install(&root, "file", 3, Unread, &invalid).unwrap_err();
+        assert!(!failure.committed);
+        assert_eq!(fs::read(root.join("file")).unwrap(), b"old");
+    }
+    assert_eq!(fs::read_dir(&staging).unwrap().count(), 0);
+}
+
 #[test]
 fn replaces_only_destination_hard_link_and_keeps_exact_binary_bytes() {
     let f = fixture();

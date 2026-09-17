@@ -1,5 +1,5 @@
 use crate::workspace_path::{anchor, directory};
-use rustix::fs::{AtFlags, FileType, Mode, OFlags, openat, renameat, statat, unlinkat};
+use rustix::fs::{AtFlags, FileType, Mode, OFlags, fstat, openat, renameat, statat, unlinkat};
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{self, Read, Write};
@@ -28,8 +28,11 @@ pub(crate) fn install(
     relative: &str,
     size: u64,
     mut input: impl Read,
+    staging_root: &Path,
 ) -> Result<(), Failure> {
     if size > MAX_BYTES
+        || staging_root.starts_with(root)
+        || root.starts_with(staging_root)
         || relative.is_empty()
         || relative.len() > 4096
         || relative
@@ -41,13 +44,19 @@ pub(crate) fn install(
     let (parent, leaf) = relative.rsplit_once('/').unwrap_or(("", relative));
     let root = anchor(root)?;
     let parent = directory(&root, parent)?;
+    let staging_parent = directory(&anchor(staging_root)?, "")?;
+    if fstat(&parent).map_err(io::Error::from)?.st_dev
+        != fstat(&staging_parent).map_err(io::Error::from)?.st_dev
+    {
+        return Err(io::Error::from(io::ErrorKind::InvalidInput).into());
+    }
     match statat(&parent, leaf, AtFlags::SYMLINK_NOFOLLOW) {
         Ok(metadata) if FileType::from_raw_mode(metadata.st_mode) == FileType::RegularFile => (),
         Ok(_) => return Err(io::Error::from(io::ErrorKind::InvalidInput).into()),
         Err(rustix::io::Errno::NOENT) => (),
         Err(error) => return Err(io::Error::from(error).into()),
     }
-    let staging = Staging::new(&parent)?;
+    let staging = Staging::new(&staging_parent)?;
     let mut file = &staging.file;
     let mut digest = Sha256::new();
     let mut remaining = size;
@@ -66,11 +75,17 @@ pub(crate) fn install(
         return Err(io::Error::from(io::ErrorKind::InvalidData).into());
     }
     staging.file.sync_all()?;
-    staging.persist(leaf)?;
+    staging.persist(&parent, leaf)?;
     File::from(parent).sync_all().map_err(|error| Failure {
         committed: true,
         error,
     })?;
+    File::from(staging_parent)
+        .sync_all()
+        .map_err(|error| Failure {
+            committed: true,
+            error,
+        })?;
     Ok(())
 }
 
@@ -98,8 +113,8 @@ impl<'a> Staging<'a> {
         })
     }
 
-    fn persist(mut self, leaf: &str) -> io::Result<()> {
-        renameat(self.parent, self.name.as_str(), self.parent, leaf)?;
+    fn persist(mut self, destination: &OwnedFd, leaf: &str) -> io::Result<()> {
+        renameat(self.parent, self.name.as_str(), destination, leaf)?;
         self.committed = true;
         Ok(())
     }

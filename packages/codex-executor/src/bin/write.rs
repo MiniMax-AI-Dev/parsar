@@ -9,13 +9,19 @@ use std::path::Path;
 
 fn run() -> Result<u64, write_file::Failure> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.len() != 3 {
+    if args.len() != 4 {
         return Err(io::Error::from(io::ErrorKind::InvalidInput).into());
     }
     let size = args[2]
         .parse::<u64>()
         .map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;
-    write_file::install(Path::new(&args[0]), &args[1], size, io::stdin().lock())?;
+    write_file::install(
+        Path::new(&args[0]),
+        &args[1],
+        size,
+        io::stdin().lock(),
+        Path::new(&args[3]),
+    )?;
     Ok(size)
 }
 
