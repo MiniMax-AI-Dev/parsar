@@ -2337,10 +2337,12 @@ or filesystem isolation. Automatic installation remains separate.
   ACP context-token occupancy and cumulative cost are not per-turn usage. Do
   not report them as token consumption or advertise usage accounting.
 
-- Daemon-managed Codex sessions use `approvalPolicy=never` and
+- Ordinary daemon-managed Codex sessions default to `approvalPolicy=never` and
   `sandbox=danger-full-access` on both `thread/start` and `thread/resume`,
-  including conversations created under an older policy. The daemon owns
-  these defaults; no `PARSAR_CODEX_*` approval environment switch is required.
+  including conversations created under an older policy. When the operator sets
+  `PARSAR_CODEX_PERMISSION_PROFILE`, the named native permission profile replaces
+  that sandbox override while approval remains `never`. The daemon owns these
+  defaults; no approval environment switch is required.
   Explicit engine approval requests still use the durable interaction lifecycle;
   user-input requests continue to wait for a human answer.
 
