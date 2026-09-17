@@ -1,11 +1,11 @@
 package v1
 
-// InlineEnvironmentFileCreateRequest is the implemented member of the pinned
-// inline/file_id union. Source-file resolution remains a separate implementation gap.
-type InlineEnvironmentFileCreateRequest struct {
-	Type string  `json:"type" binding:"required" enums:"inline"`
-	Data *string `json:"data" binding:"required"`
-	Path *string `json:"path" binding:"required"`
+// EnvironmentFileCreateRequest represents the pinned inline/file_id union.
+type EnvironmentFileCreateRequest struct {
+	Type   string  `json:"type" binding:"required" enums:"inline,file_id"`
+	Data   *string `json:"data,omitempty"`
+	FileID *string `json:"file_id,omitempty"`
+	Path   *string `json:"path" binding:"required"`
 }
 
 type EnvironmentFile struct {

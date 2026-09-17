@@ -270,6 +270,23 @@ definitions:
     - path
     - size_bytes
     type: object
+  v1.EnvironmentFileCreateRequest:
+    properties:
+      data:
+        type: string
+      file_id:
+        type: string
+      path:
+        type: string
+      type:
+        enum:
+        - inline
+        - file_id
+        type: string
+    required:
+    - path
+    - type
+    type: object
   v1.EnvironmentFileList:
     properties:
       data:
@@ -363,21 +380,6 @@ definitions:
           type: object
         type: array
         x-nullable: true
-    type: object
-  v1.InlineEnvironmentFileCreateRequest:
-    properties:
-      data:
-        type: string
-      path:
-        type: string
-      type:
-        enum:
-        - inline
-        type: string
-    required:
-    - data
-    - path
-    - type
     type: object
   v1.InputContent:
     properties:
@@ -851,6 +853,59 @@ definitions:
     required:
     - data
     - has_more
+    type: object
+  v1.SourceFile:
+    properties:
+      bytes:
+        minimum: 0
+        type: integer
+      created_at:
+        type: integer
+      expires_at:
+        type: integer
+        x-nullable: true
+      filename:
+        type: string
+      id:
+        type: string
+      object:
+        enum:
+        - file
+        type: string
+      purpose:
+        enum:
+        - user_data
+        type: string
+      status:
+        enum:
+        - processed
+        type: string
+      status_details:
+        type: string
+        x-nullable: true
+    required:
+    - bytes
+    - created_at
+    - filename
+    - id
+    - object
+    - purpose
+    - status
+    type: object
+  v1.SourceFileDeleted:
+    properties:
+      deleted:
+        type: boolean
+      id:
+        type: string
+      object:
+        enum:
+        - file
+        type: string
+    required:
+    - deleted
+    - id
+    - object
     type: object
   v1.StaticBearerCredentialAuth:
     properties:
@@ -1550,14 +1605,13 @@ paths:
       consumes:
       - application/json
       description: Uploads standard Base64 bytes to a file beneath /workspace in a
-        preconfigured, qualified local Environment. This partial implementation accepts
-        inline only; the pinned file_id union member remains unimplemented. Public
-        hosted Session creation is not enabled. A private 50 MiB decoded-content limit
-        applies. The parent directory must exist. Replacement installs a new mode-0600
-        inode; upstream overwrite metadata semantics remain unverified. Idle writes
-        exclude execution. Missing receipts return unavailable and retain a durable
-        mutation gate without automatic replay. Error/timing parity with upstream
-        remains unverified.
+        preconfigured, qualified local Environment. Accepts inline bytes or a project-owned
+        source file_id through the same write path. Public hosted Session creation
+        is not enabled. A private 50 MiB decoded-content limit applies. The parent
+        directory must exist. Replacement installs a new mode-0600 inode; upstream
+        overwrite metadata semantics remain unverified. Idle writes exclude execution.
+        Missing receipts return unavailable and retain a durable mutation gate without
+        automatic replay. Error/timing parity with upstream remains unverified.
       parameters:
       - description: agents=v1
         in: header
@@ -1569,12 +1623,12 @@ paths:
         name: environment_id
         required: true
         type: string
-      - description: Inline file bytes and absolute workspace path
+      - description: Inline bytes or source file ID and absolute workspace path
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/v1.InlineEnvironmentFileCreateRequest'
+          $ref: '#/definitions/v1.EnvironmentFileCreateRequest'
       produces:
       - application/json
       responses:
@@ -1612,7 +1666,7 @@ paths:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Create an Environment file from inline bytes
+      summary: Create an Environment file from inline bytes or a source file
       tags:
       - Environments
   /agents/sessions:
@@ -2237,6 +2291,191 @@ paths:
       summary: Retrieve an execution Turn
       tags:
       - Turns
+  /files:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Accepts one multipart file and purpose=user_data in either order,
+        with a private 512 MiB content limit and 64 KiB envelope allowance. Commits
+        only after the entire request validates. The source is project-owned, independent
+        of Sessions and workspace copies. No Beta header is required. Other purposes,
+        expires_after, listing, resumable Uploads, quotas/rate-limit and complete
+        hosted error/status parity remain unsupported or unverified.
+      parameters:
+      - description: Source bytes
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: user_data
+        enum:
+        - user_data
+        in: formData
+        name: purpose
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SourceFile'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload a source file
+      tags:
+      - Files
+  /files/{file_id}:
+    delete:
+      description: Atomically deletes project-owned metadata and stored bytes. Already-admitted
+        reads or copies may finish. Workspace copies remain independent. Historical
+        WAL/backups are not erased. No Beta header is required; exact hosted concurrent
+        deletion/error semantics remain unverified.
+      parameters:
+      - description: Source file ID
+        in: path
+        name: file_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SourceFileDeleted'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a source file
+      tags:
+      - Files
+    get:
+      description: Returns immutable project-owned user_data file metadata. No Beta
+        header is required. Other purposes, expiration and full hosted status/error
+        semantics remain unimplemented or unverified.
+      parameters:
+      - description: Source file ID
+        in: path
+        name: file_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SourceFile'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve source file metadata
+      tags:
+      - Files
+  /files/{file_id}/content:
+    get:
+      description: Streams an authorized immutable source snapshot. Already-admitted
+        reads may finish after deletion; later reads reject. No Beta header is required.
+        Range requests and exact hosted headers/error behavior are not implemented
+        or verified.
+      parameters:
+      - description: Source file ID
+        in: path
+        name: file_id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Download source file bytes
+      tags:
+      - Files
   /vaults:
     get:
       description: Lists project-owned Vaults independently of execution. Includes

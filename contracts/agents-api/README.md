@@ -293,6 +293,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Pending function actions | Persisted calls/results/application receipts, `required_actions`, Session `requires_action`, Turn `waiting`, and live state snapshots; other interactions remain incomplete |
 | Public recovery and SSE | Persisted Turn/Items queries and partial Usage; live lifecycle/Item/text events, creation streaming and the official one-Turn tool-handler helper |
 | Execution ownership | Immutable Session engine/device, durable input receipts and database writer fencing; uncertain claimed work fails on restart, without blind replay |
+| Files | Bounded live Environment listing and inline/file_id copies into a qualified preconfigured V1 local workspace; project-owned user_data source upload/retrieve/content/delete; [scope and limits](source-files.md) |
 | Clients | Fixed Python SDK 3.13.0 and official Go SDK v3.61.0; raw HTTP and real provider acceptance supplement controlled tests |
 | Release and product | Registry publication, managed provisioning and Parsar cutover remain open; business Team orchestration is deferred |
 

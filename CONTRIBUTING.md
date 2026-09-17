@@ -330,6 +330,22 @@ write retirement. Public Files.list delegates workspace access to this reader;
 the API owns tenant authorization, path validation and protocol pagination. Keep
 partial directory coverage and unverified defaults explicit in the Files contract.
 
+Source Files belong to the execution project and have an independent lifecycle
+from copied workspace files. Store immutable source metadata and PostgreSQL large
+objects in the execution database with the pinned pgx driver. Upload validation,
+metadata insertion and bytes commit atomically; deletion removes metadata and
+unlinks the object in one transaction. Keep OIDs private and authorize every
+metadata/content/delete lookup by tenant before opening a body. Stream bounded
+chunks; never hold an entire general Files upload in memory or use filenames as
+filesystem paths. A read-only repeatable-read transaction preserves an admitted
+source snapshot across concurrent deletion. Resolve that snapshot before entering
+the existing Environment write path; deleting a source does not undo a completed
+workspace copy. Bound request/transaction lifetimes, roll back incomplete bodies,
+and never automatically retry ambiguous commits. Backups must include PostgreSQL
+large objects; live deletion does not erase WAL or historical backups. Schema
+rollback must not orphan existing source objects. Do not reuse product capability
+tables or introduce a second destination writer for file_id.
+
 Local inline file delivery uses the same authenticated daemon connection and exact
 Environment/Session binding. The optional startup-owned `PARSAR_RUNTIME_WRITE_HELPER`
 and `PARSAR_RUNTIME_STAGING` enable only the bounded installer primitive; they do

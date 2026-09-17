@@ -40,6 +40,7 @@ type Handler struct {
 	executorURL     string
 	directoryReader EnvironmentDirectoryReader
 	fileWriter      EnvironmentFileWriter
+	sourceFiles     SourceFileStore
 }
 
 func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...Option) (http.Handler, error) {
@@ -54,6 +55,13 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 	router.Use(log.HTTPMiddleware)
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	router.Group(func(r chi.Router) {
+		r.Use(h.authenticateProject)
+		r.Post("/v1/files", h.createSourceFile)
+		r.Get("/v1/files/{file_id}", h.getSourceFile)
+		r.Get("/v1/files/{file_id}/content", h.sourceFileContent)
+		r.Delete("/v1/files/{file_id}", h.deleteSourceFile)
 	})
 	router.Route("/v1", func(r chi.Router) {
 		r.Use(h.authenticate)
@@ -92,32 +100,6 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 		})
 	})
 	return router, nil
-}
-
-type principalContextKey struct{}
-
-func (h *Handler) authenticate(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		principal, ok := h.auth.principal(r)
-		if !ok {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			writeError(w, http.StatusUnauthorized, "invalid_api_key", "A valid Agents API bearer key is required.")
-			return
-		}
-		if r.Header.Get("OpenAI-Beta") != "agents=v1" {
-			writeError(w, http.StatusBadRequest, "invalid_beta_header", "OpenAI-Beta: agents=v1 is required.")
-			return
-		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalContextKey{}, principal)))
-	})
-}
-
-func tenantID(r *http.Request) string {
-	return r.Context().Value(principalContextKey{}).(identity.Principal).TenantID
-}
-
-func sessionCreator(r *http.Request) identity.Subject {
-	return r.Context().Value(principalContextKey{}).(identity.Principal).Subject()
 }
 
 // createSession atomically reserves or admits initial text with the Session.
