@@ -183,3 +183,21 @@ func TestWorkspaceReadUnknownAndRelease(t *testing.T) {
 		})
 	}
 }
+
+func TestWorkspaceReadDeadlineStopsOwnerBeforeUnknown(t *testing.T) {
+	p, config := readPreparation(t, "read-held")
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { _, err := p.ReadWorkspaceFile(ctx, "file", 4); done <- err }()
+	waitPreparationFile(t, filepath.Join(config.StateDir, "read-admitted"))
+	if err := <-done; err != agent.ErrWorkspaceReadUncertain {
+		t.Fatal(err)
+	}
+	if p.session.process.Context().Err() == nil {
+		t.Fatal("uncertain deadline returned before owner cancellation")
+	}
+	if _, err := p.Start(t.Context(), "late", "hello", make(chan proto.Envelope, 8)); err == nil {
+		t.Fatal("unknown owner accepted a new Start")
+	}
+}

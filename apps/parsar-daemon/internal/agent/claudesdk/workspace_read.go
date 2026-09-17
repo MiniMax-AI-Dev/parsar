@@ -131,12 +131,10 @@ func (s *session) failWorkspaceRead(read *workspaceRead) {
 		s.reads.uncertain = true
 		s.reads.pending = nil
 		read.err = agent.ErrWorkspaceReadUncertain
+		s.process.Cancel()
 		close(read.done)
 	}
 	s.reads.mu.Unlock()
-	if pending {
-		s.process.Cancel()
-	}
 }
 
 func (s *session) awaitWorkspaceRead(_ context.Context, read *workspaceRead) (agent.WorkspaceReadResult, error) {
