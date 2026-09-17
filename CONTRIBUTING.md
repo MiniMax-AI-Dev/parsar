@@ -530,6 +530,13 @@ the exact frozen Environment identity; callers cannot supply sockets, credential
 or workspace roots. Shared routing uses the optional `agent.WorkspaceReader`
 interface, without selecting an engine by name. The optional Codex artifact uses
 its existing same-manager socket; stock Codex and other adapters remain unsupported.
+The same control accepts `operation: directory` through the optional
+`agent.WorkspaceDirectoryLister`, with mutually exclusive byte/entry limits and
+typed directory metadata. Directory responses carry at most 1024 single-component
+UTF-8 names of at most 255 bytes, so escaped metadata stays below the existing
+frame bound. These are private transport limits, not public Files parameters.
+Byte and directory operations share target checks, correlation, capacity and
+retained operation waits; neither creates a Run or selects an engine by name.
 This control is not a public Files endpoint or capability advertisement.
 
 The separate optional `agent.WorkspaceDirectoryLister` observes one workspace-relative
