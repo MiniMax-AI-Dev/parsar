@@ -208,8 +208,12 @@ Core and Runtime use common preparation, start, input-receipt, cancellation,
 release and recovery semantics for Codex and Claude. Retain each harness's native
 implementation behind its adapter. Core acts on verified capabilities and runtime
 conditions; a capability declaration alone never grants public feature admission.
-Extend existing interfaces during related functional work and apply common
-acceptance to both engines, without introducing a second framework or a broad rewrite.
+Extend existing interfaces during related functional work without introducing a
+second framework or a broad rewrite. The current MVP accepts Codex only, with
+Docker-hosted delivery first and E2B afterward. Preserve existing Claude code and
+evidence; further Claude integration and remote-executor separation are deferred.
+Later engines must satisfy the same applicable acceptance contract while keeping
+their suitable native deployment layout.
 
 Workspace reads may request the private `workspace_read_only` preparation profile
 through the existing preparation factory and verified `workspace_read_preparation`
@@ -231,6 +235,17 @@ does not retry cleanup; ownership remains until an explicit release or shutdown 
 A release request,
 HTTP disconnect or remote socket closure alone is not cleanup confirmation. This
 profile does not establish remote mutation quiescence or public Files admission.
+
+Core directory reads reuse the Worker's Session scheduling reservation for idle
+preparation and target the exact Run for active execution. Device selection uses
+operation-specific capabilities; reading files never resolves model/MCP options
+or creates a Turn. HTTP cancellation ends observation, not an admitted native read.
+Keep the idle reservation through the bounded read and release attempt. Return
+directory data only after confirmed Close; incomplete reads or uncertain cleanup
+return unavailable without data. Revoke the scoped read transport credential on
+completion or failure. Runtime retains uncertain cleanup ownership and capacity;
+this does not require a second durable Core owner registry or establish remote
+write retirement. Public Files admission and protocol pagination remain separate.
 
 Keep prerequisites specific to the public operation being implemented. Native
 harnesses execute; adapters translate protocols and fill demonstrated capability

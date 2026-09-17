@@ -32,23 +32,26 @@ func (w *Worker) bindDevice(ctx context.Context, tenantID, sessionID string) (bo
 	if err := json.Unmarshal(session.Configuration, &snapshot); err != nil {
 		return false, err
 	}
+	return w.bindSessionDevice(ctx, session, func(id string) bool { return w.ready(id, session.Engine, snapshot) })
+}
 
-	bound, err := w.dispatcher.Store.GetSessionDevice(ctx, tenantID, sessionID)
+func (w *Worker) bindSessionDevice(ctx context.Context, session store.Session, ready func(string) bool) (bool, error) {
+	bound, err := w.dispatcher.Store.GetSessionDevice(ctx, session.TenantID, session.ID)
 	if err == nil {
-		return w.ready(bound.ID, session.Engine, snapshot), nil
+		return ready(bound.ID), nil
 	}
 	if !errors.Is(err, store.ErrNotFound) {
 		return false, err
 	}
-	devices, err := w.dispatcher.Store.ListExecutionDevices(ctx, tenantID)
+	devices, err := w.dispatcher.Store.ListExecutionDevices(ctx, session.TenantID)
 	if err != nil {
 		return false, err
 	}
 	for _, device := range devices {
-		if !w.ready(device.ID, session.Engine, snapshot) {
+		if !ready(device.ID) {
 			continue
 		}
-		err := w.dispatcher.Store.BindSessionDevice(ctx, tenantID, sessionID, device.ID)
+		err := w.dispatcher.Store.BindSessionDevice(ctx, session.TenantID, session.ID, device.ID)
 		return err == nil, err
 	}
 	return false, nil
