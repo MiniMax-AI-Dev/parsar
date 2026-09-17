@@ -211,6 +211,19 @@ conditions; a capability declaration alone never grants public feature admission
 Extend existing interfaces during related functional work and apply common
 acceptance to both engines, without introducing a second framework or a broad rewrite.
 
+Keep prerequisites specific to the public operation being implemented. Native
+harnesses execute; adapters translate protocols and fill demonstrated capability
+gaps; Core owns public semantics, authorization and resources. Before adding a
+mechanism, identify the current operation it enables and why existing native
+capabilities or interfaces do not suffice. Durable metadata queries need no live
+runtime. Live file reads require an authorized, isolated view of the exact workspace
+and bounded operation ownership, but not a complete file-write, environment
+replacement or placement-retirement implementation. Apply mutation fencing and
+retirement guarantees where an operation can write, replace or retire that owner.
+Read-only access still requires tenant/resource checks, path isolation and safe
+failure when the authorized workspace cannot be reached; it never grants public
+admission merely because an adapter advertises a capability.
+
 Use distinct authorization for callers, devices and environment connections. A
 co-located harness must not expose broader application credentials or other tenants'
 secrets to generated code. Directory bindings and process identities do not provide
@@ -459,9 +472,11 @@ publication is not readiness or revocation; its owner must supervise runner fail
 gate operations on initialization/readiness and release retained handles on teardown.
 This is a private native dependency experiment, not a production runtime selection.
 Record the patch, build overlay and artifact identities separately from upstream.
-Production adoption requires real remote execution/files/history acceptance plus
-bounded idle ownership, caller authorization and stale-write fencing. Connection
-observation generations alone cannot retract already-issued filesystem mutations.
+Production adoption requires real acceptance of the requested operations against
+the remote workspace/history, bounded ownership and caller authorization. Require
+stale-write fencing when admitting mutations or replacing their owner, rather than
+making it a prerequisite for every read. Connection observation generations alone
+cannot retract already-issued filesystem mutations.
 
 The opt-in [private harness artifact](packages/codex-harness/README.md) consumes
 that same hook in a separately named executable at the unchanged native pin.

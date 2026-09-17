@@ -67,15 +67,22 @@ and one Run, then releases it. That is not an idle file owner. Existing durable
 connection generations fence observations; they do not revoke an old process or
 an already-dispatched file write.
 
-Before Files admission, define a bounded adapter-side owner for the exact
-Environment generation. Execution and file access use that same authorized
-workspace context. Core checks resource ownership and scheduling; the adapter
-owns native transport and translation. Each mutation must reject superseded
-ownership, including at the executor. Lease loss stops new mutations and closes
-the transport; uncertain effects remain unknown rather than being replayed.
-Specify idle capacity, expiry/revocation and release independently of Run
-completion. Releasing transient credentials must not delete caller-owned files
-or required native history. A replacement socket alone never authorizes overlap.
+Determine prerequisites for each public operation under the
+[Core/Runtime rules](../../CONTRIBUTING.md#environment-ownership-and-placement).
+Environment metadata retrieval already reads durable resources without preparing
+execution. Files.list needs live path/size metadata from the authorized workspace;
+the private bounded byte reader alone does not implement that route. Reuse native
+directory/metadata access and existing lifecycle interfaces through a thin adapter.
+Bound a live read to its exact authorized Environment/workspace context, including
+when idle, and retain permission, path-isolation and unavailable-runtime checks.
+Do not require a complete write, replacement or retirement mechanism for this read.
+
+For file mutations and owner replacement, reject superseded ownership, including
+at the executor. Lease loss stops new mutations and closes the transport; uncertain
+effects remain unknown rather than being replayed. A replacement socket alone never
+authorizes overlap. Define capacity and release for the lifetime actually used by
+the operation; a permanent idle owner is not a universal prerequisite. Releasing
+transient credentials must not delete caller-owned files or required native history.
 
 The tracked exact-pin raw-runner hook now publishes its stock-built manager;
 private Files/execution/cancel/history composition is qualified. The injectable
