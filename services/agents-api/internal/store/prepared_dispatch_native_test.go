@@ -263,7 +263,7 @@ func testNativePreparedWorkerRemoteEnvironment(t *testing.T, directoryReads bool
 	for _, token := range tokens {
 		assertDaemonRemoteSecrets(t, root, "agents-api-"+h.session.ID, key, credential.Token, token, h.credential)
 	}
-	environmentEvents := retainedEnvironmentEvents(t, ctx, h.s, h.tenant, h.session.ID, environment.ID)
+	environmentEvents := observer.environmentEvents(t)
 	verifyEnvironmentEventsWithSDK(t, root, environmentEvents)
 	proof["environment_events"] = environmentEvents
 	proof["native_thread_id"] = nativeID
