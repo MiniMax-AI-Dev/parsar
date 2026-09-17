@@ -214,7 +214,7 @@ acceptance to both engines, without introducing a second framework or a broad re
 Workspace reads may request the private `workspace_read_only` preparation profile
 through the existing preparation factory and verified `workspace_read_preparation`
 capability. It accepts only the bound Environment and resource identity; execution
-options, credentials, native Session continuation and model/tool input are excluded.
+options, model/MCP credentials, native Session continuation and model/tool input are excluded.
 The Codex adapter creates temporary local state, reuses its native connection and
 directory transport, and rejects Start. Ordinary execution keeps its stable state.
 For this read profile, `released` is published only after local Close succeeds;

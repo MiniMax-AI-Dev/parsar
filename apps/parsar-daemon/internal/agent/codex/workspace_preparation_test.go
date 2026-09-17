@@ -13,6 +13,7 @@ func TestWorkspaceReadPreparationLeavesExecutionStateUntouched(t *testing.T) {
 	privateHarnessTestHome(t)
 	request, cfg, root := preparationFixture(t)
 	cfg.harnessBinary = cfg.codexBinary
+	t.Setenv("PARSAR_PRIVATE_HARNESS_FAKE", "1")
 	request.WorkspaceReadOnly = true
 	request.WorkDir, request.AgentOptions, request.FunctionTools = "", nil, nil
 	stable, err := allocCodexHome(request.AgentStateKey)

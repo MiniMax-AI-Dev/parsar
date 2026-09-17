@@ -185,6 +185,19 @@ func testNativeDaemonRemoteEnvironmentWithArtifact(t *testing.T, prepared bool, 
 			connected, e := registry.Connected(ctx, h.tenant, environment.ID)
 			return reconnected && e == nil && connected
 		})
+		if artifact != nil && index == 0 {
+			observation.mu.Lock()
+			beforeRead := observation.executors
+			observation.mu.Unlock()
+			artifact.observeReadPreparation(t, ctx, peer, req, root)
+			awaitDaemonRemoteCondition(t, ctx, 30*time.Second, "executor reconnect after temporary read", func() bool {
+				observation.mu.Lock()
+				reconnected := observation.executors > beforeRead
+				observation.mu.Unlock()
+				connected, err := registry.Connected(ctx, h.tenant, environment.ID)
+				return reconnected && err == nil && connected
+			})
+		}
 	}
 	count, err := os.ReadFile(filepath.Join(local, "execution-count"))
 	if err != nil || string(count) != "first\nresumed\n" {
