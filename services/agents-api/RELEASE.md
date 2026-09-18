@@ -1,7 +1,10 @@
 # Agents API distribution
 
 This Linux amd64 package contains the independent API, embedded migrator and two
-operator commands. It needs PostgreSQL and separately installed execution software.
+operator commands. It needs PostgreSQL. The Docker variant also includes the
+qualified colocated Runtime image, its seccomp policy and `HOSTED.md`; use that
+guide after the common API setup below. The basic archive needs separately
+installed execution software.
 It does not need a source checkout, Go, Node, the Parsar product or its database.
 The [coverage ledger](https://github.com/MiniMax-AI-Dev/parsar/blob/@SOURCE_REVISION@/contracts/agents-api/README.md)
 describes supported workflows and remaining protocol gaps. Packaging does not
@@ -14,10 +17,10 @@ new directory under `~/.parsar/`. Keep deployment configuration outside the extr
 package so replacing binaries does not replace credentials or state.
 
 ```sh
-sha256sum -c agents-api-@SOURCE_REVISION@-linux-amd64.tar.gz.sha256
+sha256sum -c @ARCHIVE_NAME@.tar.gz.sha256
 mkdir -p "$HOME/.parsar/releases"
-tar -xzf agents-api-@SOURCE_REVISION@-linux-amd64.tar.gz -C "$HOME/.parsar/releases"
-cd "$HOME/.parsar/releases/agents-api-@SOURCE_REVISION@-linux-amd64"
+tar -xzf @ARCHIVE_NAME@.tar.gz -C "$HOME/.parsar/releases"
+cd "$HOME/.parsar/releases/@ARCHIVE_NAME@"
 sha256sum -c SHA256SUMS
 export AGENTS_API_BIN_DIR="$PWD/bin"
 ```
@@ -40,8 +43,6 @@ mkdir -p "$PARSAR_HOME"
 export AGENTS_API_DATABASE_URL='postgres://<account>:<password>@<host>/<execution-db>'
 export AGENTS_API_KEYS_FILE="$PARSAR_HOME/keys.json"
 export AGENTS_API_ADDR=127.0.0.1:8091
-export AGENTS_API_DAEMON_WS_URL=ws://127.0.0.1:8091/api/v1/agent-daemon/ws
-export AGENTS_API_EXECUTOR_URL=http://127.0.0.1:8091
 export AGENTS_API_ENGINE=codex
 ```
 
@@ -59,6 +60,15 @@ project and subject IDs must remain stable across key rotation.
   "subject_id": "<subject ID>",
   "token_sha256": "<caller key SHA-256 hex digest>"
 }]
+```
+
+For the Docker variant, continue in `HOSTED.md` now to configure the Runtime's
+outward connection and provider before starting Core. For the basic archive,
+set the separately installed software's reachable endpoints:
+
+```sh
+export AGENTS_API_DAEMON_WS_URL=ws://127.0.0.1:8091/api/v1/agent-daemon/ws
+export AGENTS_API_EXECUTOR_URL=http://127.0.0.1:8091
 ```
 
 Keep the configuration and key files mode 0600. Run migrations explicitly, then
