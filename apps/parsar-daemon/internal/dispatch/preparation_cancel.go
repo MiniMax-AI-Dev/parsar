@@ -23,6 +23,7 @@ type preparedStartCancellation struct {
 func (r *Router) cancelPreparedStartLocked(state *sessionState, env proto.Envelope, deliveryID string) {
 	pending := state.preparationStart
 	state.ctxCancel()
+	r.clearInteractionRoutesLocked(state)
 	if pending.cancelDone == nil {
 		pending.cancelDone = make(chan struct{})
 		go func() {
@@ -63,29 +64,19 @@ func (r *Router) sendPreparedCancellation(state *sessionState, pending *prepared
 	}
 }
 
-func (r *Router) finishPreparedCancellation(p *preparationState, state *sessionState, session agent.Session, pending *preparedStartCancellation) {
+func (r *Router) finishPreparedCancellation(p *preparationState, state *sessionState, session agent.Session, pending *preparedStartCancellation, forwarded <-chan error) {
 	defer r.cleanupSession(state)
 	// Cancellation already owns release. A late Done must not release the
 	// Session again or make this failed transfer available for steering.
 	r.mu.Lock()
 	state.releaseOnCompletion = false
 	r.mu.Unlock()
-	var forwarded chan error
-	if session != nil {
-		forwarded = make(chan error, 1)
-		go func() { forwarded <- r.forwardSessionOutput(state, true) }()
-	}
 	<-pending.cancelDone
 	prepared, supported := pending.prepared.(agent.PreparedCancellation)
 	if session != nil && (!supported || pending.cancelErr != nil) {
 		_ = session.Cancel(context.Background())
 	}
-	var forwardErr error
-	if forwarded != nil {
-		forwardErr = <-forwarded
-	} else {
-		forwardErr = r.forwardSessionOutput(state, false)
-	}
+	forwardErr := <-forwarded
 	closeErr := r.closePreparationResource(p)
 	ack := proto.InteractionDecisionAckPayload{ErrorCode: "cancel_outcome_unavailable"}
 	switch {

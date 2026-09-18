@@ -71,9 +71,12 @@ func (r *Router) handleExecutionStart(_ context.Context, env proto.Envelope) err
 }
 
 func (r *Router) startPreparedExecution(p *preparationState, state *sessionState, input proto.ExecutionStartPayload, status proto.PreparationStatusPayload) {
+	defer r.shutdownWG.Done()
 	if !r.sendPreparation(p.requestID, p.trace, status) {
 		r.releasePreparation(p, "failed", "status_delivery_failed", false)
 	}
+	forwarded := make(chan error, 1)
+	go func() { forwarded <- r.forwardSessionOutput(state, true) }()
 	session, err := p.prepared.Start(p.ctx, input.RunID, input.Prompt, state.out)
 	r.mu.Lock()
 	cancellation := state.preparationStart
@@ -84,10 +87,8 @@ func (r *Router) startPreparedExecution(p *preparationState, state *sessionState
 		p.status.State, p.status.Revision = "started", p.status.Revision+1
 		p.timer.Stop()
 	} else {
-		if cancellation.cancelDone == nil {
-			delete(r.sessions, state.runID)
-		}
 		p.cancel()
+		r.clearInteractionRoutesLocked(state)
 		p.timer.Stop()
 		if p.status.State == "starting" {
 			p.status.State, p.status.ErrorCode, p.status.Revision = "failed", "start_failed", p.status.Revision+1
@@ -95,28 +96,45 @@ func (r *Router) startPreparedExecution(p *preparationState, state *sessionState
 	}
 	status = p.status
 	r.mu.Unlock()
+	if session == nil {
+		close(state.out)
+	}
 	if !started {
-		defer r.shutdownWG.Done()
 		if cancellation.cancelDone != nil {
-			r.finishPreparedCancellation(p, state, session, cancellation)
+			r.finishPreparedCancellation(p, state, session, cancellation, forwarded)
 			r.sendPreparation(p.requestID, p.trace, status)
 			return
 		}
 		if session != nil {
 			_ = session.Cancel(context.Background())
-			r.drain(state.out)
 		}
+		forwardErr := <-forwarded
 		r.closePreparationResource(p)
 		r.sendPreparation(p.requestID, p.trace, status)
 		ctx, stop := r.shutdownContext(context.Background())
 		defer stop()
-		r.emitTerminalError(ctx, state.runID, "prepared execution could not start")
+		r.mu.Lock()
+		completionDelivered := state.completionObserved && forwardErr == nil
+		r.mu.Unlock()
+		if completionDelivered {
+			r.emitRunError(ctx, state.runID, "prepared execution could not start")
+		} else {
+			r.emitTerminalError(ctx, state.runID, "prepared execution could not start")
+		}
+		r.cleanupSession(state)
 		return
 	}
 	if !r.sendPreparation(p.requestID, p.trace, status) {
+		r.mu.Lock()
+		state.releaseOnCompletion = false
+		r.mu.Unlock()
 		state.ctxCancel()
 		_ = session.Cancel(context.Background())
+	} else if err := r.releaseObservedCompletion(state, false); err != nil {
+		ctx, stop := r.shutdownContext(context.Background())
+		r.emitRunError(ctx, state.runID, "failed to release completed executor")
+		stop()
 	}
-	// Transfer the tracked goroutine and output ownership to the existing pump.
-	r.pump(state)
+	<-forwarded
+	r.cleanupSession(state)
 }

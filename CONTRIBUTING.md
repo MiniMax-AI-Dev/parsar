@@ -1039,6 +1039,14 @@ Forwarded permission and user-choice observations from that cancelled handoff do
 not register actionable interactions. Codex prepared cancellation also waits for
 the transferred Session's local cleanup, which can finish after output closes;
 ordinary Session cancellation retains its existing behavior.
+The Router starts forwarding the existing bounded output sink before invoking
+`Prepared.Start`, so accepted native frames cannot fill that sink while Start is
+still returning. A successful non-nil Session assumes close ownership; after a
+nil result the Router closes the sink. Early completion is retained until the
+real Session can be released once. This does not add output replay or unbounded
+buffering. Interaction identities are retained while transfer is pending, but
+decisions receive retryable `not_ready` until a successful transfer publishes the
+native Session; failed or cancelled transfers remove those routes.
 The ordinary output pump forwards accepted frames before the observed cancellation
 outcome receipt. Missing capability, failed cancellation or failed forwarding cannot
 produce an applied receipt. An unused resource may supply an empty observed outcome;

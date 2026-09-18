@@ -69,6 +69,7 @@ type fakeSession struct {
 	closeOutOnCancelMu  sync.Once
 	postCancelEnvelopes []proto.Envelope // emitted to out after Cancel fires
 	ctx                 context.Context
+	cancelErr           error
 }
 
 type permCall struct {
@@ -93,7 +94,7 @@ func (s *fakeSession) Cancel(context.Context) error {
 			close(s.out)
 		})
 	}
-	return nil
+	return s.cancelErr
 }
 
 func (s *fakeSession) SubmitPermission(_ context.Context, permID string, dec proto.PermissionDecisionPayload) error {

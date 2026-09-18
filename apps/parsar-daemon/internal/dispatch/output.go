@@ -41,11 +41,12 @@ func (r *Router) forwardSessionOutput(s *sessionState, wait bool) error {
 				r.log.InfoContext(pumpCtx, "pump: out channel closed", "run_id", s.runID)
 				return nil
 			}
-			if s.session != nil {
+			switch env.Type {
+			case proto.TypePermissionRequest, proto.TypePermissionCancel, proto.TypePromptForUserChoice:
 				r.indexPermissionFrame(s, env)
 			}
-			if env.Type == proto.TypeDone && s.releaseOnCompletion {
-				if err := r.releaseCompletedSession(s); err != nil {
+			if env.Type == proto.TypeDone {
+				if err := r.releaseObservedCompletion(s, true); err != nil {
 					sendCtx, stop := r.shutdownContext(pumpCtx)
 					r.emitTerminalError(sendCtx, s.runID, "failed to release completed executor")
 					stop()
@@ -100,4 +101,20 @@ func (r *Router) forwardSessionOutput(s *sessionState, wait bool) error {
 			return ErrRouterClosed
 		}
 	}
+}
+
+// releaseObservedCompletion records an early Done without blocking output.
+// Once Start publishes a real Session, exactly one caller claims its release.
+func (r *Router) releaseObservedCompletion(s *sessionState, observed bool) error {
+	r.mu.Lock()
+	if observed {
+		s.completionObserved = true
+	}
+	if !s.completionObserved || !s.releaseOnCompletion || s.session == nil {
+		r.mu.Unlock()
+		return nil
+	}
+	s.releaseOnCompletion = false
+	r.mu.Unlock()
+	return r.releaseCompletedSession(s)
 }

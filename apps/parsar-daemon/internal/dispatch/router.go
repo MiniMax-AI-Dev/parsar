@@ -65,9 +65,11 @@ type appliedInteractionDecision struct {
 	recordedAt  time.Time
 }
 
-// sessionState is the dispatcher's per-run bookkeeping. The agent
-// owns the close of out; the dispatcher cancels ctxCancel to wind
-// down. traceparent captures the prompt_request's W3C trace so every
+// sessionState is the dispatcher's per-run bookkeeping. An ordinary factory or
+// a Prepared Start returning a Session owns the close of out. The Router retains
+// close ownership while a Prepared Start has not returned a Session. The
+// dispatcher cancels ctxCancel to wind down. traceparent captures the
+// prompt_request's W3C trace so every
 // outbound frame stamps env.Trace with the same value, completing
 // frontend → server → daemon → agent → server attribution.
 type sessionState struct {
@@ -90,6 +92,7 @@ type sessionState struct {
 	steeringClosed      bool
 	steeringDone        chan struct{}
 	preparationStart    *preparedStartCancellation
+	completionObserved  bool
 }
 
 // Config is the constructor input. Registry and Sender are required;
@@ -244,8 +247,12 @@ func (r *Router) handlePermissionDecision(ctx context.Context, env proto.Envelop
 	r.mu.Lock()
 	runID, known := r.permIndex[env.ID]
 	var state *sessionState
+	var session agent.Session
 	if known {
 		state = r.sessions[runID]
+		if state != nil && state.preparationStart == nil {
+			session = state.session
+		}
 	}
 	r.mu.Unlock()
 
@@ -255,8 +262,11 @@ func (r *Router) handlePermissionDecision(ctx context.Context, env proto.Envelop
 		r.log.InfoContext(ctx, "permission_decision for unknown perm (run gone)", "perm_id", env.ID)
 		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_pending", "permission request is no longer pending")
 	}
+	if session == nil {
+		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_ready", "permission request is waiting for the native session")
+	}
 
-	if err := state.session.SubmitPermission(ctx, env.ID, payload); err != nil {
+	if err := session.SubmitPermission(ctx, env.ID, payload); err != nil {
 		if errors.Is(err, agent.ErrUnknownPermission) {
 			r.log.InfoContext(ctx, "agent reports unknown perm (race with cancel)", "perm_id", env.ID, "run_id", runID)
 			r.dropPermission(state, env.ID)
@@ -311,8 +321,12 @@ func (r *Router) handlePromptForUserChoiceDecision(ctx context.Context, env prot
 	r.mu.Lock()
 	runID, known := r.askIndex[env.ID]
 	var state *sessionState
+	var session agent.Session
 	if known {
 		state = r.sessions[runID]
+		if state != nil && state.preparationStart == nil {
+			session = state.session
+		}
 	}
 	r.mu.Unlock()
 
@@ -320,8 +334,11 @@ func (r *Router) handlePromptForUserChoiceDecision(ctx context.Context, env prot
 		r.log.InfoContext(ctx, "prompt_for_user_choice_decision for unknown ask (run gone)", "ask_id", env.ID)
 		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_pending", "user-input request is no longer pending")
 	}
+	if session == nil {
+		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_ready", "user-input request is waiting for the native session")
+	}
 
-	err = state.session.SubmitPromptForUserChoice(ctx, env.ID, payload)
+	err = session.SubmitPromptForUserChoice(ctx, env.ID, payload)
 	if err != nil {
 		if errors.Is(err, agent.ErrUnknownAsk) {
 			r.log.InfoContext(ctx, "agent reports unknown ask (race with cancel)", "ask_id", env.ID, "run_id", runID)
@@ -432,8 +449,9 @@ func (r *Router) dropAsk(s *sessionState, askID string) {
 	r.mu.Unlock()
 }
 
-// indexPermissionFrame records / forgets perm and ask ids as the
-// agent emits / cancels them.
+// indexPermissionFrame records interaction identities before forwarding them.
+// A Prepared Start retains these routes while its native Session is unavailable;
+// decision handlers return not_ready until a successful transfer publishes it.
 func (r *Router) indexPermissionFrame(s *sessionState, env proto.Envelope) {
 	switch env.Type {
 	case proto.TypePermissionRequest:
@@ -449,8 +467,10 @@ func (r *Router) indexPermissionFrame(s *sessionState, env proto.Envelope) {
 			return
 		}
 		r.mu.Lock()
-		r.permIndex[requestID] = s.runID
-		s.pendingIDs[requestID] = struct{}{}
+		if r.interactionRouteOpenLocked(s) {
+			r.permIndex[requestID] = s.runID
+			s.pendingIDs[requestID] = struct{}{}
+		}
 		r.mu.Unlock()
 	case proto.TypePermissionCancel:
 		if env.ID == "" {
@@ -469,9 +489,29 @@ func (r *Router) indexPermissionFrame(s *sessionState, env proto.Envelope) {
 			return
 		}
 		r.mu.Lock()
-		r.askIndex[p.AskID] = s.runID
-		s.pendingAsks[p.AskID] = struct{}{}
+		if r.interactionRouteOpenLocked(s) {
+			r.askIndex[p.AskID] = s.runID
+			s.pendingAsks[p.AskID] = struct{}{}
+		}
 		r.mu.Unlock()
+	}
+}
+
+func (r *Router) interactionRouteOpenLocked(s *sessionState) bool {
+	if r.closed || s.ctx.Err() != nil {
+		return false
+	}
+	return s.session != nil || s.preparationStart != nil && s.preparationStart.cancelDone == nil
+}
+
+func (r *Router) clearInteractionRoutesLocked(s *sessionState) {
+	for permissionID := range s.pendingIDs {
+		delete(r.permIndex, permissionID)
+		delete(s.pendingIDs, permissionID)
+	}
+	for askID := range s.pendingAsks {
+		delete(r.askIndex, askID)
+		delete(s.pendingAsks, askID)
 	}
 }
 
@@ -552,10 +592,7 @@ func (r *Router) expireIdle(state *sessionState, lease uint64) {
 	}
 }
 
-// emitTerminalError synthesises error + done for a run that couldn't
-// even be started. Stamps env.Trace from ctx so the gateway can
-// attribute these frames to the same trace_id.
-func (r *Router) emitTerminalError(ctx context.Context, runID, msg string) {
+func (r *Router) emitRunError(ctx context.Context, runID, msg string) {
 	traceparent := ""
 	if carrier, ok := obslog.TraceFromContext(ctx); ok {
 		traceparent = carrier.String()
@@ -565,6 +602,16 @@ func (r *Router) emitTerminalError(ctx context.Context, runID, msg string) {
 		if sendErr := r.sender.Send(ctx, errEnv); sendErr != nil {
 			r.log.ErrorContext(ctx, "emit terminal error frame failed", "run_id", runID, "err", sendErr)
 		}
+	}
+}
+
+// emitTerminalError synthesises error + done for a run that couldn't even be
+// started and has not already emitted Done.
+func (r *Router) emitTerminalError(ctx context.Context, runID, msg string) {
+	r.emitRunError(ctx, runID, msg)
+	traceparent := ""
+	if carrier, ok := obslog.TraceFromContext(ctx); ok {
+		traceparent = carrier.String()
 	}
 	doneEnv, err := proto.NewEnvelopeWithTrace(proto.TypeDone, runID, proto.DonePayload{}, traceparent)
 	if err == nil {

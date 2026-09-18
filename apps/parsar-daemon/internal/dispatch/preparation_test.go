@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -83,6 +84,375 @@ func waitPreparationClosed(t *testing.T, p *controlledPreparation) {
 	case <-p.closed:
 	case <-time.After(3 * time.Second):
 		t.Fatal("native preparation leaked")
+	}
+}
+
+const preparedCapacityFrameCount = 96
+
+func preparedCapacityFrames(t *testing.T, runID string) []proto.Envelope {
+	t.Helper()
+	frames := make([]proto.Envelope, 0, preparedCapacityFrameCount)
+	for sequence := uint64(1); sequence <= preparedCapacityFrameCount; sequence++ {
+		frames = append(frames, mustEnv(t, proto.TypeDelta, runID, proto.DeltaPayload{
+			Delta: "bounded", Sequence: sequence,
+		}))
+	}
+	return frames
+}
+
+func sendPreparedCapacityFrames(out chan<- proto.Envelope, frames []proto.Envelope, abort <-chan struct{}) bool {
+	for _, frame := range frames {
+		select {
+		case out <- frame:
+		case <-abort:
+			return false
+		}
+	}
+	return true
+}
+
+func assertPreparedCapacityFrames(t *testing.T, sender *recSender, runID string, count int) {
+	t.Helper()
+	seen := 0
+	for _, frame := range sender.snapshot() {
+		if frame.ID != runID || frame.Type != proto.TypeDelta {
+			continue
+		}
+		seen++
+		var delta proto.DeltaPayload
+		if frame.DecodePayload(&delta) != nil || delta.Sequence != uint64(seen) {
+			t.Fatalf("prepared output sequence %d = %+v", seen, delta)
+		}
+	}
+	if seen != count {
+		t.Fatalf("prepared output count = %d, want %d", seen, count)
+	}
+}
+
+func waitPreparedCapacity(t *testing.T, sent <-chan struct{}, abort chan<- struct{}, r *dispatch.Router) {
+	t.Helper()
+	select {
+	case <-sent:
+		return
+	case <-time.After(2 * time.Second):
+		close(abort)
+		waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "blocked prepared Start cleanup")
+		t.Fatal("prepared Start output blocked at the bounded channel capacity")
+	}
+}
+
+type failPreparedOutputSender struct {
+	*recSender
+	failAt int32
+	seen   atomic.Int32
+}
+
+func (s *failPreparedOutputSender) Send(ctx context.Context, env proto.Envelope) error {
+	if env.ID == "run" && env.Type == proto.TypeDelta && s.seen.Add(1) == s.failAt {
+		return errors.New("controlled prepared output failure")
+	}
+	return s.recSender.Send(ctx, env)
+}
+
+type blockingPreparedTerminalSender struct {
+	*recSender
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (s *blockingPreparedTerminalSender) Send(ctx context.Context, env proto.Envelope) error {
+	if env.ID == "run" && env.Type == proto.TypeDone {
+		s.once.Do(func() { close(s.entered) })
+		select {
+		case <-s.release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return s.recSender.Send(ctx, env)
+}
+
+func TestPreparationStartForwardsBeyondCapacityBeforeReturn(t *testing.T) {
+	sender := &recSender{}
+	frames := preparedCapacityFrames(t, "run")
+	abort, sent, allowReturn := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	session := &fakeSession{closeOutOnCancel: true}
+	p := &controlledPreparation{closed: make(chan struct{})}
+	p.start = func(_ context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+		session.out = out
+		if !sendPreparedCapacityFrames(out, frames, abort) {
+			return nil, errors.New("controlled test abort")
+		}
+		close(sent)
+		select {
+		case <-allowReturn:
+			return session, nil
+		case <-abort:
+			return nil, errors.New("controlled test abort")
+		}
+	}
+	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
+	startCancellationPreparation(t, r, sender)
+	waitPreparedCapacity(t, sent, abort, r)
+	waitFor(t, func() bool { return len(sender.typesFor("run")) == preparedCapacityFrameCount }, "prepared output forwarding before Start return")
+	assertPreparedCapacityFrames(t, sender, "run", preparedCapacityFrameCount)
+	if r.ActiveRuns() != 1 {
+		t.Fatal("pending Start released run ownership")
+	}
+	close(allowReturn)
+	waitPreparationStatus(t, sender, "request", "started", "")
+	session.out <- mustEnv(t, proto.TypeDone, "run", proto.DonePayload{Content: "complete"})
+	waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "completed prepared run cleanup")
+	if session.cancels() != 1 {
+		t.Fatal("completed prepared Session was not released once")
+	}
+	assertPreparedCapacityFrames(t, sender, "run", preparedCapacityFrameCount)
+}
+
+func TestPreparationStartDefersEarlyCompletionReleaseUntilSessionReturn(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		releaseErr error
+		want       []string
+	}{
+		{name: "released", want: []string{proto.TypeDone}},
+		{name: "release_error", releaseErr: errors.New("controlled release failure"), want: []string{proto.TypeDone, proto.TypeError}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sender := &recSender{}
+			abort, emitted, allowReturn := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			session := &fakeSession{closeOutOnCancel: true, cancelErr: tc.releaseErr}
+			done := mustEnv(t, proto.TypeDone, "run", proto.DonePayload{Content: "complete"})
+			p := &controlledPreparation{closed: make(chan struct{})}
+			p.start = func(_ context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+				session.out = out
+				select {
+				case out <- done:
+					close(emitted)
+				case <-abort:
+					return nil, errors.New("controlled test abort")
+				}
+				select {
+				case <-allowReturn:
+					return session, nil
+				case <-abort:
+					return nil, errors.New("controlled test abort")
+				}
+			}
+			r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
+			startCancellationPreparation(t, r, sender)
+			select {
+			case <-emitted:
+			case <-time.After(2 * time.Second):
+				close(abort)
+				waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "blocked early completion cleanup")
+				t.Fatal("early completion was not consumed while Start was pending")
+			}
+			waitFor(t, func() bool { return len(sender.typesFor("run")) == 1 }, "early completion forwarding")
+			if session.cancels() != 0 || r.ActiveRuns() != 1 {
+				t.Fatal("early completion released a Session before Start returned")
+			}
+			close(allowReturn)
+			waitPreparationStatus(t, sender, "request", "started", "")
+			waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "early completion release")
+			if session.cancels() != 1 {
+				t.Fatal("early completion did not release the returned Session once")
+			}
+			if got := sender.typesFor("run"); !reflect.DeepEqual(got, tc.want) {
+				t.Fatal("early completion terminal order differs", got)
+			}
+		})
+	}
+}
+
+func TestPreparationStartActivatesEarlyInteractionRoutesAfterSessionReturn(t *testing.T) {
+	sender := &recSender{}
+	emitted, allowReturn := make(chan struct{}), make(chan struct{})
+	session := &fakeSession{closeOutOnCancel: true}
+	p := &controlledPreparation{closed: make(chan struct{})}
+	p.start = func(ctx context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+		session.out = out
+		out <- mustEnv(t, proto.TypePermissionRequest, "run", proto.PermissionRequestPayload{
+			RequestID: "permission", Tool: "Bash", Title: "approve",
+		})
+		out <- mustEnv(t, proto.TypePromptForUserChoice, "run", proto.PromptForUserChoicePayload{
+			AskID: "ask", Question: "continue?", Options: []proto.PromptForUserChoiceOption{{Label: "yes"}},
+		})
+		close(emitted)
+		select {
+		case <-allowReturn:
+			return session, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
+	startCancellationPreparation(t, r, sender)
+	select {
+	case <-emitted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("early interactions were not emitted")
+	}
+	waitFor(t, func() bool { return len(sender.typesFor("run")) == 2 }, "early interaction forwarding")
+
+	if err := r.Handle(t.Context(), mustEnv(t, proto.TypePermissionDecision, "permission", proto.PermissionDecisionPayload{DeliveryID: "permission-before", Approved: true})); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Handle(t.Context(), mustEnv(t, proto.TypePromptForUserChoiceDecision, "ask", proto.PromptForUserChoiceDecisionPayload{DeliveryID: "ask-before", Answers: []string{"yes"}})); err != nil {
+		t.Fatal(err)
+	}
+	assertDecisionAck(t, sender, "permission-before", false, "not_ready")
+	assertDecisionAck(t, sender, "ask-before", false, "not_ready")
+	if len(session.submissions()) != 0 {
+		t.Fatal("permission reached the Session before Start returned")
+	}
+	session.askMu.Lock()
+	earlyAskCalls := len(session.askCalls)
+	session.askMu.Unlock()
+	if earlyAskCalls != 0 {
+		t.Fatal("user choice reached the Session before Start returned")
+	}
+
+	close(allowReturn)
+	waitPreparationStatus(t, sender, "request", "started", "")
+	if err := r.Handle(t.Context(), mustEnv(t, proto.TypePermissionDecision, "permission", proto.PermissionDecisionPayload{DeliveryID: "permission-after", Approved: true})); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Handle(t.Context(), mustEnv(t, proto.TypePromptForUserChoiceDecision, "ask", proto.PromptForUserChoiceDecisionPayload{DeliveryID: "ask-after", Answers: []string{"yes"}})); err != nil {
+		t.Fatal(err)
+	}
+	assertDecisionAck(t, sender, "permission-after", true, "")
+	assertDecisionAck(t, sender, "ask-after", true, "")
+	if calls := session.submissions(); len(calls) != 1 || calls[0].id != "permission" {
+		t.Fatalf("permission calls = %+v", calls)
+	}
+	session.askMu.Lock()
+	askCalls := append([]askCall(nil), session.askCalls...)
+	session.askMu.Unlock()
+	if len(askCalls) != 1 || askCalls[0].id != "ask" {
+		t.Fatalf("user-choice calls = %+v", askCalls)
+	}
+
+	session.out <- mustEnv(t, proto.TypeDone, "run", proto.DonePayload{Content: "complete"})
+	waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "interaction run cleanup")
+}
+
+func TestPreparationFailedStartDoesNotDuplicateEarlyCompletion(t *testing.T) {
+	sender := &recSender{}
+	frames := preparedCapacityFrames(t, "run")
+	p := &controlledPreparation{closed: make(chan struct{})}
+	p.start = func(_ context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+		for _, frame := range frames {
+			out <- frame
+		}
+		out <- mustEnv(t, proto.TypeDone, "run", proto.DonePayload{Content: "observed"})
+		return nil, errors.New("controlled Start failure after completion")
+	}
+	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
+	startCancellationPreparation(t, r, sender)
+	waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "failed completed Start cleanup")
+	waitPreparationClosed(t, p)
+	assertPreparedCapacityFrames(t, sender, "run", preparedCapacityFrameCount)
+	got := sender.typesFor("run")
+	if len(got) != preparedCapacityFrameCount+2 || got[len(got)-2] != proto.TypeDone || got[len(got)-1] != proto.TypeError {
+		t.Fatalf("failed completed Start terminal order = %v", got)
+	}
+}
+
+func TestPreparationFailedStartForwardsAcceptedOutput(t *testing.T) {
+	sender := &blockingPreparedTerminalSender{recSender: &recSender{}, entered: make(chan struct{}), release: make(chan struct{})}
+	defer func() {
+		select {
+		case <-sender.release:
+		default:
+			close(sender.release)
+		}
+	}()
+	frames := preparedCapacityFrames(t, "run")
+	abort, sent := make(chan struct{}), make(chan struct{})
+	p := &controlledPreparation{closed: make(chan struct{})}
+	p.start = func(_ context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+		if !sendPreparedCapacityFrames(out, frames, abort) {
+			return nil, errors.New("controlled test abort")
+		}
+		close(sent)
+		return nil, errors.New("controlled Start failure")
+	}
+	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
+	startCancellationPreparation(t, r, sender.recSender)
+	waitPreparedCapacity(t, sent, abort, r)
+	select {
+	case <-sender.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("failed prepared Start did not reach its terminal frame")
+	}
+	if r.ActiveRuns() != 1 {
+		t.Fatal("failed prepared Start released run capacity before terminal delivery")
+	}
+	assertPreparedCapacityFrames(t, sender.recSender, "run", preparedCapacityFrameCount)
+	close(sender.release)
+	waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "failed prepared Start cleanup")
+	waitPreparationClosed(t, p)
+	assertPreparedCapacityFrames(t, sender.recSender, "run", preparedCapacityFrameCount)
+	got := sender.typesFor("run")
+	if len(got) != preparedCapacityFrameCount+2 || got[len(got)-2] != proto.TypeError || got[len(got)-1] != proto.TypeDone {
+		t.Fatalf("failed Start terminal order = %v", got)
+	}
+}
+
+func TestPreparationStartDrainsAfterOutputDeliveryFailure(t *testing.T) {
+	sender := &failPreparedOutputSender{recSender: &recSender{}, failAt: 17}
+	frames := preparedCapacityFrames(t, "run")
+	abort, sent := make(chan struct{}), make(chan struct{})
+	session := &fakeSession{closeOutOnCancel: true}
+	p := &controlledPreparation{closed: make(chan struct{})}
+	p.start = func(_ context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+		session.out = out
+		if !sendPreparedCapacityFrames(out, frames, abort) {
+			return nil, errors.New("controlled test abort")
+		}
+		close(sent)
+		return session, nil
+	}
+	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
+	startCancellationPreparation(t, r, sender.recSender)
+	waitPreparedCapacity(t, sent, abort, r)
+	waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "failed output cleanup")
+	waitPreparationClosed(t, p)
+	if sender.seen.Load() != sender.failAt || session.cancels() != 1 {
+		t.Fatal("output failure did not drain producer and cancel late Session", sender.seen.Load(), session.cancels())
+	}
+}
+
+func TestPreparationStartShutdownDrainsBeyondCapacity(t *testing.T) {
+	sender := &recSender{}
+	frames := preparedCapacityFrames(t, "run")
+	abort, sent := make(chan struct{}), make(chan struct{})
+	p := &controlledPreparation{closed: make(chan struct{})}
+	p.start = func(ctx context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+		if !sendPreparedCapacityFrames(out, frames, abort) {
+			return nil, errors.New("controlled test abort")
+		}
+		close(sent)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-abort:
+			return nil, errors.New("controlled test abort")
+		}
+	}
+	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
+	startCancellationPreparation(t, r, sender)
+	waitPreparedCapacity(t, sent, abort, r)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := r.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	waitPreparationClosed(t, p)
+	if r.ActiveRuns() != 0 {
+		t.Fatal("shutdown retained prepared run ownership")
 	}
 }
 
