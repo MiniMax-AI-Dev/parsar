@@ -246,6 +246,31 @@ timeouts can leave processes alive and require allocation cleanup before reuse.
 The [managed Runtime build and ownership contract](services/agents-api/deploy/codex/README.md#managed-runtime-image-and-docker-adapter)
 does not itself enable public hosted admission or supply durable expiry.
 
+Managed Runtime allocation, dedicated daemon credential hash and exact Session
+binding commit atomically before Provider.Create, using the existing execution
+lease and Session lock. Only the fresh allocation receipt permits Create; retries
+and Core restart observe that same reference without replay or credential rotation.
+The operator's stable provider key identifies one backend/installation; retain its
+adapter for cleanup, and use a different key when changing the target. Never treat
+absence on another backend as successful reclamation.
+
+Allocation state is private compute ownership, separate from public Environment
+connection/native readiness. Adapters qualify bootstrap completion; Core does not
+infer it from an engine or provider name. Connected, observed compute receives
+service keepalives between Turns. Keepalives cannot revive a one-hour lapse or a
+cleanup request. Idle alone never requests shutdown. A stopped/missing container
+does not authorize discarding retained workspace or history. Session deletion or
+expiry requests cleanup, revokes the scoped device and cancels pending work before
+Provider.Kill; the existing Worker serializes these lifecycle operations and drains
+them before releasing its execution lease.
+
+Keep the allocation after public Session deletion. Mark it released only after
+owned compute/volume cleanup and evidence that its original Create has settled.
+An unknown creation retains cleanup ownership even after an absence observation;
+continue bounded scans for late resources without issuing another Create. This
+conservative internal lifecycle does not enable public hosted admission, define
+user-managed enrollment, or prove complete upstream expiry/error semantics.
+
 Qualify the actual Docker/native sandbox before default cutover: real model
 execution, file access, owned cancellation, restart with retained native history
 and files, and rejection when required history is missing. Generated code and file

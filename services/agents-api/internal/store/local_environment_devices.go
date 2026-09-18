@@ -32,28 +32,32 @@ func (s *Store) CreateEnvironmentDevice(ctx context.Context, tenantID, environme
 		return ExecutionDevice{}, err
 	}
 	err = s.withPublicSession(ctx, tenantID, environment.SessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
-		_, err := q.GetSessionDevice(ctx, sqlc.GetSessionDeviceParams{TenantID: lookup.TenantID, ID: session})
-		if err == nil {
-			return ErrDeviceBindingConflict
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		id, err := q.CreateEnvironmentDevice(ctx, sqlc.CreateEnvironmentDeviceParams{
-			ID: params.ID, TenantID: params.TenantID, Name: params.Name,
-			CredentialHash: params.CredentialHash, EnvironmentID: lookup.ID,
-		})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrDeviceBindingConflict
-		}
-		if err != nil {
-			return err
-		}
-		_, err = q.BindSessionDevice(ctx, sqlc.BindSessionDeviceParams{TenantID: lookup.TenantID, ID: session, ID_2: id})
-		return err
+		return createEnvironmentDevice(ctx, q, lookup, session, params)
 	})
 	if err != nil {
 		return ExecutionDevice{}, err
 	}
 	return ExecutionDevice{ID: uuid.UUID(params.ID.Bytes).String(), Name: params.Name, EnvironmentID: environment.ID}, nil
+}
+
+func createEnvironmentDevice(ctx context.Context, q *sqlc.Queries, lookup sqlc.GetDeviceParams, session pgtype.UUID, params sqlc.CreateDeviceParams) error {
+	_, err := q.GetSessionDevice(ctx, sqlc.GetSessionDeviceParams{TenantID: lookup.TenantID, ID: session})
+	if err == nil {
+		return ErrDeviceBindingConflict
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	id, err := q.CreateEnvironmentDevice(ctx, sqlc.CreateEnvironmentDeviceParams{
+		ID: params.ID, TenantID: params.TenantID, Name: params.Name,
+		CredentialHash: params.CredentialHash, EnvironmentID: lookup.ID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrDeviceBindingConflict
+	}
+	if err != nil {
+		return err
+	}
+	_, err = q.BindSessionDevice(ctx, sqlc.BindSessionDeviceParams{TenantID: lookup.TenantID, ID: session, ID_2: id})
+	return err
 }

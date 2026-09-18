@@ -95,15 +95,16 @@ Environment before Create, and serializes lifecycle operations for that allocati
 Create returns the reference even on failure. Duplicate allocation creation does
 not rewrite credentials or restart the container. After a lost response, inspect
 the allocation and reconcile its actual state; do not blindly replay Create.
-This adapter does not supply durable Core reconciliation or public hosted Session
-admission. Those are required before switching the default hosted path.
+Core owns durable allocation reconciliation through its internal managed Runtime
+coordinator. Public hosted Session admission and operator wiring remain required
+before switching the default hosted path.
 
 Two labelled named volumes retain native state and the workspace/staging pair.
 The trusted daemon auth profile is copied with restrictive permissions before
 startup; it does not enter image layers, environment variables, labels or arguments.
 GetInfo describes observed compute state, not daemon or native readiness. Docker
-has no renewable provider lease: Renew verifies the allocation, while future Core
-lifecycle integration must own expiry. Kill verifies allocation ownership, removes
+has no renewable provider lease: Renew verifies the allocation, while Core owns
+keepalives and expiry. Kill verifies allocation ownership, removes
 the container, explicitly removes its named volumes and confirms absence. Keep the
 reference and retry cleanup when an operation fails; an HTTP timeout is not proof
 that a resource disappeared. Never use broad container or volume pruning.

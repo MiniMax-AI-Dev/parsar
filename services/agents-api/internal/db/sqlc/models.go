@@ -93,6 +93,18 @@ type FunctionCall struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type RuntimeAllocation struct {
+	ID            pgtype.UUID        `json:"id"`
+	EnvironmentID pgtype.UUID        `json:"environment_id"`
+	DeviceID      pgtype.UUID        `json:"device_id"`
+	ProviderKey   pgtype.UUID        `json:"provider_key"`
+	State         string             `json:"state"`
+	CreateSettled bool               `json:"create_settled"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	KeptAt        pgtype.Timestamptz `json:"kept_at"`
+	ReleasedAt    pgtype.Timestamptz `json:"released_at"`
+}
+
 type Session struct {
 	ID                  pgtype.UUID        `json:"id"`
 	TenantID            pgtype.UUID        `json:"tenant_id"`
