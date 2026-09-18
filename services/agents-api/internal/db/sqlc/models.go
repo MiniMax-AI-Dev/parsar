@@ -180,17 +180,18 @@ type SubagentIdentity struct {
 }
 
 type Turn struct {
-	ID                pgtype.UUID        `json:"id"`
-	SessionID         pgtype.UUID        `json:"session_id"`
-	Status            string             `json:"status"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	StartedAt         pgtype.Timestamptz `json:"started_at"`
-	CompletedAt       pgtype.Timestamptz `json:"completed_at"`
-	CancelRequestedAt pgtype.Timestamptz `json:"cancel_requested_at"`
-	Outcome           []byte             `json:"outcome"`
-	EventCount        int32              `json:"event_count"`
-	EventBytes        int64              `json:"event_bytes"`
-	TokenUsage        []byte             `json:"token_usage"`
+	ID                     pgtype.UUID        `json:"id"`
+	SessionID              pgtype.UUID        `json:"session_id"`
+	Status                 string             `json:"status"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	StartedAt              pgtype.Timestamptz `json:"started_at"`
+	CompletedAt            pgtype.Timestamptz `json:"completed_at"`
+	CancelRequestedAt      pgtype.Timestamptz `json:"cancel_requested_at"`
+	Outcome                []byte             `json:"outcome"`
+	EventCount             int32              `json:"event_count"`
+	EventBytes             int64              `json:"event_bytes"`
+	TokenUsage             []byte             `json:"token_usage"`
+	ArtifactCaptureStarted bool               `json:"artifact_capture_started"`
 }
 
 type TurnEvent struct {

@@ -11,6 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const beginTurnArtifactCapture = `-- name: BeginTurnArtifactCapture :execrows
+UPDATE turns SET artifact_capture_started = true
+WHERE session_id = $1 AND id = $2 AND NOT artifact_capture_started
+`
+
+type BeginTurnArtifactCaptureParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	ID        pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) BeginTurnArtifactCapture(ctx context.Context, arg BeginTurnArtifactCaptureParams) (int64, error) {
+	result, err := q.db.Exec(ctx, beginTurnArtifactCapture, arg.SessionID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteSessionArtifact = `-- name: DeleteSessionArtifact :one
 DELETE FROM session_artifacts a USING sessions s
 WHERE s.id = a.session_id AND s.tenant_id = $1 AND s.deleted_at IS NULL

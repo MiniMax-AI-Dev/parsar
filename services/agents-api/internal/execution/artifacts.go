@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -16,16 +17,22 @@ func (d *Dispatcher) captureCompletedArtifacts(ctx context.Context, peer *gatewa
 	}
 	owner, cancel := context.WithTimeout(ctx, 180*time.Second)
 	defer cancel()
-	err := d.withPreparedWorkspace(owner, peer, session, environment, bound, func(ctx context.Context, handle string) error {
-		return peer.ExportWorkspaceOutputs(ctx, proto.WorkspaceExportPayload{Handle: handle, EnvironmentID: environment.ID}, func(body io.Reader) error {
-			return d.Store.StageTurnArtifacts(ctx, session.TenantID, session.ID, turnID, environment.ID, body)
+	err := d.Store.BeginTurnArtifactCapture(owner, session.TenantID, session.ID, turnID, result.AppliedThrough)
+	if err == nil {
+		err = d.withPreparedWorkspace(owner, peer, session, environment, bound, func(ctx context.Context, handle string) error {
+			return peer.ExportWorkspaceOutputs(ctx, proto.WorkspaceExportPayload{Handle: handle, EnvironmentID: environment.ID}, func(body io.Reader) error {
+				return d.Store.StageTurnArtifacts(ctx, session.TenantID, session.ID, turnID, environment.ID, body)
+			})
 		})
-	})
+	}
 	if err == nil {
 		return result, status
 	}
 	// Do not expose native diagnostics or publish partial output after a failed capture.
 	result.ErrorCode = "artifact_capture_failed"
+	if errors.Is(err, store.ErrUnappliedInputs) {
+		result.ErrorCode = "input_not_applied"
+	}
 	status = store.TurnFailed
 	check, stop := context.WithTimeout(context.Background(), 5*time.Second)
 	defer stop()

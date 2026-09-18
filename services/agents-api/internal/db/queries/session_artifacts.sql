@@ -1,3 +1,7 @@
+-- name: BeginTurnArtifactCapture :execrows
+UPDATE turns SET artifact_capture_started = true
+WHERE session_id = $1 AND id = $2 AND NOT artifact_capture_started;
+
 -- name: StageSessionArtifact :exec
 INSERT INTO session_artifacts (id, session_id, turn_id, environment_id, path, size_bytes, body_oid, sha256)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8);

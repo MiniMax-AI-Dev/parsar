@@ -3,6 +3,7 @@ package store_test
 import (
 	"archive/tar"
 	"bytes"
+	"encoding/json"
 	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -42,6 +43,10 @@ func completeLocalArtifactExport(t *testing.T, h *dispatchHarness, environment s
 	page, err := h.s.ListSessionArtifacts(t.Context(), h.tenant, h.session.ID, "", "", 20, false)
 	if err != nil || len(page.Artifacts) != 0 {
 		t.Fatal("capture published before native completion", err)
+	}
+	pending, err := h.s.ReserveEnvironmentInput(t.Context(), h.tenant, h.session.ID, "during-artifact-capture", []store.Input{{Kind: "message", Payload: json.RawMessage(`{"text":"run after the completed native execution"}`)}})
+	if err != nil || pending.State != store.EnvironmentInputPending || len(pending.Receipts) != 0 {
+		t.Fatalf("input during artifact capture was assigned to the finished executor: %+v %v", pending, err)
 	}
 	h.write(begin.ID, proto.TypeWorkspaceExportResult, proto.WorkspaceExportResultPayload{Outcome: "completed", Offset: export.Offset})
 	release := h.read(proto.TypeExecutionRelease)

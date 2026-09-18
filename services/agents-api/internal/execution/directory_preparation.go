@@ -19,7 +19,7 @@ func (d *Dispatcher) readPreparedDirectory(ctx context.Context, peer *gateway.Se
 		return result.err
 	})
 	if err != nil {
-		result.err = err
+		return directoryReadResult{err: err}
 	}
 	return result
 }

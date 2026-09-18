@@ -88,7 +88,7 @@ func (s *Store) ReserveEnvironmentInput(ctx context.Context, tenantID, sessionID
 		if err := checkEnvironmentInputGate(ctx, q, session, key, encoded); err != nil {
 			return err
 		}
-		if _, err := q.GetActiveTurn(ctx, session); err == nil {
+		if active, err := q.GetActiveTurn(ctx, session); err == nil && !active.ArtifactCaptureStarted {
 			result = EnvironmentInputReservation{SessionID: sessionID, State: EnvironmentInputAdmitted}
 			for position, input := range batch {
 				receipt, err := admitInput(ctx, q, tenantID, session, key, int32(position), input)
@@ -98,7 +98,7 @@ func (s *Store) ReserveEnvironmentInput(ctx context.Context, tenantID, sessionID
 				result.Receipts = append(result.Receipts, receipt)
 			}
 			return nil
-		} else if !errors.Is(err, pgx.ErrNoRows) {
+		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		row, err := q.CreateEnvironmentInputReservation(ctx, sqlc.CreateEnvironmentInputReservationParams{

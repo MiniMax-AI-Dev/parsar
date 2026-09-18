@@ -1,4 +1,5 @@
 -- +goose Up
+ALTER TABLE turns ADD COLUMN artifact_capture_started boolean NOT NULL DEFAULT false;
 CREATE TABLE session_artifacts (
     id uuid PRIMARY KEY,
     session_id uuid NOT NULL REFERENCES sessions(id),
@@ -24,3 +25,4 @@ DO $$ BEGIN
 END $$;
 -- +goose StatementEnd
 DROP TABLE session_artifacts;
+ALTER TABLE turns DROP COLUMN artifact_capture_started;
