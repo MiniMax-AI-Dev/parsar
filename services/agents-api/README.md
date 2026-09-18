@@ -76,7 +76,19 @@ Linux amd64 archive, with source/protocol identity, checksums, a license and
 [operator instructions](RELEASE.md). Build from a clean Git worktree with Go and
 Python 3.9+; output defaults to `~/.parsar/build/agents-api-release` (or
 `AGENTS_API_RELEASE_DIR`). The extracted API needs no source checkout or compiler.
-Database setup, daemon/native installation and publication remain separate.
+For a Docker-hosted package, first qualify an immutable Linux amd64 Runtime built
+with [the existing Runtime builder](deploy/codex/README.md), then run:
+
+```sh
+AGENTS_API_RELEASE_RUNTIME_IMAGE=sha256:<qualified-image-ID> make build-agents-api-release
+```
+
+The resulting `agents-api-docker-<revision>-linux-amd64.tar.gz` also contains the
+Runtime image export, committed seccomp policy and [hosted guide](HOSTED-RELEASE.md).
+Consumers load the included image and start the extracted Core; no source checkout
+or compiler is needed. The builder records the selected image ID and file hashes;
+the exact Core/Runtime combination still needs deployment acceptance. The ordinary
+archive remains Docker-free. Database/Docker setup and publication remain separate.
 
 ## Database ownership
 

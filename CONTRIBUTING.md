@@ -1152,6 +1152,16 @@ packaged operators and public protocol, not private Store provisioning. Preserve
 the database and native history when replacing the API package. This target does
 not publish a release or provide an installer/supervisor.
 
+`AGENTS_API_RELEASE_RUNTIME_IMAGE=sha256:<image ID>` adds an explicitly qualified
+Linux amd64 Runtime to the same release builder. The Docker archive contains that
+immutable image export, the committed seccomp policy and hosted operator guide,
+with hashes in its manifest and checksums. The default Core-only archive remains
+Docker-free. Image selection and packaging do not qualify an arbitrary image or
+prove compatibility between unrelated Core/Runtime versions: accept the exact
+package with a fresh database, extracted binaries, loaded image and real public
+workflow. Keep model/operator credentials external and Provider ownership stable
+across upgrades. This is the same managed Runtime, not user-managed enrollment.
+
 #### Current implementation
 
 The constraints below describe existing code, not requirements to preserve legacy

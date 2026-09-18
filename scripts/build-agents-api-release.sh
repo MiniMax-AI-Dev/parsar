@@ -32,6 +32,14 @@ source_revision="$(git -C "$repo_root" rev-parse HEAD)"
 source_tree="$(git -C "$repo_root" rev-parse "$source_revision^{tree}")"
 source_epoch="$(git -C "$repo_root" show -s --format=%ct "$source_revision")"
 archive_name="agents-api-$source_revision-linux-amd64.tar.gz"
+runtime_image="${AGENTS_API_RELEASE_RUNTIME_IMAGE:-}"
+if [[ -n "$runtime_image" ]]; then
+  if [[ ! "$runtime_image" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    printf 'Hosted releases require a qualified immutable Runtime image ID (sha256:...)\n' >&2
+    exit 1
+  fi
+  archive_name="agents-api-docker-$source_revision-linux-amd64.tar.gz"
+fi
 
 mkdir -p "$output_dir"
 release_context="$(mktemp -d "$output_dir/.staging.XXXXXX")"
@@ -55,16 +63,17 @@ if [[ "$(git -C "$repo_root" rev-parse HEAD)" != "$source_revision" ]]; then
   exit 1
 fi
 
-python3 - "$release_context" "$source_revision" "$source_tree" "$source_epoch" "$go_version" "$archive_name" <<'PY'
+python3 - "$release_context" "$source_revision" "$source_tree" "$source_epoch" "$go_version" "$archive_name" "$runtime_image" <<'PY'
 import gzip
 import hashlib
 import json
 import pathlib
+import subprocess
 import sys
 import tarfile
 
 root = pathlib.Path(sys.argv[1])
-revision, tree, epoch, go_version, archive_name = sys.argv[2:]
+revision, tree, epoch, go_version, archive_name, runtime_image = sys.argv[2:]
 source, package = root / "source", root / "package"
 binaries = ["agents-api", "agents-api-migrate", "agents-api-device", "agents-api-environment-key"]
 
@@ -80,7 +89,8 @@ def sha256(path):
 readme = (source / "services/agents-api/RELEASE.md").read_text(encoding="utf-8")
 if "@SOURCE_REVISION@" not in readme:
     sys.exit("Agents API RELEASE.md must link to @SOURCE_REVISION@")
-(package / "README.md").write_text(readme.replace("@SOURCE_REVISION@", revision), encoding="utf-8")
+readme = readme.replace("@SOURCE_REVISION@", revision).replace("@ARCHIVE_NAME@", archive_name.removesuffix(".tar.gz"))
+(package / "README.md").write_text(readme, encoding="utf-8")
 (package / "LICENSE").write_bytes((source / "LICENSE").read_bytes())
 manifest = {
     "artifact": "agents-api",
@@ -90,8 +100,25 @@ manifest = {
     "upstream_protocol": json.loads((source / "contracts/agents-api/upstream.json").read_text(encoding="utf-8")),
     "binaries": {"bin/" + name: {"sha256": sha256(package / "bin" / name)} for name in binaries},
 }
+extra_members = []
+if runtime_image:
+    inspected = json.loads(subprocess.check_output(["docker", "image", "inspect", runtime_image], text=True))[0]
+    if inspected["Id"] != runtime_image or inspected["Os"] != "linux" or inspected["Architecture"] != "amd64":
+        sys.exit("Hosted releases require the selected Linux amd64 Runtime image")
+    (package / "runtime").mkdir()
+    image_path = package / "runtime/image.tar"
+    subprocess.run(["docker", "image", "save", "--output", str(image_path), runtime_image], check=True)
+    (package / "runtime/seccomp.json").write_bytes((source / "services/agents-api/deploy/codex/seccomp.json").read_bytes())
+    guide = (source / "services/agents-api/HOSTED-RELEASE.md").read_text(encoding="utf-8")
+    (package / "HOSTED.md").write_text(guide.replace("@RUNTIME_IMAGE@", runtime_image).replace("@SOURCE_REVISION@", revision), encoding="utf-8")
+    extra_members = ["HOSTED.md", "runtime/image.tar", "runtime/seccomp.json"]
+    manifest["runtime"] = {
+        "image_id": runtime_image,
+        "platform": {"os": inspected["Os"], "architecture": inspected["Architecture"]},
+        "files": {name: {"sha256": sha256(package / name)} for name in extra_members},
+    }
 (package / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-members = sorted(["bin/" + name for name in binaries] + ["LICENSE", "README.md", "manifest.json"])
+members = sorted(["bin/" + name for name in binaries] + ["LICENSE", "README.md", "manifest.json"] + extra_members)
 (package / "SHA256SUMS").write_text("".join(sha256(package / name) + "  " + name + "\n" for name in members), encoding="utf-8")
 members = sorted(members + ["SHA256SUMS"])
 prefix = archive_name.removesuffix(".tar.gz")
