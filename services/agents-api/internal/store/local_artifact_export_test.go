@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/execution"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
 
-func completeLocalArtifactExport(t *testing.T, h *dispatchHarness, environment store.Environment) {
+func completeLocalArtifactExport(t *testing.T, h *dispatchHarness, worker *execution.Worker, environment store.Environment) {
 	t.Helper()
 	prepared := h.read(proto.TypeExecutionPrepare)
 	var request proto.ExecutionPreparePayload
@@ -44,6 +45,7 @@ func completeLocalArtifactExport(t *testing.T, h *dispatchHarness, environment s
 	if err != nil || len(page.Artifacts) != 0 {
 		t.Fatal("capture published before native completion", err)
 	}
+	completeCaptureDirectoryRead(t, h, worker, environment)
 	pending, err := h.s.ReserveEnvironmentInput(t.Context(), h.tenant, h.session.ID, "during-artifact-capture", []store.Input{{Kind: "message", Payload: json.RawMessage(`{"text":"run after the completed native execution"}`)}})
 	if err != nil || pending.State != store.EnvironmentInputPending || len(pending.Receipts) != 0 {
 		t.Fatalf("input during artifact capture was assigned to the finished executor: %+v %v", pending, err)
@@ -55,4 +57,25 @@ func completeLocalArtifactExport(t *testing.T, h *dispatchHarness, environment s
 		t.Fatal("export did not release its own read preparation")
 	}
 	h.write(prepared.ID, proto.TypePreparationStatus, proto.PreparationStatusPayload{Handle: handle, Revision: 3, State: "released"})
+}
+
+func completeCaptureDirectoryRead(t *testing.T, h *dispatchHarness, worker *execution.Worker, environment store.Environment) {
+	t.Helper()
+	result := startDirectoryRead(t.Context(), worker, environment)
+	frame := h.read(proto.TypeExecutionPrepare)
+	var prepare proto.ExecutionPreparePayload
+	if frame.DecodePayload(&prepare) != nil || !proto.ValidWorkspaceReadPreparation(prepare.Configuration) || prepare.Configuration.LocalEnvironment == nil || prepare.Configuration.LocalEnvironment.ID != environment.ID {
+		t.Fatal("directory read during capture lost read-only authority")
+	}
+	handle := acknowledgePreparation(h, frame.ID)
+	h.write(frame.ID, proto.TypePreparationStatus, proto.PreparationStatusPayload{Handle: handle, Revision: 2, State: "ready"})
+	read := h.read(proto.TypeWorkspaceRead)
+	var request proto.WorkspaceReadPayload
+	if read.DecodePayload(&request) != nil || request.Handle != handle || request.RunID != "" || request.EnvironmentID != environment.ID {
+		t.Fatal("directory read during capture used a finished native Run")
+	}
+	completeDirectoryRead(t, h, frame.ID, read.ID, false, false)
+	if got := awaitDirectoryResult(t, result); got.err != nil || len(got.value.Entries) != 1 {
+		t.Fatal("directory read failed during paused output capture", got.err)
+	}
 }

@@ -436,7 +436,9 @@ Capture bytes into private PostgreSQL large objects without a Session admission
 lock; after confirmed export, lock and recheck the live Turn before staging metadata.
 Before capture, seal native input under that lock using the private capture marker.
 Later messages reuse the existing Environment input reservation and await the next
-Turn; the public Turn stays in progress until publication settles. Cancellation
+Turn; the public Turn stays in progress until publication settles. Directory reads
+during capture use an independent authorized read-only preparation, not the released
+native Run; they do not request model credentials or mutate the workspace. Cancellation
 retains the existing Turn/reservation semantics. Do not introduce a second queue.
 Publish metadata in the same transaction as Turn completion. Failed/cancelled Turns
 discard private objects, and Session deletion removes both private and published
