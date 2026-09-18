@@ -11,6 +11,7 @@ and [FileObject](https://github.com/openai/openai-python/blob/d7c41efee1b0802b79
 | Operation | Current behavior |
 | --- | --- |
 | `POST /files` | Multipart `file` and `purpose=user_data`; either part order; immutable bytes and metadata commit after full validation |
+| `GET /files` | Project-scoped metadata listing with `after`, `limit`, `order` and `purpose`; deterministic creation-time/ID keysets |
 | `GET /files/{id}` | Project-owned metadata, without reading the body |
 | `GET /files/{id}/content` | Immutable binary stream with declared length; incomplete transfer aborts rather than returning a JSON error as file content |
 | `DELETE /files/{id}` | Atomic metadata removal and body unlink; `id`, `object: file`, `deleted: true` |
@@ -20,6 +21,15 @@ organization/project header validation but do not require `OpenAI-Beta`. Existin
 Agents/Vault routes retain their Beta check. User and service-account keys in the
 same configured project share the source resource. Every read/delete/copy lookup
 uses that project partition; missing and foreign IDs return the same safe 404.
+
+Listing defaults to 10,000 resources and rejects limits outside the pinned
+1–10,000 range. Omitted order uses descending creation order; `asc` and `desc`
+use the stored timestamp plus ID as a deterministic keyset. The response includes
+`object`, `data`, `first_id`, `last_id` and `has_more`; empty pages use null IDs.
+The cursor must name a currently visible File in the same project. The optional
+purpose filter is exact; unsupported purposes return an empty page because this
+profile stores only `user_data`. Exact hosted default order, invalid/deleted cursor
+errors and pagination during concurrent mutation remain unverified local policies.
 
 Metadata includes `id`, `object: file`, `bytes`, Unix-second `created_at`,
 `filename`, `purpose: user_data`, deprecated `status: processed`, and nullable
@@ -55,7 +65,7 @@ their source request evidence. Destination unknown-write handling remains unchan
 
 ## Remaining scope and verification
 
-Other upload purposes, `expires_after`, Files listing, resumable Uploads, quotas,
+Other upload purposes, `expires_after`, resumable Uploads, quotas,
 rate-limit parity, Artifacts and full status/error/header compatibility remain
 unimplemented or unverified. Unsupported purposes/expiration are rejected. The
 pinned request accepts `evals` while FileObject's purpose union omits it; this
@@ -66,6 +76,9 @@ baseline. This workflow does not enable public hosted Session provisioning.
 Store tests use actual PostgreSQL for rollback, project isolation, independent
 reads and concurrent deletion. The opt-in 512 MiB test exercises streaming storage.
 API tests cover multipart ordering/validation and response/authentication behavior.
+The fixed SDK and raw HTTP list regression covers default and bounded pages,
+automatic continuation, purpose filtering, same-project sharing, foreign-project
+isolation, restart and exact list envelopes against real PostgreSQL.
 `official_environment_files_create.py` includes the fixed SDK/raw HTTP source
 workflow through `official_source_files.py`; its invoking native fixture must
 verify copied hashes, retained copies after source deletion, absence of leaked

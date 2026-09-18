@@ -14,6 +14,7 @@ import (
 type SourceFileStore interface {
 	CreateSourceFile(context.Context, string, func(io.Writer) (store.SourceFileUpload, error)) (store.SourceFile, error)
 	GetSourceFile(context.Context, string, string) (store.SourceFile, error)
+	ListSourceFiles(context.Context, string, string, int, bool, *string) (store.SourceFilePage, error)
 	ReadSourceFile(context.Context, string, string, func(store.SourceFile, io.Reader) error) error
 	DeleteSourceFile(context.Context, string, string) error
 }
@@ -22,9 +23,16 @@ func WithSourceFiles(s SourceFileStore) Option {
 	return func(h *Handler) { h.sourceFiles = s }
 }
 
-func (h *Handler) sourceFilesReady(w http.ResponseWriter, r *http.Request) bool {
+func (h *Handler) sourceFilesAvailable(w http.ResponseWriter) bool {
 	if h.sourceFiles == nil {
 		writeError(w, http.StatusServiceUnavailable, "file_storage_unavailable", "Source file storage is unavailable.")
+		return false
+	}
+	return true
+}
+
+func (h *Handler) sourceFilesReady(w http.ResponseWriter, r *http.Request) bool {
+	if !h.sourceFilesAvailable(w) {
 		return false
 	}
 	if r.URL.RawQuery != "" {

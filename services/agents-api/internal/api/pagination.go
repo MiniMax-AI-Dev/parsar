@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
@@ -23,6 +24,10 @@ func readPageSize(w http.ResponseWriter, r *http.Request, rejectLarger bool, ext
 }
 
 func readPageQuery(w http.ResponseWriter, q url.Values, rejectLarger bool, extraKeys ...string) (pageOptions, bool) {
+	return readPageQueryLimits(w, q, 20, 100, rejectLarger, extraKeys...)
+}
+
+func readPageQueryLimits(w http.ResponseWriter, q url.Values, defaultLimit, maxLimit int, rejectLarger bool, extraKeys ...string) (pageOptions, bool) {
 	keys := append([]string{"after", "limit", "order"}, extraKeys...)
 	for key, values := range q {
 		if !slices.Contains(keys, key) || len(values) != 1 {
@@ -30,20 +35,20 @@ func readPageQuery(w http.ResponseWriter, q url.Values, rejectLarger bool, extra
 			return pageOptions{}, false
 		}
 	}
-	limit, order := 20, q.Get("order")
+	limit, order := defaultLimit, q.Get("order")
 	if raw, ok := q["limit"]; ok {
 		var err error
 		var requested int64
 		requested, err = strconv.ParseInt(raw[0], 10, 64)
-		if err != nil || requested < 1 || (rejectLarger && requested > 100) {
+		if err != nil || requested < 1 || (rejectLarger && requested > int64(maxLimit)) {
 			message := "limit must be a positive 64-bit integer."
 			if rejectLarger {
-				message = "limit must be between 1 and 100."
+				message = fmt.Sprintf("limit must be between 1 and %d.", maxLimit)
 			}
 			writeError(w, http.StatusBadRequest, "invalid_request", message)
 			return pageOptions{}, false
 		}
-		limit = int(min(requested, 100))
+		limit = int(min(requested, int64(maxLimit)))
 	}
 	if order != "" && order != "asc" && order != "desc" {
 		writeError(w, http.StatusBadRequest, "invalid_request", "order must be asc or desc.")
