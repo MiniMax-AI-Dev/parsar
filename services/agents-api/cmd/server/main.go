@@ -75,6 +75,15 @@ func run() error {
 	if engine == "" {
 		engine = "codex"
 	}
+	managed, closeManaged, err := managedRuntimes()
+	if err != nil {
+		return err
+	}
+	defer closeManaged()
+	transientOptions, err := executionOptions()
+	if err != nil {
+		return err
+	}
 	executionStore := store.NewWithCredentialCipher(pool, credentialKey)
 	if err := executionStore.EnsureProjectScopes(ready, auth.ProjectScopes()); err != nil {
 		return err
@@ -109,7 +118,7 @@ func run() error {
 	}
 	if registry != nil {
 		dispatcher := &execution.Dispatcher{Store: executionStore, Registry: registry,
-			EnvironmentConnection: environmentConnection(executor)}
+			EnvironmentConnection: environmentConnection(executor), ManagedRuntimes: managed, Options: transientOptions}
 		if executor != nil {
 			dispatcher.CloseEnvironmentConnections = executor.Close
 		}
@@ -126,6 +135,9 @@ func run() error {
 			}
 		}()
 		options = append(options, api.WithExecution(worker), api.WithEnvironmentDirectoryReader(worker), api.WithEnvironmentFileWriter(worker))
+		if managed != nil && managed.DefaultProvider != "" {
+			options = append(options, api.WithHostedEnvironments())
+		}
 	}
 	handler, err := api.NewHandler(executionStore, auth, engine, options...)
 	if err != nil {

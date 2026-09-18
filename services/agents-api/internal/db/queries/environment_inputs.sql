@@ -36,3 +36,7 @@ RETURNING *;
 -- name: CancelSessionEnvironmentInput :exec
 UPDATE environment_input_reservations SET state = 'cancelled', settled_at = clock_timestamp()
 WHERE session_id = $1 AND state = 'pending';
+
+-- name: FailSessionEnvironmentInput :exec
+UPDATE environment_input_reservations SET state = 'failed', settled_at = clock_timestamp()
+WHERE session_id = $1 AND state = 'pending';

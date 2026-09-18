@@ -10,9 +10,9 @@ import (
 
 func TestLocalEnvironmentRequiresQualifiedProfileAndExactAuthority(t *testing.T) {
 	for _, configuration := range []string{
-		`{"type":"openai_hosted"}`,
-		`{"type":"openai_hosted","network":null}`,
-		`{"type":"openai_hosted","network":{"access":"enabled"}}`,
+		`{"type":"openai_hosted","network":{}}`,
+		`{"type":"openai_hosted","network":{"access":"restricted"}}`,
+		`{"type":"openai_hosted","network":{"access":"enabled","allowed_domains":["example.com"]}}`,
 		`{"type":"openai_hosted","network":{"access":"disabled","allow":["example.com"]}}`,
 		`{"type":"openai_hosted","network":{"access":"disabled"},"workspace_directory":"/override"}`,
 	} {
@@ -36,5 +36,18 @@ func TestLocalEnvironmentRequiresQualifiedProfileAndExactAuthority(t *testing.T)
 		} else if err == nil || req.LocalEnvironment != nil {
 			t.Fatal("unscoped or foreign authority accepted")
 		}
+	}
+}
+
+func TestLocalNetworkDefaultsAndSupportedPolicies(t *testing.T) {
+	for _, configuration := range []string{`{"type":"openai_hosted"}`, `{"type":"openai_hosted","network":null}`, `{"type":"openai_hosted","network":{"access":"enabled","allowed_domains":[]}}`} {
+		got, err := parseEnvironmentPlacement([]byte(configuration))
+		if err != nil || got.NetworkAccess != "enabled" {
+			t.Fatal("enabled default lost", got, err)
+		}
+	}
+	got, err := parseEnvironmentPlacement([]byte(`{"type":"openai_hosted","network":{"access":"disabled","allowed_domains":null}}`))
+	if err != nil || got.NetworkAccess != "disabled" {
+		t.Fatal("disabled policy lost", got, err)
 	}
 }

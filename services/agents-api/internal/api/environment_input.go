@@ -9,9 +9,6 @@ import (
 )
 
 func (h *Handler) setEnvironmentInputWriteDeadline(w http.ResponseWriter, r *http.Request, sessionID string) error {
-	if h.executorURL == "" {
-		return nil
-	}
 	session, err := h.store.GetSession(r.Context(), tenantID(r), sessionID)
 	if err != nil {
 		return err
@@ -20,7 +17,7 @@ func (h *Handler) setEnvironmentInputWriteDeadline(w http.ResponseWriter, r *htt
 	if err := json.Unmarshal(session.Configuration, &snapshot); err != nil {
 		return err
 	}
-	if snapshot.Environment.Type != "self_hosted" {
+	if snapshot.Environment.Type != "self_hosted" && snapshot.Environment.Type != "openai_hosted" {
 		return nil
 	}
 	// This read selects only the HTTP budget; admission and its deadline remain under the Session lock.

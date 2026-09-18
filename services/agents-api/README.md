@@ -183,8 +183,8 @@ resources); general Files routes do not. Supported operations include:
   configuration or a saved `agent_id`, field replacements, optional initial text
   and ordinary or streaming responses.
 - Session event submission and live streaming, Turn retrieve/list and Items list.
-- Environment retrieve for the supported self-hosted profile, bounded live file
-  listing, and inline/source copies into a preconfigured qualified local workspace.
+- Environment retrieve for supported self-hosted and basic Docker-hosted profiles,
+  bounded live file listing, and inline/source copies into a qualified local workspace.
 - Project-owned `user_data` source file upload, metadata/content retrieval and
   deletion; see [source Files](../../contracts/agents-api/source-files.md).
 - Vault create/retrieve/list (project-scoped pagination and stored active/archived
@@ -206,8 +206,9 @@ public removal: Session/history reads and new input become unavailable. Active
 work receives a cancellation request; existing streams close on observing removal.
 Already claimed work may still complete. Creation keys stay reserved; deletion
 never affects other Sessions, saved Agents or their shared device. Internal records
-and native history are retained for execution settlement; physical cleanup remains
-unimplemented. Local repeated deletion returns 404 and creation-key reuse returns
+are retained for execution settlement. Managed Docker deletion separately revokes
+authority and reclaims owned compute/workspace/history; caller-managed compute
+is not reclaimed by this service. Local repeated deletion returns 404 and creation-key reuse returns
 409; exact hosted errors and overlapping stream timing are unverified.
 
 Codex command Items support live `agent.output.command_execution_output.delta`
@@ -221,6 +222,17 @@ execution gap. Recover missed output with Items queries, not SSE replay.
 Non-text message input, Subagents, Environment templates and populated
 installation metadata remain unsupported. Saving optional Agent configuration does not make
 it executable. Unsupported requests fail explicitly. `/healthz` reports liveness only.
+
+## Managed Docker-hosted execution
+
+The basic Codex `openai_hosted` profile is an explicit operator opt-in. Follow the
+[Runtime image and service configuration](deploy/codex/README.md#standalone-operator-configuration).
+Core remains independently deployed with its own database. Public idle and initial
+text Sessions share the existing preparation, execution, Files and recovery paths.
+Networking defaults to enabled; disabled is also supported. Restricted domains,
+templates, populated startup installations and other hosted engines remain gaps.
+Connected describes the authenticated Runtime connection, not native readiness.
+Exact hosted failure/expiry semantics remain unverified.
 
 ## Internal execution device connection
 

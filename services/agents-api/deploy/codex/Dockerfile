@@ -4,7 +4,7 @@ FROM debian:bookworm-slim@sha256:a0982977ea1cf754c15281f48a7d5957cd14039a2a4f2ac
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates bash git python3 nodejs npm ripgrep \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /environment /home/runtime \
+    && mkdir -p /environment/workspace /workspace /home/runtime \
     && groupadd --gid 1000 runtime \
     && useradd --uid 1000 --gid 1000 --home-dir /home/runtime --no-create-home runtime
 COPY --chmod=0555 parsar-daemon agents-api-codex-directory agents-api-codex-write codex /usr/local/bin/

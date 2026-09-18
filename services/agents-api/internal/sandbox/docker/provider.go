@@ -102,7 +102,7 @@ func (p *Provider) Renew(ctx context.Context, r sandbox.Reference) (sandbox.Info
 func (p *Provider) Create(ctx context.Context, b sandbox.Bootstrap) (sandbox.Info, error) {
 	info := sandbox.Info{Reference: b.Reference}
 	u, e := url.Parse(b.CoreURL)
-	if !validReference(b.Reference) || !validID(b.SessionID) || !validID(b.DeviceID) || e != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.TrimSpace(b.Credential) == "" {
+	if (b.NetworkAccess != "" && b.NetworkAccess != "enabled" && b.NetworkAccess != "disabled") || !validReference(b.Reference) || !validID(b.SessionID) || !validID(b.DeviceID) || e != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.TrimSpace(b.Credential) == "" {
 		return info, sandbox.ErrInvalid
 	}
 	if existing, e := p.GetInfo(ctx, b.Reference); e == nil {
@@ -136,10 +136,17 @@ func (p *Provider) Create(ctx context.Context, b sandbox.Bootstrap) (sandbox.Inf
 	}
 	limit := int64(128)
 	v, e := p.client.ContainerCreate(ctx, client.ContainerCreateOptions{Name: name, Image: p.config.Image,
-		Config: &container.Config{User: "1000:1000", WorkingDir: "/environment/workspace", Labels: p.labels(b.Reference), Env: []string{"PARSAR_RUNTIME_ENVIRONMENT_ID=" + b.EnvironmentID, "PARSAR_RUNTIME_SESSION_ID=" + b.SessionID}},
+		Config: &container.Config{User: "1000:1000", WorkingDir: "/environment/workspace", Labels: p.labels(b.Reference), Env: []string{"PARSAR_RUNTIME_ENVIRONMENT_ID=" + b.EnvironmentID, "PARSAR_RUNTIME_SESSION_ID=" + b.SessionID, "PARSAR_RUNTIME_NETWORK_ACCESS=" + b.NetworkAccess}},
 		HostConfig: &container.HostConfig{ReadonlyRootfs: true, CapDrop: []string{"ALL"}, SecurityOpt: []string{"no-new-privileges", "seccomp=" + p.config.Seccomp, "apparmor=unconfined"}, NetworkMode: container.NetworkMode(p.config.Network), ExtraHosts: p.config.ExtraHosts,
 			Resources: container.Resources{PidsLimit: &limit, Memory: 2 * 1024 * 1024 * 1024, NanoCPUs: 2 * 1000000000}, Tmpfs: map[string]string{"/tmp": "rw,nosuid,nodev,size=128m"},
-			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: name + "-home", Target: "/home"}, {Type: mount.TypeVolume, Source: name + "-environment", Target: "/environment"}},
+			Mounts: []mount.Mount{
+				{Type: mount.TypeVolume, Source: name + "-home", Target: "/home"},
+				{Type: mount.TypeVolume, Source: name + "-environment", Target: "/environment"},
+				// The native sandbox mounts canonical roots, omitting symlink aliases.
+				// Expose the same workspace at its public path; trusted atomic staging
+				// remains entirely on the original /environment mount.
+				{Type: mount.TypeVolume, Source: name + "-environment", Target: "/workspace", VolumeOptions: &mount.VolumeOptions{Subpath: "workspace", NoCopy: true}},
+			},
 		},
 	})
 	if errdefs.IsConflict(e) {

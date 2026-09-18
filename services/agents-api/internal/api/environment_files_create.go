@@ -25,7 +25,7 @@ func WithEnvironmentFileWriter(writer EnvironmentFileWriter) Option {
 }
 
 // @Summary Create an Environment file from inline bytes or a source file
-// @Description Uploads standard Base64 bytes to a file beneath /workspace in a preconfigured, qualified local Environment. Accepts inline bytes or a project-owned source file_id through the same write path. Public hosted Session creation is not enabled. A private 50 MiB decoded-content limit applies. The parent directory must exist. Replacement installs a new mode-0600 inode; upstream overwrite metadata semantics remain unverified. Idle writes exclude execution. Missing receipts return unavailable and retain a durable mutation gate without automatic replay. Error/timing parity with upstream remains unverified.
+// @Description Uploads standard Base64 bytes to a file beneath /workspace in a qualified local Environment. Accepts inline bytes or a project-owned source file_id through the same write path. Basic public hosted creation requires explicit managed Runtime configuration. A private 50 MiB decoded-content limit applies. The parent directory must exist. Replacement installs a new mode-0600 inode; upstream overwrite metadata semantics remain unverified. Idle writes exclude execution. Missing receipts return unavailable and retain a durable mutation gate without automatic replay. Error/timing parity with upstream remains unverified.
 // @Tags Environments
 // @Accept json
 // @Produce json

@@ -61,7 +61,7 @@ func (w *Worker) SubmitInputs(ctx context.Context, tenant, session, key string, 
 	if err != nil {
 		return nil, err
 	}
-	if selfHostedConfiguration(value.Configuration) {
+	if preparedEnvironmentConfiguration(value.Configuration) {
 		return w.submitEnvironmentInputs(ctx, value, key, inputs)
 	}
 	if !canAdmitInputs(value.Engine, value.Configuration) {

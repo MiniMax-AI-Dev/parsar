@@ -17,6 +17,8 @@ func decodeSessionEnvironment(raw json.RawMessage) (*v1.Environment, error) {
 	fields := []string{"type"}
 	switch environment.Type {
 	case "none":
+	case "openai_hosted":
+		return decodeHostedEnvironment(raw)
 	case "self_hosted":
 		fields = append(fields, "workspace_directory", "capability_directories")
 		if !path.IsAbs(environment.WorkspaceDirectory) || strings.ContainsRune(environment.WorkspaceDirectory, 0) {

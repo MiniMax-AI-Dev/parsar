@@ -24,10 +24,11 @@ import (
 )
 
 var (
-	ErrInvalidInput        = errors.New("invalid session input")
-	ErrNotFound            = errors.New("session not found")
-	ErrIdempotencyConflict = errors.New("idempotency key was already used with different input")
-	enginePattern          = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
+	ErrInvalidInput           = errors.New("invalid session input")
+	ErrEnvironmentUnavailable = errors.New("environment is no longer available")
+	ErrNotFound               = errors.New("session not found")
+	ErrIdempotencyConflict    = errors.New("idempotency key was already used with different input")
+	enginePattern             = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 )
 
 // Session is a durable execution context, separate from product conversations

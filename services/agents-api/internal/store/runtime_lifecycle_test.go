@@ -23,6 +23,7 @@ type lifecycleProvider struct {
 	creates, kills, gets            int
 	loseCreate, absent, unavailable bool
 	credentialHash                  string
+	credential                      string
 }
 
 func (p *lifecycleProvider) Create(_ context.Context, b sandbox.Bootstrap) (sandbox.Info, error) {
@@ -30,6 +31,7 @@ func (p *lifecycleProvider) Create(_ context.Context, b sandbox.Bootstrap) (sand
 	defer p.mu.Unlock()
 	p.creates++
 	p.credentialHash = device.HashCredential(b.Credential)
+	p.credential = b.Credential
 	i := sandbox.Info{Reference: b.Reference, ProviderID: b.AllocationID, State: "running", BootstrapComplete: true}
 	if !p.absent {
 		p.resources[b.AllocationID] = i

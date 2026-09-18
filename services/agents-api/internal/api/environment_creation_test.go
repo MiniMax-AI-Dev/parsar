@@ -163,7 +163,6 @@ func TestSelfHostedCreationRejectsBeforePersistence(t *testing.T) {
 		{name: "scalar capabilities", environment: `{"type":"self_hosted","workspace_directory":"/remote/workspace","capability_directories":"/remote/skills"}`},
 		{name: "output field", environment: `{"type":"self_hosted","workspace_directory":"/remote/workspace","remote_url":"https://forged.example"}`},
 		{name: "none extra field", environment: `{"type":"none","workspace_directory":null}`},
-		{name: "hosted", environment: `{"type":"openai_hosted"}`},
 		{name: "initial image", environment: validEnvironment, input: `,"input":[{"role":"user","content":[{"type":"input_image","image_url":"https://example.com/image.png"}]}]`},
 		{name: "initial assistant message", environment: validEnvironment, input: `,"input":[{"role":"assistant","content":[{"type":"input_text","text":"start"}]}]`},
 		{name: "deferred functions", environment: validEnvironment, agentFields: `,"tools":[{"type":"function","name":"lookup","description":"Find a value","parameters":{"type":"object"},"defer_loading":true}]`},
@@ -209,6 +208,22 @@ func TestSelfHostedCreationRequiresOperatorExecution(t *testing.T) {
 			if response.Code != http.StatusServiceUnavailable || json.Unmarshal(response.Body.Bytes(), &failure) != nil || failure.Error.Code != "execution_unavailable" || fixture.input.Engine != "" {
 				t.Fatal("operator prerequisites did not fail before persistence", response.Code, response.Body.String(), fixture.input)
 			}
+		}
+	}
+}
+
+func TestHostedCreationRequiresOperatorExecution(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		handler, fixture := environmentCreationHandler(t, "codex", WithExecution(&inputRecorder{}), WithEnvironmentRemoteURL(environmentOrigin))
+		body := fmt.Sprintf(`{"agent":{"model":"model"},"environment":{"type":"openai_hosted"},"stream":%t}`, stream)
+		request := httptest.NewRequest(http.MethodPost, "/v1/agents/sessions", strings.NewReader(body))
+		request.Header.Set("Authorization", "Bearer key")
+		request.Header.Set("OpenAI-Beta", "agents=v1")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		var failure v1.ErrorResponse
+		if response.Code != http.StatusServiceUnavailable || json.Unmarshal(response.Body.Bytes(), &failure) != nil || failure.Error.Code != "execution_unavailable" || fixture.input.Engine != "" {
+			t.Fatal("hosted configuration bypassed operator prerequisites", response.Code, response.Body.String())
 		}
 	}
 }

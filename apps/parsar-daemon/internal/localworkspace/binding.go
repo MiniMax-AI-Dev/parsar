@@ -12,11 +12,12 @@ import (
 
 // Binding freezes operator-owned identity and paths for one Runtime lifetime.
 type Binding struct {
-	environment string
-	stateKey    string
-	workspace   string
-	helper      string
-	writer      *fileWriter
+	environment   string
+	networkAccess string
+	stateKey      string
+	workspace     string
+	helper        string
+	writer        *fileWriter
 }
 
 func New(environment, session, workspace, helper string) (*Binding, error) {
@@ -44,14 +45,19 @@ func New(environment, session, workspace, helper string) (*Binding, error) {
 
 func Load() (*Binding, error) {
 	values := []string{os.Getenv("PARSAR_RUNTIME_ENVIRONMENT_ID"), os.Getenv("PARSAR_RUNTIME_SESSION_ID"), os.Getenv("PARSAR_RUNTIME_WORKSPACE"), os.Getenv("PARSAR_RUNTIME_DIRECTORY_HELPER")}
+	network := os.Getenv("PARSAR_RUNTIME_NETWORK_ACCESS")
+	if network != "" && network != "enabled" && network != "disabled" {
+		return nil, errors.New("unsupported local Runtime network policy")
+	}
 	writeHelper, staging := os.Getenv("PARSAR_RUNTIME_WRITE_HELPER"), os.Getenv("PARSAR_RUNTIME_STAGING")
-	if strings.Join(values, "") == "" && writeHelper == "" && staging == "" {
+	if strings.Join(values, "") == "" && writeHelper == "" && staging == "" && network == "" {
 		return nil, nil
 	}
 	b, err := New(values[0], values[1], values[2], values[3])
 	if err != nil {
 		return nil, err
 	}
+	b.networkAccess = network
 	if writeHelper != "" || staging != "" {
 		if err := b.bindWriter(writeHelper, staging); err != nil {
 			return nil, err
@@ -70,8 +76,14 @@ func (b *Binding) Configure(r proto.PromptRequestPayload) (proto.PromptRequestPa
 		r.ConversationID != "" || r.WorkspaceAuthoring || len(r.Attachments) != 0 || !r.StrictResume || !r.ReleaseOnCompletion {
 		return r, errors.New("request does not match the dedicated local Environment")
 	}
+	if (!r.WorkspaceReadOnly || r.LocalEnvironment.NetworkAccess != "") && r.LocalEnvironment.NetworkAccess != b.networkAccess {
+		return r, errors.New("request does not match the local Runtime network policy")
+	}
 	if !r.WorkspaceReadOnly {
 		r.WorkDir = b.workspace
 	}
 	return r, nil
 }
+
+// NetworkAccess is deployment-owned; read-only workspace controls need no network.
+func (b *Binding) NetworkAccess() string { return b.networkAccess }

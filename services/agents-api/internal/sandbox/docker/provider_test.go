@@ -95,6 +95,10 @@ func TestDockerProviderLifecycle(t *testing.T) {
 	if e != nil || r.ExitCode != 7 || r.Stderr != "failed" {
 		t.Fatalf("lost command status: %+v %v", r, e)
 	}
+	r, e = p.RunCommand(ctx, b.Reference, sandbox.Command{Args: []string{"sh", "-c", "set -eu; test \"$(cat /workspace/history)\" = retained; printf replaced > /environment/staging/replacement; mv /environment/staging/replacement /environment/workspace/history; cat /workspace/history"}})
+	if e != nil || r.ExitCode != 0 || r.Stdout != "replaced" {
+		t.Fatal("public workspace view or atomic staging failed", e)
+	}
 	wrong := b.Reference
 	wrong.TenantID = uuid.NewString()
 	if _, e = p.GetInfo(ctx, wrong); !errors.Is(e, sandbox.ErrNotFound) {
@@ -111,7 +115,7 @@ func TestDockerProviderLifecycle(t *testing.T) {
 		t.Fatal(e)
 	}
 	r, e = p.RunCommand(ctx, b.Reference, sandbox.Command{Args: []string{"cat", "/environment/workspace/history"}})
-	if e != nil || r.Stdout != "retained" {
+	if e != nil || r.Stdout != "replaced" {
 		t.Fatal("restart lost workspace")
 	}
 	r, e = p.RunCommand(ctx, b.Reference, sandbox.Command{Args: []string{"sh", "-c", "touch /cannot-write-root"}})

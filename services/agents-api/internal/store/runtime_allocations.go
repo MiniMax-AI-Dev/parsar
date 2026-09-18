@@ -138,3 +138,32 @@ func runtimeAllocationFromRow(row sqlc.RuntimeAllocation, session, tenant pgtype
 		CreatedAt: row.CreatedAt.Time, KeptAt: row.KeptAt.Time,
 	}
 }
+
+// UnallocatedHostedEnvironment is a committed resource awaiting service bootstrap.
+// A missing allocation is distinct from an unknown outcome of an existing Create.
+type UnallocatedHostedEnvironment struct {
+	ID, TenantID string
+}
+
+func (s *Store) ListUnallocatedHostedEnvironments(ctx context.Context, after string) ([]UnallocatedHostedEnvironment, error) {
+	if err := s.CheckExecutionOwnership(ctx); err != nil {
+		return nil, err
+	}
+	id := pgtype.UUID{Valid: true}
+	if after != "" {
+		var err error
+		id, err = parseID(after)
+		if err != nil {
+			return nil, err
+		}
+	}
+	rows, err := s.queries.ListUnallocatedHostedEnvironments(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]UnallocatedHostedEnvironment, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, UnallocatedHostedEnvironment{ID: uuid.UUID(row.ID.Bytes).String(), TenantID: uuid.UUID(row.TenantID.Bytes).String()})
+	}
+	return result, nil
+}

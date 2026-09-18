@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
@@ -20,7 +21,12 @@ func (h *Handler) createSessionStream(w http.ResponseWriter, r *http.Request, in
 		return
 	}
 	var source any = h.store
-	if len(input.InitialInputs) > 0 {
+	var config configuration
+	if err := json.Unmarshal(input.Configuration, &config); err != nil {
+		writeStoreError(w, r, store.ErrInvalidInput)
+		return
+	}
+	if len(input.InitialInputs) > 0 || config.Environment.Type == "openai_hosted" {
 		if h.inputs == nil {
 			writeError(w, http.StatusServiceUnavailable, "execution_unavailable", "Execution input is not enabled on this service.")
 			return

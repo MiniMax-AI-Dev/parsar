@@ -67,7 +67,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | Resource | Upstream operations | Current coverage |
 | --- | --- | --- |
 | Root reusable Agents | create, retrieve, update, list, delete | Partial create/retrieve/update/list/delete and Session references; configuration/error gaps remain |
-| sessions | create, retrieve, update, list, delete | Create (ordinary/live), retrieve, list with root-Agent filter, metadata-only update, public deletion; physical cleanup and exact hosted semantics remain open |
+| sessions | create, retrieve, update, list, delete | Create (ordinary/live), retrieve, list with root-Agent filter, metadata-only update, public deletion with owned Docker cleanup; general physical cleanup and exact hosted semantics remain open |
 | sessions.events | create, stream | Text/cancel/function-result admission and live events; function-action state snapshots supported |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
 | sessions.items | list | Partial Item variants |
@@ -76,7 +76,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | sessions.subagents.items | list | Missing |
 | sessions.subagents.turns | retrieve, list | Missing |
 | sessions.subagents.turns.items | list | Missing |
-| environments | retrieve | Supported self-hosted profile: durable status and safe empty installation metadata; hosted/populated inventory remains missing |
+| environments | retrieve | Supported self-hosted and basic Codex/Docker hosted profiles: durable status and safe empty installation metadata; populated inventory remains missing |
 | environments.files | create, list | [Partial bounded Codex list](environment-files.md); create remains missing |
 | environments.templates | create, retrieve, update, list, delete | Missing |
 | vaults | create, retrieve, list, delete | Create/retrieve/list/delete with independent tenant persistence, stored status filtering, atomic Credential cascade and frozen Session attachments; archive semantics and full hosted lifecycle parity remain missing |
@@ -295,7 +295,7 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 | Execution ownership | Immutable Session engine/device, durable input receipts and database writer fencing; uncertain claimed work fails on restart, without blind replay |
 | Files | Bounded live Environment listing and inline/file_id copies into a qualified preconfigured V1 local workspace; project-owned user_data source upload/retrieve/content/delete; [scope and limits](source-files.md) |
 | Clients | Fixed Python SDK 3.13.0 and official Go SDK v3.61.0; raw HTTP and real provider acceptance supplement controlled tests |
-| Release and product | Registry publication, managed provisioning and Parsar cutover remain open; business Team orchestration is deferred |
+| Release and product | Registry publication and Parsar cutover remain open; basic Docker provisioning is operator opt-in; business Team orchestration is deferred |
 
 ### Public engine profiles
 
@@ -306,6 +306,10 @@ service tier `auto`, ordinary text and non-deferred functions. Codex additionall
 supports anonymous or attached static-bearer service-origin HTTP MCP on `none`.
 Claude SDK supports the bounded service-origin HTTP MCP profile on `none`,
 with optional attached static-bearer credentials over HTTPS.
+The [basic Codex/Docker hosted profile](environments.md#basic-public-docker-hosted-profile)
+uses one colocated Runtime with enabled/disabled native networking and scoped local
+Files. It requires explicit operator composition and does not implement populated
+startup installations, restricted domains, hosted MCP or other hosted engines.
 The self-hosted profile supports text/functions and anonymous or attached
 static-bearer service-origin HTTP MCP as described in the Environment contract. See the
 [HTTP MCP profile and limits](../../services/agents-api/README.md#http-mcp-execution).

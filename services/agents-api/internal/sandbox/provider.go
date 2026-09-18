@@ -23,6 +23,7 @@ type Reference struct{ TenantID, EnvironmentID, AllocationID string }
 type Bootstrap struct {
 	Reference
 	SessionID, DeviceID, CoreURL, Credential string
+	NetworkAccess                            string
 }
 
 // Info describes compute only. Running does not establish daemon authentication,

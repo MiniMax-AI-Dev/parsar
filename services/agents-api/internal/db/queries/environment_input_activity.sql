@@ -1,6 +1,8 @@
 -- name: GetEnvironmentInputActivity :one
-SELECT r.state, r.is_initial, r.created_at, r.settled_at, e.id AS environment_id, e.status AS connection_status
+SELECT r.state, r.is_initial, r.created_at, r.settled_at, e.id AS environment_id, e.status AS connection_status,
+       COALESCE(s.configuration->'environment'->>'type', '')::text AS environment_type
 FROM environments e
+JOIN sessions s ON s.id = e.session_id
 JOIN LATERAL (
     SELECT * FROM environment_input_reservations
     WHERE session_id = e.session_id

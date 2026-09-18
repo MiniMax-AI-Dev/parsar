@@ -241,10 +241,14 @@ one caller-owned allocation reference through partial creation and cleanup. Pers
 that reference before Create and serialize its lifecycle; resolve a lost response
 with observed state, without rewriting bootstrap credentials or replaying startup.
 Provider state is compute state, not public Environment readiness. Named Runtime
-volumes need explicit owned cleanup after container removal. Initialization command
+volumes need explicit owned cleanup after container removal. A second mount of the
+same workspace volume subdirectory provides the public `/workspace` path to native
+tools; trusted staging and atomic rename retain the original parent mount. Do not
+copy files or widen private-path reads to preserve an alias. Initialization command
 timeouts can leave processes alive and require allocation cleanup before reuse.
-The [managed Runtime build and ownership contract](services/agents-api/deploy/codex/README.md#managed-runtime-image-and-docker-adapter)
-does not itself enable public hosted admission or supply durable expiry.
+The [managed Runtime build and operator configuration](services/agents-api/deploy/codex/README.md#managed-runtime-image-and-docker-adapter)
+defines the explicit opt-in for basic hosted admission. Building an image alone
+does not qualify its isolation or enable public creation.
 
 Managed Runtime allocation, dedicated daemon credential hash and exact Session
 binding commit atomically before Provider.Create, using the existing execution
@@ -253,6 +257,32 @@ and Core restart observe that same reference without replay or credential rotati
 The operator's stable provider key identifies one backend/installation; retain its
 adapter for cleanup, and use a different key when changing the target. Never treat
 absence on another backend as successful reclamation.
+Disabling the default provider stops new hosted admission/bootstrap; it must not
+block existing Session cancellation, tool results or input retry outcomes.
+Input HTTP response budgets follow the persisted Environment type, covering the
+admission wait for both hosted and self-hosted Sessions independently of operator
+creation switches or remote executor configuration.
+
+With an explicitly configured default managed provider, the same Worker scans
+committed pending hosted Environments that have no allocation. This includes idle
+Session creation and recovery after commit-before-bootstrap interruption; an
+existing allocation never enters that startup path. Keep the scan bounded and
+serialized by the existing lifecycle owner. Hosted provisioning requires no caller
+connection action. An initial reservation without a Turn leaves its Session idle,
+as allowed by the pinned contract; do not emit an in-progress event before a Turn
+starts or treat a daemon connection as native readiness.
+
+The same serialized scan publishes authenticated connection observations using
+the existing durable generations after verifying the exact Session/device binding
+and settled bootstrap. Socket loss remains observable during a provider outage;
+Core restart fences old observations. Do not create a separate connection owner.
+
+Terminal managed cleanup atomically revokes authority, persists Environment failure
+or expiry, settles pending input and requests cancellation before external cleanup.
+Preserve original input deadlines and retry outcomes. Temporary provider outages,
+unknown Create results and stopped compute do not prove permanent failure. The
+pinned stream has no Environment expired event; do not invent one. Exact hosted
+failure codes and ordering remain explicitly unverified.
 
 Allocation state is private compute ownership, separate from public Environment
 connection/native readiness. Adapters qualify bootstrap completion; Core does not
@@ -268,8 +298,8 @@ Keep the allocation after public Session deletion. Mark it released only after
 owned compute/volume cleanup and evidence that its original Create has settled.
 An unknown creation retains cleanup ownership even after an absence observation;
 continue bounded scans for late resources without issuing another Create. This
-conservative internal lifecycle does not enable public hosted admission, define
-user-managed enrollment, or prove complete upstream expiry/error semantics.
+conservative internal lifecycle does not define user-managed enrollment or prove
+complete upstream expiry/error semantics.
 
 Qualify the actual Docker/native sandbox before default cutover: real model
 execution, file access, owned cancellation, restart with retained native history
@@ -291,9 +321,21 @@ native named profile at harness startup and on both new/resumed threads, omittin
 the legacy sandbox override. It is operator configuration, never a prompt option,
 and rejects remote, none and temporary read preparations. Native managed
 requirements own allowed profiles and deny-read enforcement. Keep the selector
-unset for existing deployments. The [co-location qualification inputs](services/agents-api/deploy/codex/README.md)
+unset for existing deployments. Managed native shells disable shell snapshots,
+whose private files are inaccessible to tool execution; retain normal native shell
+startup without granting tools access to harness state.
+The [co-location qualification inputs](services/agents-api/deploy/codex/README.md)
 record the pinned native/Docker prerequisites and limits; this switch alone does
 not admit hosted Environments or authorize a workspace.
+
+A managed Runtime's enabled/disabled network policy is immutable deployment input,
+transferred through the provider-neutral bootstrap and checked against execution
+preparation. The native adapter selects the corresponding managed profile; Core
+and Docker do not select native profile names. New policy-aware peers advertise
+`local_environment_network_policy`; enabled execution requires that capability.
+The older explicit-disabled internal peer path remains supported without widening
+its policy. Read-only workspace access does not require execution network policy.
+A declaration alone does not qualify an image or admit public hosted creation.
 
 A dedicated local Runtime uses one Environment-scoped device credential and an
 immutable binding to that Environment's Session. It is excluded from general
@@ -302,8 +344,9 @@ tenant. Deleting its Session invalidates credential lookup and heartbeat renewal
 Provision a new scoped device atomically rather than widening an existing shared
 device credential. Revocation does not authorize silent placement replacement.
 
-The private local Environment reference contains only an identity. Trusted Runtime
-deployment configuration freezes the Environment, Session and workspace root;
+The private local Environment reference contains its identity and, for policy-aware
+execution, its immutable network policy. Trusted Runtime deployment configuration
+freezes the Environment, Session and workspace root;
 requests cannot supply a replacement root. Local and remote references are mutually
 exclusive. Use the same preparation/start lifecycle for native execution and the
 existing bounded workspace controls for directory access. Local idle directory
@@ -313,9 +356,9 @@ establish Provider lifecycle, or define the official `self_hosted` mapping.
 Core rechecks the persisted Environment/device binding for preparation and active
 reads; capability discovery cannot select or authorize a general device for this
 placement. Local work uses the existing pending-input reservation and Worker
-ownership without a remote connection resolver. The currently qualified private
-hosted configuration requires explicit `network.access: disabled`; omitted network
-settings mean enabled upstream and must not be silently treated as disabled.
+ownership without a remote connection resolver. The basic hosted profile supports `network.access: enabled` or `disabled`; the
+actual image must qualify both native profiles before public deployment. Omitted
+network settings mean enabled upstream and must not be silently treated as disabled.
 
 Core and Runtime use common preparation, start, input-receipt, cancellation,
 release and recovery semantics for Codex and Claude. Retain each harness's native

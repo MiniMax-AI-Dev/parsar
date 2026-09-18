@@ -2,11 +2,17 @@ default_permissions = "managed-workspace"
 allowed_approval_policies = ["never"]
 [allowed_permission_profiles]
 managed-workspace = true
+managed-workspace-enabled = true
 [permissions.managed-workspace.filesystem]
 ":minimal" = "read"
 "/environment/workspace" = "write"
+"/workspace" = "write"
 [permissions.managed-workspace.network]
 enabled = false
+[permissions.managed-workspace-enabled]
+extends = "managed-workspace"
+[permissions.managed-workspace-enabled.network]
+enabled = true
 [permissions.filesystem]
 deny_read = [
   "/environment/staging",

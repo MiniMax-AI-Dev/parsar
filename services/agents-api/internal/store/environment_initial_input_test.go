@@ -98,14 +98,22 @@ func TestEnvironmentInitialInputCreationRetainsCursorIdentityAndPromotion(t *tes
 				t.Fatal("initial batch/deadline changed", reservation)
 			}
 			environmentInputHistory(t, pool, session.ID, 0, 0)
-			requireEnvironmentInputActivity(t, s, tenant, session.ID, "requires_action", session.Environment.ID)
+			status, actionEnvironment := "requires_action", session.Environment.ID
+			if kind == "openai_hosted" {
+				status, actionEnvironment = "", ""
+			}
+			requireEnvironmentInputActivity(t, s, tenant, session.ID, status, actionEnvironment)
 			events, err := s.ListSessionEvents(t.Context(), tenant, session.ID, creation.Cursor)
-			if err != nil || len(events) != 1 || events[0].Event.Type != "agent.session.requires_action" || events[0].Turn != nil {
-				t.Fatal("creation cursor lost initial connection action", events, err)
+			expectedEvents := 1
+			if kind == "openai_hosted" {
+				expectedEvents = 0
+			}
+			if err != nil || len(events) != expectedEvents || (expectedEvents > 0 && (events[0].Event.Type != "agent.session."+status || events[0].Turn != nil)) {
+				t.Fatal("creation cursor lost initial activity", events, err)
 			}
 			other, _ := testStore(t)
 			retry, err := other.CreateSessionStream(t.Context(), tenant, input)
-			if err != nil || retry.Created || retry.Cursor != events[0].Sequence || retry.Session.ID != session.ID || retry.Session.EnvironmentInputActivity != nil {
+			if err != nil || retry.Created || retry.Cursor != int64(expectedEvents) || retry.Session.ID != session.ID || retry.Session.EnvironmentInputActivity != nil {
 				t.Fatal("retry changed creation cursor/snapshot", retry, err)
 			}
 			if got := initialEnvironmentReservation(t, other, pool, tenant, session.ID); !reflect.DeepEqual(got, reservation) {
@@ -129,7 +137,11 @@ func TestEnvironmentInitialInputCreationRetainsCursorIdentityAndPromotion(t *tes
 			if err := writer.ObserveEnvironmentConnection(t.Context(), tenant, session.Environment.ID, generation, 1, true); err != nil {
 				t.Fatal(err)
 			}
-			requireEnvironmentInputActivity(t, s, tenant, session.ID, "idle", "")
+			connectedStatus := "idle"
+			if kind == "openai_hosted" {
+				connectedStatus = ""
+			}
+			requireEnvironmentInputActivity(t, s, tenant, session.ID, connectedStatus, "")
 			environmentInputHistory(t, pool, session.ID, 0, 0)
 			promoted, err := writer.PromoteEnvironmentInput(t.Context(), tenant, session.ID, reservation.ID)
 			if err != nil || promoted.State != EnvironmentInputAdmitted || !promoted.IsInitial || len(promoted.Receipts) != 2 {
@@ -148,7 +160,7 @@ func TestEnvironmentInitialInputCreationRetainsCursorIdentityAndPromotion(t *tes
 			}
 			environmentInputHistory(t, pool, session.ID, 1, 2)
 			after, err := s.ListSessionEvents(t.Context(), tenant, session.ID, 0)
-			if err != nil || !reflect.DeepEqual(events[0], after[0]) {
+			if err != nil || !reflect.DeepEqual(events, after[:len(events)]) {
 				t.Fatal("initial snapshot changed after promotion", err)
 			}
 		})
@@ -184,7 +196,11 @@ func TestEnvironmentInitialInputExpiryHasNoTurnAndCannotReplay(t *testing.T) {
 				t.Fatal("input expiry changed Environment/Turn", failed)
 			}
 			events, err := s.ListSessionEvents(t.Context(), tenant, session.ID, 0)
-			if err != nil || len(events) != 2 || events[1].Event.Type != "agent.session.failed" || events[1].Turn != nil || events[1].EnvironmentInputActivity.Status != "failed" {
+			expectedEvents := 2
+			if kind == "openai_hosted" {
+				expectedEvents = 1
+			}
+			if err != nil || len(events) != expectedEvents || events[len(events)-1].Event.Type != "agent.session.failed" || events[len(events)-1].Turn != nil || events[len(events)-1].EnvironmentInputActivity.Status != "failed" {
 				t.Fatal("missing pre-Turn failure snapshot", events, err)
 			}
 			if err := lease.Close(t.Context()); err != nil {

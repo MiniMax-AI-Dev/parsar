@@ -2,10 +2,11 @@
 
 This assessment covers the fixed [Python SDK contract](upstream.json). It is an
 implementation plan with partial current coverage. Public execution admits
-`environment.type=none` on Codex and Claude SDK, plus the Codex self-hosted
-text/function profile. Environment retrieval supports that profile; populated installation
-metadata, templates and file uploads remain missing. Direct regular-file listing
-has [partial coverage and explicit local policies](environment-files.md).
+`environment.type=none` on Codex and Claude SDK, the Codex self-hosted text/function
+profile, and the operator-configured basic Codex/Docker hosted profile below.
+Environment retrieval supports safe metadata for these environment profiles;
+populated startup installations and templates remain missing. Live file listing
+and local inline/source writes have [partial coverage and explicit local policies](environment-files.md).
 See [current coverage](README.md#public-semantics).
 
 The internal Store now owns a durable Environment association for newly created
@@ -13,7 +14,7 @@ The internal Store now owns a durable Environment association for newly created
 It derives configuration and tenant ownership from the Session; retries preserve
 the existing identity. Scoped reads hide associations after Session deletion while
 retaining the underlying record. The public text profile reuses this association
-and the preparation/admission path below; full provider integration remains open.
+and the preparation/admission path below; additional provider profiles remain open.
 Missing/`none` configurations and historical internal snapshots gain no backfill.
 
 
@@ -41,6 +42,32 @@ The relay pairs one harness with the current executor socket and forwards native
 binary frames unchanged. Either peer loss closes both physical connections and
 invalidates grants; no queued frames or commands move to a successor. Refresh does
 not disturb a healthy pair. See the [operator prerequisite](../../services/agents-api/README.md#native-executor-transport-prerequisite).
+
+## Basic public Docker-hosted profile
+
+An explicitly configured default managed provider enables `type=openai_hosted`
+for Codex. The standalone [operator configuration](../../services/agents-api/deploy/codex/README.md#standalone-operator-configuration)
+selects the qualified immutable Runtime image; advertised capabilities alone do
+not enable admission. An idle or initial-text creation commits Session, Environment
+and retry identity before the existing leased Worker provisions its allocation.
+A committed creation interrupted before bootstrap is recovered without replaying
+an existing allocation's Create.
+
+Omitted/null network defaults to enabled; explicit enabled and disabled use the
+same image with adapter-selected immutable native policy. Unsupported restricted
+domains, templates, populated env/packages/setup/files/plugins/skills/capability
+paths fail explicitly. Empty/null installation defaults produce safe empty metadata,
+not a live workspace inventory. Hosted MCP combinations remain unimplemented.
+
+Initial provisioning leaves a Session idle until a Turn starts, with no caller
+connection action. The managed scan records authenticated, exactly bound daemon
+connections through existing fenced generations. Native preparation remains
+separate. Core restart preserves allocation/workspace/native identity; it does not
+blindly replay uncertain work. Terminal cleanup revokes authority and settles
+pending input atomically before external reclamation. Matching retries preserve
+outcomes; new inputs reject terminal Environments. Expiry has no invented SSE
+variant. Local failure codes and exact event ordering remain unverified upstream
+semantics; this profile does not establish complete Environment compatibility.
 
 ## Initial public self-hosted profile
 
@@ -426,7 +453,8 @@ self-hosted configuration. No API-managed installation resource exists in that
 profile; caller-prepared or model-created workspace files are not this inventory.
 Unsupported installation fields/capabilities fail closed. This read does not require
 execution/registry configuration or invoke native work. Populated metadata, file
-operations, hosted output and complete Environment conformance remain separate work.
+operations beyond the current Files profile, populated hosted output and complete
+Environment conformance remain separate work.
 
 ## Dependency-ordered implementation
 
