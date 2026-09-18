@@ -67,7 +67,11 @@ The developer chooses the review method based on scope, risk, uncertainty and
 expected value. Self-review with suitable verification is acceptable when it is
 sufficient. Use an independent assessment when it would materially help, especially
 for security-sensitive, shared or uncertain behavior; a subagent is not mandatory
-for every change.
+for every change. For substantial or uncertain designs, independent subagents may
+propose and challenge alternatives before implementation; the main thread chooses
+by evidence, scope and cost. All built-in subagents, including design, development,
+validation and blind review, must explicitly use GPT-6 Astra (`gpt-6-astra`) with
+`high` reasoning effort.
 
 When using blind review, finish implementation and required checks first, then ask
 one fresh subagent in an independent context to review the entire diff. Give it
@@ -1023,26 +1027,49 @@ operation deadlines remain separate. Owner cancellation/RPC exit release pending
 resources; executor loss is checked at Start, not continuously monitored. This
 adapter seam does not provide public admission or a new scheduler.
 
-The optional `PreparedCancellation` adapter contract follows cancellation across
-Start's resource transfer. Codex fences future Start under the transfer lock;
-unused resources use preparation teardown, while transferred resources use the
-existing Session cancellation path. `Close` remains inert after transfer.
+Every executable preparation must implement `PreparedCancellation`; read-only
+preparations may implement only `Prepared`. The Router rejects and closes an
+executable preparation before `ready` when that contract is missing. Codex fences
+future Start under the transfer lock; unused resources use preparation teardown,
+while transferred resources use the existing Session cancellation path inside the
+adapter. `Close` remains inert after transfer.
 `CancellationOutcome` exposes observed content, Usage and verified native identity;
 an unstarted resource has no measured Usage or observed resume identity. This is
 best-effort cancellation and an observed snapshot, not immutable final output,
 notification drain, caller-deadline compliance or remote process quiescence.
-During a pending Start, the Router invokes that cancellation capability once outside
-its receive loop and retains native preparation capacity until Start, cancellation,
-output forwarding and cleanup finish. A late Session is used only for teardown and
-forwarding; it never becomes available for input or publishes successful Start.
+From Start admission onward, the exact `PreparedCancellation` object is the sole
+release target: a late Session never receives fallback `Cancel`, and the Router
+never falls back to preparation `Close` or owner-context cancellation. Successful
+`Cancel` means local cleanup is complete and no more output writes can occur. A
+failed or timed-out call returns without waiting for output, retains execution
+ownership, and permits only a later explicit serialized retry on that same object.
+Before publication, failed cleanup also retains the preparation slot. Successful
+publication permanently transfers resource tracking to the Run; subsequent release
+does not restore preparation ownership or make its old handle cancel that Run.
 Forwarded permission and user-choice observations from that cancelled handoff do
 not register actionable interactions. Codex prepared cancellation also waits for
 the transferred Session's local cleanup, which can finish after output closes;
 ordinary Session cancellation retains its existing behavior.
-The ordinary output pump forwards accepted frames before the observed cancellation
+One prepared-output consumer starts before `Prepared.Start`, so native output beyond
+the 64-frame channel capacity cannot deadlock Start. It retains the first terminal
+frame, drains later output, and forwards accepted frames before the observed cancellation
 outcome receipt. Missing capability, failed cancellation or failed forwarding cannot
 produce an applied receipt. An unused resource may supply an empty observed outcome;
 the Router never fabricates one.
+
+The returned Session remains private until the `started` status send succeeds. The
+handoff has one permanent release claim, one current native attempt and one
+success-only settlement. Function results, permission decisions, user-choice
+decisions and steering admitted before the claim hold the same operation barrier
+through native submission, replay bookkeeping and receipt delivery. Natural
+completion waits for Start publication before cancellation; an abort wakes that
+same attempt and may fence a concurrent Start. The initial started-status send is
+bounded by the preparation deadline, which is rechecked at publication commit.
+Delayed expiry callbacks cannot cancel a successfully published handoff. The successful attempt waits for Start and the sole output
+consumer, then forwards the retained terminal frame and removes the Run. Internal
+paths join the current attempt; only an explicit cancel, Release, expiry, device
+shutdown or later Router Shutdown may retry a failed attempt. Workspace reads require
+a published, open Session but keep their independent bounded lifecycle.
 
 Receipt settlement waits at most ten seconds, with a separate five-second send
 budget and the existing gateway settlement deadline. A timeout does not free the
@@ -1072,11 +1099,14 @@ handle, while old handles cannot consume replacements. This is not durable
 exactly-once preparation or cross-connection recovery.
 
 Preparation and Start execute outside the receive loop and router lock, with
-tracked lifetime work. Start reserves the real RunID with its owner cancellation
-before native work; cancellation in that phase cancels the owner even before a
-Session is published. A late result cannot resurrect released ownership. Shutdown
-captures cancellation/session references under the lock. Successful transfer stops
-the preparation deadline and uses the ordinary run pump and completion release;
+tracked lifetime work. Start reserves the real RunID and fixed cancellation target
+before native work; cancellation in that phase uses the adapter contract across
+the transfer. A late result cannot resurrect released ownership. Shutdown claims
+or retries every prepared release under the lock before closing its cancellation
+signal. A failed native attempt returns Shutdown without waiting on an output
+consumer that may still be blocked; a later Shutdown retries the same target.
+Successful publication stops the preparation deadline and uses the same prepared
+output consumer and completion release;
 later preparation Release cannot cancel that Run. Released/expired status makes
 the handle unusable; asynchronous native cleanup still counts toward capacity and
 does not promise immediate OS quiescence. Release retries retained cleanup.

@@ -35,6 +35,7 @@ type preparationState struct {
 	owns              bool
 	closeErr          error
 	workspaceReadOnly bool
+	handoff           *preparedHandoff
 }
 
 func (r *Router) handleExecutionPrepare(ctx context.Context, env proto.Envelope) error {
@@ -102,7 +103,7 @@ func (r *Router) handleExecutionPrepare(ctx context.Context, env proto.Envelope)
 	p := &preparationState{requestID: env.ID, trace: env.Trace, fingerprint: fingerprint, ctx: owner, cancel: cancel, stateKey: req.AgentStateKey, environmentID: req.EnvironmentID(), workspaceReadOnly: req.WorkspaceReadOnly, busy: true, owns: true, deadline: time.Now().Add(r.preparationTimeout)}
 	p.status = proto.PreparationStatusPayload{Handle: uuid.NewString(), Revision: 1, State: "preparing", ExpiresAt: p.deadline.UnixMilli()}
 	r.preparations[p.status.Handle], r.preparationRequests[p.requestID] = p, p
-	p.timer = time.AfterFunc(r.preparationTimeout, func() { r.releasePreparation(p, "expired", "", true) })
+	p.timer = time.AfterFunc(r.preparationTimeout, func() { r.releasePreparation(p, "expired", "", true, true) })
 	r.shutdownWG.Add(1)
 	r.mu.Unlock()
 	go r.prepareExecution(p, req, prepare)
@@ -112,7 +113,7 @@ func (r *Router) handleExecutionPrepare(ctx context.Context, env proto.Envelope)
 func (r *Router) prepareExecution(p *preparationState, req proto.PromptRequestPayload, prepare agent.PreparationFactory) {
 	defer r.shutdownWG.Done()
 	if !r.sendPreparation(p.requestID, p.trace, proto.PreparationStatusPayload{Handle: p.status.Handle, Revision: 1, State: "preparing", ExpiresAt: p.deadline.UnixMilli()}) {
-		r.releasePreparation(p, "failed", "status_delivery_failed", false)
+		r.releasePreparation(p, "failed", "status_delivery_failed", false, false)
 	}
 	var prepared agent.Prepared
 	var err error
@@ -120,6 +121,11 @@ func (r *Router) prepareExecution(p *preparationState, req proto.PromptRequestPa
 		prepared, err = prepare(p.ctx, req)
 	} else {
 		err = p.ctx.Err()
+	}
+	if err == nil && prepared != nil && !p.workspaceReadOnly {
+		if _, ok := prepared.(agent.PreparedCancellation); !ok {
+			err = errors.New("executable preparation requires cross-transfer cancellation")
+		}
 	}
 	r.mu.Lock()
 	p.busy = false
@@ -147,7 +153,7 @@ func (r *Router) prepareExecution(p *preparationState, req proto.PromptRequestPa
 		r.mu.Unlock()
 	}
 	if !r.sendPreparation(p.requestID, p.trace, status) && ready {
-		r.releasePreparation(p, "failed", "status_delivery_failed", false)
+		r.releasePreparation(p, "failed", "status_delivery_failed", false, false)
 	}
 }
 
@@ -163,15 +169,35 @@ func (r *Router) handleExecutionRelease(_ context.Context, env proto.Envelope) e
 	if !valid {
 		return r.rejectPreparation(env, "unknown_preparation")
 	}
-	r.releasePreparation(p, "released", "", true)
+	r.releasePreparation(p, "released", "", true, true)
 	return nil
 }
 
-func (r *Router) releasePreparation(p *preparationState, state, code string, publish bool) {
+func (r *Router) releasePreparation(p *preparationState, state, code string, publish, retryHandoff bool) {
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
 		return
+	}
+	if p.handoff != nil {
+		if active := r.sessions[p.status.RunID]; active != nil && active.preparedHandoff == p.handoff {
+			if state == "expired" && p.handoff.published {
+				r.mu.Unlock()
+				return
+			}
+			switch p.status.State {
+			case "preparing", "ready", "starting", "started":
+				p.status.State, p.status.ErrorCode, p.status.Revision = state, code, p.status.Revision+1
+				p.timer.Stop()
+			}
+			r.claimPreparedReleaseLocked(active, true, "", retryHandoff)
+			status := p.status
+			r.mu.Unlock()
+			if publish {
+				r.publishPreparation(p, status)
+			}
+			return
+		}
 	}
 	closeResource := false
 	switch p.status.State {
@@ -236,15 +262,19 @@ func (r *Router) publishPreparation(p *preparationState, status proto.Preparatio
 		defer r.shutdownWG.Done()
 		// A failed terminal notification must not restart incomplete cleanup.
 		if !r.sendPreparation(p.requestID, p.trace, status) && (!p.workspaceReadOnly || status.State == "preparing" || status.State == "ready") {
-			r.releasePreparation(p, "failed", "status_delivery_failed", false)
+			r.releasePreparation(p, "failed", "status_delivery_failed", false, false)
 		}
 	}()
 }
 
 func (r *Router) sendPreparation(requestID, trace string, status proto.PreparationStatusPayload) bool {
+	return r.sendPreparationUntil(requestID, trace, status, time.Now().Add(5*time.Second))
+}
+
+func (r *Router) sendPreparationUntil(requestID, trace string, status proto.PreparationStatusPayload, deadline time.Time) bool {
 	ctx, stop := r.shutdownContext(context.Background())
 	defer stop()
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 	env, err := proto.NewEnvelopeWithTrace(proto.TypePreparationStatus, requestID, status, trace)
 	return err == nil && r.sender.Send(ctx, env) == nil

@@ -89,7 +89,7 @@ type sessionState struct {
 	steerBusy           bool
 	steeringClosed      bool
 	steeringDone        chan struct{}
-	preparationStart    *preparedStartCancellation
+	preparedHandoff     *preparedHandoff
 }
 
 // Config is the constructor input. Registry and Sender are required;
@@ -244,8 +244,13 @@ func (r *Router) handlePermissionDecision(ctx context.Context, env proto.Envelop
 	r.mu.Lock()
 	runID, known := r.permIndex[env.ID]
 	var state *sessionState
+	var session agent.Session
+	var finishOperation func()
 	if known {
 		state = r.sessions[runID]
+		if state != nil {
+			session, finishOperation, _ = r.preparedOperationLocked(state)
+		}
 	}
 	r.mu.Unlock()
 
@@ -255,8 +260,14 @@ func (r *Router) handlePermissionDecision(ctx context.Context, env proto.Envelop
 		r.log.InfoContext(ctx, "permission_decision for unknown perm (run gone)", "perm_id", env.ID)
 		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_pending", "permission request is no longer pending")
 	}
+	if session == nil {
+		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_ready", "permission request is waiting for the native session")
+	}
+	defer finishOperation()
+	ctx, stop := r.shutdownContext(ctx)
+	defer stop()
 
-	if err := state.session.SubmitPermission(ctx, env.ID, payload); err != nil {
+	if err := session.SubmitPermission(ctx, env.ID, payload); err != nil {
 		if errors.Is(err, agent.ErrUnknownPermission) {
 			r.log.InfoContext(ctx, "agent reports unknown perm (race with cancel)", "perm_id", env.ID, "run_id", runID)
 			r.dropPermission(state, env.ID)
@@ -311,8 +322,13 @@ func (r *Router) handlePromptForUserChoiceDecision(ctx context.Context, env prot
 	r.mu.Lock()
 	runID, known := r.askIndex[env.ID]
 	var state *sessionState
+	var session agent.Session
+	var finishOperation func()
 	if known {
 		state = r.sessions[runID]
+		if state != nil {
+			session, finishOperation, _ = r.preparedOperationLocked(state)
+		}
 	}
 	r.mu.Unlock()
 
@@ -320,8 +336,14 @@ func (r *Router) handlePromptForUserChoiceDecision(ctx context.Context, env prot
 		r.log.InfoContext(ctx, "prompt_for_user_choice_decision for unknown ask (run gone)", "ask_id", env.ID)
 		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_pending", "user-input request is no longer pending")
 	}
+	if session == nil {
+		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_ready", "user-input request is waiting for the native session")
+	}
+	defer finishOperation()
+	ctx, stop := r.shutdownContext(ctx)
+	defer stop()
 
-	err = state.session.SubmitPromptForUserChoice(ctx, env.ID, payload)
+	err = session.SubmitPromptForUserChoice(ctx, env.ID, payload)
 	if err != nil {
 		if errors.Is(err, agent.ErrUnknownAsk) {
 			r.log.InfoContext(ctx, "agent reports unknown ask (race with cancel)", "ask_id", env.ID, "run_id", runID)
@@ -432,8 +454,9 @@ func (r *Router) dropAsk(s *sessionState, askID string) {
 	r.mu.Unlock()
 }
 
-// indexPermissionFrame records / forgets perm and ask ids as the
-// agent emits / cancels them.
+// indexPermissionFrame records interaction identities before forwarding them.
+// Prepared output may arrive before successful Session publication; decisions
+// remain retryable until state.session becomes available.
 func (r *Router) indexPermissionFrame(s *sessionState, env proto.Envelope) {
 	switch env.Type {
 	case proto.TypePermissionRequest:
@@ -449,8 +472,10 @@ func (r *Router) indexPermissionFrame(s *sessionState, env proto.Envelope) {
 			return
 		}
 		r.mu.Lock()
-		r.permIndex[requestID] = s.runID
-		s.pendingIDs[requestID] = struct{}{}
+		if r.interactionRouteOpenLocked(s) {
+			r.permIndex[requestID] = s.runID
+			s.pendingIDs[requestID] = struct{}{}
+		}
 		r.mu.Unlock()
 	case proto.TypePermissionCancel:
 		if env.ID == "" {
@@ -469,9 +494,22 @@ func (r *Router) indexPermissionFrame(s *sessionState, env proto.Envelope) {
 			return
 		}
 		r.mu.Lock()
-		r.askIndex[p.AskID] = s.runID
-		s.pendingAsks[p.AskID] = struct{}{}
+		if r.interactionRouteOpenLocked(s) {
+			r.askIndex[p.AskID] = s.runID
+			s.pendingAsks[p.AskID] = struct{}{}
+		}
 		r.mu.Unlock()
+	}
+}
+
+func (r *Router) clearInteractionRoutesLocked(s *sessionState) {
+	for permissionID := range s.pendingIDs {
+		delete(r.permIndex, permissionID)
+		delete(s.pendingIDs, permissionID)
+	}
+	for askID := range s.pendingAsks {
+		delete(r.askIndex, askID)
+		delete(s.pendingAsks, askID)
 	}
 }
 

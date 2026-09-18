@@ -50,7 +50,7 @@ func TestReadPreparationOfflineStatusDoesNotRetryCleanup(t *testing.T) {
 		ctx: ctx, cancel: cancel, timer: timer,
 		status: proto.PreparationStatusPayload{Handle: "reader", Revision: 1, State: "ready"}}
 	for attempt := int32(1); attempt <= 2; attempt++ {
-		r.releasePreparation(p, "released", "", true)
+		r.releasePreparation(p, "released", "", true, true)
 		r.shutdownWG.Wait()
 		if got := prepared.calls.Load(); got != attempt {
 			t.Fatalf("explicit release %d caused %d cleanup attempts", attempt, got)
@@ -60,7 +60,7 @@ func TestReadPreparationOfflineStatusDoesNotRetryCleanup(t *testing.T) {
 		}
 	}
 	prepared.settled.Store(true)
-	r.releasePreparation(p, "released", "", true)
+	r.releasePreparation(p, "released", "", true, true)
 	r.shutdownWG.Wait()
 	if prepared.calls.Load() != 3 || p.owns || p.prepared != nil || p.status.State != "released" {
 		t.Fatal("explicit retry did not settle resource ownership")

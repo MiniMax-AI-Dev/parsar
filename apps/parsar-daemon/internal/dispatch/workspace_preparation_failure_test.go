@@ -63,7 +63,7 @@ func TestReadConstructorFailureCannotPublishReleaseDuringCleanupRetry(t *testing
 		close(prepared)
 	}()
 	<-boundary.entered
-	r.releasePreparation(p, "released", "", true)
+	r.releasePreparation(p, "released", "", true, true)
 	<-retryEntered
 	close(boundary.resume)
 	<-prepared
