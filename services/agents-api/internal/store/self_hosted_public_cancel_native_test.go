@@ -47,8 +47,8 @@ exec ./placement.sh resumed
 	if first["turn_id"] != requested["turn_id"] {
 		t.Fatal("cancelled Turn differs from public request target")
 	}
-	binding, err := f.store.GetSessionDevice(f.ctx, f.tenant, f.sessionID)
-	if err != nil || binding.ID != f.deviceID || binding.NativeSessionID == "" {
+	binding, err := f.store.GetSessionExecutionBinding(f.ctx, f.tenant, f.sessionID)
+	if err != nil || binding.Device.ID != f.deviceID || binding.NativeSessionID == "" {
 		t.Fatal("cancellation lost native device/history binding", err)
 	}
 	var receipt *proto.InteractionDecisionAckPayload
@@ -106,7 +106,7 @@ exec ./placement.sh resumed
 	case <-f.ctx.Done():
 		t.Fatal("public cancellation continuation timed out; inspect private proof")
 	}
-	finalBinding, err := f.store.GetSessionDevice(f.ctx, f.tenant, f.sessionID)
+	finalBinding, err := f.store.GetSessionExecutionBinding(f.ctx, f.tenant, f.sessionID)
 	if err != nil || finalBinding != binding {
 		t.Fatal("cold continuation changed native device/history binding", err)
 	}

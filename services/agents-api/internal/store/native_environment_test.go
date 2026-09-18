@@ -111,13 +111,13 @@ func TestNativeNoExecutionEnvironment(t *testing.T) {
 	}
 	first := h.message("first", "Return an answer.")
 	h.finished(h.run(ctx, first.TurnID), store.TurnCompleted)
-	bound, err := h.s.GetSessionDevice(ctx, h.tenant, h.session.ID)
+	bound, err := h.s.GetSessionExecutionBinding(ctx, h.tenant, h.session.ID)
 	if err != nil || bound.NativeSessionID == "" {
 		t.Fatal(bound, err)
 	}
 	second := h.message("second", "Continue the same conversation.")
 	h.finished(h.run(ctx, second.TurnID), store.TurnCompleted)
-	again, err := h.s.GetSessionDevice(ctx, h.tenant, h.session.ID)
+	again, err := h.s.GetSessionExecutionBinding(ctx, h.tenant, h.session.ID)
 	if err != nil || again.NativeSessionID != bound.NativeSessionID {
 		t.Fatal(again, err)
 	}

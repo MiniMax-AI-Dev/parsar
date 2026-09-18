@@ -40,11 +40,11 @@ func (d *Dispatcher) RunEnvironmentInput(ctx context.Context, tenantID, sessionI
 	if json.Unmarshal(session.Configuration, &snapshot) != nil || snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
 		return run, store.ErrInvalidInput
 	}
-	bound, err := d.Store.GetSessionDevice(ctx, tenantID, sessionID)
+	bound, err := d.Store.GetSessionExecutionBinding(ctx, tenantID, sessionID)
 	if err != nil {
 		return run, err
 	}
-	peer, err := d.Registry.LookupDevice(bound.ID)
+	peer, err := d.Registry.LookupDevice(bound.Device.ID)
 	if err != nil {
 		return run, err
 	}
@@ -54,7 +54,7 @@ func (d *Dispatcher) RunEnvironmentInput(ctx context.Context, tenantID, sessionI
 	}
 	owner, cancel := context.WithCancel(ctx)
 	defer cancel()
-	req, err := d.executionRequest(owner, session, snapshot, caps, bound.NativeSessionID)
+	req, err := d.executionRequest(owner, session, snapshot, caps, bound)
 	if err != nil {
 		return run, err
 	}
@@ -69,7 +69,7 @@ func (d *Dispatcher) RunEnvironmentInput(ctx context.Context, tenantID, sessionI
 		}
 		messages = append(messages, text)
 	}
-	release, err := d.configurePreparedEnvironment(owner, session, environment, bound, &req)
+	release, err := d.configurePreparedEnvironment(owner, session, environment, bound.Device, &req)
 	if release != nil {
 		defer release()
 	}
@@ -99,7 +99,7 @@ func (d *Dispatcher) RunEnvironmentInput(ctx context.Context, tenantID, sessionI
 	req.Prompt = strings.Join(messages, "\n\n")
 	through := run.Reservation.Receipts[len(run.Reservation.Receipts)-1].Sequence
 	result, status := d.deliver(owner, tenantID, sessionID, peer, req, through, prepared)
-	result, status = d.captureCompletedArtifacts(owner, peer, session, environment, bound, req.RunID, result, status)
+	result, status = d.captureCompletedArtifacts(owner, peer, session, environment, bound.Device, req.RunID, result, status)
 	run.Turn, err = d.finishRun(tenantID, sessionID, req.RunID, snapshot.Agent.Model, result, status)
 	return run, err
 }

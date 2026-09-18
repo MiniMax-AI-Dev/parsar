@@ -16,17 +16,18 @@ import (
 // It observes owner cancellation and RPC exit, not continuous executor readiness.
 // Remote status is rechecked at Start without reconnecting the prepared resource.
 type Prepared struct {
-	mu                sync.Mutex
-	session           *Session
-	plan              SessionPlan
-	remote            bool
-	workspaceReadOnly bool
-	resumeID          string
-	strictResume      bool
-	claimed           bool
-	closed            bool
-	started           bool
-	transferred       chan struct{}
+	mu                           sync.Mutex
+	session                      *Session
+	plan                         SessionPlan
+	remote                       bool
+	workspaceReadOnly            bool
+	resumeID                     string
+	strictResume                 bool
+	requireExistingNativeSession bool
+	claimed                      bool
+	closed                       bool
+	started                      bool
+	transferred                  chan struct{}
 }
 
 var _ agent.PreparedCancellation = (*Prepared)(nil)
@@ -85,7 +86,7 @@ func (p *Prepared) start(ctx context.Context, runID, prompt string, out chan<- p
 	p.started = true
 	close(p.transferred)
 	transferred = true
-	req := proto.PromptRequestPayload{RunID: runID, Prompt: prompt, AgentSessionID: p.resumeID, StrictResume: p.strictResume}
+	req := proto.PromptRequestPayload{RunID: runID, Prompt: prompt, AgentSessionID: p.resumeID, StrictResume: p.strictResume, RequireExistingNativeSession: p.requireExistingNativeSession}
 	go s.run(p.plan, req)
 	return s, nil
 }

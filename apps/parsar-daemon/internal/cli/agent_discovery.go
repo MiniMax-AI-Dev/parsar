@@ -148,6 +148,7 @@ func discoverAgentCLIs(rc *runContext, profile string, checks agentCLIChecks) (a
 	if codexErr == nil {
 		out.Codex.Available = true
 		out.Codex.Version = codexVersion
+		out.Codex.Capabilities.NativeSessionRecovery = codex.SupportsNativeSessionRecovery(codexVersion)
 		out.Codex.Capabilities.RemoteEnvironment = codex.SupportsRemoteEnvironment(codexVersion)
 		out.Codex.Capabilities.LocalEnvironment = codex.SupportsLocalEnvironment(codexVersion)
 		out.Codex.Capabilities.LocalEnvironmentNetworkPolicy = codex.SupportsLocalNetworkPolicy(codexVersion)

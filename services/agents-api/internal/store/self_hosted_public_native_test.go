@@ -30,8 +30,8 @@ func runNativePublicSelfHosted(t *testing.T, mode string) {
 	f := newPublicSelfHostedFixture(t, mode, "official_self_hosted.py")
 	f.startDaemon(t)
 	first := awaitPublicNativeSignal(t, f.ctx, f.observer, "first-completed", 180*time.Second)
-	binding, err := f.store.GetSessionDevice(f.ctx, f.tenant, f.sessionID)
-	if err != nil || binding.ID != f.deviceID || binding.NativeSessionID == "" {
+	binding, err := f.store.GetSessionExecutionBinding(f.ctx, f.tenant, f.sessionID)
+	if err != nil || binding.Device.ID != f.deviceID || binding.NativeSessionID == "" {
 		t.Fatal("first public Turn lacks native device/history binding", err)
 	}
 	firstStarts, err := os.ReadFile(filepath.Join(f.root, "native-starts"))
@@ -46,7 +46,7 @@ func runNativePublicSelfHosted(t *testing.T, mode string) {
 	case <-f.ctx.Done():
 		t.Fatal("public second Turn timed out; inspect private proof")
 	}
-	finalBinding, err := f.store.GetSessionDevice(f.ctx, f.tenant, f.sessionID)
+	finalBinding, err := f.store.GetSessionExecutionBinding(f.ctx, f.tenant, f.sessionID)
 	if err != nil || finalBinding != binding {
 		t.Fatal("public continuation changed native history/device binding", err)
 	}

@@ -18,8 +18,8 @@ func TestNativePublicSelfHostedFunctionsStandalone(t *testing.T) {
 	f := newPublicSelfHostedFixture(t, "empty_later", "official_self_hosted_functions_native.py")
 	f.startDaemon(t)
 	first := awaitPublicNativeSignal(t, f.ctx, f.observer, "first-completed", 180*time.Second)
-	binding, err := f.store.GetSessionDevice(f.ctx, f.tenant, f.sessionID)
-	if err != nil || binding.ID != f.deviceID || binding.NativeSessionID == "" {
+	binding, err := f.store.GetSessionExecutionBinding(f.ctx, f.tenant, f.sessionID)
+	if err != nil || binding.Device.ID != f.deviceID || binding.NativeSessionID == "" {
 		t.Fatal("first function Turn lacks native device/history binding", err)
 	}
 	call, err := f.store.GetFunctionCall(f.ctx, f.tenant, f.sessionID, first["turn_id"], first["call_id"])
@@ -38,7 +38,7 @@ func TestNativePublicSelfHostedFunctionsStandalone(t *testing.T) {
 	case <-f.ctx.Done():
 		t.Fatal("public function continuation timed out; inspect private proof")
 	}
-	finalBinding, err := f.store.GetSessionDevice(f.ctx, f.tenant, f.sessionID)
+	finalBinding, err := f.store.GetSessionExecutionBinding(f.ctx, f.tenant, f.sessionID)
 	if err != nil || finalBinding != binding {
 		t.Fatal("function continuation changed native history/device binding", err)
 	}

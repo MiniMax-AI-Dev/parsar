@@ -133,7 +133,7 @@ func TestPreparedDispatchPromotesOriginalBatchAndPersistsCompletion(t *testing.T
 	if got.err != nil || got.run.Turn.Status != store.TurnCompleted || len(got.run.Reservation.Receipts) != 2 || got.run.Reservation.Receipts[0].Replayed || got.run.Reservation.Receipts[1].Sequence >= late.Sequence || released.Load() != 1 {
 		t.Fatal("prepared completion", got, released.Load())
 	}
-	bound, err := h.s.GetSessionDevice(t.Context(), h.tenant, h.session.ID)
+	bound, err := h.s.GetSessionExecutionBinding(t.Context(), h.tenant, h.session.ID)
 	if err != nil || bound.NativeSessionID != "retained-prepared-native" {
 		t.Fatal("native identity was not committed", bound, err)
 	}

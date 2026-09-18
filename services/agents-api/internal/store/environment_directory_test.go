@@ -155,8 +155,8 @@ func TestEnvironmentDirectoryWorkerReadsWithoutExecutionPrerequisites(t *testing
 	if err != nil || session.LastTurn != nil || session.EnvironmentInputActivity != nil {
 		t.Fatal("directory read manufactured execution")
 	}
-	bound, err := h.s.GetSessionDevice(t.Context(), h.tenant, h.session.ID)
-	if err != nil || bound.ID != h.device.ID || bound.NativeSessionID != "" {
+	bound, err := h.s.GetSessionExecutionBinding(t.Context(), h.tenant, h.session.ID)
+	if err != nil || bound.Device.ID != h.device.ID || bound.NativeSessionID != "" {
 		t.Fatal("directory read changed native history identity")
 	}
 }

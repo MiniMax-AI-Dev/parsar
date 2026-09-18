@@ -103,7 +103,7 @@ func (q *Queries) GetDeviceCredential(ctx context.Context, id pgtype.UUID) (GetD
 }
 
 const getSessionDevice = `-- name: GetSessionDevice :one
-SELECT d.id, d.name, b.native_session_id, d.environment_id FROM session_devices b
+SELECT d.id, d.name, d.environment_id FROM session_devices b
 JOIN sessions s ON s.id = b.session_id
 JOIN devices d ON d.id = b.device_id AND d.tenant_id = s.tenant_id
 WHERE s.tenant_id = $1 AND s.id = $2 AND d.revoked_at IS NULL
@@ -118,20 +118,52 @@ type GetSessionDeviceParams struct {
 }
 
 type GetSessionDeviceRow struct {
-	ID              pgtype.UUID `json:"id"`
-	Name            string      `json:"name"`
-	NativeSessionID string      `json:"native_session_id"`
-	EnvironmentID   pgtype.UUID `json:"environment_id"`
+	ID            pgtype.UUID `json:"id"`
+	Name          string      `json:"name"`
+	EnvironmentID pgtype.UUID `json:"environment_id"`
 }
 
 func (q *Queries) GetSessionDevice(ctx context.Context, arg GetSessionDeviceParams) (GetSessionDeviceRow, error) {
 	row := q.db.QueryRow(ctx, getSessionDevice, arg.TenantID, arg.ID)
 	var i GetSessionDeviceRow
+	err := row.Scan(&i.ID, &i.Name, &i.EnvironmentID)
+	return i, err
+}
+
+const getSessionExecutionBinding = `-- name: GetSessionExecutionBinding :one
+SELECT d.id, d.name, b.native_session_id, d.environment_id,
+    EXISTS (SELECT 1 FROM turns t WHERE t.session_id = s.id AND t.started_at IS NOT NULL) AS has_started_turn
+FROM session_devices b
+JOIN sessions s ON s.id = b.session_id
+JOIN devices d ON d.id = b.device_id AND d.tenant_id = s.tenant_id
+WHERE s.tenant_id = $1 AND s.id = $2 AND d.revoked_at IS NULL
+AND (d.environment_id IS NULL OR EXISTS (
+    SELECT 1 FROM environments e WHERE e.id = d.environment_id AND e.session_id = s.id
+))
+`
+
+type GetSessionExecutionBindingParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+type GetSessionExecutionBindingRow struct {
+	ID              pgtype.UUID `json:"id"`
+	Name            string      `json:"name"`
+	NativeSessionID string      `json:"native_session_id"`
+	EnvironmentID   pgtype.UUID `json:"environment_id"`
+	HasStartedTurn  bool        `json:"has_started_turn"`
+}
+
+func (q *Queries) GetSessionExecutionBinding(ctx context.Context, arg GetSessionExecutionBindingParams) (GetSessionExecutionBindingRow, error) {
+	row := q.db.QueryRow(ctx, getSessionExecutionBinding, arg.TenantID, arg.ID)
+	var i GetSessionExecutionBindingRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.NativeSessionID,
 		&i.EnvironmentID,
+		&i.HasStartedTurn,
 	)
 	return i, err
 }
