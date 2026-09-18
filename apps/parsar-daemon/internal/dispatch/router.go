@@ -65,6 +65,14 @@ type appliedInteractionDecision struct {
 	recordedAt  time.Time
 }
 
+// preparedSessionRelease coordinates native Session ownership only while a
+// Prepared Start is being published. It is discarded after a normal handoff.
+type preparedSessionRelease struct {
+	claimed bool
+	done    chan struct{}
+	err     error
+}
+
 // sessionState is the dispatcher's per-run bookkeeping. An ordinary factory or
 // a Prepared Start returning a Session owns the close of out. The Router retains
 // close ownership while a Prepared Start has not returned a Session. The
@@ -95,6 +103,7 @@ type sessionState struct {
 	completionObserved  bool
 	deferCompletion     bool
 	deferredCompletion  *proto.Envelope
+	preparedRelease     *preparedSessionRelease
 }
 
 // Config is the constructor input. Registry and Sender are required;

@@ -61,7 +61,8 @@ func (r *Router) handleExecutionStart(_ context.Context, env proto.Envelope) err
 	p.startFingerprint, p.busy = fingerprint, true
 	state := &sessionState{runID: input.RunID, stateKey: p.stateKey, environmentID: p.environmentID, out: make(chan proto.Envelope, 64), ctx: p.ctx, ctxCancel: p.cancel,
 		pendingIDs: make(map[string]struct{}), pendingAsks: make(map[string]struct{}), traceparent: env.Trace, releaseOnCompletion: true,
-		preparationStart: &preparedStartCancellation{prepared: p.prepared, settled: make(chan struct{})}, deferCompletion: true}
+		preparationStart: &preparedStartCancellation{prepared: p.prepared, settled: make(chan struct{})}, deferCompletion: true,
+		preparedRelease: &preparedSessionRelease{done: make(chan struct{})}}
 	r.sessions[input.RunID] = state
 	status := p.status
 	r.shutdownWG.Add(1)
@@ -134,12 +135,14 @@ func (r *Router) startPreparedExecution(p *preparationState, state *sessionState
 	} else {
 		r.mu.Lock()
 		completed := state.completionObserved
-		if !completed {
+		releaseClaimed := state.preparedRelease != nil && state.preparedRelease.claimed
+		if !completed && !releaseClaimed {
 			state.deferCompletion = false
+			state.preparedRelease = nil
 		}
 		r.mu.Unlock()
-		if completed {
-			_, releaseErr = r.releaseObservedCompletion(state)
+		if completed || releaseClaimed {
+			_, releaseErr = r.releaseCompletedSession(state)
 		}
 	}
 	forwardErr := <-forwarded

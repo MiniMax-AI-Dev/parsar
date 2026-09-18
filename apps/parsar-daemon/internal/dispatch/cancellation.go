@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
@@ -13,9 +14,25 @@ type cancellationOutcomeProvider interface {
 
 func (r *Router) releaseCompletedSession(state *sessionState) (bool, error) {
 	r.mu.Lock()
+	if release := state.preparedRelease; state.deferCompletion && release != nil && release.claimed {
+		done := release.done
+		r.mu.Unlock()
+		<-done
+		r.mu.Lock()
+		err := release.err
+		r.mu.Unlock()
+		return false, err
+	}
 	if !state.releaseOnCompletion || state.session == nil {
 		r.mu.Unlock()
 		return false, nil
+	}
+	release := state.preparedRelease
+	if !state.deferCompletion {
+		release = nil
+	}
+	if release != nil {
+		release.claimed = true
 	}
 	state.releaseOnCompletion = false
 	state.retain = false
@@ -24,7 +41,29 @@ func (r *Router) releaseCompletedSession(state *sessionState) (bool, error) {
 	receiptErr := r.finishSteering(state)
 	err := session.Cancel(context.Background())
 	state.ctxCancel()
-	return true, errors.Join(receiptErr, err)
+	err = errors.Join(receiptErr, err)
+	if release != nil {
+		r.finishPreparedSessionRelease(release, err)
+	}
+	return true, err
+}
+
+func (r *Router) claimPreparedSessionReleaseLocked(state *sessionState) (agent.Session, *preparedSessionRelease, bool) {
+	release := state.preparedRelease
+	if !state.deferCompletion || release == nil || release.claimed || state.session == nil {
+		return nil, release, false
+	}
+	release.claimed = true
+	state.releaseOnCompletion = false
+	state.retain = false
+	return state.session, release, true
+}
+
+func (r *Router) finishPreparedSessionRelease(release *preparedSessionRelease, err error) {
+	r.mu.Lock()
+	release.err = err
+	close(release.done)
+	r.mu.Unlock()
 }
 
 func (r *Router) handlePromptCancel(ctx context.Context, env proto.Envelope) error {

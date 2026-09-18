@@ -319,6 +319,31 @@ func TestPreparationStartedStatusFailureAndCompletionReleaseSessionOnce(t *testi
 	}
 }
 
+func TestPreparationShutdownDuringStartedStatusReleasesSessionOnce(t *testing.T) {
+	sender := &failStartedPreparationSender{recSender: &recSender{}, entered: make(chan struct{}), release: make(chan struct{})}
+	session := &fakeSession{closeOutOnCancel: true}
+	p := &controlledPreparation{closed: make(chan struct{})}
+	p.start = func(_ context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+		session.out = out
+		return session, nil
+	}
+	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
+	startCancellationPreparation(t, r, sender.recSender)
+	select {
+	case <-sender.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("started status delivery did not block")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := r.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if session.cancels() != 1 {
+		t.Fatal("shutdown released settling Session more than once", session.cancels())
+	}
+}
+
 func TestPreparationStartActivatesEarlyInteractionRoutesAfterSessionReturn(t *testing.T) {
 	sender := &recSender{}
 	emitted, allowReturn := make(chan struct{}), make(chan struct{})
