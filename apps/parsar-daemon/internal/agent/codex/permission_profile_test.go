@@ -52,4 +52,41 @@ func TestPermissionProfileSelectsNativeStartupConfig(t *testing.T) {
 	if config["shell_environment_policy.inherit"] != `"core"` || config["shell_environment_policy.ignore_default_excludes"] != "false" {
 		t.Fatal("shell can inherit model credentials")
 	}
+	if config["features.shell_snapshot"] != "false" {
+		t.Fatal("managed shell depends on inaccessible private snapshots")
+	}
+}
+
+func TestManagedNetworkPolicySelectsNativeProfileAndRejectsMismatchBeforeState(t *testing.T) {
+	for _, mode := range []string{"enabled", "disabled"} {
+		t.Run(mode, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "uncreated")
+			t.Setenv("PARSAR_HOME", root)
+			req := proto.PromptRequestPayload{AgentStateKey: "session", LocalEnvironment: &proto.LocalEnvironment{ID: "environment", NetworkAccess: mode}}
+			cfg := sessionConfig{permissionProfile: "managed-workspace", runtimeNetworkAccess: mode}
+			wrong := req
+			wrong.LocalEnvironment = &proto.LocalEnvironment{ID: "environment", NetworkAccess: "restricted"}
+			if _, _, err := prepareSessionPlan(t.Context(), wrong, cfg); err == nil {
+				t.Fatal("policy mismatch accepted")
+			}
+			if _, err := os.Stat(root); !os.IsNotExist(err) {
+				t.Fatal("policy rejection created native state")
+			}
+			plan, _, err := prepareSessionPlan(t.Context(), req, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer plan.Cleanup()
+			expected := "managed-workspace"
+			if mode == "enabled" {
+				expected += "-enabled"
+			}
+			if plan.Permissions != expected || plan.Sandbox != "" {
+				t.Fatal("wrong native profile", plan.Permissions)
+			}
+			if _, _, err := prepareSessionPlan(t.Context(), req, sessionConfig{permissionProfile: "managed-workspace"}); err == nil {
+				t.Fatal("unbound Runtime accepted explicit policy")
+			}
+		})
+	}
 }

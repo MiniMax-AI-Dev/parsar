@@ -61,6 +61,9 @@ func sessionResponse(session store.Session, executorURL string) (v1.Session, err
 		response.Status, response.Error = activity.Status, nil
 		if activity.Status == "failed" {
 			message := "The initial input timed out waiting for the environment connection."
+			if activity.Failure == "environment_unavailable" {
+				message = "The environment is no longer available for this input."
+			}
 			response.Error = &message
 		}
 		response.LastActiveAt = activity.LastActiveAt.Unix()
@@ -80,8 +83,14 @@ func sessionEnvironment(session store.Session, kind, executorURL string) (v1.Ses
 		return v1.SessionEnvironment{Type: "none"}, nil
 	}
 	environment := session.Environment
-	if kind != "self_hosted" || environment == nil || environment.ID == "" || environment.SessionID != session.ID || environment.TenantID != session.TenantID || executorURL == "" {
+	if (kind != "self_hosted" && kind != "openai_hosted") || environment == nil || environment.ID == "" || environment.SessionID != session.ID || environment.TenantID != session.TenantID {
 		return v1.SessionEnvironment{}, errors.New("unsupported stored session environment")
+	}
+	if kind == "openai_hosted" {
+		return hostedSessionEnvironment(*environment)
+	}
+	if executorURL == "" {
+		return v1.SessionEnvironment{}, errors.New("self-hosted executor origin unavailable")
 	}
 	var cfg struct {
 		Type                  string   `json:"type"`

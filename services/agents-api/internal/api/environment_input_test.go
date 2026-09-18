@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,7 @@ func TestPublicEnvironmentInputFailureMappings(t *testing.T) {
 		status int
 		code   string
 	}{
+		{store.ErrEnvironmentUnavailable, http.StatusConflict, "environment_unavailable"},
 		{execution.ErrEnvironmentInputExpired, http.StatusConflict, "environment_input_expired"},
 		{execution.ErrEnvironmentInputCancelled, http.StatusConflict, "environment_input_cancelled"},
 		{execution.ErrExecutionUnavailable, http.StatusServiceUnavailable, "execution_unavailable"},
@@ -55,15 +57,17 @@ func (s *waitingEnvironmentInput) SubmitInputs(ctx context.Context, _, _, _ stri
 	}
 }
 
-func TestSelfHostedInputWaitExtendsOnlyItsResponseDeadline(t *testing.T) {
-	for _, environment := range []string{"none", "self_hosted"} {
+func TestPreparedEnvironmentInputWaitExtendsOnlyItsResponseDeadline(t *testing.T) {
+	for _, environment := range []string{"none", "self_hosted", "openai_hosted"} {
 		t.Run(environment, func(t *testing.T) {
 			waiting := &waitingEnvironmentInput{entered: make(chan struct{}), release: make(chan struct{})}
-			handler, fixture := environmentCreationHandler(t, "codex", WithExecution(waiting), WithEnvironmentRemoteURL(environmentOrigin))
+			options := []Option{WithExecution(waiting)}
 			environmentJSON := `{"type":"none"}`
 			if environment == "self_hosted" {
 				environmentJSON = `{"type":"self_hosted","workspace_directory":"/remote/workspace"}`
+				options = append(options, WithEnvironmentRemoteURL(environmentOrigin))
 			}
+			handler, fixture := environmentCreationHandler(t, "codex", options...)
 			create := httptest.NewRequest(http.MethodPost, "/v1/agents/sessions", strings.NewReader(`{"agent":{"model":"MiniMax-M3"},"environment":`+environmentJSON+`}`))
 			create.Header.Set("Authorization", "Bearer key")
 			create.Header.Set("OpenAI-Beta", "agents=v1")
@@ -71,6 +75,10 @@ func TestSelfHostedInputWaitExtendsOnlyItsResponseDeadline(t *testing.T) {
 			handler.ServeHTTP(created, create)
 			if created.Code != http.StatusOK {
 				t.Fatal("fixture creation failed", created.Code, created.Body.String())
+			}
+			if environment == "openai_hosted" {
+				// A retained hosted Session still waits when new hosted admission is disabled.
+				fixture.session.Configuration = json.RawMessage(`{"agent":{"model":"MiniMax-M3"},"environment":{"type":"openai_hosted"}}`)
 			}
 			server := httptest.NewUnstartedServer(handler)
 			server.Config.WriteTimeout = 50 * time.Millisecond
@@ -112,9 +120,9 @@ func TestSelfHostedInputWaitExtendsOnlyItsResponseDeadline(t *testing.T) {
 				if outcome.response != nil {
 					defer outcome.response.Body.Close()
 				}
-				if environment == "self_hosted" {
+				if environment != "none" {
 					if outcome.err != nil || outcome.response.StatusCode != http.StatusNoContent {
-						t.Fatal("self-hosted wait lost its response to the ordinary timeout", outcome.err)
+						t.Fatal("prepared Environment wait lost its response to the ordinary timeout", outcome.err)
 					}
 				} else if outcome.err == nil {
 					t.Fatal("none input unexpectedly replaced the server write deadline", outcome.response.StatusCode)

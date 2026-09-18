@@ -17,8 +17,8 @@ type configuration struct {
 }
 
 func resolve(input sessionRequest, tenant, key string, saved *v1.SavedAgent) (json.RawMessage, error) {
-	if input.Environment == nil || (input.Environment.Type != "none" && input.Environment.Type != "self_hosted") {
-		return nil, errors.New("This service currently supports environment.type=none or self_hosted.")
+	if input.Environment == nil || (input.Environment.Type != "none" && input.Environment.Type != "self_hosted" && input.Environment.Type != "openai_hosted") {
+		return nil, errors.New("Unsupported environment type.")
 	}
 	if err := validateMetadata(input.Metadata); err != nil {
 		return nil, err

@@ -16,6 +16,7 @@ import (
 type EnvironmentInputActivity struct {
 	Status        string    `json:"status"`
 	EnvironmentID string    `json:"environment_id,omitempty"`
+	Failure       string    `json:"failure,omitempty"`
 	LastActiveAt  time.Time `json:"last_active_at"`
 }
 
@@ -31,10 +32,20 @@ func environmentInputActivity(ctx context.Context, q *sqlc.Queries, session pgty
 	if row.SettledAt.Valid {
 		activity.LastActiveAt = row.SettledAt.Time
 	}
+	if row.State == EnvironmentInputFailed {
+		activity.Status, activity.Failure = "failed", "environment_unavailable"
+	}
 	if row.IsInitial && row.State == EnvironmentInputExpired {
 		activity.Status = "failed"
 	}
-	if row.State == EnvironmentInputPending && row.ConnectionStatus != "connected" {
+	if row.EnvironmentType == "openai_hosted" && row.IsInitial &&
+		(row.State == EnvironmentInputPending || row.State == EnvironmentInputCancelled) {
+		// No Turn has started. The pinned Session contract permits idle while a
+		// hosted Environment provisions; neither a caller action nor an invented
+		// in-progress/idle transition is appropriate here.
+		return nil, nil
+	}
+	if row.State == EnvironmentInputPending && row.EnvironmentType != "openai_hosted" && row.ConnectionStatus != "connected" {
 		activity.Status = "requires_action"
 		activity.EnvironmentID = uuid.UUID(row.EnvironmentID.Bytes).String()
 	}
@@ -54,7 +65,7 @@ func withEnvironmentInputActivity(ctx context.Context, q *sqlc.Queries, session 
 		// Admitted input is represented by the normal Turn and Session events.
 		return err
 	}
-	if before != nil && before.Status == after.Status && before.EnvironmentID == after.EnvironmentID {
+	if before != nil && before.Status == after.Status && before.EnvironmentID == after.EnvironmentID && before.Failure == after.Failure {
 		return nil
 	}
 	usage, err := q.SessionTokenUsage(ctx, session)

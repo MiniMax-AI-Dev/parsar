@@ -21,18 +21,21 @@ import (
 // Each stable key identifies one provider backend/installation across restarts;
 // changing that target requires a new key, preserving the old cleanup adapter.
 type RuntimeProviders struct {
-	CoreURL   string
-	Providers map[string]sandbox.Provider
+	CoreURL         string
+	DefaultProvider string
+	Providers       map[string]sandbox.Provider
 }
 
 type runtimeLifecycle struct {
-	store    *store.Store
-	registry *gateway.Registry
-	config   RuntimeProviders
-	gate     chan struct{}
-	ctx      context.Context
-	stop     context.CancelFunc
-	cursor   string
+	store         *store.Store
+	registry      *gateway.Registry
+	config        RuntimeProviders
+	gate          chan struct{}
+	ctx           context.Context
+	stop          context.CancelFunc
+	cursor        string
+	pendingCursor string
+	connections   map[string]*runtimeConnection
 }
 
 func newRuntimeLifecycle(s *store.Store, registry *gateway.Registry, config *RuntimeProviders) (*runtimeLifecycle, error) {
@@ -43,7 +46,7 @@ func newRuntimeLifecycle(s *store.Store, registry *gateway.Registry, config *Run
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(config.Providers) == 0 || registry == nil {
 		return nil, sandbox.ErrInvalid
 	}
-	copied := RuntimeProviders{CoreURL: config.CoreURL, Providers: make(map[string]sandbox.Provider, len(config.Providers))}
+	copied := RuntimeProviders{CoreURL: config.CoreURL, DefaultProvider: config.DefaultProvider, Providers: make(map[string]sandbox.Provider, len(config.Providers))}
 	for key, provider := range config.Providers {
 		id, err := uuid.Parse(key)
 		if err != nil || id == uuid.Nil || id.String() != key || provider == nil {
@@ -51,8 +54,11 @@ func newRuntimeLifecycle(s *store.Store, registry *gateway.Registry, config *Run
 		}
 		copied.Providers[key] = provider
 	}
+	if copied.DefaultProvider != "" && copied.Providers[copied.DefaultProvider] == nil {
+		return nil, sandbox.ErrInvalid
+	}
 	ctx, stop := context.WithCancel(context.Background())
-	return &runtimeLifecycle{store: s, registry: registry, config: copied, gate: make(chan struct{}, 1), ctx: ctx, stop: stop}, nil
+	return &runtimeLifecycle{store: s, registry: registry, config: copied, gate: make(chan struct{}, 1), ctx: ctx, stop: stop, connections: make(map[string]*runtimeConnection)}, nil
 }
 
 func (r *runtimeLifecycle) lock(ctx context.Context) error {
@@ -88,8 +94,21 @@ func (w *Worker) ProvisionEnvironment(ctx context.Context, tenant, environment, 
 		return store.RuntimeAllocation{}, err
 	}
 	defer func() { <-r.gate }()
+	return r.provision(ctx, tenant, environment, providerKey)
+}
+
+// provision runs under the lifecycle gate and uses the durable one-shot receipt.
+func (r *runtimeLifecycle) provision(ctx context.Context, tenant, environment, providerKey string) (store.RuntimeAllocation, error) {
 	provider := r.config.Providers[providerKey]
 	if provider == nil {
+		return store.RuntimeAllocation{}, sandbox.ErrInvalid
+	}
+	environmentValue, err := r.store.GetEnvironment(ctx, tenant, environment)
+	if err != nil {
+		return store.RuntimeAllocation{}, err
+	}
+	placement, err := parseEnvironmentPlacement(environmentValue.Configuration)
+	if err != nil || placement.Type != "openai_hosted" {
 		return store.RuntimeAllocation{}, sandbox.ErrInvalid
 	}
 	secret := make([]byte, 32)
@@ -106,11 +125,17 @@ func (w *Worker) ProvisionEnvironment(ctx context.Context, tenant, environment, 
 	}
 	info, err := provider.Create(ctx, sandbox.Bootstrap{
 		Reference: runtimeReference(owner), SessionID: owner.SessionID, DeviceID: owner.DeviceID,
-		CoreURL: r.config.CoreURL, Credential: token,
+		CoreURL: r.config.CoreURL, Credential: token, NetworkAccess: placement.NetworkAccess,
 	})
 	if err != nil {
-		// The existing allocation remains discoverable even if the request outcome
-		// is unknown. Reconciliation observes it; it never sends Create again.
+		// Explicit invalid/foreign bootstrap cannot become an authorized Runtime.
+		// Other failures may hide a successful Create; retain recovery for those.
+		if errors.Is(err, sandbox.ErrInvalid) || errors.Is(err, sandbox.ErrOwnership) {
+			if _, cleanupErr := r.store.RequestRuntimeCleanup(ctx, owner); cleanupErr != nil {
+				return owner, cleanupErr
+			}
+		}
+		// Reconciliation observes the original allocation; it never sends Create again.
 		return owner, err
 	}
 	if info.Reference != runtimeReference(owner) || info.ProviderID == "" || info.State != "running" || !info.BootstrapComplete {
@@ -120,7 +145,8 @@ func (w *Worker) ProvisionEnvironment(ctx context.Context, tenant, environment, 
 }
 
 // ReconcileManagedRuntimes is also callable before serving admission. One scan
-// observes existing allocations only; it never retries startup or native work.
+// observes existing allocations and bootstraps committed resources without an
+// allocation. It never retries an existing Create or native work.
 func (w *Worker) ReconcileManagedRuntimes(ctx context.Context) error {
 	if w.runtimes == nil {
 		return nil
@@ -139,7 +165,7 @@ func (w *Worker) ReconcileManagedRuntimes(ctx context.Context) error {
 	}
 	if len(rows) == 0 {
 		r.cursor = ""
-		return nil
+		return r.provisionPending(ctx)
 	}
 	for _, owner := range rows {
 		r.cursor = owner.ID
@@ -155,7 +181,7 @@ func (w *Worker) ReconcileManagedRuntimes(ctx context.Context) error {
 			log.Ctx(ctx).Warn("managed Runtime observation incomplete", "allocation_id", owner.ID)
 		}
 	}
-	return nil
+	return r.provisionPending(ctx)
 }
 
 func (r *runtimeLifecycle) observe(ctx context.Context, owner store.RuntimeAllocation) error {
@@ -165,6 +191,9 @@ func (r *runtimeLifecycle) observe(ctx context.Context, owner store.RuntimeAlloc
 		if err != nil {
 			return err
 		}
+		delete(r.connections, owner.ID)
+	} else if err := r.observeConnection(ctx, owner); err != nil {
+		return err
 	}
 	provider := r.config.Providers[owner.ProviderKey]
 	if provider == nil {
@@ -214,7 +243,7 @@ func (r *runtimeLifecycle) observe(ctx context.Context, owner store.RuntimeAlloc
 	if err != nil {
 		return err
 	}
-	if _, err := r.registry.LookupDevice(owner.DeviceID); err != nil {
+	if peer, err := r.registry.LookupDevice(owner.DeviceID); err != nil || peer.IsClosed() {
 		return nil
 	}
 	renewed, err := provider.Renew(ctx, runtimeReference(owner))

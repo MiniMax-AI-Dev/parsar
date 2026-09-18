@@ -23,6 +23,13 @@ type recordingStore struct {
 	input  store.CreateSessionInput
 }
 
+func (s *recordingStore) GetSession(ctx context.Context, tenant, id string) (store.Session, error) {
+	if s.ResourceStore != nil {
+		return s.ResourceStore.GetSession(ctx, tenant, id)
+	}
+	return store.Session{ID: id, TenantID: tenant, Configuration: json.RawMessage(`{"environment":{"type":"none"}}`)}, nil
+}
+
 func (s *recordingStore) FindSessionCreation(context.Context, string, string, json.RawMessage, identity.Subject) (store.SessionCreation, error) {
 	return store.SessionCreation{}, store.ErrNotFound
 }
@@ -81,7 +88,7 @@ func TestHTTPRejectsUntrustedOrUnsupportedRequests(t *testing.T) {
 		{"missing beta", "Bearer test-api-key", "", "/v1/agents/sessions", valid, 400},
 		{"tenant query", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions?tenant_id=other", valid, 400},
 		{"tenant body", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"agent":`, `"tenant_id":"other","agent":`, 1), 400},
-		{"hosted environment", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"none"`, `"openai_hosted"`, 1), 400},
+		{"hosted environment on unqualified engine", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"none"`, `"openai_hosted"`, 1), 400},
 		{"self-hosted environment", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"none"`, `"self_hosted"`, 1), 400},
 		{"initial input", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"agent":`, `"input":"run it","agent":`, 1), 503},
 		{"stream unavailable", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"agent":`, `"stream":true,"agent":`, 1), 503},

@@ -16,23 +16,48 @@ var (
 	ErrExecutionUnavailable      = errors.New("execution ownership is unavailable")
 )
 
-func selfHostedConfiguration(configuration json.RawMessage) bool {
+func preparedEnvironmentConfiguration(configuration json.RawMessage) bool {
 	var snapshot Snapshot
-	return json.Unmarshal(configuration, &snapshot) == nil && snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted"
+	return json.Unmarshal(configuration, &snapshot) == nil && snapshot.Environment != nil &&
+		(snapshot.Environment.Type == "self_hosted" || snapshot.Environment.Type == "openai_hosted")
 }
 
-func (w *Worker) validateCreation(ctx context.Context, input store.CreateSessionInput) error {
-	if selfHostedConfiguration(input.Configuration) {
+func (w *Worker) validateEnvironmentAdmission(engine string, configuration json.RawMessage) error {
+	var snapshot Snapshot
+	if json.Unmarshal(configuration, &snapshot) != nil || snapshot.Environment == nil {
+		return store.ErrInvalidInput
+	}
+	switch snapshot.Environment.Type {
+	case "self_hosted":
 		if w.dispatcher.EnvironmentConnection == nil {
 			return store.ErrInvalidInput
 		}
-		if err := ValidateSessionConfiguration(input.Engine, input.Configuration); err != nil {
+	case "openai_hosted":
+		if w.runtimes == nil {
+			return ErrExecutionUnavailable
+		}
+	default:
+		return store.ErrInvalidInput
+	}
+	return ValidateSessionConfiguration(engine, configuration)
+}
+
+func (w *Worker) validateCreation(ctx context.Context, input store.CreateSessionInput) error {
+	if preparedEnvironmentConfiguration(input.Configuration) {
+		if err := w.validateEnvironmentAdmission(input.Engine, input.Configuration); err != nil {
 			return err
 		}
-		if len(input.InitialInputs) > 0 {
-			return w.checkAdmissionOwnership(ctx)
+		var snapshot Snapshot
+		if err := json.Unmarshal(input.Configuration, &snapshot); err != nil {
+			return store.ErrInvalidInput
 		}
-		return nil
+		if snapshot.Environment.Type == "openai_hosted" && w.runtimes.config.DefaultProvider == "" {
+			return ErrExecutionUnavailable
+		}
+		if len(input.InitialInputs) == 0 && snapshot.Environment.Type == "self_hosted" {
+			return nil
+		}
+		return w.checkAdmissionOwnership(ctx)
 	}
 	if !canAdmitInputs(input.Engine, input.Configuration) {
 		return store.ErrInvalidInput
@@ -41,8 +66,8 @@ func (w *Worker) validateCreation(ctx context.Context, input store.CreateSession
 }
 
 func (w *Worker) submitEnvironmentInputs(ctx context.Context, session store.Session, key string, inputs []store.Input) ([]store.InputReceipt, error) {
-	if w.dispatcher.EnvironmentConnection == nil || ValidateSessionConfiguration(session.Engine, session.Configuration) != nil {
-		return nil, store.ErrInvalidInput
+	if err := w.validateEnvironmentAdmission(session.Engine, session.Configuration); err != nil {
+		return nil, err
 	}
 	if err := w.checkAdmissionOwnership(ctx); err != nil {
 		return nil, err
@@ -67,6 +92,8 @@ func (w *Worker) submitEnvironmentInputs(ctx context.Context, session store.Sess
 		switch reservation.State {
 		case store.EnvironmentInputAdmitted:
 			return reservation.Receipts, nil
+		case store.EnvironmentInputFailed:
+			return nil, store.ErrEnvironmentUnavailable
 		case store.EnvironmentInputExpired:
 			return nil, ErrEnvironmentInputExpired
 		case store.EnvironmentInputCancelled:

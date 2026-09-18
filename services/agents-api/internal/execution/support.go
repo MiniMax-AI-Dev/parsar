@@ -28,6 +28,17 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 		_, _, err := executionTools(snapshot.Agent.Tools)
 		return err
 	}
+	if snapshot.Environment != nil && snapshot.Environment.Type == "openai_hosted" {
+		// Only this placement/engine combination has current native qualification.
+		// Runtime capability checks still apply before any execution claim.
+		if engine != "codex" || snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
+			return store.ErrInvalidInput
+		}
+		configuration, err := json.Marshal(snapshot.Environment)
+		if err != nil || !LocalWorkspaceConfiguration(configuration) {
+			return store.ErrInvalidInput
+		}
+	}
 	if engine != "claude_sdk" {
 		_, mcp, err := executionTools(snapshot.Agent.Tools)
 		if len(mcp) != 0 && (engine != "codex" || snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil) {
@@ -151,8 +162,13 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" && (!caps.Preparation || !caps.RemoteEnvironment) {
 		return fail("device must advertise preparation and remote_environment")
 	}
-	if snapshot.Environment != nil && snapshot.Environment.Type == "openai_hosted" && (!caps.Preparation || !caps.LocalEnvironment) {
-		return fail("device must advertise preparation and local_environment")
+	if snapshot.Environment != nil && snapshot.Environment.Type == "openai_hosted" {
+		if !caps.Preparation || !caps.LocalEnvironment {
+			return fail("device must advertise preparation and local_environment")
+		}
+		if (snapshot.Environment.Network == nil || snapshot.Environment.Network.Access != "disabled") && !caps.LocalEnvironmentNetworkPolicy {
+			return fail("device must advertise local_environment_network_policy")
+		}
 	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "none" && !caps.EnvironmentNone {
 		return fail("device must advertise environment_none")

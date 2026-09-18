@@ -19,6 +19,7 @@ const (
 	EnvironmentInputAdmitted  = "admitted"
 	EnvironmentInputExpired   = "expired"
 	EnvironmentInputCancelled = "cancelled"
+	EnvironmentInputFailed    = "failed"
 )
 
 // EnvironmentInputReservation is private admission state, not a public Session projection.
@@ -75,10 +76,14 @@ func (s *Store) ReserveEnvironmentInput(ctx context.Context, tenantID, sessionID
 		if err := checkEnvironmentFileWriteGate(ctx, q, session); err != nil {
 			return err
 		}
-		if _, err := q.GetSessionEnvironment(ctx, sqlc.GetSessionEnvironmentParams{TenantID: tenant, ID: session}); errors.Is(err, pgx.ErrNoRows) {
+		environment, err := q.GetSessionEnvironment(ctx, sqlc.GetSessionEnvironmentParams{TenantID: tenant, ID: session})
+		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrInvalidInput
 		} else if err != nil {
 			return err
+		}
+		if environment.Environment.Status == "failed" || environment.Environment.Status == "expired" {
+			return ErrEnvironmentUnavailable
 		}
 		if err := checkEnvironmentInputGate(ctx, q, session, key, encoded); err != nil {
 			return err

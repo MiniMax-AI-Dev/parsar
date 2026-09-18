@@ -12,6 +12,7 @@ import (
 
 type environmentPlacement struct {
 	Type                  string   `json:"type"`
+	NetworkAccess         string   `json:"-"`
 	WorkspaceDirectory    string   `json:"workspace_directory"`
 	CapabilityDirectories []string `json:"capability_directories"`
 }
@@ -34,16 +35,25 @@ func parseEnvironmentPlacement(configuration json.RawMessage) (environmentPlacem
 			return placement, nil
 		}
 	case "openai_hosted":
-		// This private profile qualifies only explicit network denial, not the enabled default.
+		// Qualified local execution currently supports enabled/disabled network only.
 		var local struct {
-			Type    string `json:"type"`
-			Network struct {
-				Access string `json:"access"`
+			Type                  string   `json:"type"`
+			CapabilityDirectories []string `json:"capability_directories"`
+			Network               *struct {
+				Access         string   `json:"access"`
+				AllowedDomains []string `json:"allowed_domains"`
 			} `json:"network"`
 		}
 		decoder := json.NewDecoder(bytes.NewReader(configuration))
 		decoder.DisallowUnknownFields()
-		if decoder.Decode(&local) == nil && local.Network.Access == "disabled" {
+		if decoder.Decode(&local) == nil && len(local.CapabilityDirectories) == 0 {
+			placement.NetworkAccess = "enabled"
+			if local.Network != nil {
+				if len(local.Network.AllowedDomains) != 0 || (local.Network.Access != "enabled" && local.Network.Access != "disabled") {
+					return placement, store.ErrInvalidInput
+				}
+				placement.NetworkAccess = local.Network.Access
+			}
 			return placement, nil
 		}
 	}
@@ -67,6 +77,18 @@ func (d *Dispatcher) configurePreparedEnvironment(ctx context.Context, session s
 	}
 	if placement.Type == "openai_hosted" {
 		req.LocalEnvironment = &proto.LocalEnvironment{ID: environment.ID}
+		// Keep the previously qualified explicit-disabled internal peer path intact.
+		// New bound-policy peers validate the exact policy during preparation.
+		boundPolicy := placement.NetworkAccess != "disabled"
+		if d.Registry != nil {
+			if peer, e := d.Registry.LookupDevice(bound.ID); e == nil {
+				info, found, known := peer.AgentKindStatus(session.Engine)
+				boundPolicy = boundPolicy || (known && found && info.Capabilities.LocalEnvironmentNetworkPolicy)
+			}
+		}
+		if boundPolicy {
+			req.LocalEnvironment.NetworkAccess = placement.NetworkAccess
+		}
 		return nil, nil
 	}
 	if d.EnvironmentConnection == nil {

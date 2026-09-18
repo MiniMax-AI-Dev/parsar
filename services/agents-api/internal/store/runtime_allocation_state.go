@@ -56,7 +56,12 @@ func (s *Store) RequestRuntimeCleanup(ctx context.Context, owner RuntimeAllocati
 		if current.DeletedAt.Valid {
 			err = cancel()
 		} else {
-			err = withEnvironmentInputActivity(ctx, q, current.SessionID, cancel)
+			err = withEnvironmentInputActivity(ctx, q, current.SessionID, func() error {
+				if err := terminateRuntimeEnvironment(ctx, q, current); err != nil {
+					return err
+				}
+				return cancel()
+			})
 		}
 		if err != nil {
 			return sqlc.RuntimeAllocation{}, err

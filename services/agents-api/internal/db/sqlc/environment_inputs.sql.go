@@ -104,6 +104,16 @@ func (q *Queries) ExpireEnvironmentInputReservation(ctx context.Context, arg Exp
 	return err
 }
 
+const failSessionEnvironmentInput = `-- name: FailSessionEnvironmentInput :exec
+UPDATE environment_input_reservations SET state = 'failed', settled_at = clock_timestamp()
+WHERE session_id = $1 AND state = 'pending'
+`
+
+func (q *Queries) FailSessionEnvironmentInput(ctx context.Context, sessionID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, failSessionEnvironmentInput, sessionID)
+	return err
+}
+
 const findEnvironmentInputReservation = `-- name: FindEnvironmentInputReservation :one
 SELECT r.id, r.session_id, r.idempotency_key, r.batch, r.state, r.created_at, r.deadline, r.settled_at, r.is_initial, r.batch = $1::jsonb AS matches
 FROM environment_input_reservations r

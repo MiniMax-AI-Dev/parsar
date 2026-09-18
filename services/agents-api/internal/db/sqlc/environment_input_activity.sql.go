@@ -12,8 +12,10 @@ import (
 )
 
 const getEnvironmentInputActivity = `-- name: GetEnvironmentInputActivity :one
-SELECT r.state, r.is_initial, r.created_at, r.settled_at, e.id AS environment_id, e.status AS connection_status
+SELECT r.state, r.is_initial, r.created_at, r.settled_at, e.id AS environment_id, e.status AS connection_status,
+       COALESCE(s.configuration->'environment'->>'type', '')::text AS environment_type
 FROM environments e
+JOIN sessions s ON s.id = e.session_id
 JOIN LATERAL (
     SELECT id, session_id, idempotency_key, batch, state, created_at, deadline, settled_at, is_initial FROM environment_input_reservations
     WHERE session_id = e.session_id
@@ -33,6 +35,7 @@ type GetEnvironmentInputActivityRow struct {
 	SettledAt        pgtype.Timestamptz `json:"settled_at"`
 	EnvironmentID    pgtype.UUID        `json:"environment_id"`
 	ConnectionStatus string             `json:"connection_status"`
+	EnvironmentType  string             `json:"environment_type"`
 }
 
 func (q *Queries) GetEnvironmentInputActivity(ctx context.Context, sessionID pgtype.UUID) (GetEnvironmentInputActivityRow, error) {
@@ -45,6 +48,7 @@ func (q *Queries) GetEnvironmentInputActivity(ctx context.Context, sessionID pgt
 		&i.SettledAt,
 		&i.EnvironmentID,
 		&i.ConnectionStatus,
+		&i.EnvironmentType,
 	)
 	return i, err
 }

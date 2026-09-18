@@ -108,15 +108,19 @@ func recordEnvironmentConnection(ctx context.Context, q *sqlc.Queries, row sqlc.
 	if err := json.Unmarshal(row.Configuration, &config); err != nil || (config.Type != "self_hosted" && config.Type != "openai_hosted") {
 		return errors.New("invalid stored Environment type")
 	}
-	if status != "connected" && status != "disconnected" {
+	if status != "connected" && status != "disconnected" && status != "failed" {
 		return ErrInvalidInput
 	}
 	if err := q.SetEnvironmentConnectionStatus(ctx, sqlc.SetEnvironmentConnectionStatusParams{ID: row.Environment.ID, Status: status}); err != nil {
 		return err
 	}
+	state := &v1.SessionEnvironmentState{ID: uuid.UUID(row.Environment.ID.Bytes).String(), Type: config.Type, Status: status}
+	if status == "failed" {
+		state.Error = &v1.StreamError{Code: "environment_unavailable", Type: "server_error", Message: "The environment could not be prepared for execution."}
+	}
 	return recordSessionChange(ctx, q, row.Environment.SessionID, SessionChange{Event: v1.SessionEvent{
 		Type:        "agent.session.environment." + status,
-		Environment: &v1.SessionEnvironmentState{ID: uuid.UUID(row.Environment.ID.Bytes).String(), Type: config.Type, Status: status},
+		Environment: state,
 	}})
 }
 

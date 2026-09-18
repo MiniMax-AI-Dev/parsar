@@ -15,3 +15,13 @@ func SupportsLocalEnvironment(version string) bool {
 	binding, err := localworkspace.Load()
 	return err == nil && binding != nil
 }
+
+// SupportsLocalNetworkPolicy describes the qualified adapter and bound policy;
+// actual native preparation still validates the managed requirements.
+func SupportsLocalNetworkPolicy(version string) bool {
+	if !SupportsLocalEnvironment(version) || os.Getenv("PARSAR_CODEX_PERMISSION_PROFILE") != "managed-workspace" {
+		return false
+	}
+	binding, err := localworkspace.Load()
+	return err == nil && binding != nil && binding.NetworkAccess() != ""
+}

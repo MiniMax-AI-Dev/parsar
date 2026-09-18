@@ -40,3 +40,11 @@ WHERE id = $1 AND state <> 'released' RETURNING *;
 -- name: ReleaseRuntimeAllocation :one
 UPDATE runtime_allocations SET state = 'released', released_at = clock_timestamp()
 WHERE id = $1 AND state = 'cleanup_pending' AND create_settled RETURNING *;
+
+-- name: ListUnallocatedHostedEnvironments :many
+SELECT e.id, s.tenant_id
+FROM environments e JOIN sessions s ON s.id = e.session_id
+WHERE e.id > $1 AND s.deleted_at IS NULL AND e.status = 'pending'
+  AND s.configuration->'environment'->>'type' = 'openai_hosted'
+  AND NOT EXISTS (SELECT 1 FROM runtime_allocations a WHERE a.environment_id = e.id)
+ORDER BY e.id LIMIT 32;

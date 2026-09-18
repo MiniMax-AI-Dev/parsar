@@ -33,14 +33,15 @@ type ResourceStore interface {
 }
 
 type Handler struct {
-	store           ResourceStore
-	auth            *Authenticator
-	engine          string
-	inputs          InputSubmitter
-	executorURL     string
-	directoryReader EnvironmentDirectoryReader
-	fileWriter      EnvironmentFileWriter
-	sourceFiles     SourceFileStore
+	store              ResourceStore
+	auth               *Authenticator
+	engine             string
+	inputs             InputSubmitter
+	executorURL        string
+	hostedEnvironments bool
+	directoryReader    EnvironmentDirectoryReader
+	fileWriter         EnvironmentFileWriter
+	sourceFiles        SourceFileStore
 }
 
 func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...Option) (http.Handler, error) {
@@ -104,7 +105,7 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 
 // createSession atomically reserves or admits initial text with the Session.
 // @Summary Create an execution Session
-// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none, subject to the configured engine. Codex additionally supports HTTP MCP with explicit service origin, native allowed_tools and boolean required defaulting to false. Session vault_ids attach only project-owned Vaults; credential_id selects an attached static bearer credential for the exact HTTPS URL, while null/omission selects a unique match or remains anonymous. Ambiguous selection rejects creation. Frozen private selections never populate an omitted public credential_id; missing decryption configuration fails dispatch without anonymous fallback. Required initialization uses native startup before the first native Turn, including cold resume, and requires a separately advertised capability; exact hosted creation timing and error parity remain unverified. Other MCP origins and OAuth remain unsupported. The self_hosted profile requires Codex, an absolute workspace_directory and empty capability_directories, with optional non-deferred function tools and HTTP MCP using explicit service origin, optionally authenticated by the attached Vault rules. Remote MCP and remote Bearer authentication each require separately advertised combination support; old peers cannot receive unsupported work. Omitted/null capability_directories use the empty-list default; self_hosted requires configured execution plus executor registry. Claude SDK currently requires medium verbosity and object-root function schemas. It supports anonymous or attached static-bearer service-origin HTTP MCP on none with required=false and separately advertised MCP/bearer runtime support. The shared Vault selection and immutable binding rules apply; unsupported native labels/tool names reject before persistence. An attached Vault with no matching credential may remain anonymous; missing keys or failed credential lookup/decryption never fall back to anonymous execution. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text. None initial input atomically starts a Turn; self_hosted initial input is reserved while returning its Environment connection target, with execution deferred to native readiness and Session failure on initial timeout. Omitted or null input creates an idle Session. With stream=true, returns live Session events starting at creation; disconnect does not cancel execution. New Sessions retain their authenticated creator; all creation retries require the same typed subject, including across key rotation. Saved-Agent retries and inline requests using Vault attachments or credential references retain caller intent independently of later resource changes; unrelated inline retries preserve resolved/default equivalences. Unknown historical creators reject retries; known creators without recorded intent retain resolved-snapshot retry rules. These conflict policies are local and not verified hosted parity. Creation retries observe future events without replay; retry with stream=false to retrieve the Session. Non-text initial input remains unsupported.
+// @Description Supports inline configuration or a tenant-owned saved agent_id with per-Session field replacements. Execution supports model/instructions, text verbosity, non-deferred function tools, disabled multi_agent, implicit reasoning, service tier auto and environment type none, subject to the configured engine. Codex additionally supports HTTP MCP with explicit service origin, native allowed_tools and boolean required defaulting to false. Session vault_ids attach only project-owned Vaults; credential_id selects an attached static bearer credential for the exact HTTPS URL, while null/omission selects a unique match or remains anonymous. Ambiguous selection rejects creation. Frozen private selections never populate an omitted public credential_id; missing decryption configuration fails dispatch without anonymous fallback. Required initialization uses native startup before the first native Turn, including cold resume, and requires a separately advertised capability; exact hosted creation timing and error parity remain unverified. Other MCP origins and OAuth remain unsupported. The self_hosted profile requires Codex, an absolute workspace_directory and empty capability_directories, with optional non-deferred function tools and HTTP MCP using explicit service origin, optionally authenticated by the attached Vault rules. Remote MCP and remote Bearer authentication each require separately advertised combination support; old peers cannot receive unsupported work. Omitted/null capability_directories use the empty-list default; self_hosted requires configured execution plus executor registry. Claude SDK currently requires medium verbosity and object-root function schemas. It supports anonymous or attached static-bearer service-origin HTTP MCP on none with required=false and separately advertised MCP/bearer runtime support. The shared Vault selection and immutable binding rules apply; unsupported native labels/tool names reject before persistence. An attached Vault with no matching credential may remain anonymous; missing keys or failed credential lookup/decryption never fall back to anonymous execution. Omitted stream defaults to false; stream and agent_id cannot be null. Metadata may be null, but its values must be strings. Initial input accepts a string or user-message array containing text. None initial input atomically starts a Turn; self_hosted initial input is reserved while returning its Environment connection target, with execution deferred to native readiness and Session failure on initial timeout. Omitted or null input creates an idle Session. With stream=true, returns live Session events starting at creation; disconnect does not cancel execution. New Sessions retain their authenticated creator; all creation retries require the same typed subject, including across key rotation. Saved-Agent retries and inline requests using Vault attachments or credential references retain caller intent independently of later resource changes; unrelated inline retries preserve resolved/default equivalences. Unknown historical creators reject retries; known creators without recorded intent retain resolved-snapshot retry rules. These conflict policies are local and not verified hosted parity. Creation retries observe future events without replay; retry with stream=false to retrieve the Session. Non-text initial input remains unsupported. Basic Codex openai_hosted creation requires an explicitly configured managed provider. Idle Sessions provision automatically; initial provisioning has no caller connection action. Network defaults to enabled; disabled is also supported, while restricted domains and populated startup installations are rejected.
 // @Tags Sessions
 // @Accept json
 // @Produce json,text/event-stream
@@ -198,6 +199,10 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "execution_unavailable", "Self-hosted execution is not configured on this service.")
 		return
 	}
+	if input.Environment.Type == "openai_hosted" && (!h.hostedEnvironments || h.inputs == nil) {
+		writeError(w, http.StatusServiceUnavailable, "execution_unavailable", "Hosted execution is not configured on this service.")
+		return
+	}
 	createInput := store.CreateSessionInput{
 		Creator: sessionCreator(r),
 		Engine:  h.engine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs, CreationRequest: creationRequest,
@@ -207,7 +212,7 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	create := h.store.CreateSession
-	if len(initialInputs) > 0 {
+	if len(initialInputs) > 0 || input.Environment.Type == "openai_hosted" {
 		if h.inputs == nil {
 			writeError(w, http.StatusServiceUnavailable, "execution_unavailable", "Execution input is not enabled on this service.")
 			return
@@ -223,7 +228,7 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Retrieve an execution Session
-// @Description Returns supported none and self_hosted Session environments. Pending input can require an Environment connection before a Turn exists; connection observations are not native execution readiness.
+// @Description Returns supported none, self_hosted and basic openai_hosted Session environments. Self-hosted pending input can require a caller connection before a Turn exists. Hosted initial provisioning remains idle until a Turn starts; connection observations are not native execution readiness.
 // @Tags Sessions
 // @Produce json
 // @Security BearerAuth

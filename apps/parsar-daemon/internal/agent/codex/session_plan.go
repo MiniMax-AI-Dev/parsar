@@ -8,7 +8,8 @@ import (
 )
 
 func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg sessionConfig) (SessionPlan, string, error) {
-	if err := validatePermissionProfile(req, cfg.permissionProfile); err != nil {
+	profile, err := managedPermissionProfile(req, cfg)
+	if err != nil {
 		return SessionPlan{}, "", err
 	}
 	if req.WorkspaceReadOnly {
@@ -23,11 +24,13 @@ func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg
 	if err != nil {
 		return SessionPlan{}, "", fmt.Errorf("codex: build session plan: %w", err)
 	}
-	if cfg.permissionProfile != "" {
+	if profile != "" {
 		plan.Sandbox = ""
-		plan.Permissions = cfg.permissionProfile
-		plan.ExtraConfig = append(plan.ExtraConfig, [2]string{"default_permissions", tomlQuoteString(cfg.permissionProfile)})
+		plan.Permissions = profile
+		plan.ExtraConfig = append(plan.ExtraConfig, [2]string{"default_permissions", tomlQuoteString(profile)})
 		configureRestrictedShellEnvironment(&plan)
+		// Native login-shell snapshots live outside the managed tool filesystem.
+		plan.ExtraConfig = append(plan.ExtraConfig, [2]string{"features.shell_snapshot", "false"})
 	}
 
 	if req.DisableSubagents {
