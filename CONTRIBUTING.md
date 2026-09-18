@@ -424,6 +424,16 @@ large objects; live deletion does not erase WAL or historical backups. Schema
 rollback must not orphan existing source objects. Do not reuse product capability
 tables or introduce a second destination writer for file_id.
 
+Session Artifacts are immutable published output copies, separate from live
+workspace files and general source Files. A private output exporter must reuse
+the authorized workspace path boundary and stream bounded bytes. Require complete
+capture and confirmed helper/transport success before publication; valid archive
+syntax alone is insufficient. Never extract an output archive into Core's
+filesystem or hold the global execution lease through a large transfer. Keep
+publication ordered with Turn completion, and authorize stored reads independently
+of Environment availability so published outputs can survive its expiration.
+Exporter component checks do not establish public Artifact compatibility.
+
 Local inline file delivery uses the same authenticated daemon connection and exact
 Environment/Session binding. The optional startup-owned `PARSAR_RUNTIME_WRITE_HELPER`
 and `PARSAR_RUNTIME_STAGING` enable only the bounded installer primitive; they do

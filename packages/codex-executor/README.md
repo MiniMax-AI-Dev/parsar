@@ -66,6 +66,29 @@ not change stock native filesystem methods, create a daemon connection, or enabl
 public Files. The [native fixture](../../services/agents-api/tests/native/directory/README.md)
 qualifies the standalone helper independently of later adapter/public wiring.
 
+## Scoped output exporter
+
+`agents-api-workspace-export` takes one authorized absolute workspace root and
+streams regular files beneath its `outputs` directory as a standard tar archive
+on stdout. It reuses the directory helper's descriptor-relative path protection;
+it does not invoke a shell, model or provider command. The caller must supply the
+exact Environment's frozen root and independently authorize the operation.
+
+Require both a complete validated archive and successful process exit before
+publishing anything. On failure the stdout prefix may still look like a valid
+archive. Never extract it into Core's filesystem. Consumers must bound and stream
+individual entries into private storage, then publish only after the entire
+capture succeeds. A missing `outputs` directory produces an empty archive.
+
+The exporter rejects symlinks, multiply linked files, special files, device
+changes and detected concurrent modifications. It limits each file to 200 MiB
+and aggregate bytes to 500 MiB, following the current official Files guide.
+Traversal is additionally bounded at 4096 entries, 64 directory levels and
+4096-byte relative paths; those are implementation limits, not upstream promises.
+This is not a filesystem-wide point-in-time snapshot. Immutable publication,
+tenant isolation, Turn ordering and storage cleanup remain Core/Runtime duties;
+the helper alone does not enable public Artifacts.
+
 ## Scoped file installer
 
 The optional `agents-api-codex-write` helper addresses two pinned native write
