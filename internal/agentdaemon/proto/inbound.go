@@ -253,6 +253,7 @@ type AgentKindCapabilities struct {
 	Permissions                   bool `json:"permissions,omitempty"`
 	Usage                         bool `json:"usage,omitempty"`
 	Resume                        bool `json:"resume,omitempty"`
+	NativeSessionRecovery         bool `json:"native_session_recovery,omitempty"`
 	WorkspaceAuthoring            bool `json:"workspace_authoring,omitempty"`
 	Steering                      bool `json:"steering,omitempty"`
 	MessageItems                  bool `json:"message_items,omitempty"`

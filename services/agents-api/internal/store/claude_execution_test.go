@@ -93,7 +93,7 @@ func TestClaudeWorkerSelectsStoredEngineAndRestrictiveCapabilities(t *testing.T)
 			}
 			h.write(input.TurnID, proto.TypeDone, proto.DonePayload{Content: "done", Metadata: map[string]any{proto.DoneMetaAgentSessionID: "claude-native"}})
 			waitTurn(t, h, input.TurnID, store.TurnCompleted)
-			bound, err := h.s.GetSessionDevice(ctx, h.tenant, h.session.ID)
+			bound, err := h.s.GetSessionExecutionBinding(ctx, h.tenant, h.session.ID)
 			if err != nil || bound.NativeSessionID != "claude-native" {
 				t.Fatal(bound, err)
 			}

@@ -116,7 +116,7 @@ func TestExecutionLeaseLossFencesAllLifecycleWrites(t *testing.T) {
 	if _, err = successor.Store().CompleteExecution(t.Context(), tenant, active.ID, input.TurnID, TurnCompleted, json.RawMessage(`{"done":{"content":"accepted"}}`), "successor-native", input.Sequence); err != nil {
 		t.Fatal(err)
 	}
-	bound, err := s.GetSessionDevice(t.Context(), tenant, active.ID)
+	bound, err := s.GetSessionExecutionBinding(t.Context(), tenant, active.ID)
 	if err != nil || bound.NativeSessionID != "successor-native" {
 		t.Fatal(bound, err)
 	}

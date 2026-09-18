@@ -150,8 +150,8 @@ func TestLocalEnvironmentWorkerSchedulesPreparationWithoutRemoteResolver(t *test
 	if err != nil || settled.State != store.EnvironmentInputAdmitted || len(settled.Receipts) != 1 {
 		t.Fatal("local reservation did not settle", err)
 	}
-	bound, err := h.s.GetSessionDevice(t.Context(), h.tenant, h.session.ID)
-	if err != nil || bound.EnvironmentID != environment.ID || bound.NativeSessionID != "local-native-history" {
+	bound, err := h.s.GetSessionExecutionBinding(t.Context(), h.tenant, h.session.ID)
+	if err != nil || bound.Device.EnvironmentID != environment.ID || bound.NativeSessionID != "local-native-history" {
 		t.Fatal("local native identity was not retained", err)
 	}
 	artifacts, err := h.s.ListSessionArtifacts(t.Context(), h.tenant, h.session.ID, environment.ID, "", 20, false)

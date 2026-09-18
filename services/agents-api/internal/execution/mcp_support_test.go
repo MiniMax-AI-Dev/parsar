@@ -41,7 +41,7 @@ func TestMCPPublicBearerPolicyIsIndependentOfRuntimeCapabilities(t *testing.T) {
 			if _, err := mcpExecutionCredentials(engine, snapshot, servers, caps); (err == nil) != allowed {
 				t.Fatal("runtime capabilities widened public admission", err)
 			}
-			request, err := (&Dispatcher{}).executionRequest(t.Context(), store.Session{Engine: engine}, snapshot, caps, "")
+			request, err := (&Dispatcher{}).executionRequest(t.Context(), store.Session{Engine: engine}, snapshot, caps, store.SessionExecutionBinding{})
 			if err == nil || request.MCPHTTPServers != nil {
 				t.Fatal("credential execution without a store was admitted")
 			}
@@ -95,7 +95,7 @@ func TestMCPExecutionChecksRequireVerifiedCapabilityCombinations(t *testing.T) {
 					t.Fatal("incorrect combined MCP capability decision", err)
 				}
 				if !allowed {
-					request, requestErr := (&Dispatcher{}).executionRequest(t.Context(), store.Session{Engine: "codex"}, snapshot, caps, "")
+					request, requestErr := (&Dispatcher{}).executionRequest(t.Context(), store.Session{Engine: "codex"}, snapshot, caps, store.SessionExecutionBinding{})
 					if requestErr == nil || request.MCPHTTPServers != nil || requestErr.Error() == "authenticated MCP execution is unavailable" {
 						t.Fatal("request bypassed capability checks before credential lookup", requestErr)
 					}
@@ -126,7 +126,7 @@ func TestMCPAnonymousExecutionPreservesFrozenDecision(t *testing.T) {
 				if err := ValidateSessionConfiguration(engine, raw); (err == nil) != allowed || canAdmitInputs(engine, raw) != allowed {
 					t.Fatal("anonymous binding validation changed", err)
 				}
-				request, err := (&Dispatcher{}).executionRequest(t.Context(), store.Session{Engine: engine}, snapshot, caps, "")
+				request, err := (&Dispatcher{}).executionRequest(t.Context(), store.Session{Engine: engine}, snapshot, caps, store.SessionExecutionBinding{})
 				if !allowed {
 					if err == nil || request.MCPHTTPServers != nil {
 						t.Fatal("invalid frozen binding reached dispatch")

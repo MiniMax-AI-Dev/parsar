@@ -153,7 +153,7 @@ func TestExecutionFunctionsCancellationAndUnconfirmedResults(t *testing.T) {
 			}
 			h.finished(result, status)
 			if cancel {
-				bound, err := h.s.GetSessionDevice(t.Context(), h.tenant, h.session.ID)
+				bound, err := h.s.GetSessionExecutionBinding(t.Context(), h.tenant, h.session.ID)
 				if err != nil || bound.NativeSessionID != "native-cancelled-functions" {
 					t.Fatal(bound, err)
 				}

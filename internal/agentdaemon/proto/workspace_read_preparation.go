@@ -6,7 +6,7 @@ func ValidWorkspaceReadPreparation(r PromptRequestPayload) bool {
 	return r.WorkspaceReadOnly && ((r.RemoteEnvironment != nil) != (r.LocalEnvironment != nil)) && r.AgentStateKey != "" &&
 		r.StrictResume && r.ReleaseOnCompletion && r.RunID == "" && r.Prompt == "" &&
 		r.ConversationID == "" && r.AgentSessionID == "" && r.WorkDir == "" &&
-		!r.WorkspaceAuthoring && !r.DisableExecutionEnvironment && len(r.Attachments) == 0 &&
+		!r.RequireExistingNativeSession && !r.WorkspaceAuthoring && !r.DisableExecutionEnvironment && len(r.Attachments) == 0 &&
 		len(r.AgentOptions) == 0 && r.ExecutionControls == nil && r.MCPHTTPServers == nil &&
 		len(r.FunctionTools) == 0 && !r.ObserveMessages && !r.ObserveTools &&
 		!r.ObserveToolObservations && !r.ObserveSubagentIdentities

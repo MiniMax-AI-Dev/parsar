@@ -212,6 +212,18 @@ future V2 option, to revisit only after V1 is stable and concrete needs justify 
 Do not extend that topology for hosted delivery, maintain two current hosted routes,
 or introduce dormant V2 compatibility scaffolding.
 
+When an execution Session has a previously started Turn but no recorded native
+Session ID, Core requires existing-history recovery through a verified Runtime
+capability. Read that condition before claiming the next Turn. A supplied native ID
+remains authoritative. The Codex adapter may recover only a unique, nonarchived
+root in the exact Session-private native home and expected working directory, using
+native listing and exact-ID resume. Missing, incomplete or ambiguous history must
+fail without starting a fresh root. A recorded start can precede native work; that
+uncertain case also fails conservatively. Recovery does not replay interrupted
+inputs, erase prior outcomes or promise transparent continuation of running tools.
+Keep Device identity and Environment scope in `ExecutionDevice`; native Session
+identity and prior API Turn state belong to `SessionExecutionBinding`.
+
 Platform-managed and user-managed deployment reuse this same Runtime. For platform
 management, SandboxProvider creates and reclaims it. For user management, the user
 starts the Runtime and its daemon authenticates and initiates the Core connection;

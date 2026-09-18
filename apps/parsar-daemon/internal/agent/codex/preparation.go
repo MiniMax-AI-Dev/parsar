@@ -39,6 +39,9 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	if req.WorkspaceReadOnly && (!proto.ValidWorkspaceReadPreparation(req) || cfg.harnessBinary == "") {
 		return nil, errors.New("codex: read-only preparation requires a private harness and a closed read configuration")
 	}
+	if req.RequireExistingNativeSession && (!req.StrictResume || req.AgentStateKey == "" || req.WorkspaceReadOnly) {
+		return nil, errors.New("codex: native-session recovery requires strict private state")
+	}
 	if req.RunID != "" || req.Prompt != "" {
 		return nil, errors.New("codex: preparation does not accept a run identity or prompt")
 	}
@@ -119,7 +122,7 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	plan.Cleanup = s.cleanup
 	p := &Prepared{
 		session: s, plan: plan, remote: req.RemoteEnvironment != nil, workspaceReadOnly: req.WorkspaceReadOnly,
-		resumeID: req.AgentSessionID, strictResume: req.StrictResume,
+		resumeID: req.AgentSessionID, strictResume: req.StrictResume, requireExistingNativeSession: req.RequireExistingNativeSession,
 		transferred: make(chan struct{}),
 	}
 

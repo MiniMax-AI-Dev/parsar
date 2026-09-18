@@ -178,7 +178,7 @@ func TestPreparedDispatchCancellationReceiptSurvivesStartFailure(t *testing.T) {
 			if receipts != 1 {
 				t.Fatal("cancellation receipt was not journaled once", receipts)
 			}
-			bound, err := h.s.GetSessionDevice(t.Context(), h.tenant, h.session.ID)
+			bound, err := h.s.GetSessionExecutionBinding(t.Context(), h.tenant, h.session.ID)
 			if err != nil || (withOutcome && (bound.NativeSessionID != "cancelled-prepared-native" || outcome.Done.Content != "retained cancellation")) {
 				t.Fatal("cancellation lost native continuation or final output", err)
 			}

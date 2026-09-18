@@ -194,8 +194,8 @@ func testNativePreparedWorkerRemoteEnvironment(t *testing.T, directoryReads bool
 		if json.Unmarshal(run.Turn.Outcome, &result) != nil || !strings.Contains(result.Done.Content, memory) || !strings.Contains(result.Done.Content, instruction) || strings.Contains(result.Done.Content, "WRONG_LOCAL_INSTRUCTIONS") {
 			t.Fatal("remote instructions or native memory missing; inspect private proof")
 		}
-		bound, err := h.s.GetSessionDevice(ctx, h.tenant, h.session.ID)
-		if err != nil || bound.ID != h.device.ID || bound.NativeSessionID == "" || (index == 1 && bound.NativeSessionID != nativeID) {
+		bound, err := h.s.GetSessionExecutionBinding(ctx, h.tenant, h.session.ID)
+		if err != nil || bound.Device.ID != h.device.ID || bound.NativeSessionID == "" || (index == 1 && bound.NativeSessionID != nativeID) {
 			t.Fatal("native continuation identity changed", err)
 		}
 		nativeID = bound.NativeSessionID

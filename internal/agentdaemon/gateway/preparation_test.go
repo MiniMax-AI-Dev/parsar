@@ -77,8 +77,8 @@ func TestPreparationCloseAndOverflowDoNotInventRunEvents(t *testing.T) {
 }
 
 func TestPreparationCapabilitySurvivesHeartbeatMapping(t *testing.T) {
-	kinds := deviceKindsFromHeartbeat(proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Preparation: true, RemoteEnvironment: true, LocalEnvironment: true, LocalEnvironmentNetworkPolicy: true, WorkspaceReadPreparation: true}}}})
-	if len(kinds) != 1 || (!kinds[0].Capabilities.Preparation || !kinds[0].Capabilities.LocalEnvironment || !kinds[0].Capabilities.LocalEnvironmentNetworkPolicy || !kinds[0].Capabilities.WorkspaceReadPreparation) {
+	kinds := deviceKindsFromHeartbeat(proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Preparation: true, RemoteEnvironment: true, LocalEnvironment: true, LocalEnvironmentNetworkPolicy: true, WorkspaceReadPreparation: true, NativeSessionRecovery: true}}}})
+	if len(kinds) != 1 || (!kinds[0].Capabilities.Preparation || !kinds[0].Capabilities.LocalEnvironment || !kinds[0].Capabilities.LocalEnvironmentNetworkPolicy || !kinds[0].Capabilities.WorkspaceReadPreparation || !kinds[0].Capabilities.NativeSessionRecovery) {
 		t.Fatal("preparation capability lost")
 	}
 }

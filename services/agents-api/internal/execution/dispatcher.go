@@ -52,11 +52,11 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if err != nil {
 		return store.Turn{}, err
 	}
-	bound, err := d.Store.GetSessionDevice(ctx, tenantID, sessionID)
+	bound, err := d.Store.GetSessionExecutionBinding(ctx, tenantID, sessionID)
 	if err != nil {
 		return store.Turn{}, err
 	}
-	peer, err := d.Registry.LookupDevice(bound.ID)
+	peer, err := d.Registry.LookupDevice(bound.Device.ID)
 	if err != nil {
 		return store.Turn{}, err
 	}
@@ -76,7 +76,7 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if err != nil {
 		return store.Turn{}, err
 	}
-	req, err := d.executionRequest(ctx, session, snapshot, caps, bound.NativeSessionID)
+	req, err := d.executionRequest(ctx, session, snapshot, caps, bound)
 	if err != nil {
 		return store.Turn{}, err
 	}

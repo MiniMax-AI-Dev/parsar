@@ -20,10 +20,16 @@ var ErrDeviceBindingConflict = errors.New("session is already bound to a differe
 
 // ExecutionDevice contains safe identity only, never a device credential.
 type ExecutionDevice struct {
-	ID              string
-	Name            string
+	ID            string
+	Name          string
+	EnvironmentID string
+}
+
+// SessionExecutionBinding identifies the Runtime and native history selected for one API Session.
+type SessionExecutionBinding struct {
+	Device          ExecutionDevice
 	NativeSessionID string
-	EnvironmentID   string
+	HasStartedTurn  bool
 }
 
 // CreateDevice is operator provisioning, not a tenant-facing registration API.
@@ -84,7 +90,7 @@ func (s *Store) RevokeDevice(ctx context.Context, tenantID, deviceID string) err
 }
 
 // BindSessionDevice keeps retries stable and refuses silent filesystem moves.
-// The dispatcher must obtain its device through GetSessionDevice before delivery.
+// Dispatchers must obtain the full Session binding before delivery.
 func (s *Store) BindSessionDevice(ctx context.Context, tenantID, sessionID, deviceID string) error {
 	params, err := deviceLookup(tenantID, deviceID)
 	if err != nil {
@@ -116,11 +122,34 @@ func (s *Store) GetSessionDevice(ctx context.Context, tenantID, sessionID string
 	if err != nil {
 		return ExecutionDevice{}, err
 	}
-	value := ExecutionDevice{ID: uuid.UUID(row.ID.Bytes).String(), Name: row.Name, NativeSessionID: row.NativeSessionID}
-	if row.EnvironmentID.Valid {
-		value.EnvironmentID = uuid.UUID(row.EnvironmentID.Bytes).String()
+	return executionDevice(row.ID, row.Name, row.EnvironmentID), nil
+}
+
+func (s *Store) GetSessionExecutionBinding(ctx context.Context, tenantID, sessionID string) (SessionExecutionBinding, error) {
+	params, err := deviceLookup(tenantID, sessionID)
+	if err != nil {
+		return SessionExecutionBinding{}, err
 	}
-	return value, nil
+	row, err := s.queries.GetSessionExecutionBinding(ctx, sqlc.GetSessionExecutionBindingParams(params))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return SessionExecutionBinding{}, ErrNotFound
+	}
+	if err != nil {
+		return SessionExecutionBinding{}, err
+	}
+	return SessionExecutionBinding{
+		Device:          executionDevice(row.ID, row.Name, row.EnvironmentID),
+		NativeSessionID: row.NativeSessionID,
+		HasStartedTurn:  row.HasStartedTurn,
+	}, nil
+}
+
+func executionDevice(id pgtype.UUID, name string, environmentID pgtype.UUID) ExecutionDevice {
+	value := ExecutionDevice{ID: uuid.UUID(id.Bytes).String(), Name: name}
+	if environmentID.Valid {
+		value.EnvironmentID = uuid.UUID(environmentID.Bytes).String()
+	}
+	return value
 }
 
 func deviceLookup(tenantID, id string) (sqlc.GetDeviceParams, error) {

@@ -89,15 +89,16 @@ type PromptRequestPayload struct {
 	AgentStateKey      string `json:"agent_state_key,omitempty"`
 	WorkspaceAuthoring bool   `json:"workspace_authoring,omitempty"`
 	// ReleaseOnCompletion closes the native writer before acknowledging Done.
-	ReleaseOnCompletion         bool           `json:"release_on_completion,omitempty"`
-	StrictResume                bool           `json:"strict_resume,omitempty"`
-	ObserveMessages             bool           `json:"observe_messages,omitempty"`
-	ObserveTools                bool           `json:"observe_tools,omitempty"`
-	ObserveToolObservations     bool           `json:"observe_tool_observations,omitempty"`
-	ObserveSubagentIdentities   bool           `json:"observe_subagent_identities,omitempty"`
-	FunctionTools               []FunctionTool `json:"function_tools,omitempty"`
-	DisableExecutionEnvironment bool           `json:"disable_execution_environment,omitempty"`
-	DisableSubagents            bool           `json:"disable_subagents,omitempty"`
+	ReleaseOnCompletion          bool           `json:"release_on_completion,omitempty"`
+	StrictResume                 bool           `json:"strict_resume,omitempty"`
+	RequireExistingNativeSession bool           `json:"require_existing_native_session,omitempty"`
+	ObserveMessages              bool           `json:"observe_messages,omitempty"`
+	ObserveTools                 bool           `json:"observe_tools,omitempty"`
+	ObserveToolObservations      bool           `json:"observe_tool_observations,omitempty"`
+	ObserveSubagentIdentities    bool           `json:"observe_subagent_identities,omitempty"`
+	FunctionTools                []FunctionTool `json:"function_tools,omitempty"`
+	DisableExecutionEnvironment  bool           `json:"disable_execution_environment,omitempty"`
+	DisableSubagents             bool           `json:"disable_subagents,omitempty"`
 }
 
 // PromptAttachment is one piece of non-text user input the daemon-side

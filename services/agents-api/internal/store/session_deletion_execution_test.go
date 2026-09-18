@@ -47,7 +47,7 @@ func TestDeletedSessionWaitingTurnSettlesWithoutStoppingWorker(t *testing.T) {
 	}
 	h.write(input.TurnID, proto.TypeInteractionDecisionAck, proto.InteractionDecisionAckPayload{DeliveryID: request.DeliveryID, Applied: true, Outcome: &proto.DonePayload{Metadata: map[string]any{proto.DoneMetaAgentSessionID: "deleted-native"}}})
 	waitTurn(t, h, input.TurnID, store.TurnCancelled)
-	bound, err := h.s.GetSessionDevice(ctx, h.tenant, h.session.ID)
+	bound, err := h.s.GetSessionExecutionBinding(ctx, h.tenant, h.session.ID)
 	if err != nil || bound.NativeSessionID != "deleted-native" {
 		t.Fatal(bound, err)
 	}

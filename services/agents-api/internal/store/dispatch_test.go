@@ -81,7 +81,7 @@ func newDispatchHarnessForSession(t *testing.T, configuration []byte, local bool
 		t.Fatal("device connection failed")
 	}
 	t.Cleanup(func() { h.conn.Close() })
-	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true, DurableInputReceipts: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: true, SubagentControl: true, ToolObservations: true}}}})
+	h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "codex", Available: true, Capabilities: proto.AgentKindCapabilities{Streaming: true, Steering: true, Resume: true, DurableTurns: true, DurableInputReceipts: true, WebSearchControl: true, TextVerbosity: true, ExecutionControls: true, SubagentControl: true, ToolObservations: true, NativeSessionRecovery: true}}}})
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		peer, e := h.registry.LookupDevice(h.device.ID)
@@ -200,7 +200,7 @@ func TestExecutionDispatchSteeringAndNativeContinuity(t *testing.T) {
 	defer pool.Close()
 	h.s = newStore
 	h.d.Store = newStore
-	bound, err := newStore.GetSessionDevice(ctx, h.tenant, h.session.ID)
+	bound, err := newStore.GetSessionExecutionBinding(ctx, h.tenant, h.session.ID)
 	if err != nil || bound.NativeSessionID != "native-thread-1" {
 		t.Fatalf("native binding lost: %+v %v", bound, err)
 	}
@@ -319,7 +319,7 @@ func TestExecutionOutcomeAndNativeBindingCommitTogether(t *testing.T) {
 	if _, err := h.s.CompleteExecution(ctx, h.tenant, h.session.ID, first.TurnID, store.TurnCompleted, []byte(`{}`), "native-one", first.Sequence); !errors.Is(err, store.ErrUnappliedInputs) {
 		t.Fatalf("unapplied completion: %v", err)
 	}
-	bound, _ := h.s.GetSessionDevice(ctx, h.tenant, h.session.ID)
+	bound, _ := h.s.GetSessionExecutionBinding(ctx, h.tenant, h.session.ID)
 	if bound.NativeSessionID != "" {
 		t.Fatal("native ID committed without outcome")
 	}

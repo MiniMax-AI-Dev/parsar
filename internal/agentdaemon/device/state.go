@@ -64,6 +64,7 @@ type KindCapabilities struct {
 	Permissions                   bool `json:"permissions,omitempty"`
 	Usage                         bool `json:"usage,omitempty"`
 	Resume                        bool `json:"resume,omitempty"`
+	NativeSessionRecovery         bool `json:"native_session_recovery,omitempty"`
 	Steering                      bool `json:"steering,omitempty"`
 	MessageItems                  bool `json:"message_items,omitempty"`
 	ToolItems                     bool `json:"tool_items,omitempty"`

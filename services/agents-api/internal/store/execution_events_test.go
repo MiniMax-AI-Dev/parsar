@@ -93,7 +93,7 @@ func TestExecutionDoesNotCompleteAfterEventPersistenceFailure(t *testing.T) {
 	if outcome.ErrorCode != "event_persistence_failed" {
 		t.Fatal(outcome.ErrorCode)
 	}
-	bound, err := h.s.GetSessionDevice(ctx, h.tenant, h.session.ID)
+	bound, err := h.s.GetSessionExecutionBinding(ctx, h.tenant, h.session.ID)
 	if err != nil || bound.NativeSessionID != "failed-native" || outcome.Done.Usage.InputTokens != 13 {
 		t.Fatalf("terminal failure lost native continuity or usage: %+v %+v %v", bound, outcome, err)
 	}
