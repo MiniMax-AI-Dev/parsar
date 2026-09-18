@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /environment/workspace /workspace /home/runtime \
     && groupadd --gid 1000 runtime \
     && useradd --uid 1000 --gid 1000 --home-dir /home/runtime --no-create-home runtime
-COPY --chmod=0555 parsar-daemon agents-api-codex-directory agents-api-codex-write codex /usr/local/bin/
+COPY --chmod=0555 parsar-daemon agents-api-codex-directory agents-api-codex-write agents-api-workspace-export codex /usr/local/bin/
 COPY codex-resources /usr/local/codex-resources
 COPY requirements.toml /etc/codex/requirements.toml
 RUN chmod 0555 /etc/codex && chmod 0444 /etc/codex/requirements.toml
@@ -16,6 +16,7 @@ ENV HOME=/home/runtime PARSAR_HOME=/home/runtime/.parsar \
     PARSAR_RUNTIME_WORKSPACE=/environment/workspace \
     PARSAR_RUNTIME_DIRECTORY_HELPER=/usr/local/bin/agents-api-codex-directory \
     PARSAR_RUNTIME_WRITE_HELPER=/usr/local/bin/agents-api-codex-write \
+    PARSAR_RUNTIME_EXPORT_HELPER=/usr/local/bin/agents-api-workspace-export \
     PARSAR_RUNTIME_STAGING=/environment/staging
 USER 1000:1000
 RUN test -r /etc/codex/requirements.toml && test "$(codex --version)" = "codex-cli 0.153.4"

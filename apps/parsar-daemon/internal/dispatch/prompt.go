@@ -74,7 +74,7 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 		r.log.ErrorContext(callerCtx, "handlePromptRequest: router closed", "run_id", runID)
 		return ErrRouterClosed
 	}
-	if r.workspaceWrite != nil {
+	if r.workspaceWrite != nil || r.workspaceExport != nil {
 		r.mu.Unlock()
 		err := errors.New("local workspace has an unsettled write")
 		r.emitTerminalError(callerCtx, runID, err.Error())

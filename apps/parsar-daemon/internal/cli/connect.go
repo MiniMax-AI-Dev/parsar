@@ -372,12 +372,17 @@ func pumpConn(parentCtx context.Context, conn *transport.Conn, registry *agent.R
 	}()
 
 	conn.StartHeartbeats(parentCtx, boot.HeartbeatInterval(), func() proto.HeartbeatPayload {
+		kinds := registry.SupportedAgentKinds()
+		for i := range kinds {
+			caps := &kinds[i].Capabilities
+			caps.WorkspaceOutputExport = local.CanExport() && caps.LocalEnvironment && caps.WorkspaceReadPreparation
+		}
 		return proto.HeartbeatPayload{
 			Timestamp:           time.Now().Unix(),
 			ActiveRequests:      router.ActiveRuns(),
 			DaemonVersion:       Version,
 			ClaudeAvailable:     agentCLIs.ClaudeCode.Available, // legacy server compatibility
-			SupportedAgentKinds: registry.SupportedAgentKinds(),
+			SupportedAgentKinds: kinds,
 		}
 	}, obslog.Bg().With("component", "heartbeat"))
 

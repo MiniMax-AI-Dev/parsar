@@ -81,6 +81,16 @@ Workspace and staging must share the same mount for atomic rename. Do not mount
 them separately or put daemon/model credentials, native history or other tenants
 inside `/environment`. The read-only Runtime can omit both writer settings.
 
+Hosted Turn output publication additionally requires the immutable
+`agents-api-workspace-export` executable selected by
+`PARSAR_RUNTIME_EXPORT_HELPER`. The Runtime bundle includes it outside the workspace.
+It exports regular files below `outputs` through the authenticated daemon connection;
+Core stores immutable copies and publishes them with successful Turn completion.
+Use a matched Core/Runtime release: older Runtime images without bounded output
+export are ineligible for hosted execution. Listing and downloading already
+published artifacts uses the execution database and requires no running Environment.
+The export capability does not replace the deployment isolation checks above.
+
 The installer runs as a trusted bounded daemon child with a minimal environment.
 Native tools retain their narrower filesystem policy. Qualify direct reads,
 symlink and process-root aliases, attempted staging modification, real uploaded

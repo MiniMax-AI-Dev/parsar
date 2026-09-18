@@ -778,6 +778,63 @@ definitions:
     - status
     - vault_ids
     type: object
+  v1.SessionArtifact:
+    properties:
+      created_at:
+        type: integer
+      environment_id:
+        type: string
+      id:
+        type: string
+      object:
+        enum:
+        - agent.session.artifact
+        type: string
+      path:
+        type: string
+      session_id:
+        type: string
+      size_bytes:
+        type: integer
+      turn_id:
+        type: string
+    required:
+    - created_at
+    - environment_id
+    - id
+    - object
+    - path
+    - session_id
+    - size_bytes
+    - turn_id
+    type: object
+  v1.SessionArtifactDeleted:
+    properties:
+      deleted:
+        type: boolean
+      id:
+        type: string
+      object:
+        enum:
+        - agent.session.artifact.deleted
+        type: string
+    required:
+    - deleted
+    - id
+    - object
+    type: object
+  v1.SessionArtifactList:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/v1.SessionArtifact'
+        type: array
+      has_more:
+        type: boolean
+    required:
+    - data
+    - has_more
+    type: object
   v1.SessionDeleted:
     properties:
       deleted:
@@ -2066,6 +2123,231 @@ paths:
       summary: Update execution Session metadata
       tags:
       - Sessions
+  /agents/sessions/{session_id}/artifacts:
+    get:
+      description: Lists published outputs independently of Environment availability.
+        Sorting uses publication time and ID. The local default page size is 20; exact
+        upstream defaults and error parity remain unverified.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: Producing Environment ID
+        in: query
+        name: environment_id
+        type: string
+      - description: Last immutable artifact ID
+        in: query
+        name: after
+        type: string
+      - default: 20
+        description: Page size
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: desc
+        description: Publication order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SessionArtifactList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List immutable Session artifacts
+      tags:
+      - Artifacts
+  /agents/sessions/{session_id}/artifacts/{artifact_id}:
+    delete:
+      description: Deletes the published copy without modifying its original workspace
+        file. Already admitted content reads may finish; later reads reject.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: Artifact ID
+        in: path
+        name: artifact_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SessionArtifactDeleted'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a published artifact
+      tags:
+      - Artifacts
+    get:
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: Artifact ID
+        in: path
+        name: artifact_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SessionArtifact'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve immutable artifact metadata
+      tags:
+      - Artifacts
+  /agents/sessions/{session_id}/artifacts/{artifact_id}/content:
+    get:
+      description: Streams stored bytes after tenant and Session authorization, including
+        after Environment expiration. Exact upstream headers and Range behavior remain
+        unverified.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: Artifact ID
+        in: path
+        name: artifact_id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Download immutable artifact bytes
+      tags:
+      - Artifacts
   /agents/sessions/{session_id}/events:
     get:
       description: Live-only events, including command output fragments from capable

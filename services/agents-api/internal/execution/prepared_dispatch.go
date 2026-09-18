@@ -99,6 +99,7 @@ func (d *Dispatcher) RunEnvironmentInput(ctx context.Context, tenantID, sessionI
 	req.Prompt = strings.Join(messages, "\n\n")
 	through := run.Reservation.Receipts[len(run.Reservation.Receipts)-1].Sequence
 	result, status := d.deliver(owner, tenantID, sessionID, peer, req, through, prepared)
+	result, status = d.captureCompletedArtifacts(owner, peer, session, environment, bound, req.RunID, result, status)
 	run.Turn, err = d.finishRun(tenantID, sessionID, req.RunID, snapshot.Agent.Model, result, status)
 	return run, err
 }

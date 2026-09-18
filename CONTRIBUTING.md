@@ -432,6 +432,14 @@ syntax alone is insufficient. Never extract an output archive into Core's
 filesystem or hold the global execution lease through a large transfer. Keep
 publication ordered with Turn completion, and authorize stored reads independently
 of Environment availability so published outputs can survive its expiration.
+Capture bytes into private PostgreSQL large objects without a Session admission
+lock; after confirmed export, lock and recheck the live Turn before staging metadata.
+Publish metadata in the same transaction as Turn completion. Failed/cancelled Turns
+discard private objects, and Session deletion removes both private and published
+copies. Reuse the source-file snapshot reader pattern and common content response;
+artifact deletion does not alter workspace files. Hosted execution requires the
+Runtime's bounded output-export capability and exact read-only preparation binding;
+capability advertisement alone does not qualify an operator's deployment.
 Exporter component checks do not establish public Artifact compatibility.
 
 Local inline file delivery uses the same authenticated daemon connection and exact

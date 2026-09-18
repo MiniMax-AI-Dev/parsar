@@ -17,6 +17,7 @@ type Binding struct {
 	stateKey      string
 	workspace     string
 	helper        string
+	exportHelper  string
 	writer        *fileWriter
 }
 
@@ -50,7 +51,8 @@ func Load() (*Binding, error) {
 		return nil, errors.New("unsupported local Runtime network policy")
 	}
 	writeHelper, staging := os.Getenv("PARSAR_RUNTIME_WRITE_HELPER"), os.Getenv("PARSAR_RUNTIME_STAGING")
-	if strings.Join(values, "") == "" && writeHelper == "" && staging == "" && network == "" {
+	exportHelper := os.Getenv("PARSAR_RUNTIME_EXPORT_HELPER")
+	if strings.Join(values, "") == "" && writeHelper == "" && staging == "" && network == "" && exportHelper == "" {
 		return nil, nil
 	}
 	b, err := New(values[0], values[1], values[2], values[3])
@@ -58,6 +60,17 @@ func Load() (*Binding, error) {
 		return nil, err
 	}
 	b.networkAccess = network
+	if exportHelper != "" {
+		// Reuse the startup executable/root checks; this grants no caller authority.
+		if _, err := New(values[0], values[1], values[2], exportHelper); err != nil {
+			return nil, err
+		}
+		resolved, err := filepath.EvalSymlinks(exportHelper)
+		if err != nil || resolved != exportHelper {
+			return nil, errors.New("workspace exporter must be a canonical executable")
+		}
+		b.exportHelper = exportHelper
+	}
 	if writeHelper != "" || staging != "" {
 		if err := b.bindWriter(writeHelper, staging); err != nil {
 			return nil, err

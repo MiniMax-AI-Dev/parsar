@@ -121,6 +121,18 @@ type Session struct {
 	CreatorID           pgtype.Text        `json:"creator_id"`
 }
 
+type SessionArtifact struct {
+	ID            pgtype.UUID        `json:"id"`
+	SessionID     pgtype.UUID        `json:"session_id"`
+	TurnID        pgtype.UUID        `json:"turn_id"`
+	EnvironmentID pgtype.UUID        `json:"environment_id"`
+	Path          string             `json:"path"`
+	SizeBytes     int64              `json:"size_bytes"`
+	BodyOid       pgtype.Uint32      `json:"body_oid"`
+	Sha256        string             `json:"sha256"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type SessionDevice struct {
 	SessionID       pgtype.UUID `json:"session_id"`
 	DeviceID        pgtype.UUID `json:"device_id"`
