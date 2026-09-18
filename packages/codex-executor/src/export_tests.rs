@@ -5,6 +5,7 @@ use std::os::unix::{fs::symlink, net::UnixListener};
 
 #[test]
 fn captures_nested_binary_empty_and_long_names_without_other_workspace_files() {
+    let _guard = crate::directory::TEST_LOCK.lock().unwrap();
     let root = tempfile::tempdir().unwrap();
     fs::create_dir_all(root.path().join("outputs/nested")).unwrap();
     fs::write(root.path().join("private.txt"), "not an output").unwrap();
@@ -32,6 +33,7 @@ fn captures_nested_binary_empty_and_long_names_without_other_workspace_files() {
 
 #[test]
 fn absent_outputs_is_an_empty_archive() {
+    let _guard = crate::directory::TEST_LOCK.lock().unwrap();
     let root = tempfile::tempdir().unwrap();
     let mut bytes = Vec::new();
     outputs(root.path(), &mut bytes).unwrap();
@@ -46,6 +48,7 @@ fn absent_outputs_is_an_empty_archive() {
 
 #[test]
 fn rejects_links_and_special_files_without_exposing_their_contents() {
+    let _guard = crate::directory::TEST_LOCK.lock().unwrap();
     for kind in ["root-symlink", "file-symlink", "hardlink", "socket"] {
         let root = tempfile::tempdir().unwrap();
         let other = tempfile::tempdir().unwrap();
@@ -80,6 +83,7 @@ fn rejects_links_and_special_files_without_exposing_their_contents() {
 
 #[test]
 fn enforces_file_and_total_bytes_without_loading_bodies() {
+    let _guard = crate::directory::TEST_LOCK.lock().unwrap();
     for sizes in [
         vec![MAX_FILE_BYTES + 1],
         vec![MAX_FILE_BYTES, MAX_FILE_BYTES, 101 << 20],
@@ -98,6 +102,7 @@ fn enforces_file_and_total_bytes_without_loading_bodies() {
 
 #[test]
 fn rejects_a_changed_file_or_directory_during_export() {
+    let _guard = crate::directory::TEST_LOCK.lock().unwrap();
     struct Mutate<'a> {
         root: &'a Path,
         directory: bool,
@@ -140,6 +145,7 @@ fn rejects_a_changed_file_or_directory_during_export() {
 
 #[test]
 fn rejects_truncated_traversal_and_broken_destination() {
+    let _guard = crate::directory::TEST_LOCK.lock().unwrap();
     let root = tempfile::tempdir().unwrap();
     fs::create_dir(root.path().join("outputs")).unwrap();
     for index in 0..=MAX_ENTRIES {
