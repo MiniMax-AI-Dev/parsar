@@ -93,6 +93,8 @@ type sessionState struct {
 	steeringDone        chan struct{}
 	preparationStart    *preparedStartCancellation
 	completionObserved  bool
+	deferCompletion     bool
+	deferredCompletion  *proto.Envelope
 }
 
 // Config is the constructor input. Registry and Sender are required;

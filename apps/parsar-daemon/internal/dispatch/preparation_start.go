@@ -61,7 +61,7 @@ func (r *Router) handleExecutionStart(_ context.Context, env proto.Envelope) err
 	p.startFingerprint, p.busy = fingerprint, true
 	state := &sessionState{runID: input.RunID, stateKey: p.stateKey, environmentID: p.environmentID, out: make(chan proto.Envelope, 64), ctx: p.ctx, ctxCancel: p.cancel,
 		pendingIDs: make(map[string]struct{}), pendingAsks: make(map[string]struct{}), traceparent: env.Trace, releaseOnCompletion: true,
-		preparationStart: &preparedStartCancellation{prepared: p.prepared, settled: make(chan struct{})}}
+		preparationStart: &preparedStartCancellation{prepared: p.prepared, settled: make(chan struct{})}, deferCompletion: true}
 	r.sessions[input.RunID] = state
 	status := p.status
 	r.shutdownWG.Add(1)
@@ -76,7 +76,7 @@ func (r *Router) startPreparedExecution(p *preparationState, state *sessionState
 		r.releasePreparation(p, "failed", "status_delivery_failed", false)
 	}
 	forwarded := make(chan error, 1)
-	go func() { forwarded <- r.forwardSessionOutput(state, true) }()
+	go func() { forwarded <- r.forwardSessionOutput(state) }()
 	session, err := p.prepared.Start(p.ctx, input.RunID, input.Prompt, state.out)
 	r.mu.Lock()
 	cancellation := state.preparationStart
@@ -113,28 +113,44 @@ func (r *Router) startPreparedExecution(p *preparationState, state *sessionState
 		r.sendPreparation(p.requestID, p.trace, status)
 		ctx, stop := r.shutdownContext(context.Background())
 		defer stop()
-		r.mu.Lock()
-		completionDelivered := state.completionObserved && forwardErr == nil
-		r.mu.Unlock()
-		if completionDelivered {
-			r.emitRunError(ctx, state.runID, "prepared execution could not start")
-		} else {
+		completionHeld := false
+		if forwardErr == nil {
+			var completionErr error
+			completionHeld, completionErr = r.forwardDeferredCompletion(state, "prepared execution could not start")
+			if completionErr != nil {
+				r.log.ErrorContext(ctx, "forward deferred completion failed", "run_id", state.runID, "err", completionErr)
+			}
+		}
+		if !completionHeld {
 			r.emitTerminalError(ctx, state.runID, "prepared execution could not start")
 		}
 		r.cleanupSession(state)
 		return
 	}
-	if !r.sendPreparation(p.requestID, p.trace, status) {
+	statusDelivered := r.sendPreparation(p.requestID, p.trace, status)
+	var releaseErr error
+	if !statusDelivered {
+		_, releaseErr = r.releaseCompletedSession(state)
+	} else {
 		r.mu.Lock()
-		state.releaseOnCompletion = false
+		completed := state.completionObserved
+		if !completed {
+			state.deferCompletion = false
+		}
 		r.mu.Unlock()
-		state.ctxCancel()
-		_ = session.Cancel(context.Background())
-	} else if err := r.releaseObservedCompletion(state, false); err != nil {
-		ctx, stop := r.shutdownContext(context.Background())
-		r.emitRunError(ctx, state.runID, "failed to release completed executor")
-		stop()
+		if completed {
+			_, releaseErr = r.releaseObservedCompletion(state)
+		}
 	}
-	<-forwarded
+	forwardErr := <-forwarded
+	if forwardErr == nil {
+		failure := ""
+		if releaseErr != nil {
+			failure = "failed to release completed executor"
+		}
+		if held, err := r.forwardDeferredCompletion(state, failure); held && err != nil {
+			r.log.Error("forward deferred completion failed", "run_id", state.runID, "err", err)
+		}
+	}
 	r.cleanupSession(state)
 }

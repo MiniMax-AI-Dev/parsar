@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
@@ -77,6 +78,10 @@ func (r *Router) finishPreparedCancellation(p *preparationState, state *sessionS
 		_ = session.Cancel(context.Background())
 	}
 	forwardErr := <-forwarded
+	if forwardErr == nil {
+		_, terminalErr := r.forwardDeferredCompletion(state, "")
+		forwardErr = errors.Join(forwardErr, terminalErr)
+	}
 	closeErr := r.closePreparationResource(p)
 	ack := proto.InteractionDecisionAckPayload{ErrorCode: "cancel_outcome_unavailable"}
 	switch {

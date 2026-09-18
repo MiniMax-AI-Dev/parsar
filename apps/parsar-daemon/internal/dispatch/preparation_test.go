@@ -161,6 +161,27 @@ type blockingPreparedTerminalSender struct {
 	once    sync.Once
 }
 
+type failStartedPreparationSender struct {
+	*recSender
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (s *failStartedPreparationSender) Send(ctx context.Context, env proto.Envelope) error {
+	var status proto.PreparationStatusPayload
+	if env.Type == proto.TypePreparationStatus && env.DecodePayload(&status) == nil && status.State == "started" {
+		s.once.Do(func() { close(s.entered) })
+		select {
+		case <-s.release:
+			return errors.New("controlled started status failure")
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return s.recSender.Send(ctx, env)
+}
+
 func (s *blockingPreparedTerminalSender) Send(ctx context.Context, env proto.Envelope) error {
 	if env.ID == "run" && env.Type == proto.TypeDone {
 		s.once.Do(func() { close(s.entered) })
@@ -217,7 +238,7 @@ func TestPreparationStartDefersEarlyCompletionReleaseUntilSessionReturn(t *testi
 		want       []string
 	}{
 		{name: "released", want: []string{proto.TypeDone}},
-		{name: "release_error", releaseErr: errors.New("controlled release failure"), want: []string{proto.TypeDone, proto.TypeError}},
+		{name: "release_error", releaseErr: errors.New("controlled release failure"), want: []string{proto.TypeError, proto.TypeDone}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sender := &recSender{}
@@ -249,7 +270,10 @@ func TestPreparationStartDefersEarlyCompletionReleaseUntilSessionReturn(t *testi
 				waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "blocked early completion cleanup")
 				t.Fatal("early completion was not consumed while Start was pending")
 			}
-			waitFor(t, func() bool { return len(sender.typesFor("run")) == 1 }, "early completion forwarding")
+			waitFor(t, func() bool { return len(session.out) == 0 }, "early completion consumption")
+			if got := sender.typesFor("run"); len(got) != 0 {
+				t.Fatal("early completion was visible before native release", got)
+			}
 			if session.cancels() != 0 || r.ActiveRuns() != 1 {
 				t.Fatal("early completion released a Session before Start returned")
 			}
@@ -263,6 +287,35 @@ func TestPreparationStartDefersEarlyCompletionReleaseUntilSessionReturn(t *testi
 				t.Fatal("early completion terminal order differs", got)
 			}
 		})
+	}
+}
+
+func TestPreparationStartedStatusFailureAndCompletionReleaseSessionOnce(t *testing.T) {
+	sender := &failStartedPreparationSender{recSender: &recSender{}, entered: make(chan struct{}), release: make(chan struct{})}
+	session := &fakeSession{closeOutOnCancel: true}
+	done := mustEnv(t, proto.TypeDone, "run", proto.DonePayload{Content: "complete"})
+	session.postCancelEnvelopes = []proto.Envelope{done}
+	p := &controlledPreparation{closed: make(chan struct{})}
+	p.start = func(_ context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+		session.out = out
+		return session, nil
+	}
+	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
+	startCancellationPreparation(t, r, sender.recSender)
+	select {
+	case <-sender.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("started status delivery did not block")
+	}
+	session.out <- done
+	waitFor(t, func() bool { return len(session.out) == 0 }, "completion consumption during started status delivery")
+	close(sender.release)
+	waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "failed started status cleanup")
+	if session.cancels() != 1 {
+		t.Fatal("started status failure released Session more than once", session.cancels())
+	}
+	if got := sender.typesFor("run"); !reflect.DeepEqual(got, []string{proto.TypeDone}) {
+		t.Fatal("started status failure changed terminal delivery", got)
 	}
 }
 
@@ -355,7 +408,7 @@ func TestPreparationFailedStartDoesNotDuplicateEarlyCompletion(t *testing.T) {
 	waitPreparationClosed(t, p)
 	assertPreparedCapacityFrames(t, sender, "run", preparedCapacityFrameCount)
 	got := sender.typesFor("run")
-	if len(got) != preparedCapacityFrameCount+2 || got[len(got)-2] != proto.TypeDone || got[len(got)-1] != proto.TypeError {
+	if len(got) != preparedCapacityFrameCount+2 || got[len(got)-2] != proto.TypeError || got[len(got)-1] != proto.TypeDone {
 		t.Fatalf("failed completed Start terminal order = %v", got)
 	}
 }

@@ -11,14 +11,20 @@ type cancellationOutcomeProvider interface {
 	CancellationOutcome() proto.DonePayload
 }
 
-func (r *Router) releaseCompletedSession(state *sessionState) error {
+func (r *Router) releaseCompletedSession(state *sessionState) (bool, error) {
 	r.mu.Lock()
+	if !state.releaseOnCompletion || state.session == nil {
+		r.mu.Unlock()
+		return false, nil
+	}
+	state.releaseOnCompletion = false
 	state.retain = false
+	session := state.session
 	r.mu.Unlock()
 	receiptErr := r.finishSteering(state)
-	err := state.session.Cancel(context.Background())
+	err := session.Cancel(context.Background())
 	state.ctxCancel()
-	return errors.Join(receiptErr, err)
+	return true, errors.Join(receiptErr, err)
 }
 
 func (r *Router) handlePromptCancel(ctx context.Context, env proto.Envelope) error {
