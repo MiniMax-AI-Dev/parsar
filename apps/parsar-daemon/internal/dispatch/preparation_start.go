@@ -37,6 +37,13 @@ func (r *Router) handleExecutionStart(_ context.Context, env proto.Envelope) err
 	}
 	if p.status.State == "starting" || p.status.State == "started" {
 		matches, status := p.startFingerprint == fingerprint, p.status
+		if matches && status.State == "started" {
+			state := r.sessions[input.RunID]
+			if state != nil && state.preparedHandoff != nil && state.preparedHandoff.phase == preparedHandoffPublishing {
+				r.mu.Unlock()
+				return nil
+			}
+		}
 		r.mu.Unlock()
 		if !matches {
 			return r.rejectPreparation(env, "start_conflict")
@@ -60,8 +67,8 @@ func (r *Router) handleExecutionStart(_ context.Context, env proto.Envelope) err
 	p.status.State, p.status.RunID, p.status.Revision = "starting", input.RunID, p.status.Revision+1
 	p.startFingerprint, p.busy = fingerprint, true
 	state := &sessionState{runID: input.RunID, stateKey: p.stateKey, environmentID: p.environmentID, out: make(chan proto.Envelope, 64), ctx: p.ctx, ctxCancel: p.cancel,
-		pendingIDs: make(map[string]struct{}), pendingAsks: make(map[string]struct{}), traceparent: env.Trace, releaseOnCompletion: true,
-		preparationStart: &preparedStartCancellation{prepared: p.prepared, settled: make(chan struct{})}}
+		pendingIDs: make(map[string]struct{}), pendingAsks: make(map[string]struct{}), traceparent: env.Trace, releaseOnCompletion: true}
+	state.preparedHandoff = newPreparedHandoff(p)
 	r.sessions[input.RunID] = state
 	status := p.status
 	r.shutdownWG.Add(1)
@@ -71,52 +78,59 @@ func (r *Router) handleExecutionStart(_ context.Context, env proto.Envelope) err
 }
 
 func (r *Router) startPreparedExecution(p *preparationState, state *sessionState, input proto.ExecutionStartPayload, status proto.PreparationStatusPayload) {
+	defer r.shutdownWG.Done()
 	if !r.sendPreparation(p.requestID, p.trace, status) {
 		r.releasePreparation(p, "failed", "status_delivery_failed", false)
 	}
-	session, err := p.prepared.Start(p.ctx, input.RunID, input.Prompt, state.out)
+	go r.forwardPreparedOutput(state)
+	handoff := state.preparedHandoff
+	session, err := handoff.prepared.Start(p.ctx, input.RunID, input.Prompt, state.out)
 	r.mu.Lock()
-	cancellation := state.preparationStart
-	started := err == nil && session != nil && p.status.State == "starting" && p.ctx.Err() == nil && !r.closed
+	handoff.session = session
+	abortRequested := handoff.releaseCauses&preparedAbortStartCauses != 0
+	started := err == nil && session != nil && p.status.State == "starting" && p.ctx.Err() == nil && !r.closed && !abortRequested
 	if started {
-		state.session, state.preparationStart = session, nil
-		p.prepared, p.owns, p.busy = nil, false, false
+		handoff.phase = preparedHandoffPublishing
 		p.status.State, p.status.Revision = "started", p.status.Revision+1
 		p.timer.Stop()
 	} else {
-		if cancellation.cancelDone == nil {
-			delete(r.sessions, state.runID)
-		}
+		handoff.phase = preparedHandoffStopping
 		p.cancel()
+		r.clearInteractionRoutesLocked(state)
 		p.timer.Stop()
 		if p.status.State == "starting" {
 			p.status.State, p.status.ErrorCode, p.status.Revision = "failed", "start_failed", p.status.Revision+1
 		}
+		r.requestPreparedReleaseLocked(state, preparedReleaseStartFailure)
 	}
 	status = p.status
+	r.maybeStartPreparedReleaseLocked(state)
 	r.mu.Unlock()
+	if session == nil {
+		close(state.out)
+	}
 	if !started {
-		defer r.shutdownWG.Done()
-		if cancellation.cancelDone != nil {
-			r.finishPreparedCancellation(p, state, session, cancellation)
-			r.sendPreparation(p.requestID, p.trace, status)
-			return
-		}
-		if session != nil {
-			_ = session.Cancel(context.Background())
-			r.drain(state.out)
-		}
-		r.closePreparationResource(p)
 		r.sendPreparation(p.requestID, p.trace, status)
-		ctx, stop := r.shutdownContext(context.Background())
-		defer stop()
-		r.emitTerminalError(ctx, state.runID, "prepared execution could not start")
+		r.settlePreparedHandoff(state)
 		return
 	}
-	if !r.sendPreparation(p.requestID, p.trace, status) {
-		state.ctxCancel()
-		_ = session.Cancel(context.Background())
+	statusDelivered := r.sendPreparation(p.requestID, p.trace, status)
+	r.mu.Lock()
+	switch {
+	case !statusDelivered:
+		if p.status.State == "started" {
+			p.status.State, p.status.ErrorCode, p.status.Revision = "failed", "status_delivery_failed", p.status.Revision+1
+		}
+		handoff.phase = preparedHandoffStopping
+		r.requestPreparedReleaseLocked(state, preparedReleaseStatusFailure)
+	case handoff.release != preparedReleaseIdle:
+		handoff.phase = preparedHandoffStopping
+		r.maybeStartPreparedReleaseLocked(state)
+	default:
+		handoff.phase = preparedHandoffActive
+		state.session = session
+		p.prepared, p.owns, p.busy = nil, false, false
 	}
-	// Transfer the tracked goroutine and output ownership to the existing pump.
-	r.pump(state)
+	r.mu.Unlock()
+	r.settlePreparedHandoff(state)
 }

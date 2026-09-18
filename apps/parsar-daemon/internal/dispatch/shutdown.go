@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -36,7 +35,7 @@ func (r *Router) Shutdown(ctx context.Context) error {
 		close(r.shutdownCh)
 		for _, s := range r.sessions {
 			s.retain = false
-			victims = append(victims, sessionCancellation{s.runID, s.ctxCancel, s.session})
+			victims = append(victims, r.sessionCancellationLocked(s, preparedReleaseRouterShutdown))
 		}
 		for _, states := range r.idle {
 			for s := range states {
@@ -44,7 +43,7 @@ func (r *Router) Shutdown(ctx context.Context) error {
 				if s.idleTimer != nil {
 					s.idleTimer.Stop()
 				}
-				victims = append(victims, sessionCancellation{s.runID, s.ctxCancel, s.session})
+				victims = append(victims, sessionCancellation{runID: s.runID, ctxCancel: s.ctxCancel, session: s.session})
 			}
 		}
 		r.idle = make(map[string]map[*sessionState]struct{})
@@ -59,7 +58,7 @@ func (r *Router) Shutdown(ctx context.Context) error {
 		for _, p := range preparations {
 			go func() { defer r.shutdownWG.Done(); r.closePreparationResource(p) }()
 		}
-		cancelSessions(ctx, victims, r.log)
+		r.cancelSessions(ctx, victims)
 		r.shutdownWG.Done()
 		r.shutdownWG.Wait()
 		r.mu.Lock()
@@ -105,7 +104,7 @@ func (r *Router) handleDeviceShutdown(ctx context.Context, env proto.Envelope) e
 	victims := make([]sessionCancellation, 0, len(r.sessions))
 	for _, s := range r.sessions {
 		s.retain = false
-		victims = append(victims, sessionCancellation{s.runID, s.ctxCancel, s.session})
+		victims = append(victims, r.sessionCancellationLocked(s, preparedReleaseDeviceShutdown))
 	}
 	for _, states := range r.idle {
 		for s := range states {
@@ -113,7 +112,7 @@ func (r *Router) handleDeviceShutdown(ctx context.Context, env proto.Envelope) e
 			if s.idleTimer != nil {
 				s.idleTimer.Stop()
 			}
-			victims = append(victims, sessionCancellation{s.runID, s.ctxCancel, s.session})
+			victims = append(victims, sessionCancellation{runID: s.runID, ctxCancel: s.ctxCancel, session: s.session})
 		}
 	}
 	r.idle = make(map[string]map[*sessionState]struct{})
@@ -121,7 +120,7 @@ func (r *Router) handleDeviceShutdown(ctx context.Context, env proto.Envelope) e
 	for _, p := range preparations {
 		go func() { defer r.shutdownWG.Done(); r.closePreparationResource(p) }()
 	}
-	cancelSessions(ctx, victims, r.log)
+	r.cancelSessions(ctx, victims)
 	return nil
 }
 
@@ -133,16 +132,31 @@ type sessionCancellation struct {
 	runID     string
 	ctxCancel context.CancelFunc
 	session   agent.Session
+	handoff   *preparedHandoff
 }
 
-func cancelSessions(ctx context.Context, sessions []sessionCancellation, log *slog.Logger) {
+func (r *Router) sessionCancellationLocked(state *sessionState, cause preparedReleaseCause) sessionCancellation {
+	if state.preparedHandoff != nil {
+		r.requestPreparedReleaseLocked(state, cause)
+		return sessionCancellation{runID: state.runID, handoff: state.preparedHandoff}
+	}
+	return sessionCancellation{runID: state.runID, ctxCancel: state.ctxCancel, session: state.session}
+}
+
+func (r *Router) cancelSessions(ctx context.Context, sessions []sessionCancellation) {
 	for _, s := range sessions {
+		if s.handoff != nil {
+			if err := r.awaitPreparedRelease(ctx, s.handoff); err != nil {
+				r.log.Warn("prepared session release failed", "run_id", s.runID, "err", err)
+			}
+			continue
+		}
 		s.ctxCancel()
 		if s.session == nil {
 			continue
 		}
 		if err := s.session.Cancel(ctx); err != nil {
-			log.Warn("session.Cancel failed", "run_id", s.runID, "err", err)
+			r.log.Warn("session.Cancel failed", "run_id", s.runID, "err", err)
 		}
 	}
 }

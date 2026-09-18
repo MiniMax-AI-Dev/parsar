@@ -67,8 +67,12 @@ type fakeSession struct {
 	closeOutOnCancel    bool
 	out                 chan<- proto.Envelope
 	closeOutOnCancelMu  sync.Once
+	cancelSignal        sync.Once
+	cancelEntered       chan struct{}
+	cancelRelease       <-chan struct{}
 	postCancelEnvelopes []proto.Envelope // emitted to out after Cancel fires
 	ctx                 context.Context
+	cancelErr           error
 }
 
 type permCall struct {
@@ -85,6 +89,12 @@ func (s *fakeSession) Cancel(context.Context) error {
 	s.cancelMu.Lock()
 	s.cancelCalls++
 	s.cancelMu.Unlock()
+	if s.cancelEntered != nil {
+		s.cancelSignal.Do(func() { close(s.cancelEntered) })
+	}
+	if s.cancelRelease != nil {
+		<-s.cancelRelease
+	}
 	if s.closeOutOnCancel {
 		s.closeOutOnCancelMu.Do(func() {
 			for _, env := range s.postCancelEnvelopes {
@@ -93,7 +103,7 @@ func (s *fakeSession) Cancel(context.Context) error {
 			close(s.out)
 		})
 	}
-	return nil
+	return s.cancelErr
 }
 
 func (s *fakeSession) SubmitPermission(_ context.Context, permID string, dec proto.PermissionDecisionPayload) error {

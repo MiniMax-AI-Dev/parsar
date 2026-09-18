@@ -35,11 +35,15 @@ func (r *Router) handleFunctionResult(ctx context.Context, env proto.Envelope) e
 	}
 	r.mu.Lock()
 	state := r.sessions[env.ID]
+	ready := state != nil && state.session != nil && r.interactionRouteOpenLocked(state)
 	var submitter agent.FunctionResultSubmitter
-	if state != nil {
+	if ready {
 		submitter, _ = state.session.(agent.FunctionResultSubmitter)
 	}
 	r.mu.Unlock()
+	if state != nil && !ready {
+		return r.sendInteractionDecisionAck(ctx, env.ID, result.DeliveryID, false, "not_ready", "function call is waiting for the native session")
+	}
 	if submitter == nil {
 		return r.sendInteractionDecisionAck(ctx, env.ID, result.DeliveryID, false, "not_pending", "function call is no longer pending")
 	}

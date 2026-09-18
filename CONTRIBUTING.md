@@ -1031,18 +1031,34 @@ existing Session cancellation path. `Close` remains inert after transfer.
 an unstarted resource has no measured Usage or observed resume identity. This is
 best-effort cancellation and an observed snapshot, not immutable final output,
 notification drain, caller-deadline compliance or remote process quiescence.
-During a pending Start, the Router invokes that cancellation capability once outside
-its receive loop and retains native preparation capacity until Start, cancellation,
-output forwarding and cleanup finish. A late Session is used only for teardown and
-forwarding; it never becomes available for input or publishes successful Start.
-Forwarded permission and user-choice observations from that cancelled handoff do
-not register actionable interactions. Codex prepared cancellation also waits for
-the transferred Session's local cleanup, which can finish after output closes;
-ordinary Session cancellation retains its existing behavior.
-The ordinary output pump forwards accepted frames before the observed cancellation
-outcome receipt. Missing capability, failed cancellation or failed forwarding cannot
-produce an applied receipt. An unused resource may supply an empty observed outcome;
-the Router never fabricates one.
+Every accepted prepared Start has one execution-local handoff owner with starting,
+publishing, active, stopping and settled phases. It starts one bounded output
+consumer before calling `Start` and keeps that consumer until the output channel
+closes. A non-nil Session transfers output ownership even when `Start` also returns
+an error; a nil Session leaves the Router responsible for closing the channel.
+The Session remains private until the `started` status is delivered successfully.
+Early output may be forwarded, but steering, interaction results and workspace
+reads remain unavailable until publication succeeds; retryable inputs report
+`not_ready` where that control defines such a receipt.
+
+Completion, prompt cancellation, start or status failure, output delivery failure,
+Router shutdown and device shutdown all claim or join the same release result.
+The first claimant closes new input admission and waits for any admitted steering
+receipt before invoking one native release target. Pending Start uses
+`PreparedCancellation` when available; its result is never retried through a late
+Session because an error may follow a successful native side effect. Without that
+optional contract, release waits for `Start` and then uses the returned Session or
+unused preparation. Later claimants only wait within their own deadline. Native
+release, output drain and preparation bookkeeping retain capacity until the shared
+handoff settles.
+
+The output consumer forwards accepted non-terminal frames in read order, holds the
+first Done, drains later frames, and publishes the terminal only after native release
+and output closure. Failed output delivery switches the same consumer to drain-only
+mode and requests shared release. Cancellation receipts observe that shared result;
+missing capability, failed cancellation or failed forwarding cannot produce an
+applied receipt. An unused resource may supply an empty observed outcome; the Router
+never fabricates one.
 
 Receipt settlement waits at most ten seconds, with a separate five-second send
 budget and the existing gateway settlement deadline. A timeout does not free the
@@ -1075,9 +1091,10 @@ Preparation and Start execute outside the receive loop and router lock, with
 tracked lifetime work. Start reserves the real RunID with its owner cancellation
 before native work; cancellation in that phase cancels the owner even before a
 Session is published. A late result cannot resurrect released ownership. Shutdown
-captures cancellation/session references under the lock. Successful transfer stops
-the preparation deadline and uses the ordinary run pump and completion release;
-later preparation Release cannot cancel that Run. Released/expired status makes
+captures the shared handoff under the lock and joins its result. Successful public
+transfer stops the preparation deadline and releases preparation bookkeeping while
+the same output consumer continues through completion; later preparation Release
+cannot cancel that Run. Released/expired status makes
 the handle unusable; asynchronous native cleanup still counts toward capacity and
 does not promise immediate OS quiescence. Release retries retained cleanup.
 Concurrent Shutdown calls join one tracked attempt within their caller deadlines;

@@ -85,6 +85,9 @@ func TestPreparedCancellationWaitsForOutputAndCleanup(t *testing.T) {
 	p.start = func(_ context.Context, id, _ string, out chan<- proto.Envelope) (agent.Session, error) {
 		session = &fakeSession{out: out, closeOutOnCancel: true,
 			postCancelEnvelopes: []proto.Envelope{mustEnv(t, proto.TypeDone, id, p.outcome)}}
+		for sequence := uint64(1); sequence <= 80; sequence++ {
+			out <- mustEnv(t, proto.TypeDelta, id, proto.DeltaPayload{Delta: "observed", Sequence: sequence})
+		}
 		out <- mustEnv(t, proto.TypeDelta, id, proto.DeltaPayload{Delta: "observed"})
 		out <- mustEnv(t, proto.TypePermissionRequest, id, proto.PermissionRequestPayload{RequestID: "permission"})
 		out <- mustEnv(t, proto.TypePromptForUserChoice, id, proto.PromptForUserChoicePayload{AskID: "ask"})
@@ -138,7 +141,11 @@ func TestPreparedCancellationWaitsForOutputAndCleanup(t *testing.T) {
 		}
 	}
 	got := sender.typesFor("run")
-	want := []string{proto.TypeDelta, proto.TypePermissionRequest, proto.TypePromptForUserChoice, proto.TypeUsage, proto.TypeDone, proto.TypeInteractionDecisionAck, proto.TypeInteractionDecisionAck}
+	want := make([]string, 0, 87)
+	for range 81 {
+		want = append(want, proto.TypeDelta)
+	}
+	want = append(want, proto.TypePermissionRequest, proto.TypePromptForUserChoice, proto.TypeUsage, proto.TypeDone, proto.TypeInteractionDecisionAck, proto.TypeInteractionDecisionAck)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("output/receipt order = %v", got)
 	}
@@ -213,6 +220,7 @@ func TestPreparedCancellationFailuresRemainConservative(t *testing.T) {
 			}
 			p.cancel = func(ctx context.Context) error {
 				if failure == "cancel_failed" {
+					_ = session.Cancel(ctx)
 					return errors.New("controlled native failure")
 				}
 				return session.Cancel(ctx)
