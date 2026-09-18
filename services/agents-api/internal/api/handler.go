@@ -61,6 +61,7 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 	router.Group(func(r chi.Router) {
 		r.Use(h.authenticateProject)
 		r.Post("/v1/files", h.createSourceFile)
+		r.Get("/v1/files", h.listSourceFiles)
 		r.Get("/v1/files/{file_id}", h.getSourceFile)
 		r.Get("/v1/files/{file_id}/content", h.sourceFileContent)
 		r.Delete("/v1/files/{file_id}", h.deleteSourceFile)

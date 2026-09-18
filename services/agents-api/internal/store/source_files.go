@@ -34,6 +34,11 @@ type SourceFileUpload struct {
 	Purpose  string
 }
 
+type SourceFilePage struct {
+	Files      []SourceFile
+	NextCursor string
+}
+
 // CreateSourceFile commits only after the complete upload envelope has validated.
 func (s *Store) CreateSourceFile(ctx context.Context, tenantID string, upload func(io.Writer) (SourceFileUpload, error)) (SourceFile, error) {
 	tenant, err := parseID(tenantID)
@@ -95,6 +100,47 @@ func (s *Store) GetSourceFile(ctx context.Context, tenantID, fileID string) (Sou
 		return SourceFile{}, err
 	}
 	return sourceFileFromRow(row), nil
+}
+
+func (s *Store) ListSourceFiles(ctx context.Context, tenantID, cursor string, limit int, ascending bool, purpose *string) (SourceFilePage, error) {
+	tenant, err := parseID(tenantID)
+	if err != nil {
+		return SourceFilePage{}, err
+	}
+	if limit < 1 || limit > 10000 {
+		return SourceFilePage{}, fmt.Errorf("%w: internal page size must be 1..10000", ErrInvalidInput)
+	}
+	params := sqlc.ListSourceFilesParams{
+		TenantID: tenant, PageLimit: int32(limit + 1), Ascending: ascending,
+		AfterID: pgtype.UUID{Valid: true},
+	}
+	if purpose != nil {
+		if !utf8.ValidString(*purpose) || strings.ContainsRune(*purpose, '\x00') {
+			return SourceFilePage{}, ErrInvalidInput
+		}
+		params.Purpose = pgtype.Text{String: *purpose, Valid: true}
+	}
+	if cursor != "" {
+		after, err := s.GetSourceFile(ctx, tenantID, cursor)
+		if err != nil {
+			return SourceFilePage{}, err
+		}
+		params.AfterCreated = pgtype.Timestamptz{Time: after.CreatedAt, Valid: true}
+		_, params.AfterID, _ = sourceFileIDs(tenantID, after.ID)
+	}
+	rows, err := s.queries.ListSourceFiles(ctx, params)
+	if err != nil {
+		return SourceFilePage{}, fmt.Errorf("list source files: %w", err)
+	}
+	page := SourceFilePage{Files: make([]SourceFile, 0, min(limit, len(rows)))}
+	if len(rows) > limit {
+		page.NextCursor = sourceFileFromRow(rows[limit-1]).ID
+		rows = rows[:limit]
+	}
+	for _, row := range rows {
+		page.Files = append(page.Files, sourceFileFromRow(row))
+	}
+	return page, nil
 }
 
 // ReadSourceFile retains an authorized immutable snapshot during concurrent deletion.

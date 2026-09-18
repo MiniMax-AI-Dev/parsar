@@ -20,11 +20,18 @@ import (
 )
 
 type sourceFilesFixture struct {
-	mu     sync.Mutex
-	tenant string
-	file   store.SourceFile
-	data   []byte
-	reads  int
+	mu          sync.Mutex
+	tenant      string
+	file        store.SourceFile
+	data        []byte
+	reads       int
+	listPage    store.SourceFilePage
+	listErr     error
+	listCalls   int
+	listAfter   string
+	listLimit   int
+	listAsc     bool
+	listPurpose *string
 }
 
 func (f *sourceFilesFixture) CreateSourceFile(_ context.Context, tenant string, upload func(io.Writer) (store.SourceFileUpload, error)) (store.SourceFile, error) {
@@ -47,6 +54,14 @@ func (f *sourceFilesFixture) GetSourceFile(_ context.Context, tenant, id string)
 		return store.SourceFile{}, store.ErrNotFound
 	}
 	return f.file, nil
+}
+
+func (f *sourceFilesFixture) ListSourceFiles(_ context.Context, tenant, after string, limit int, ascending bool, purpose *string) (store.SourceFilePage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.tenant, f.listAfter, f.listLimit, f.listAsc, f.listPurpose = tenant, after, limit, ascending, purpose
+	f.listCalls++
+	return f.listPage, f.listErr
 }
 
 func (f *sourceFilesFixture) ReadSourceFile(ctx context.Context, tenant, id string, consume func(store.SourceFile, io.Reader) error) error {

@@ -1037,6 +1037,29 @@ definitions:
     - id
     - object
     type: object
+  v1.SourceFileList:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/v1.SourceFile'
+        type: array
+      first_id:
+        type: string
+        x-nullable: true
+      has_more:
+        type: boolean
+      last_id:
+        type: string
+        x-nullable: true
+      object:
+        enum:
+        - list
+        type: string
+    required:
+    - data
+    - has_more
+    - object
+    type: object
   v1.StaticBearerCredentialAuth:
     properties:
       mcp_server_url:
@@ -2656,6 +2679,68 @@ paths:
       tags:
       - Turns
   /files:
+    get:
+      description: Lists project-owned Files without reading their bodies. Supports
+        the pinned after, limit, order and purpose query surface. The limit defaults
+        to 10000 and must be 1–10000. Equal creation times use ID ordering. Current
+        storage contains only user_data; exact hosted default order, invalid-cursor
+        errors and concurrent-page behavior remain unverified. No Beta header is required.
+      parameters:
+      - description: Last File ID from the previous page
+        in: query
+        name: after
+        type: string
+      - default: 10000
+        description: Maximum page size, 1–10000
+        in: query
+        maximum: 10000
+        minimum: 1
+        name: limit
+        type: integer
+      - default: desc
+        description: Creation order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - description: Only return Files with this purpose
+        in: query
+        name: purpose
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.SourceFileList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List source files
+      tags:
+      - Files
     post:
       consumes:
       - multipart/form-data

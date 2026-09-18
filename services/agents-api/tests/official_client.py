@@ -34,6 +34,7 @@ from official_agent_references import verify_agent_references
 from official_session_requests import verify_session_create_requests
 from official_session_metadata import verify_session_metadata, verify_active_session_metadata
 from official_session_creators import verify_session_creators, verify_creator_recovery
+from official_source_file_list import verify_source_file_list, verify_source_file_list_recovery
 from openai import AuthenticationError, BadRequestError, ConflictError, InternalServerError, NotFoundError, OpenAI
 import yaml
 
@@ -69,6 +70,8 @@ def main():
                 path += "/credentials" + ("/{credential_id}" if len(suffix) > 1 else "")
         elif path.startswith("/agents/") and path != "/agents/sessions":
             path = "/agents/{agent_id}"
+        elif path.startswith("/files/"):
+            path = "/files/{file_id}/content" if path.endswith("/content") else "/files/{file_id}"
         schema = contract["paths"][path][response.request.method.lower()]["responses"][str(response.status_code)]["schema"]
         Draft4Validator({"definitions": contract["definitions"], **schema}).validate(response.json())
     pin = json.loads((root / "contracts/agents-api/upstream.json").read_text())
@@ -150,6 +153,7 @@ def main():
                         listed_credentials = verify_credential_list(
                             a, b, invalid, peer, bindings[0], saved_vaults, saved_credentials,
                             listed_vaults, root, directory, credential_canary, expect_error)
+                        listed_files = verify_source_file_list(a, b, invalid, peer, expect_error)
                     saved_agents = verify_agents(a, b, invalid, expect_error)
                     listed_agents = verify_agent_list(a, b, invalid, saved_agents, expect_error)
                     sessions = a.beta.agents.sessions
@@ -246,6 +250,7 @@ def main():
                         verify_vault_list_recovery(a, b, peer, listed_vaults)
                         verify_credential_recovery(a, b, peer, saved_credentials)
                         verify_credential_list_recovery(a, b, peer, listed_credentials, credential_canary)
+                        verify_source_file_list_recovery(a, b, peer, listed_files)
                         verify_mcp_credential_recovery(a, mcp_credentials)
                         verify_rotation_recovery(a, peer, credential_rotation)
                         verify_credential_deletion_recovery(a, b, credential_deletion, expect_error)

@@ -91,3 +91,63 @@ func (q *Queries) GetSourceFile(ctx context.Context, arg GetSourceFileParams) (S
 	)
 	return i, err
 }
+
+const listSourceFiles = `-- name: ListSourceFiles :many
+SELECT id, tenant_id, filename, purpose, body_oid, size_bytes, sha256, created_at FROM source_files
+WHERE tenant_id = $1
+  AND ($2::text IS NULL OR purpose = $2::text)
+  AND ($3::timestamptz IS NULL
+    OR (NOT $4::boolean AND (created_at, id) < ($3::timestamptz, $5::uuid))
+    OR ($4::boolean AND (created_at, id) > ($3::timestamptz, $5::uuid)))
+ORDER BY
+  CASE WHEN $4::boolean THEN created_at END ASC,
+  CASE WHEN $4::boolean THEN id END ASC,
+  CASE WHEN NOT $4::boolean THEN created_at END DESC,
+  CASE WHEN NOT $4::boolean THEN id END DESC
+LIMIT $6
+`
+
+type ListSourceFilesParams struct {
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	Purpose      pgtype.Text        `json:"purpose"`
+	AfterCreated pgtype.Timestamptz `json:"after_created"`
+	Ascending    bool               `json:"ascending"`
+	AfterID      pgtype.UUID        `json:"after_id"`
+	PageLimit    int32              `json:"page_limit"`
+}
+
+func (q *Queries) ListSourceFiles(ctx context.Context, arg ListSourceFilesParams) ([]SourceFile, error) {
+	rows, err := q.db.Query(ctx, listSourceFiles,
+		arg.TenantID,
+		arg.Purpose,
+		arg.AfterCreated,
+		arg.Ascending,
+		arg.AfterID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SourceFile{}
+	for rows.Next() {
+		var i SourceFile
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.Filename,
+			&i.Purpose,
+			&i.BodyOid,
+			&i.SizeBytes,
+			&i.Sha256,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

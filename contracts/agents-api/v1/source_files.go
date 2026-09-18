@@ -12,6 +12,14 @@ type SourceFile struct {
 	StatusDetails *string `json:"status_details" extensions:"x-nullable"`
 }
 
+type SourceFileList struct {
+	Object  string       `json:"object" binding:"required" enums:"list"`
+	Data    []SourceFile `json:"data" binding:"required"`
+	HasMore bool         `json:"has_more" binding:"required"`
+	FirstID *string      `json:"first_id" extensions:"x-nullable"`
+	LastID  *string      `json:"last_id" extensions:"x-nullable"`
+}
+
 type SourceFileDeleted struct {
 	ID      string `json:"id" binding:"required"`
 	Object  string `json:"object" binding:"required" enums:"file"`
