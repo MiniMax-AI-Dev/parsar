@@ -35,6 +35,8 @@ type Dispatcher struct {
 	EnvironmentConnection func(context.Context, store.Session, store.Environment) (EnvironmentConnection, error)
 	// CloseEnvironmentConnections drains transport observations before releasing execution ownership.
 	CloseEnvironmentConnections func()
+	// ManagedRuntimes is optional internal provisioning; it does not admit hosted API requests.
+	ManagedRuntimes *RuntimeProviders
 }
 
 type Result struct {

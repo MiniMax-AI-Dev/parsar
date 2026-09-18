@@ -12,20 +12,27 @@ import (
 // DeleteSession removes public access while retaining state needed to settle execution.
 func (s *Store) DeleteSession(ctx context.Context, tenantID, sessionID string) error {
 	return s.withPublicSession(ctx, tenantID, sessionID, func(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
-		turn, err := q.GetActiveTurn(ctx, session)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		if err == nil {
-			if err := requestTurnCancel(ctx, q, session, turn); err != nil {
-				return err
-			}
-		}
-		if err := q.CancelSessionEnvironmentInput(ctx, session); err != nil {
+		if err := cancelSessionWork(ctx, q, session); err != nil {
 			return err
 		}
 		return q.MarkSessionDeleted(ctx, session)
 	})
+}
+
+func cancelSessionWork(ctx context.Context, q *sqlc.Queries, session pgtype.UUID) error {
+	turn, err := q.GetActiveTurn(ctx, session)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if err == nil {
+		if err := requestTurnCancel(ctx, q, session, turn); err != nil {
+			return err
+		}
+	}
+	if err := q.CancelSessionEnvironmentInput(ctx, session); err != nil {
+		return err
+	}
+	return nil
 }
 
 func requestTurnCancel(ctx context.Context, q *sqlc.Queries, session pgtype.UUID, turn sqlc.Turn) error {

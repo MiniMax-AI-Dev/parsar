@@ -89,6 +89,7 @@ func (p *Provider) GetInfo(ctx context.Context, r sandbox.Reference) (sandbox.In
 	}
 	info.ProviderID = v.Container.ID
 	info.State = string(v.Container.State.Status)
+	info.BootstrapComplete = info.State == "running"
 	return info, nil
 }
 

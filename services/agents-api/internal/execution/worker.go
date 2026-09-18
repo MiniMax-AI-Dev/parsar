@@ -20,6 +20,7 @@ type Worker struct {
 	fileWrites     chan fileWriteRequest
 	stopped        chan struct{}
 	stopOnce       sync.Once
+	runtimes       *runtimeLifecycle
 }
 
 func StartWorker(ctx context.Context, dispatcher *Dispatcher) (*Worker, error) {
@@ -30,11 +31,22 @@ func StartWorker(ctx context.Context, dispatcher *Dispatcher) (*Worker, error) {
 	owned := *dispatcher
 	owned.Store = lease.Store()
 	worker := &Worker{dispatcher: &owned, admission: dispatcher.Store, lease: lease, directoryReads: make(chan directoryReadRequest), fileWrites: make(chan fileWriteRequest), stopped: make(chan struct{})}
+	worker.runtimes, err = newRuntimeLifecycle(owned.Store, owned.Registry, owned.ManagedRuntimes)
+	if err != nil {
+		_ = lease.Close(context.Background())
+		return nil, err
+	}
 	if err := owned.Store.ReconcileEnvironmentConnections(ctx); err != nil {
+		if worker.runtimes != nil {
+			worker.runtimes.stop()
+		}
 		_ = lease.Close(context.Background())
 		return nil, err
 	}
 	if err := worker.reconcile(ctx); err != nil {
+		if worker.runtimes != nil {
+			worker.runtimes.stop()
+		}
 		_ = lease.Close(context.Background())
 		return nil, err
 	}
@@ -84,7 +96,15 @@ func (w *Worker) Run(ctx context.Context) error {
 	var running sync.WaitGroup
 	defer func() {
 		cancel()
+		if w.runtimes != nil {
+			w.runtimes.stop()
+		}
 		running.Wait()
+		if w.runtimes != nil {
+			// Drain an external provisioning caller before releasing the writer lease.
+			w.runtimes.gate <- struct{}{}
+			<-w.runtimes.gate
+		}
 		if w.dispatcher.CloseEnvironmentConnections != nil {
 			w.dispatcher.CloseEnvironmentConnections()
 		}
@@ -98,6 +118,14 @@ func (w *Worker) Run(ctx context.Context) error {
 		err error
 	}
 	completed := make(chan completion, 4)
+	lifecycleDone := make(chan error, 1)
+	if w.runtimes != nil {
+		running.Add(1)
+		go func() {
+			defer running.Done()
+			lifecycleDone <- w.runManagedRuntimes(ctx)
+		}()
+	}
 	type readCompletion struct {
 		id      string
 		request directoryReadRequest
@@ -117,6 +145,8 @@ func (w *Worker) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case err := <-lifecycleDone:
+			return err
 		case request := <-w.fileWrites:
 			if request.ctx.Err() != nil || active[request.environment.SessionID] || len(active) == 4 {
 				request.result <- fileWriteResult{err: ErrExecutionUnavailable}

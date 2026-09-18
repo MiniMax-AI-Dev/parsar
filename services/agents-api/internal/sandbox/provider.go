@@ -30,6 +30,9 @@ type Bootstrap struct {
 type Info struct {
 	Reference
 	ProviderID, State string
+	// BootstrapComplete is provider evidence that initialization has reached its
+	// last mutating step. It does not establish daemon or native readiness.
+	BootstrapComplete bool
 }
 type Command struct {
 	Args      []string
