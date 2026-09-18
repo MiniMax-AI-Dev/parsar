@@ -89,13 +89,14 @@ func (r *Router) queueSteering(ctx context.Context, env proto.Envelope, input pr
 	if state.session == nil {
 		return &ack
 	}
-	steerer, ok := state.session.(agent.Steerer)
+	session := state.session
+	steerer, ok := session.(agent.Steerer)
 	if !ok {
 		ack.ErrorCode, ack.Error = "unsupported", "This engine does not support active-turn input."
 		return &ack
 	}
 	if input.DurableReceipt {
-		if _, ok := state.session.(agent.DurableSteerer); !ok || !state.releaseOnCompletion {
+		if _, ok := session.(agent.DurableSteerer); !ok || !state.releaseOnCompletion {
 			ack.ErrorCode, ack.Error = "unsupported", "Durable input receipts require a supported release-on-completion run."
 			return &ack
 		}
@@ -103,6 +104,11 @@ func (r *Router) queueSteering(ctx context.Context, env proto.Envelope, input pr
 	if state.steerBusy {
 		ack.ErrorCode, ack.Error = "busy", "Another input is awaiting an engine receipt; retry this input later."
 		state.steering[input.InputID] = steeringReceipt{fingerprint: fingerprint, ack: ack, durable: input.DurableReceipt}
+		return &ack
+	}
+	session, finishOperation, ready := r.preparedOperationLocked(state)
+	if !ready {
+		ack.ErrorCode, ack.Error = "run_inactive", "The run is completing."
 		return &ack
 	}
 	ack.ErrorCode, ack.Error = "in_flight", "This input is awaiting an engine receipt."
@@ -113,6 +119,7 @@ func (r *Router) queueSteering(ctx context.Context, env proto.Envelope, input pr
 	r.shutdownWG.Add(1)
 	go func() {
 		defer r.shutdownWG.Done()
+		defer finishOperation()
 		defer func() {
 			r.mu.Lock()
 			state.steerBusy = false
@@ -123,7 +130,7 @@ func (r *Router) queueSteering(ctx context.Context, env proto.Envelope, input pr
 		defer stop()
 		var err error
 		if input.DurableReceipt {
-			err = r.steerDurably(ctx, state, env, input, fingerprint)
+			err = r.steerDurably(ctx, state, session, env, input, fingerprint)
 		} else {
 			callCtx, cancel := context.WithTimeout(ctx, steeringCallTimeout)
 			err = steerer.Steer(callCtx, input)

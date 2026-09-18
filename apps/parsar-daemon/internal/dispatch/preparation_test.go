@@ -17,6 +17,8 @@ import (
 type controlledPreparation struct {
 	closed    chan struct{}
 	once      sync.Once
+	mu        sync.Mutex
+	session   agent.Session
 	starts    atomic.Int32
 	start     func(context.Context, string, string, chan<- proto.Envelope) (agent.Session, error)
 	closeHook func()
@@ -33,7 +35,33 @@ func (p *controlledPreparation) Close() error {
 }
 func (p *controlledPreparation) Start(ctx context.Context, id, prompt string, out chan<- proto.Envelope) (agent.Session, error) {
 	p.starts.Add(1)
-	return p.start(ctx, id, prompt, out)
+	session, err := p.start(ctx, id, prompt, out)
+	if session != nil {
+		p.mu.Lock()
+		p.session = session
+		p.mu.Unlock()
+	}
+	return session, err
+}
+
+func (p *controlledPreparation) Cancel(ctx context.Context) error {
+	p.mu.Lock()
+	session := p.session
+	p.mu.Unlock()
+	if session != nil {
+		return session.Cancel(ctx)
+	}
+	return p.Close()
+}
+
+func (p *controlledPreparation) CancellationOutcome() proto.DonePayload {
+	p.mu.Lock()
+	session := p.session
+	p.mu.Unlock()
+	if provider, ok := session.(interface{ CancellationOutcome() proto.DonePayload }); ok {
+		return provider.CancellationOutcome()
+	}
+	return proto.DonePayload{}
 }
 
 func preparationRequest() proto.ExecutionPreparePayload {
@@ -185,34 +213,45 @@ func TestPreparationSingleTransferAndReleaseDoesNotCancelRun(t *testing.T) {
 
 func TestPreparationCancelDuringStartClosesLateSession(t *testing.T) {
 	sender := &recSender{}
-	entered, allowReturn := make(chan context.Context, 1), make(chan struct{})
+	entered, cancelEntered, allowReturn := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	lateSession := make(chan *fakeSession, 1)
-	p := &controlledPreparation{closed: make(chan struct{})}
-	p.start = func(ctx context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
-		entered <- ctx
+	p := &cancellationPreparation{controlledPreparation: &controlledPreparation{closed: make(chan struct{})}}
+	p.start = func(_ context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+		close(entered)
 		<-allowReturn
 		s := &fakeSession{out: out, closeOutOnCancel: true}
 		lateSession <- s
 		return s, nil
 	}
+	p.cancel = func(ctx context.Context) error {
+		close(cancelEntered)
+		return (<-lateSession).Cancel(ctx)
+	}
 	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
 	_ = r.Handle(t.Context(), mustEnv(t, proto.TypeExecutionPrepare, "request", preparationRequest()))
 	ready := waitPreparationStatus(t, sender, "request", "ready", "")
 	_ = r.Handle(t.Context(), mustEnv(t, proto.TypeExecutionStart, "request", proto.ExecutionStartPayload{Handle: ready.Handle, RunID: "real-run", Prompt: "input"}))
-	owner := <-entered
+	<-entered
 	if err := r.Handle(t.Context(), mustEnv(t, proto.TypePromptCancel, "real-run", proto.PromptCancelPayload{DeliveryID: "cancel"})); err != nil {
 		t.Fatal(err)
 	}
 	select {
-	case <-owner.Done():
+	case <-cancelEntered:
 	case <-time.After(time.Second):
-		t.Fatal("start blocked cancellation")
+		t.Fatal("fixed cancellation target was not called across Start")
 	}
 	close(allowReturn)
-	waitPreparationClosed(t, p)
 	waitFor(t, func() bool { return r.ActiveRuns() == 0 }, "late cancelled Session cleanup")
-	if (<-lateSession).cancels() != 1 || r.ActiveRuns() != 0 {
+	p.mu.Lock()
+	session := p.session.(*fakeSession)
+	p.mu.Unlock()
+	if session.cancels() != 1 || r.ActiveRuns() != 0 {
 		t.Fatal("late session resurrected cancelled run")
+	}
+	select {
+	case <-p.controlledPreparation.closed:
+		t.Fatal("transferred preparation was released a second time")
+	default:
 	}
 	for _, frame := range sender.snapshot() {
 		var status proto.PreparationStatusPayload

@@ -7,19 +7,24 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
-// Prepared owns native resources until Start transfers them to a Session. The
+// Prepared owns native resources until Start returns a non-nil Session. The
 // preparation owner context spans the eventual Session; Start's context is local
-// to that operation. The caller closes abandoned or failed preparations.
+// to that operation. A nil Session leaves preparation cleanup with the caller.
 type Prepared interface {
+	// Start transfers output ownership only when it returns a non-nil Session.
+	// A nil Session leaves the caller as the sole owner of closing out, and the
+	// implementation must not retain or write to it after Start returns.
 	Start(context.Context, string, string, chan<- proto.Envelope) (Session, error)
 	// Close retains unused ownership on error; callers may retry settlement.
 	Close() error
 }
 
-// PreparedCancellation optionally follows cancellation across Start's resource transfer.
+// PreparedCancellation is required for executable preparations and follows the
+// same native resource across Start. Read-only preparations need only Prepared.
 type PreparedCancellation interface {
 	Prepared
-	// Cancel returns after owned local cleanup; callers retain ownership on timeout.
+	// Cancel returns after local cleanup and all output writes have stopped.
+	// An error retains ownership so callers can retry this exact object serially.
 	Cancel(context.Context) error
 	CancellationOutcome() proto.DonePayload
 }

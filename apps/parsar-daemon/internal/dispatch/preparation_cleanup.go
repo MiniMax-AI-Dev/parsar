@@ -35,6 +35,9 @@ func (r *Router) closePendingPreparationsLocked() []*preparationState {
 		if !p.owns {
 			continue
 		}
+		if p.handoff != nil {
+			continue
+		}
 		p.cancel()
 		switch p.status.State {
 		case "preparing", "ready", "starting":

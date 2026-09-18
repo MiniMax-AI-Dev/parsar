@@ -71,7 +71,7 @@ func (r *Router) workspaceResourceLocked(request proto.WorkspaceReadPayload) (an
 	} else {
 		s := r.sessions[request.RunID]
 		if s == nil || s.environmentID != request.EnvironmentID || s.session == nil ||
-			s.preparationStart != nil || s.steeringClosed || s.ctx.Err() != nil {
+			!r.interactionRouteOpenLocked(s) {
 			return nil, "resource_unavailable"
 		}
 		resource = s.session

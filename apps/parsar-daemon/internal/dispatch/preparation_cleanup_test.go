@@ -23,23 +23,24 @@ func (p *retryablePreparation) Close() error { return p.close(p.calls.Add(1)) }
 
 type cancellingRetryablePreparation struct{ *retryablePreparation }
 
-func (p *cancellingRetryablePreparation) Cancel(context.Context) error { return nil }
+func (p *cancellingRetryablePreparation) Cancel(context.Context) error { return p.Close() }
 func (p *cancellingRetryablePreparation) CancellationOutcome() proto.DonePayload {
 	return proto.DonePayload{}
 }
 
 func TestPreparedCancellationDoesNotAcknowledgeFailedCleanup(t *testing.T) {
-	entered := make(chan struct{})
+	entered, cancelled := make(chan struct{}), make(chan struct{})
 	p := &cancellingRetryablePreparation{&retryablePreparation{close: func(call int32) error {
 		if call == 1 {
 			return errors.New("cleanup incomplete")
 		}
+		close(cancelled)
 		return nil
 	}}}
-	p.start = func(ctx context.Context, _, _ string, _ chan<- proto.Envelope) (agent.Session, error) {
+	p.start = func(_ context.Context, _, _ string, _ chan<- proto.Envelope) (agent.Session, error) {
 		close(entered)
-		<-ctx.Done()
-		return nil, ctx.Err()
+		<-cancelled
+		return nil, context.Canceled
 	}
 	sender := &recSender{}
 	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
@@ -56,6 +57,43 @@ func TestPreparedCancellationDoesNotAcknowledgeFailedCleanup(t *testing.T) {
 	}
 	_ = r.Handle(t.Context(), mustEnv(t, proto.TypeExecutionRelease, "request", proto.ExecutionReleasePayload{Handle: ready.Handle}))
 	waitFor(t, func() bool { owned, _ := r.PreparationOwnershipForTest(ready.Handle); return !owned }, "retained cancellation cleanup")
+}
+
+func TestShutdownRetriesFailedPreparedCancellationOnSameTarget(t *testing.T) {
+	want := errors.New("prepared cleanup incomplete")
+	sender := &recSender{}
+	var session *fakeSession
+	p := &cancellationPreparation{controlledPreparation: &controlledPreparation{closed: make(chan struct{})}}
+	p.start = func(_ context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+		session = &fakeSession{out: out, closeOutOnCancel: true}
+		return session, nil
+	}
+	p.cancel = func(ctx context.Context) error {
+		if p.calls.Load() == 1 {
+			return want
+		}
+		return session.Cancel(ctx)
+	}
+	r := preparationRouter(t, sender, time.Minute, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) { return p, nil })
+	startCancellationPreparation(t, r, sender)
+	waitPreparationStatus(t, sender, "request", "started", "")
+	if err := r.Shutdown(t.Context()); !errors.Is(err, want) {
+		t.Fatalf("first shutdown lost native failure: %v", err)
+	}
+	if r.ActiveRuns() != 1 || p.calls.Load() != 1 || session.cancels() != 0 {
+		t.Fatal("failed shutdown released ownership or changed release target")
+	}
+	select {
+	case <-p.closed:
+		t.Fatal("failed prepared cancellation fell back to Close")
+	default:
+	}
+	if err := r.Shutdown(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if r.ActiveRuns() != 0 || p.calls.Load() != 2 || session.cancels() != 1 {
+		t.Fatalf("shutdown did not retry the same target once: active=%d target=%d session=%d", r.ActiveRuns(), p.calls.Load(), session.cancels())
+	}
 }
 
 func TestPreparationCloseFailureRetainsCapacityAndRetries(t *testing.T) {
@@ -189,5 +227,63 @@ func TestShutdownTimeoutAndConcurrentRetryWaitForCleanup(t *testing.T) {
 	}
 	if p.calls.Load() != 1 {
 		t.Fatal("shutdown repeated in-flight cleanup")
+	}
+}
+
+func TestPublishedPreparedRunRetainsRetryAfterHandleRetirement(t *testing.T) {
+	sender := &recSender{}
+	session := &fakeSession{closeOutOnCancel: true}
+	p := &cancellationPreparation{controlledPreparation: &controlledPreparation{closed: make(chan struct{})}}
+	p.start = func(_ context.Context, _, _ string, out chan<- proto.Envelope) (agent.Session, error) {
+		session.out = out
+		return session, nil
+	}
+	p.cancel = func(ctx context.Context) error {
+		if p.calls.Load() == 1 {
+			return errors.New("cleanup incomplete")
+		}
+		return session.Cancel(ctx)
+	}
+	var factories atomic.Int32
+	r := preparationRouter(t, sender, 200*time.Millisecond, func(context.Context, proto.PromptRequestPayload) (agent.Prepared, error) {
+		if factories.Add(1) == 1 {
+			return p, nil
+		}
+		return &controlledPreparation{closed: make(chan struct{})}, nil
+	})
+	ready := startCancellationPreparation(t, r, sender)
+	waitPreparationStatus(t, sender, "request", "started", "")
+	waitFor(t, func() bool { owned, _ := r.PreparationOwnershipForTest(ready.Handle); return !owned }, "publication transfer")
+	time.Sleep(time.Until(time.UnixMilli(ready.ExpiresAt)) + 20*time.Millisecond)
+	if p.calls.Load() != 0 {
+		t.Fatal("preparation expiry cancelled a published Run")
+	}
+	// A later admission retires the expired preparation record. The Run still
+	// owns the exact cancellation target independently of that old handle.
+	if err := r.Handle(t.Context(), mustEnv(t, proto.TypeExecutionPrepare, "replacement", preparationRequest())); err != nil {
+		t.Fatal(err)
+	}
+	waitPreparationStatus(t, sender, "replacement", "ready", "")
+	for i := range 2 {
+		if err := r.Handle(t.Context(), mustEnv(t, proto.TypePromptCancel, "run", proto.PromptCancelPayload{DeliveryID: fmt.Sprint("cancel-", i)})); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, func() bool { return len(cancellationAcks(sender)) == i+1 }, "Run cancellation receipt")
+		if i == 0 {
+			if ack := cancellationAcks(sender)[0]; ack.Applied || ack.ErrorCode != "cancel_failed" || r.ActiveRuns() != 1 {
+				t.Fatalf("failed cleanup lost retained Run: %+v", ack)
+			}
+			if err := r.Handle(t.Context(), mustEnv(t, proto.TypeExecutionRelease, "request", proto.ExecutionReleasePayload{Handle: ready.Handle})); err == nil {
+				t.Fatal("retired preparation handle was restored")
+			}
+		}
+	}
+	if p.calls.Load() != 2 || session.cancels() != 1 || r.ActiveRuns() != 0 {
+		t.Fatal("Run cancellation did not retry and settle the same target")
+	}
+	select {
+	case <-p.closed:
+		t.Fatal("Run cancellation fell back to preparation Close")
+	default:
 	}
 }

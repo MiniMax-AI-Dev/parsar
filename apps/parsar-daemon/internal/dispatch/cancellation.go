@@ -36,8 +36,13 @@ func (r *Router) handlePromptCancel(ctx context.Context, env proto.Envelope) err
 		state.retain = false
 	}
 	var cancelSession func(context.Context) error
-	if state != nil && state.preparationStart != nil {
-		r.cancelPreparedStartLocked(state, env, request.DeliveryID)
+	if state != nil && state.preparedHandoff != nil {
+		handoff := state.preparedHandoff
+		release, attempt := r.claimPreparedReleaseLocked(state, true, "", true)
+		if request.DeliveryID != "" {
+			r.shutdownWG.Add(1)
+			go r.sendPreparedCancellation(state, handoff, release, attempt, env, request.DeliveryID)
+		}
 		r.mu.Unlock()
 		return nil
 	}
