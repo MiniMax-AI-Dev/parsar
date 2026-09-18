@@ -22,6 +22,7 @@ func localWorker(t *testing.T, scoped, execute bool) (*dispatchHarness, *executi
 	}
 	caps := proto.AgentKindCapabilities{LocalEnvironment: true, Preparation: true, WorkspaceReadPreparation: true}
 	if execute {
+		caps.WorkspaceOutputExport = true
 		caps.Streaming, caps.Steering, caps.DurableTurns, caps.DurableInputReceipts = true, true, true, true
 		caps.WebSearchControl, caps.TextVerbosity, caps.ExecutionControls = true, true, true
 		caps.SubagentControl, caps.ToolObservations = true, true
@@ -110,7 +111,7 @@ func TestLocalEnvironmentWorkerRejectsGeneralDeviceDespiteCapability(t *testing.
 }
 
 func TestLocalEnvironmentWorkerSchedulesPreparationWithoutRemoteResolver(t *testing.T) {
-	h, _, environment := localWorker(t, true, true)
+	h, worker, environment := localWorker(t, true, true)
 	reservation, err := h.s.ReserveEnvironmentInput(t.Context(), h.tenant, h.session.ID, "local-input", []store.Input{{Kind: "message", Payload: json.RawMessage(`{"text":"first"}`)}})
 	if err != nil {
 		t.Fatal(err)
@@ -140,6 +141,7 @@ func TestLocalEnvironmentWorkerSchedulesPreparationWithoutRemoteResolver(t *test
 	}
 	h.write(frame.ID, proto.TypePreparationStatus, proto.PreparationStatusPayload{Handle: handle, Revision: 3, State: "started", RunID: start.RunID})
 	h.write(start.RunID, proto.TypeDone, proto.DonePayload{Content: "complete", Metadata: map[string]any{proto.DoneMetaAgentSessionID: "local-native-history"}})
+	completeLocalArtifactExport(t, h, worker, environment)
 	awaitDaemonRemoteCondition(t, t.Context(), 5*time.Second, "local completion", func() bool {
 		turn, err := h.s.GetTurn(t.Context(), h.tenant, h.session.ID, start.RunID)
 		return err == nil && turn.Status == store.TurnCompleted
@@ -151,5 +153,9 @@ func TestLocalEnvironmentWorkerSchedulesPreparationWithoutRemoteResolver(t *test
 	bound, err := h.s.GetSessionDevice(t.Context(), h.tenant, h.session.ID)
 	if err != nil || bound.EnvironmentID != environment.ID || bound.NativeSessionID != "local-native-history" {
 		t.Fatal("local native identity was not retained", err)
+	}
+	artifacts, err := h.s.ListSessionArtifacts(t.Context(), h.tenant, h.session.ID, environment.ID, "", 20, false)
+	if err != nil || len(artifacts.Artifacts) != 1 || artifacts.Artifacts[0].Path != "/workspace/outputs/result.bin" || artifacts.Artifacts[0].TurnID != start.RunID || artifacts.Artifacts[0].SizeBytes != 3 {
+		t.Fatalf("completed turn did not publish output: %+v %v", artifacts, err)
 	}
 }

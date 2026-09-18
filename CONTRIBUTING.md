@@ -424,6 +424,30 @@ large objects; live deletion does not erase WAL or historical backups. Schema
 rollback must not orphan existing source objects. Do not reuse product capability
 tables or introduce a second destination writer for file_id.
 
+Session Artifacts are immutable published output copies, separate from live
+workspace files and general source Files. A private output exporter must reuse
+the authorized workspace path boundary and stream bounded bytes. Require complete
+capture and confirmed helper/transport success before publication; valid archive
+syntax alone is insufficient. Never extract an output archive into Core's
+filesystem or hold the global execution lease through a large transfer. Keep
+publication ordered with Turn completion, and authorize stored reads independently
+of Environment availability so published outputs can survive its expiration.
+Capture bytes into private PostgreSQL large objects without a Session admission
+lock; after confirmed export, lock and recheck the live Turn before staging metadata.
+Before capture, seal native input under that lock using the private capture marker.
+Later messages reuse the existing Environment input reservation and await the next
+Turn; the public Turn stays in progress until publication settles. Directory reads
+during capture use an independent authorized read-only preparation, not the released
+native Run; they do not request model credentials or mutate the workspace. Cancellation
+retains the existing Turn/reservation semantics. Do not introduce a second queue.
+Publish metadata in the same transaction as Turn completion. Failed/cancelled Turns
+discard private objects, and Session deletion removes both private and published
+copies. Reuse the source-file snapshot reader pattern and common content response;
+artifact deletion does not alter workspace files. Hosted execution requires the
+Runtime's bounded output-export capability and exact read-only preparation binding;
+capability advertisement alone does not qualify an operator's deployment.
+Exporter component checks do not establish public Artifact compatibility.
+
 Local inline file delivery uses the same authenticated daemon connection and exact
 Environment/Session binding. The optional startup-owned `PARSAR_RUNTIME_WRITE_HELPER`
 and `PARSAR_RUNTIME_STAGING` enable only the bounded installer primitive; they do

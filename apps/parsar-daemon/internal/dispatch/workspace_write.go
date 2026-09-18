@@ -46,6 +46,10 @@ func (r *Router) handleWorkspaceWrite(ctx context.Context, env proto.Envelope) e
 		return ErrRouterClosed
 	}
 	if request.Step == "begin" {
+		if r.workspaceExport != nil {
+			r.mu.Unlock()
+			return r.sendWorkspaceWrite(ctx, env.ID, rejectedWorkspaceWrite("resource_unavailable"))
+		}
 		if r.workspaceWrite != nil {
 			duplicate := r.workspaceWrite.envelope.ID == env.ID
 			r.mu.Unlock()

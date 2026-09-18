@@ -41,6 +41,9 @@ func recordTurnChange(ctx context.Context, q *sqlc.Queries, row sqlc.Turn, creat
 		return nil
 	}
 	if terminalStatus(row.Status) {
+		if err := settleTurnArtifacts(ctx, q, row); err != nil {
+			return err
+		}
 		unfinished, err := q.FinishSessionItems(ctx, sqlc.FinishSessionItemsParams{SessionID: row.SessionID, TurnID: row.ID})
 		if err != nil {
 			return err

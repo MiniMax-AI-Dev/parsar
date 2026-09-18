@@ -42,6 +42,7 @@ type Handler struct {
 	directoryReader    EnvironmentDirectoryReader
 	fileWriter         EnvironmentFileWriter
 	sourceFiles        SourceFileStore
+	artifacts          SessionArtifactStore
 }
 
 func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...Option) (http.Handler, error) {
@@ -93,6 +94,10 @@ func NewHandler(s ResourceStore, auth *Authenticator, engine string, options ...
 		r.Get("/agents/sessions/{session_id}/items", h.listItems)
 		r.Get("/agents/sessions/{session_id}/turns", h.listTurns)
 		r.Get("/agents/sessions/{session_id}/turns/{turn_id}", h.getTurn)
+		r.Get("/agents/sessions/{session_id}/artifacts", h.listSessionArtifacts)
+		r.Get("/agents/sessions/{session_id}/artifacts/{artifact_id}", h.getSessionArtifact)
+		r.Get("/agents/sessions/{session_id}/artifacts/{artifact_id}/content", h.sessionArtifactContent)
+		r.Delete("/agents/sessions/{session_id}/artifacts/{artifact_id}", h.deleteSessionArtifact)
 		r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 			writeError(w, http.StatusNotFound, "unsupported_operation", "This API operation is not supported.")
 		})

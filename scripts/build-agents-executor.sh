@@ -35,7 +35,7 @@ cp -R "$repo_root/packages/codex-executor/src" "$build_context/src"
   cargo build --locked --release
 )
 mkdir -p "$output_dir"
-for binary in agents-api-codex-executor agents-api-codex-directory agents-api-codex-write; do
+for binary in agents-api-codex-executor agents-api-codex-directory agents-api-codex-write agents-api-workspace-export; do
   cp "$CARGO_TARGET_DIR/release/$binary" "$output_dir/$binary.tmp"
   mv -f "$output_dir/$binary.tmp" "$output_dir/$binary"
 done

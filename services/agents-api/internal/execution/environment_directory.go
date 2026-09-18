@@ -90,16 +90,19 @@ func (w *Worker) runDirectoryRead(owner context.Context, request directoryReadRe
 			return
 		}
 	}
+	// Capture retains the public Turn after its native Run has been released.
+	prepare := reserved || session.LastTurn != nil && session.LastTurn.ArtifactCaptureStarted
 	bound, err := w.dispatcher.Store.GetSessionDevice(check, session.TenantID, session.ID)
-	if err != nil || !environmentDeviceMatches(session, environment, bound, placement) || !w.directoryDeviceReady(bound.ID, session.Engine, placement, reserved) {
+	if err != nil || !environmentDeviceMatches(session, environment, bound, placement) || !w.directoryDeviceReady(bound.ID, session.Engine, placement, prepare) {
 		return
 	}
 	peer, err := w.dispatcher.Registry.LookupDevice(bound.ID)
 	if err != nil {
 		return
 	}
-	read := proto.WorkspaceReadPayload{EnvironmentID: environment.ID, RunID: run, Path: request.path, MaxEntries: proto.WorkspaceDirectoryMaxEntries}
-	if !reserved {
+	read := proto.WorkspaceReadPayload{EnvironmentID: environment.ID, Path: request.path, MaxEntries: proto.WorkspaceDirectoryMaxEntries}
+	if !prepare {
+		read.RunID = run
 		result = readEnvironmentDirectory(owner, peer, read)
 		return
 	}

@@ -5,8 +5,6 @@ use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
 struct Fixture {
     path: PathBuf,
     _guard: std::sync::MutexGuard<'static, ()>,

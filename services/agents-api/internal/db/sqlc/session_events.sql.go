@@ -144,7 +144,7 @@ func (q *Queries) SessionEventCursor(ctx context.Context, arg SessionEventCursor
 }
 
 const sessionEventTurn = `-- name: SessionEventTurn :one
-SELECT id, session_id, status, created_at, started_at, completed_at, cancel_requested_at, outcome, event_count, event_bytes, token_usage FROM turns WHERE session_id = $1 AND id = $2
+SELECT id, session_id, status, created_at, started_at, completed_at, cancel_requested_at, outcome, event_count, event_bytes, token_usage, artifact_capture_started FROM turns WHERE session_id = $1 AND id = $2
 `
 
 type SessionEventTurnParams struct {
@@ -167,6 +167,7 @@ func (q *Queries) SessionEventTurn(ctx context.Context, arg SessionEventTurnPara
 		&i.EventCount,
 		&i.EventBytes,
 		&i.TokenUsage,
+		&i.ArtifactCaptureStarted,
 	)
 	return i, err
 }

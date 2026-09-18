@@ -36,6 +36,8 @@ type Turn struct {
 	CancelRequestedAt     time.Time
 	Usage                 json.RawMessage
 	Outcome               json.RawMessage
+	// ArtifactCaptureStarted is private Runtime coordination, never a wire field.
+	ArtifactCaptureStarted bool `json:"-"`
 }
 
 type TurnTransition struct {
@@ -153,5 +155,6 @@ func turnFromRow(row sqlc.Turn) Turn {
 		ID: uuid.UUID(row.ID.Bytes).String(), SessionID: uuid.UUID(row.SessionID.Bytes).String(), Status: row.Status,
 		CreatedAt: row.CreatedAt.Time, StartedAt: row.StartedAt.Time, CompletedAt: row.CompletedAt.Time,
 		CancelRequestedAt: row.CancelRequestedAt.Time, Outcome: json.RawMessage(row.Outcome), Usage: json.RawMessage(row.TokenUsage),
+		ArtifactCaptureStarted: row.ArtifactCaptureStarted,
 	}
 }

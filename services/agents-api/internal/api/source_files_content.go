@@ -25,6 +25,14 @@ func (h *Handler) sourceFileContent(w http.ResponseWriter, r *http.Request) {
 	if !h.sourceFilesReady(w, r) {
 		return
 	}
+	serveStoredContent(w, r, func(ctx context.Context, consume func(string, int64, io.Reader) error) error {
+		return h.sourceFiles.ReadSourceFile(ctx, tenantID(r), chi.URLParam(r, "file_id"), func(file store.SourceFile, body io.Reader) error {
+			return consume(file.Filename, file.SizeBytes, body)
+		})
+	})
+}
+
+func serveStoredContent(w http.ResponseWriter, r *http.Request, read func(context.Context, func(string, int64, io.Reader) error) error) {
 	deadline := time.Now().Add(sourceTransferTimeout)
 	if http.NewResponseController(w).SetWriteDeadline(deadline) != nil {
 		writeError(w, http.StatusServiceUnavailable, "file_transfer_unavailable", "Bounded file transfer is unavailable.")
@@ -33,16 +41,16 @@ func (h *Handler) sourceFileContent(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithDeadline(r.Context(), deadline)
 	defer cancel()
 	started := false
-	err := h.sourceFiles.ReadSourceFile(ctx, tenantID(r), chi.URLParam(r, "file_id"), func(file store.SourceFile, body io.Reader) error {
+	err := read(ctx, func(filename string, size int64, body io.Reader) error {
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": file.Filename}))
-		w.Header().Set("Content-Length", strconv.FormatInt(file.SizeBytes, 10))
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		started = true
 		w.WriteHeader(http.StatusOK)
 		n, err := io.CopyBuffer(w, body, make([]byte, 256<<10))
-		if err == nil && n != file.SizeBytes {
+		if err == nil && n != size {
 			err = io.ErrUnexpectedEOF
 		}
 		return err

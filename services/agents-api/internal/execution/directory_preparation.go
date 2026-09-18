@@ -10,20 +10,32 @@ import (
 )
 
 func (d *Dispatcher) readPreparedDirectory(ctx context.Context, peer *gateway.Session, session store.Session, environment store.Environment, bound store.ExecutionDevice, read proto.WorkspaceReadPayload) directoryReadResult {
-	unavailable := directoryReadResult{err: ErrExecutionUnavailable}
 	owner, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
+	var result directoryReadResult
+	err := d.withPreparedWorkspace(owner, peer, session, environment, bound, func(ctx context.Context, handle string) error {
+		read.Handle = handle
+		result = readEnvironmentDirectory(ctx, peer, read)
+		return result.err
+	})
+	if err != nil {
+		return directoryReadResult{err: err}
+	}
+	return result
+}
+
+func (d *Dispatcher) withPreparedWorkspace(owner context.Context, peer *gateway.Session, session store.Session, environment store.Environment, bound store.ExecutionDevice, consume func(context.Context, string) error) error {
 	req := proto.PromptRequestPayload{AgentKind: session.Engine, AgentStateKey: "agents-api-" + session.ID, StrictResume: true, ReleaseOnCompletion: true, WorkspaceReadOnly: true}
 	release, err := d.configurePreparedEnvironment(owner, session, environment, bound, &req)
 	if release != nil {
 		defer release()
 	}
 	if err != nil {
-		return unavailable
+		return ErrExecutionUnavailable
 	}
 	prepared, err := newPreparedStart(peer)
 	if err != nil {
-		return unavailable
+		return ErrExecutionUnavailable
 	}
 	releaseAttempted := false
 	defer func() {
@@ -40,15 +52,14 @@ func (d *Dispatcher) readPreparedDirectory(ctx context.Context, peer *gateway.Se
 	}
 	stop()
 	if err != nil {
-		return unavailable
+		return ErrExecutionUnavailable
 	}
-	read.Handle = prepared.handle
-	result := readEnvironmentDirectory(owner, peer, read)
+	err = consume(owner, prepared.handle)
 	releaseAttempted = true
 	if prepared.releaseDirectory() != nil {
-		return unavailable
+		return ErrExecutionUnavailable
 	}
-	return result
+	return err
 }
 
 func (p *preparedStart) awaitDirectoryReady(ctx context.Context) error {

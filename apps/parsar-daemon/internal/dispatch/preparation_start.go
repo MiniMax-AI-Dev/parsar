@@ -22,6 +22,10 @@ func (r *Router) handleExecutionStart(_ context.Context, env proto.Envelope) err
 		r.mu.Unlock()
 		return ErrRouterClosed
 	}
+	if r.workspaceExport != nil {
+		r.mu.Unlock()
+		return r.rejectPreparation(env, "resource_unavailable")
+	}
 	p := r.preparations[input.Handle]
 	if p == nil || p.requestID != env.ID {
 		r.mu.Unlock()

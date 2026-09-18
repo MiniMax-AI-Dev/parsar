@@ -57,9 +57,9 @@ dependencies, risk and effort. Parsar cutover and its business Team loop are sep
 
 This inventory is based on the pinned Python source, not our generated OpenAPI.
 It contains 42 distinct HTTP operations in 15 resource classes, excluding async
-duplicates, overloads and client-side helpers. Twenty operations currently have
-handlers; that count is not a compatibility score. Even those operations implement
-only part of the upstream input, configuration and event variants.
+duplicates, overloads and client-side helpers. Handlers below are partial coverage,
+not a compatibility score. They implement only part of the upstream input,
+configuration and event variants.
 
 Paths below are SDK resource paths beneath `client.beta.agents`. Method names use
 the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
@@ -71,7 +71,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | sessions.events | create, stream | Text/cancel/function-result admission and live events; function-action state snapshots supported |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
 | sessions.items | list | Partial Item variants |
-| sessions.artifacts | retrieve, list, delete, content | Missing |
+| sessions.artifacts | retrieve, list, delete, content | Codex/Docker hosted output capture and immutable stored reads/deletion, including after Environment expiry; exact upstream defaults/errors, unchanged-file republishing and cancellation-edge parity remain unverified |
 | sessions.subagents | retrieve, list | Missing |
 | sessions.subagents.items | list | Missing |
 | sessions.subagents.turns | retrieve, list | Missing |

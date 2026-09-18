@@ -163,8 +163,8 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 		return fail("device must advertise preparation and remote_environment")
 	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "openai_hosted" {
-		if !caps.Preparation || !caps.LocalEnvironment {
-			return fail("device must advertise preparation and local_environment")
+		if !caps.Preparation || !caps.LocalEnvironment || !caps.WorkspaceReadPreparation || !caps.WorkspaceOutputExport {
+			return fail("device must advertise local preparation, workspace reads and output export")
 		}
 		if (snapshot.Environment.Network == nil || snapshot.Environment.Network.Access != "disabled") && !caps.LocalEnvironmentNetworkPolicy {
 			return fail("device must advertise local_environment_network_policy")

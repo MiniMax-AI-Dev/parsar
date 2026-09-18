@@ -62,3 +62,7 @@ pub(crate) fn observe(fd: &OwnedFd, limit: usize) -> io::Result<Observation> {
 #[cfg(test)]
 #[path = "directory_tests.rs"]
 mod tests;
+
+// Tests counting process-wide descriptors must exclude concurrent fixture I/O.
+#[cfg(test)]
+pub(crate) static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

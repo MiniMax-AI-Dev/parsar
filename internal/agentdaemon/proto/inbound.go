@@ -264,6 +264,7 @@ type AgentKindCapabilities struct {
 	LocalEnvironmentNetworkPolicy bool `json:"local_environment_network_policy,omitempty"`
 	Preparation                   bool `json:"preparation,omitempty"`
 	WorkspaceReadPreparation      bool `json:"workspace_read_preparation,omitempty"`
+	WorkspaceOutputExport         bool `json:"workspace_output_export,omitempty"`
 	WebSearchControl              bool `json:"web_search_control,omitempty"`
 	// ExecutionControls supports typed search and verbosity controls.
 	ExecutionControls    bool `json:"execution_controls,omitempty"`
