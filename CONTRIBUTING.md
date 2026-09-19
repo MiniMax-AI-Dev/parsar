@@ -1975,8 +1975,8 @@ for implementation and registration steps.
 
 MiniMax Code's opt-in Agents API profile qualifies native ACP 0.4.12 for
 `environment:none` text execution. It reuses the shared lifecycle without public
-workspace, functions, MCP or native Subagents. Keep the ordinary product package
-pin unchanged. Native configuration disables file/shell authority and external
+workspace, functions, MCP or native Subagents. Native configuration disables
+file/shell authority and external
 capability discovery; the child receives a private Session home and a restricted
 environment. Active-input application requires a native ACP receipt, cancellation
 settles the process and output, and continuation requires the exact owned native

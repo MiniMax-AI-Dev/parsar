@@ -7,11 +7,9 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
-const ExecutionVersion = "0.4.12"
-
 // SupportsExecution is an operator opt-in, separate from ordinary product availability.
 func SupportsExecution(version string) bool {
-	return os.Getenv("PARSAR_MCODE_AGENTS_API") == "1" && version == ExecutionVersion
+	return os.Getenv("PARSAR_MCODE_AGENTS_API") == "1" && version == SupportedVersion
 }
 
 func validateExecutionRequest(req proto.PromptRequestPayload) error {

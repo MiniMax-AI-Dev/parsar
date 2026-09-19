@@ -12,8 +12,7 @@ package version **0.4.12**, with Node.js 22.22.x and its native SQLite dependenc
 The inspected upstream source is `33b259bbbeb1c16433390869938191d09bdb0680`.
 Install outside the checkout, under a private operator directory in `~/.parsar/`.
 Check the native install succeeds and `mcode --version` reports exactly 0.4.12.
-The ordinary Parsar product image retains its existing package pin; this profile
-uses an explicitly selected native executable on a trusted execution host.
+This profile runs on a trusted execution host.
 
 Set `PARSAR_MCODE_BIN` to that absolute executable and `PARSAR_MCODE_AGENTS_API=1`
 for the daemon. The opt-in only advertises the profile for the qualified version.
@@ -111,8 +110,8 @@ MiniMax M2.7 APIs. Both exercised execution, native steering receipts, daemon
 restart, history continuation, tenant rejection and cancel/continue. Native
 missing/foreign history rejection passed separately. Credential scans found the
 provider key only in each private mode-0600 native config, not in logs, public
-results or native history. The ordinary product's pinned 0.3.11 ACP regression
-also passed new/resume, model/instruction refresh, Skill discovery and MCP using
+results or native history. Product ACP regression uses the same 0.4.12 package
+and covers new/resume, model/instruction refresh, Skill discovery and MCP using
 its existing synthetic provider fixture.
 
 This acceptance uses an in-process Core HTTP server and a separate real daemon;

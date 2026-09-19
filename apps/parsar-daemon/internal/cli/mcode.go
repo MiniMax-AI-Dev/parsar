@@ -17,7 +17,7 @@ func discoverMCode(rc *runContext, check func(context.Context, string) (string, 
 	defer cancel()
 	version, err := check(ctx, "")
 	if err != nil {
-		fmt.Fprintf(rc.stderr, "parsar-daemon: mcode unavailable: %v\n  Install: npm install -g @minimax-ai/code@0.3.11\n", err)
+		fmt.Fprintf(rc.stderr, "parsar-daemon: mcode unavailable: %v\n  Install: npm install -g @minimax-ai/code@0.4.12\n", err)
 		return result
 	}
 	result.Available, result.Version = true, version

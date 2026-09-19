@@ -178,14 +178,8 @@ func (s *Session) execute() error {
 	if err != nil {
 		return err
 	}
-	settings := []struct{ key, value string }{{"model", model}}
-	if !s.req.StrictResume {
-		settings = append(settings, struct{ key, value string }{"permissionMode", s.opts.Mode})
-	}
-	for _, config := range settings {
-		if err := s.call("session/set_config_option", map[string]any{"sessionId": session.SessionID, "configId": config.key, "value": config.value}, nil, false); err != nil {
-			return err
-		}
+	if err := s.call("session/set_config_option", map[string]any{"sessionId": session.SessionID, "configId": "model", "value": model}, nil, false); err != nil {
+		return err
 	}
 	s.active = true
 	var result struct {

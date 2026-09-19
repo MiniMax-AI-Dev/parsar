@@ -16,9 +16,9 @@ import (
 )
 
 type launchOptions struct {
-	Dir, DataDir, Model, Mode string
-	Env                       []string
-	MCP                       []map[string]any
+	Dir, DataDir, Model string
+	Env                 []string
+	MCP                 []map[string]any
 }
 
 func prepareOptions(ctx context.Context, req proto.PromptRequestPayload) (launchOptions, error) {
@@ -79,6 +79,14 @@ func prepareOptions(ctx context.Context, req proto.PromptRequestPayload) (launch
 	if req.StrictResume {
 		configureTextExecution(config)
 	}
+	mode := optionString(opts, "mode")
+	if mode == "" {
+		mode = "auto"
+	}
+	if mode != "auto" && mode != "default" && mode != "bypassPermissions" {
+		return result, fmt.Errorf("mcode: unsupported permission mode")
+	}
+	config["permissionMode"] = mode
 	data, err := json.Marshal(config)
 	if err != nil {
 		return result, err
@@ -107,13 +115,6 @@ func prepareOptions(ctx context.Context, req proto.PromptRequestPayload) (launch
 	result.Env = append(result.Env, "MINIMAX_DATA_DIR="+result.DataDir)
 	if req.StrictResume {
 		result.Env = append(result.Env, "HOME="+result.DataDir, "USERPROFILE="+result.DataDir)
-	}
-	result.Mode = optionString(opts, "mode")
-	if result.Mode == "" {
-		result.Mode = "auto"
-	}
-	if result.Mode != "auto" && result.Mode != "default" && result.Mode != "bypassPermissions" {
-		return result, fmt.Errorf("mcode: unsupported permission mode")
 	}
 	result.MCP, err = mcpServers(opts["mcp_servers"])
 	return result, err
