@@ -9,7 +9,7 @@ func TestMCodeOperationQualification(t *testing.T) {
 		valid      bool
 	}{
 		{"text", `{"agent":{"model":"real-model"},"environment":{"type":"none"}}`, true},
-		{"hosted", `{"agent":{"model":"real-model"},"environment":{"type":"openai_hosted"}}`, false},
+		{"hosted", `{"agent":{"model":"real-model"},"environment":{"type":"openai_hosted"}}`, true},
 		{"verbosity", `{"agent":{"model":"real-model","text":{"verbosity":"high"}},"environment":{"type":"none"}}`, false},
 		{"subagents", `{"agent":{"model":"real-model","multi_agent":{"enabled":true}},"environment":{"type":"none"}}`, false},
 		{"functions", `{"agent":{"model":"real-model","tools":[{"type":"function","name":"f","parameters":{"type":"object"}}]},"environment":{"type":"none"}}`, false},

@@ -16,12 +16,13 @@ import (
 
 // agentCLIDiscovery is the daemon startup snapshot advertised in heartbeat.
 type agentCLIDiscovery struct {
-	ClaudeSDK  *claudeSDKDiscovery
-	ClaudeCode proto.SupportedAgentKind
-	OpenCode   proto.SupportedAgentKind
-	Codex      proto.SupportedAgentKind
-	Pi         proto.SupportedAgentKind
-	MCode      proto.SupportedAgentKind
+	MCodeWorkspace *mcode.WorkspaceConfig
+	ClaudeSDK      *claudeSDKDiscovery
+	ClaudeCode     proto.SupportedAgentKind
+	OpenCode       proto.SupportedAgentKind
+	Codex          proto.SupportedAgentKind
+	Pi             proto.SupportedAgentKind
+	MCode          proto.SupportedAgentKind
 }
 
 type agentCLIChecks struct {
@@ -180,6 +181,7 @@ func discoverAgentCLIs(rc *runContext, profile string, checks agentCLIChecks) (a
 	}
 
 	out.MCode = discoverMCode(rc, checks.MCode)
+	discoverMCodeWorkspace(rc, &out)
 	out.ClaudeSDK = discoverClaudeSDK(rc, profile, checks.ClaudeSDK)
 
 	if !out.ClaudeCode.Available && !out.OpenCode.Available && !out.Codex.Available && !out.Pi.Available && !out.MCode.Available && (out.ClaudeSDK == nil || !out.ClaudeSDK.Info.Available) {

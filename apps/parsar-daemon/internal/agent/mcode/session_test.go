@@ -213,6 +213,14 @@ func TestMCodeProcess(t *testing.T) {
 		if scenario == "hang" {
 			continue
 		}
+		if record := os.Getenv("PARSAR_MCODE_TEST_RECORD"); record != "" {
+			f, err := os.OpenFile(record, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+			if err != nil {
+				os.Exit(10)
+			}
+			_, _ = f.WriteString(frame.Method + "\n")
+			_ = f.Close()
+		}
 		result := any(map[string]any{})
 		switch frame.Method {
 		case "initialize":
@@ -240,7 +248,7 @@ func TestMCodeProcess(t *testing.T) {
 				Prompt []map[string]string `json:"prompt"`
 			}
 			_ = json.Unmarshal(frame.Params, &input)
-			if (scenario == "strict-cancel" && len(input.Prompt) != 2) || (scenario != "strict-cancel" && len(input.Prompt) != 1) {
+			if strict := scenario == "strict-cancel" || scenario == "prepared"; (strict && len(input.Prompt) != 2) || (!strict && len(input.Prompt) != 1) {
 				os.Exit(9)
 			}
 			if scenario == "steering" || scenario == "steer-rejected" || scenario == "steer-lost" || scenario == "strict-cancel" {
@@ -248,7 +256,7 @@ func TestMCodeProcess(t *testing.T) {
 				update("agent_message_chunk", map[string]any{"content": map[string]string{"type": "text", "text": "ready"}})
 				continue
 			}
-			if scenario == "many-frames" {
+			if scenario == "many-frames" || scenario == "prepared" {
 				for range 100 {
 					update("agent_message_chunk", map[string]any{"content": map[string]string{"type": "text", "text": "x"}})
 				}

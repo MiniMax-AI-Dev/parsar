@@ -1,14 +1,18 @@
-# MiniMax Code text Runtime
+# MiniMax Code Runtime
 
-This profile targets `environment:none` through the same Core/daemon execution
-contract as the other engines. It has no public workspace, Files, Artifacts, MCP,
-function calls, image input or native Subagent execution. Those are separate
-qualification tasks, not requirements to match Codex or Claude.
+MiniMax Code uses the same Core/Runtime execution contract as the other engines.
+The text profile supports `environment:none`; the dedicated Docker profile adds
+workspace execution and the shared Files/Artifacts path. See
+[workspace qualification](../../../../contracts/agents-api/mcode-workspace-v1.md)
+for exact acceptance evidence and limits.
+Public MCP/functions, image input and native Subagent execution remain outside
+this batch.
 
 ## Pinned prerequisite
 
 Use the official [`@minimax-ai/code`](https://github.com/MiniMax-AI/minimax-code)
-package version **0.4.12**, with Node.js 22.22.x and its native SQLite dependency.
+package version **0.4.12**, with Node.js 22.x and its native SQLite dependency. The Docker image pins Node.js
+22.23.1; the text fixture used 22.22.0.
 The inspected upstream source is `33b259bbbeb1c16433390869938191d09bdb0680`.
 Install outside the checkout, under a private operator directory in `~/.parsar/`.
 Check the native install succeeds and `mcode --version` reports exactly 0.4.12.
@@ -20,6 +24,38 @@ Use the existing authenticated daemon connection and operator device enrollment;
 this is not a new public enrollment API or official `self_hosted` implementation.
 Set `AGENTS_API_ENGINE=mcode` in the independent Core deployment. Existing Sessions
 retain their engine. Do not expose a new public harness selector.
+
+## Docker workspace
+
+Build the shared workspace helpers, install the published CLI into a private
+operator directory, and build the companion from the pinned native source:
+
+```sh
+MCODE_NATIVE_SOURCE=/absolute/minimax-code bash scripts/build-mcode-harness.sh
+MCODE_CLI_DIR=/absolute/published-package \
+MCODE_HARNESS_BUILD_DIR=/absolute/built-companion \
+bash scripts/build-mcode-runtime.sh
+docker build --platform linux/amd64 -t agents-runtime:mcode \
+  "${PARSAR_HOME:-$HOME/.parsar}/build/mcode-runtime"
+```
+
+Configure Core's existing managed Docker provider with the immutable image ID,
+`deploy/codex/seccomp.json` and `nested_sandbox: true`. Core, database ownership,
+enrollment and the public protocol remain shared. The image supplies the private
+`PARSAR_MCODE_WORKSPACE=managed` and companion paths; caller Agent options cannot
+change them. Public Files and Artifacts use the common bound workspace helpers.
+
+The native process and ACP Session use a private control directory, while six
+original native tools execute against `/workspace` through one trusted MCP bridge
+and the upstream Linux sandbox. MCP is internal transport here; it does not enable
+caller-supplied public MCP servers. Project instructions must be read through the
+workspace tools. Native automatic project configuration and diff/undo capture do
+not apply to this isolated tool path. Exact native-ID continuation remains
+required; recovery without a recorded ID fails closed. Native Bash observations
+become public `command_execution` items after command arguments arrive. Their
+text output and status are retained; absent native exit code/duration stay unknown.
+The private MCP server and file/skill/task utilities are not invented public MCP
+or function calls.
 
 ## Provider configuration
 
@@ -60,7 +96,8 @@ Each API Session uses a separate native state directory and cwd. The execution
 child inherits only process and model-network essentials; it does not inherit
 Core/daemon tokens or arbitrary Node startup configuration. The adapter owns its
 native config, instructions and home and disables external skills, delegated work,
-web search, file/shell tools, browser tools, mcode-tools and native goals.
+web search, builtin file/shell tools, browser tools, mcode-tools and native goals.
+The workspace profile adds only its trusted isolated tool bridge.
 
 The native model may still see `skill`, `task_query`, `task_output` and `task_stop`.
 The first loads an exact registered skill name and cannot execute a script; the
@@ -114,8 +151,10 @@ results or native history. Product ACP regression uses the same 0.4.12 package
 and covers new/resume, model/instruction refresh, Skill discovery and MCP using
 its existing synthetic provider fixture.
 
-This acceptance uses an in-process Core HTTP server and a separate real daemon;
-it is not a standalone Core deployment certification. Hosted Docker isolation,
-Files/Artifacts and complete official protocol compatibility remain unqualified.
-Before release, record `make check`, race checks and independent review alongside
-these native results in the board task.
+That text acceptance used an in-process Core HTTP server and a separate real
+daemon. The subsequent [Docker workspace qualification](../../../../contracts/agents-api/mcode-workspace-v1.md)
+uses independently built Core binaries, its own database and managed Runtime.
+It covers public Files/Artifacts, cancellation, reconnect, exact-history recovery
+and isolation with real Kimi and MiniMax APIs. Read its recorded Kimi continuation
+limitation: new model-issued commands are not automatic recovery replay. Neither
+acceptance establishes complete official protocol compatibility.

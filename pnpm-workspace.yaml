@@ -1,6 +1,8 @@
 packages:
   - "apps/*"
   - "packages/*"
+  # The native companion is installed from its own npm lock in the Linux artifact build.
+  - "!packages/mcode-harness"
 allowBuilds:
   # Vite requires esbuild's platform-binary installer. Keep the allowlist
   # explicit so supply-chain-enforcing pnpm runtimes can run project checks.
