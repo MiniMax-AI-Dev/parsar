@@ -5,22 +5,17 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
+	engineprofile "github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/engine"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
-
-// Public acceptance is separate from private adapter capability. Enabling a
-// profile requires official-client and real execution validation for that path.
-var publicMCPBearerProfiles = map[string]bool{
-	"codex":      true,
-	"claude_sdk": true,
-}
 
 func mcpCredentialBindings(engine string, snapshot Snapshot) (map[string]store.MCPCredentialBinding, error) {
 	selected, err := selectedMCPCredentials(snapshot)
 	if err != nil {
 		return nil, err
 	}
-	if len(selected) > 0 && !publicMCPBearerProfiles[engine] {
+	profile, qualified := engineprofile.Lookup(engine)
+	if len(selected) > 0 && (!qualified || !profile.MCPBearer) {
 		return nil, errors.New("The configured engine currently supports anonymous HTTP MCP only.")
 	}
 	return selected, nil

@@ -56,6 +56,9 @@ func NewPreparationFactory(config Config) agent.PreparationFactory {
 		if start.observeFunctions && !info.supportsWorkspaceCommands() {
 			return nil, fmt.Errorf("claudesdk: packaged runtime does not support workspace command observations")
 		}
+		if len(start.Functions) > 0 && !info.SupportsWorkspaceFunctions() {
+			return nil, fmt.Errorf("claudesdk: packaged runtime does not support workspace functions")
+		}
 		s, err := launch(owner, snapshot, start, env)
 		if err != nil {
 			return nil, err

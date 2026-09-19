@@ -95,7 +95,8 @@ test("prepare validates a workspace-only immutable configuration and prompt-only
   const { root, request } = placement();
   try {
     assert.deepEqual(parseRequest(JSON.stringify(request)), request);
-    for (const fields of [{ prompt: "" }, { prompt: "input" }, { workspace: undefined }, { functions: [] },
+    assert.deepEqual(parseRequest(JSON.stringify({ ...request, functions: [] })), { ...request, functions: [] });
+    for (const fields of [{ prompt: "" }, { prompt: "input" }, { workspace: undefined },
       { mcp_http_servers: [] }, { env: {} }, { resume: "" }, { type: "prepared" }]) {
       assert.throws(() => parseRequest(JSON.stringify({ ...request, ...fields })), /invalid_request/);
     }

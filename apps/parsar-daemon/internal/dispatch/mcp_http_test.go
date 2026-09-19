@@ -72,7 +72,7 @@ func TestMCPHTTPBearerRejectsUnsupportedRequestsBeforeFactory(t *testing.T) {
 					return nil, errors.New("controlled factory stop")
 				})
 			err := h.router.Handle(t.Context(), mustEnv(t, proto.TypePromptRequest, "mcp-bearer", req))
-			if called != (mode == "supported" || mode == "claude" || mode == "credential-free" || mode == "product" || mode == "required" || mode == "optional old peer") {
+			if called != (mode == "supported" || mode == "claude" || mode == "claude remote" || mode == "other engine" || mode == "credential-free" || mode == "product" || mode == "required" || mode == "optional old peer") {
 				t.Fatal("wrong factory admission")
 			}
 			frames := h.sender.snapshot()
@@ -143,7 +143,7 @@ func TestRemoteMCPRejectsBeforePreparationFactory(t *testing.T) {
 				return nil, errors.New("controlled stop")
 			})
 			err := h.router.Handle(t.Context(), mustEnv(t, proto.TypeExecutionPrepare, "remote-mcp", req))
-			allowed := mode == "supported" || mode == "no declaration" || mode == "bearer supported" || mode == "required"
+			allowed := mode == "supported" || mode == "other engine" || mode == "no declaration" || mode == "bearer supported" || mode == "required"
 			if (err == nil) != allowed {
 				t.Fatal("wrong preparation admission", err)
 			}

@@ -92,7 +92,7 @@ func discoverClaudeSDK(rc *runContext, profile string, check func(context.Contex
 			return fail(fmt.Errorf("Claude SDK bundle does not support the local Runtime contract"))
 		}
 		caps := &out.Info.Capabilities
-		caps.EnvironmentNone, caps.FunctionTools = false, false
+		caps.EnvironmentNone, caps.FunctionTools = false, info.SupportsWorkspaceFunctions()
 		caps.Preparation, caps.LocalEnvironment, caps.LocalEnvironmentNetworkPolicy = true, true, true
 		caps.WorkspaceReadPreparation, caps.NativeSessionRecovery = true, true
 	}

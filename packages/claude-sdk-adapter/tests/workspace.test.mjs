@@ -24,10 +24,10 @@ function fixture(t) {
   return { root, dirs, config, request };
 }
 
-test("workspace is explicit, typed and incompatible with any function or MCP declaration", t => {
+test("workspace is explicit, typed and rejects external MCP declarations", t => {
   const { config, request } = fixture(t);
   assert.deepEqual(parseStart(JSON.stringify(request)), request);
-  for (const fields of [{ functions: [] }, { mcp_http_servers: [] }, { functions: null }, { mcp_http_servers: null }]) {
+  for (const fields of [{ mcp_http_servers: [] }, { functions: null }, { mcp_http_servers: null }]) {
     assert.throws(() => parseStart(JSON.stringify({ ...request, ...fields })), /invalid_request/);
   }
   for (const workspace of [null, [], {}, { ...config, native: {} }, { ...config, env: {} },
@@ -174,4 +174,31 @@ test("dedicated Runtime carries an explicit native network policy", t => {
   assert.throws(() => parseStart(JSON.stringify({ ...request, workspace: { ...config, network_access: "restricted" } })), /invalid_request/);
   const { workspace, ...none } = request;
   assert.throws(() => parseStart(JSON.stringify({ ...none, require_history: true })), /invalid_request/);
+});
+
+test("workspace functions retain native sandbox and exact tool authority", async t => {
+  const { dirs, config, request } = fixture(t);
+  const functions = [{ name: "lookup", description: "Lookup", parameters: { type: "object" } }];
+  assert.deepEqual(parseStart(JSON.stringify({ ...request, functions })).functions, functions);
+  const profile = new WorkspaceProfile(dirs.workspace, config, ["mcp__functions__lookup"]);
+  profile.verify(["Bash", "Read", "Edit", "mcp__functions__lookup"], [{ name: "functions", status: "connected" }]);
+  for (const servers of [[], [{ name: "functions", status: "failed" }], [{ name: "external", status: "connected" }]]) {
+    assert.throws(() => profile.verify(["Bash", "Read", "Edit", "mcp__functions__lookup"], servers));
+  }
+  assert.throws(() => profile.verify(["Bash", "Read", "Edit", "mcp__functions__unknown"], [{ name: "functions", status: "connected" }]));
+  const controller = new AbortController();
+  const input = { id: "fixture" };
+  const options = { signal: controller.signal };
+  assert.deepEqual(await profile.canUseTool("mcp__functions__lookup", input, options), { behavior: "allow", updatedInput: input });
+  assert.equal((await profile.canUseTool("mcp__functions__unknown", input, options)).behavior, "deny");
+  assert.equal((await profile.canUseTool("mcp__functions__lookup", input, { ...options, agentID: "child" })).behavior, "deny");
+  const event = { hook_event_name: "PreToolUse", tool_name: "mcp__functions__lookup", tool_input: input, tool_use_id: "call" };
+  assert.deepEqual(await profile.beforeTool(event, "call", options), {});
+  assert.equal((await profile.beforeTool({ ...event, tool_name: "mcp__external__lookup" }, "call", options)).hookSpecificOutput.permissionDecision, "deny");
+  assert.equal((await profile.canUseTool("Bash", { command: "true", dangerouslyDisableSandbox: true }, options)).behavior, "deny");
+  assert.equal((await profile.canUseTool("Read", { file_path: dirs.state + "/history" }, options)).behavior, "deny");
+  assert.equal(profile.options.sandbox.failIfUnavailable, true);
+  assert.equal(profile.options.sandbox.allowUnsandboxedCommands, false);
+  controller.abort();
+  assert.equal((await profile.canUseTool("mcp__functions__lookup", input, options)).behavior, "deny");
 });

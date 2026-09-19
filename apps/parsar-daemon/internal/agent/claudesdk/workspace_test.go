@@ -76,7 +76,7 @@ func TestWorkspaceTrustedBindingAndEnvironment(t *testing.T) {
 }
 
 func TestWorkspaceRejectsConflictsBeforeSideEffects(t *testing.T) {
-	for _, name := range []string{"none", "remote", "work-dir", "function", "mcp", "caller-policy", "relative", "missing", "overlap", "symlink", "rule-pattern", "ambient-setting", "duplicate-env", "bad-env", "path-empty-component", "path-workspace", "code-in-workspace"} {
+	for _, name := range []string{"none", "remote", "work-dir", "mcp", "caller-policy", "relative", "missing", "overlap", "symlink", "rule-pattern", "ambient-setting", "duplicate-env", "bad-env", "path-empty-component", "path-workspace", "code-in-workspace"} {
 		t.Run(name, func(t *testing.T) {
 			config := workspaceFixture(t)
 			req := workspaceRequest()
@@ -87,8 +87,6 @@ func TestWorkspaceRejectsConflictsBeforeSideEffects(t *testing.T) {
 				req.RemoteEnvironment = &proto.RemoteEnvironment{}
 			case "work-dir":
 				req.WorkDir = config.Workspace.ScratchDir
-			case "function":
-				req.FunctionTools = []proto.FunctionTool{{Name: "hello", Parameters: json.RawMessage(`{"type":"object"}`)}}
 			case "mcp":
 				req.MCPHTTPServers = &[]proto.MCPHTTPServer{}
 			case "caller-policy":
@@ -134,5 +132,18 @@ func TestWorkspaceRejectsConflictsBeforeSideEffects(t *testing.T) {
 				t.Fatal("rejection created execution state")
 			}
 		})
+	}
+}
+
+func TestWorkspaceRetainsDeclaredFunctions(t *testing.T) {
+	config := workspaceFixture(t)
+	req := workspaceRequest()
+	req.FunctionTools = []proto.FunctionTool{{Name: "lookup", Parameters: json.RawMessage(`{"type":"object"}`)}}
+	start, _, err := prepare(config, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if start.Workspace == nil || len(start.Functions) != 1 || start.Functions[0].Name != "lookup" || start.MCPHTTPServers != nil {
+		t.Fatal("workspace function declaration was not retained independently of external MCP")
 	}
 }
