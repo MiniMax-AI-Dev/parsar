@@ -45,8 +45,11 @@ not disturb a healthy pair. See the [operator prerequisite](../../services/agent
 
 ## Basic public Docker-hosted profile
 
-An explicitly configured default managed provider enables `type=openai_hosted`
-for Codex. The standalone [operator configuration](../../services/agents-api/deploy/codex/README.md#standalone-operator-configuration)
+An explicitly configured default managed Docker provider enables `type=openai_hosted`
+for the qualified Codex, Claude Code and MiniMax Code profiles. Each uses the same
+Runtime lifecycle and workspace interfaces with its own native adapter/isolation.
+See the [engine profile guides](README.md#public-engine-profiles) for setup and limits.
+The standalone [operator configuration](../../services/agents-api/deploy/codex/README.md#standalone-operator-configuration)
 selects the qualified immutable Runtime image; advertised capabilities alone do
 not enable admission. An idle or initial-text creation commits Session, Environment
 and retry identity before the existing leased Worker provisions its allocation.

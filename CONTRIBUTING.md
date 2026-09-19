@@ -140,6 +140,11 @@ path until an explicit client cutover.
   Record unspecified or unverified behavior explicitly; never invent official
   semantics. Track partial
   coverage in `contracts/agents-api/README.md` until the complete target is verified.
+  Reconcile current coverage summaries with merged routes and recorded acceptance;
+  distinguish accepted profiles, partial implementation, missing operations and
+  unverified semantics. Retain historical evidence with its original scope. Handler
+  counts are not compatibility percentages, and an active provider probe is not
+  deployment qualification.
 - No legacy Agents API compatibility requirement takes precedence over this
   design. Replace an unsuitable implementation instead of growing compatibility
   branches. Preserve reusable, verified infrastructure rather than rewriting it
@@ -2288,10 +2293,10 @@ execution controls. It does not advertise permissions, product authoring, legacy
 raw tool Items, general web-search control or text-verbosity levels. Router admission
 for `environment:none` uses the available engine capability, not an engine name.
 The independent API selects new Session engines through `AGENTS_API_ENGINE`
-(`codex` by default, or `claude_sdk`); existing Sessions keep their stored engine.
+(`codex` by default, `claude_sdk` or `mcode`); existing Sessions keep their stored engine.
 This is operator configuration, not a public harness-selector field. API admission,
 device selection and the final preclaim check share the execution service's narrow
-engine policy without importing native adapters. Both engines require the common
+engine policy without importing native adapters. Selected engines require the common
 durable execution capabilities. Codex retains its general search/verbosity checks;
 Claude uses its restrictive profile without claiming those general capabilities.
 Idle and initial-input Session creation qualify the resolved configuration before

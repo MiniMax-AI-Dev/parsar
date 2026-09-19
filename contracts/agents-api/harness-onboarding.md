@@ -125,8 +125,9 @@ full board. Acceptance of one engine is not complete public protocol compatibili
 The upstream project is [MiniMax-AI/minimax-code](https://github.com/MiniMax-AI/minimax-code).
 The repository already contains an ACP stdio adapter under `agent/mcode`, including
 native session creation/loading, events and human interactions. Its existing
-product integration is not Agents API qualification: on the #701 baseline the
-service catalog contains Codex and Claude only.
+product integration is not Agents API qualification. The current service catalog
+registers Codex, Claude Code and MiniMax Code. Text qualification in #702 and
+workspace qualification in #703 are separate recorded milestones.
 
 The implementation reuses that adapter with an explicit native 0.4.12 opt-in for
 `environment:none` text execution. It adds native active-input receipts and

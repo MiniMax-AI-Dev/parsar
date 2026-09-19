@@ -2,8 +2,11 @@
 
 Independent execution service implementing part of the pinned OpenAI Agents API.
 It owns reusable Agents, durable Sessions/Turns/Items, live events, function actions
-and a daemon execution worker. Public execution supports Codex and an opt-in Claude
-SDK profile. It builds and runs with its own PostgreSQL database and credentials;
+and a daemon execution worker. Public execution supports qualified Codex, Claude Code
+(`claude_sdk`) and MiniMax Code (`mcode`) profiles through the shared Runtime contract.
+The three-harness Linux amd64 Docker V1 MVP is accepted; E2B qualification is a
+separate active batch and is not certified by the Docker results. It builds and
+runs with its own PostgreSQL database and credentials;
 Parsar's product service, frontend and database are not required.
 
 Use this guide to build, configure and connect a client. The
@@ -14,8 +17,9 @@ Parsar product execution and its eventual public-client cutover are separate.
 
 ## Reusable Agents
 
-Static-bearer Vault Credentials support creation, token replacement and safe
-metadata retrieval/listing. Configure their independent encryption key and authenticated
+Static-bearer Vault Credentials support creation, token replacement, deletion and
+safe metadata retrieval/listing. Vault deletion atomically removes its Credentials.
+Configure their independent encryption key and authenticated
 Session use through the [credential guide](credentials.md). OAuth remains a
 separate implementation gap.
 
@@ -182,8 +186,10 @@ creation is unsupported. Executor keys separately match this recorded creator be
 Environment connection; they do not inherit general caller API permissions.
 
 `AGENTS_API_ADDR` defaults to `127.0.0.1:8091`; use a TLS reverse proxy for remote
-access. `AGENTS_API_ENGINE` defaults to `codex`; set it to `claude_sdk` for the
-registered SDK profile. It selects new Sessions independently of the requested
+access. `AGENTS_API_ENGINE` defaults to `codex`; use `claude_sdk` for Claude Code
+or `mcode` for MiniMax Code. Configure the corresponding qualified Runtime through
+its [deployment guide](../../contracts/agents-api/README.md#public-engine-profiles).
+It selects new Sessions independently of the requested
 model. Existing Sessions retain their stored engine.
 
 The SDK base URL is `http://127.0.0.1:8091/v1`. Requests require a bearer key.
@@ -191,17 +197,20 @@ Agents and Vault routes also require `OpenAI-Beta: agents=v1` (set by their SDK
 resources); general Files routes do not. Supported operations include:
 
 - Saved Agent create/retrieve/update/list/delete.
-- Session create/retrieve/list and metadata-only update. Creation supports inline
+- Session create/retrieve/list/delete and metadata-only update. Creation supports inline
   configuration or a saved `agent_id`, field replacements, optional initial text
   and ordinary or streaming responses.
 - Session event submission and live streaming, Turn retrieve/list and Items list.
-- Environment retrieve for supported self-hosted and basic Docker-hosted profiles,
-  bounded live file listing, and inline/source copies into a qualified local workspace.
-- Project-owned `user_data` source file upload, metadata/content retrieval and
+- Environment retrieve for supported Codex self-hosted and three-harness Docker
+  profiles, bounded live file listing, and inline/source copies into qualified
+  local workspaces. Shared Artifacts support capture, list/retrieve/content and
+  deletion independently of the live Runtime after publication.
+- Project-owned `user_data` source file upload/list, metadata/content retrieval and
   deletion; see [source Files](../../contracts/agents-api/source-files.md).
-- Vault create/retrieve/list (project-scoped pagination and stored active/archived
-  filtering; no public archive/delete lifecycle) and static-bearer Credential create/retrieve/list/token replacement,
-  with Session attachments for
+- Vault create/retrieve/list/delete, project-scoped pagination and stored status
+  filtering; static-bearer Credential create/retrieve/list/token replacement/delete.
+  Public archive semantics and OAuth remain gaps. Already-delivered credentials
+  are not withdrawn by local deletion. Session attachments support
   [authenticated HTTPS MCP](credentials.md#use-a-credential-in-a-session).
 
 Execution uses the selected
@@ -283,7 +292,8 @@ device, preserves that assignment across retries/restarts, and refuses a silent
 move to another device. Revoked bindings cannot be used for dispatch. Device
 connections alone do not start a Turn. Submit text, cancellation or function results
 through the official Session events endpoint; the worker assigns a same-tenant host and preserves that
-binding. Provider lifecycle remains under construction. See the [ownership rules](../../CONTRIBUTING.md#product-and-execution-service-separation).
+binding. Managed Docker lifecycle is qualified within the three-harness V1 profile;
+other provider qualification and full protocol semantics remain separate. See the [ownership rules](../../CONTRIBUTING.md#product-and-execution-service-separation).
 
 ### Enable Claude SDK execution
 
