@@ -8,6 +8,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
+	engineprofile "github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/engine"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
 
@@ -17,8 +18,8 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 	if json.Unmarshal(configuration, &snapshot) != nil {
 		return store.ErrInvalidInput
 	}
-	profile, ok := acceptedEngine(engine)
-	if !ok || (snapshot.Environment != nil && !profile.accepts(snapshot.Environment.Type)) {
+	profile, ok := engineprofile.Lookup(engine)
+	if !ok || (snapshot.Environment != nil && !profile.Accepts(snapshot.Environment.Type)) {
 		return store.ErrInvalidInput
 	}
 	_, err := mcpCredentialBindings(engine, snapshot)
@@ -29,8 +30,6 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 		if snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" || !path.IsAbs(snapshot.Environment.WorkspaceDirectory) || strings.ContainsAny(snapshot.Environment.WorkspaceDirectory, "\x00\r\n\\") || len(snapshot.Environment.CapabilityDirectories) != 0 {
 			return store.ErrInvalidInput
 		}
-		_, _, err := executionTools(snapshot.Agent.Tools)
-		return err
 	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "openai_hosted" {
 		// Only this placement/engine combination has current native qualification.
@@ -43,14 +42,7 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 			return store.ErrInvalidInput
 		}
 	}
-	if profile.validateConfiguration == nil {
-		_, mcp, err := executionTools(snapshot.Agent.Tools)
-		if len(mcp) != 0 && (snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil) {
-			return errors.New("HTTP MCP execution currently requires the Codex service-side environment:none profile")
-		}
-		return err
-	}
-	return profile.validateConfiguration(snapshot)
+	return validateProfileConfiguration(profile, snapshot)
 }
 
 func canAdmitInputs(engine string, configuration json.RawMessage) bool {
@@ -62,14 +54,11 @@ func canAdmitInputs(engine string, configuration json.RawMessage) bool {
 }
 
 func validateEngineInputs(engine string, inputs []store.Input) error {
-	profile, ok := acceptedEngine(engine)
+	profile, ok := engineprofile.Lookup(engine)
 	if !ok {
 		return store.ErrInvalidInput
 	}
-	if profile.validateInputs != nil {
-		return profile.validateInputs(inputs)
-	}
-	return nil
+	return validateProfileInputs(profile, inputs)
 }
 
 // engineCapabilities is shared by device selection and the final preclaim check.
@@ -78,12 +67,12 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	fail := func(message string) (device.KindCapabilities, error) {
 		return device.KindCapabilities{}, errors.New(message)
 	}
-	profile, ok := acceptedEngine(engine)
-	if !ok || (snapshot.Environment != nil && !profile.accepts(snapshot.Environment.Type)) {
+	profile, ok := engineprofile.Lookup(engine)
+	if !ok || (snapshot.Environment != nil && !profile.Accepts(snapshot.Environment.Type)) {
 		return fail("execution engine placement is not supported")
 	}
-	if profile.validateConfiguration != nil {
-		if err := profile.validateConfiguration(snapshot); err != nil {
+	if profile.ValidateConfiguration != nil {
+		if err := validateProfileConfiguration(profile, snapshot); err != nil {
 			return device.KindCapabilities{}, err
 		}
 	}
@@ -95,10 +84,10 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	if !caps.ExecutionControls {
 		return fail("device must advertise execution_controls")
 	}
-	if profile.webSearchControl && !caps.WebSearchControl {
+	if profile.WebSearchControl && !caps.WebSearchControl {
 		return fail("device must advertise web_search_control")
 	}
-	if profile.textVerbosity && !caps.TextVerbosity {
+	if profile.TextVerbosity && !caps.TextVerbosity {
 		return fail("device must advertise text_verbosity")
 	}
 	if !caps.ToolObservations {
