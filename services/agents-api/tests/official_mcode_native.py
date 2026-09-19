@@ -81,7 +81,7 @@ def main():
             # The input must remain ordinary text instead of triggering ACP /model.
             execute(sid, "/model")
             assert sessions.turns.list(sid, order="asc", limit=100).data[-1].status == "completed"
-            record["cancel_events"] = execute(sid, "Write 500 numbered lines, each explaining a different arithmetic fact. Start immediately.", cancel=True)
+            record["cancel_events"] = execute(sid, "Print the integers from 1 to 10000, one per line. Start with 1 immediately; no explanation or planning.", cancel=True)
             execute(sid, "Reply with the original MCODE-MEMORY marker only.")
             assert record["marker"] in answer(sid)
             record["checks"] += ["cold_daemon_history_continuation", "foreign_tenant_rejected", "slash_text_execution", "cancel_and_continue"]
