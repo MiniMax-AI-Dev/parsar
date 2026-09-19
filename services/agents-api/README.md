@@ -201,7 +201,7 @@ resources); general Files routes do not. Supported operations include:
   configuration or a saved `agent_id`, field replacements, optional initial text
   and ordinary or streaming responses.
 - Session event submission and live streaming, Turn retrieve/list and Items list.
-- Environment retrieve for supported Codex self-hosted and three-harness Docker
+- Environment retrieve for supported Codex self-hosted and three-harness Docker/E2B
   profiles, bounded live file listing, and inline/source copies into qualified
   local workspaces. Shared Artifacts support capture, list/retrieve/content and
   deletion independently of the live Runtime after publication.
@@ -296,8 +296,8 @@ device, preserves that assignment across retries/restarts, and refuses a silent
 move to another device. Revoked bindings cannot be used for dispatch. Device
 connections alone do not start a Turn. Submit text, cancellation or function results
 through the official Session events endpoint; the worker assigns a same-tenant host and preserves that
-binding. Managed Docker lifecycle is qualified within the three-harness V1 profile;
-other provider qualification and full protocol semantics remain separate. See the [ownership rules](../../CONTRIBUTING.md#product-and-execution-service-separation).
+binding. Managed Docker/E2B lifecycle is qualified within the three-harness V1 profiles;
+additional provider qualification and full protocol semantics remain separate. See the [ownership rules](../../CONTRIBUTING.md#product-and-execution-service-separation).
 
 ### Enable Claude SDK execution
 

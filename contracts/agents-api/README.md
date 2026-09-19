@@ -257,7 +257,7 @@ including further deployment qualification; this inventory describes merged beha
   asynchronous cancellation request while internal finalization remains available.
   Existing streams close on observing removal without an invented deletion event.
   Creation keys remain reserved (local 409); missing/repeated deletion locally
-  returns 404. Qualified managed Docker deletion also reclaims its owned Runtime;
+  returns 404. Qualified managed Docker/E2B deletion also reclaims its owned Runtime;
   broader physical SQL/native history cleanup, immediate native quiescence and
   exact hosted error/retry/overlapping-stream semantics remain unverified or
   unimplemented. Shared devices, saved Agents and other Sessions are independent.
@@ -363,7 +363,7 @@ including further deployment qualification; this inventory describes merged beha
 
 | Capability | Current state |
 | --- | --- |
-| Independent deployment | Source-free Core package and separate execution PostgreSQL ownership; managed Docker Runtime co-locates daemon, selected harness and workspace; no Parsar dependency |
+| Independent deployment | Source-free Core package and separate execution PostgreSQL ownership; managed Docker/E2B Runtime co-locates daemon, selected harness and workspace; no Parsar dependency |
 | Saved Agents and Sessions | Saved Agent routes, immutable inline/referenced Session configuration, metadata updates, root-Agent filtering and scoped cursor pagination |
 | Public execution | Initial/later text, active input and cancellation through Codex, Claude Code or MiniMax Code; Codex/Claude additionally support qualified public functions; see profile limits below |
 | Pending function actions | Persisted calls/results/application receipts, `required_actions`, Session `requires_action`, Turn `waiting`, and live state snapshots; other interactions remain incomplete |
