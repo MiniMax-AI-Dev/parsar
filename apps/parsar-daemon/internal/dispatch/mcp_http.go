@@ -12,11 +12,11 @@ func validateMCPHTTP(req proto.PromptRequestPayload, caps proto.AgentKindCapabil
 	if req.MCPHTTPServers == nil {
 		return nil
 	}
-	if req.RemoteEnvironment != nil && (req.AgentKind != "codex" || !caps.MCPHTTPTools || !caps.MCPHTTPRemoteEnvironment) {
+	if req.RemoteEnvironment != nil && (!caps.MCPHTTPTools || !caps.MCPHTTPRemoteEnvironment) {
 		return errors.New("engine does not support service-side HTTP MCP with a remote environment")
 	}
 	for _, server := range *req.MCPHTTPServers {
-		if server.Required && (req.AgentKind != "codex" || !caps.MCPHTTPTools || !caps.MCPHTTPRequired || req.DisableExecutionEnvironment == (req.RemoteEnvironment != nil)) {
+		if server.Required && (!caps.MCPHTTPTools || !caps.MCPHTTPRequired || req.DisableExecutionEnvironment == (req.RemoteEnvironment != nil)) {
 			return errors.New("engine does not support required service-side HTTP MCP initialization")
 		}
 		if server.BearerToken == nil {
@@ -25,7 +25,7 @@ func validateMCPHTTP(req proto.PromptRequestPayload, caps proto.AgentKindCapabil
 		if !caps.MCPHTTPTools || !caps.MCPHTTPBearerAuth {
 			return errors.New("engine does not support authenticated HTTP MCP")
 		}
-		if (req.AgentKind != "codex" && req.AgentKind != "claude_sdk") || req.DisableExecutionEnvironment == (req.RemoteEnvironment != nil) {
+		if req.DisableExecutionEnvironment == (req.RemoteEnvironment != nil) {
 			return errors.New("authenticated HTTP MCP requires a supported service-side environment")
 		}
 		if req.RemoteEnvironment != nil {

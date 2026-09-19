@@ -61,7 +61,7 @@ export function parseWorkspace(value: unknown, cwd: string): Workspace | undefin
 export class WorkspaceProfile {
   readonly options: Options;
 
-  constructor(private readonly cwd: string, config: Workspace) {
+  constructor(private readonly cwd: string, config: Workspace, private readonly functions: readonly string[] = []) {
     config = parseWorkspace(config, cwd)!;
     // SDK history lookup reads the bridge environment, independently of query.env.
     if (process.env.HOME !== config.home || process.env.CLAUDE_CONFIG_DIR !== config.state ||
@@ -78,7 +78,7 @@ export class WorkspaceProfile {
     }
     const protectedRoots = [config.home, config.state, ...config.protected_dirs];
     this.options = {
-      env, tools: [...nativeTools], allowedTools: [], mcpServers: {}, strictMcpConfig: true,
+      env, tools: [...nativeTools], allowedTools: [...functions], mcpServers: {}, strictMcpConfig: true,
       settingSources: [], permissionMode: "default", persistSession: true,
       settings: {
         permissions: {
@@ -105,8 +105,11 @@ export class WorkspaceProfile {
   }
 
   verify(tools: string[], servers: { name: string; status: string }[]): void {
-    if (servers.length || tools.length !== nativeTools.length || new Set(tools).size !== tools.length ||
-        tools.some(name => !nativeTools.includes(name))) throw new Error("unexpected native workspace inventory");
+    const expected = [...nativeTools, ...this.functions];
+    if (servers.length !== (this.functions.length ? 1 : 0) ||
+        servers.some(server => server.name !== "functions" || server.status !== "connected") ||
+        tools.length !== expected.length || new Set(tools).size !== tools.length ||
+        tools.some(name => !expected.includes(name))) throw new Error("unexpected native workspace inventory");
   }
 
   readonly canUseTool: CanUseTool = async (name, input, { signal, agentID }) => {
@@ -119,19 +122,20 @@ export class WorkspaceProfile {
   readonly beforeTool: HookCallback = async (input, id, { signal }) => {
     if (!signal.aborted && input.hook_event_name === "PreToolUse" && input.agent_id === undefined &&
         (id === undefined || id === input.tool_use_id) && this.permits(input.tool_name, input.tool_input)) {
-      return input.tool_name === "Bash" ? {} : { hookSpecificOutput: { hookEventName: "PreToolUse",
+      return input.tool_name !== "Read" && input.tool_name !== "Edit" ? {} : { hookSpecificOutput: { hookEventName: "PreToolUse",
         updatedInput: this.absoluteInput(input.tool_name, input.tool_input as Record<string, unknown>) } };
     }
     return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: denial } };
   };
 
   private absoluteInput(name: string, input: Record<string, unknown>): Record<string, unknown> {
-    return name === "Bash" ? input : { ...input, file_path: resolve(this.cwd, input.file_path as string) };
+    return name !== "Read" && name !== "Edit" ? input : { ...input, file_path: resolve(this.cwd, input.file_path as string) };
   }
 
   private permits(name: string, value: unknown): boolean {
     if (!value || typeof value !== "object" || Array.isArray(value)) return false;
     const input = value as Record<string, unknown>;
+    if (this.functions.includes(name)) return true;
     if (name === "Bash") return typeof input.command === "string" && !!input.command.trim() &&
       (input.run_in_background === undefined || input.run_in_background === false) &&
       (input.dangerouslyDisableSandbox === undefined || input.dangerouslyDisableSandbox === false);

@@ -24,6 +24,8 @@ in an execution adapter. The application core owns execution state and persisten
 engine-specific shapes stay at the adapter boundary. Codex uses its native
 app-server; Claude uses the maintained Agent SDK. Reuse native protocols and SDKs
 for further harnesses rather than adding another model/tool loop.
+The [harness contract and parity baseline](harnesses.md) describes equal-engine
+registration, qualification and shared acceptance.
 Verify configuration against actual execution: response defaults must not merely
 describe values the adapter never applied.
 

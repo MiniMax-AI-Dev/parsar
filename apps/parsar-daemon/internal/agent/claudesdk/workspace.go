@@ -36,7 +36,7 @@ type workspaceProfile struct {
 }
 
 func prepareWorkspace(config Config, req proto.PromptRequestPayload) (*workspaceProfile, []string, error) {
-	if req.DisableExecutionEnvironment || req.RemoteEnvironment != nil || len(req.FunctionTools) != 0 || req.MCPHTTPServers != nil {
+	if req.DisableExecutionEnvironment || req.RemoteEnvironment != nil || req.MCPHTTPServers != nil {
 		return nil, nil, fmt.Errorf("claudesdk: workspace profile does not support the requested execution combination")
 	}
 	if req.WorkDir != "" && req.WorkDir != config.Workspace.Directory {

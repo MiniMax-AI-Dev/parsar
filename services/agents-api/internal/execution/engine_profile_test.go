@@ -72,10 +72,10 @@ func TestAdditionalProfileUsesCommonAdmission(t *testing.T) {
 }
 
 func TestClaudeHostedToolsRequireSeparateQualification(t *testing.T) {
-	for _, tools := range []string{`[{"type":"function","name":"f","parameters":{"type":"object"},"defer_loading":false}]`, `[{"type":"mcp","server_label":"s","transport":{"type":"http","server_url":"https://example.test/mcp"},"connection_origin":"service"}]`} {
+	for index, tools := range []string{`[{"type":"function","name":"f","parameters":{"type":"object"},"defer_loading":false}]`, `[{"type":"mcp","server_label":"s","transport":{"type":"http","server_url":"https://example.test/mcp"},"connection_origin":"service"}]`} {
 		for _, placement := range []string{"none", "openai_hosted"} {
 			raw := json.RawMessage(`{"agent":{"model":"fixture","tools":` + tools + `},"environment":{"type":"` + placement + `"}}`)
-			if err := ValidateSessionConfiguration("claude_sdk", raw); (err == nil) != (placement == "none") {
+			if err := ValidateSessionConfiguration("claude_sdk", raw); (err == nil) != (placement == "none" || index == 0) {
 				t.Fatalf("%s: %v", placement, err)
 			}
 		}

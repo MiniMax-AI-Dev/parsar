@@ -39,8 +39,8 @@ func validateClaudeConfiguration(agent v1.Agent, environment *v1.Environment, ha
 }
 
 func validateClaudeTools(environment *v1.Environment, _ bool, tools []proto.FunctionTool, mcp []proto.MCPHTTPServer) error {
-	if environment.Type == "openai_hosted" && (len(tools) != 0 || len(mcp) != 0) {
-		return errors.New("The configured workspace profile does not support function or MCP tools.")
+	if environment.Type == "openai_hosted" && len(mcp) != 0 {
+		return errors.New("The configured workspace profile does not support HTTP MCP tools.")
 	}
 	if err := validateClaudeMCP(mcp); err != nil {
 		return err

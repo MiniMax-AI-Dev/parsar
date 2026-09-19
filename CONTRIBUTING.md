@@ -198,13 +198,13 @@ the same transaction as its Session and creation identity when this resource is
 implemented. Keep mutable connection/registration state out of immutable
 configuration; replacement ownership must fence stale observations.
 
-The current delivery milestone is the Codex single-Agent path: Session
+The accepted delivery baseline is the shared Codex/Claude single-Agent path: Session
 creation, environment preparation, native execution, files/artifacts, cancellation,
 reconnection/recovery queries, and standalone deployment acceptance. Select each
 bounded task from the complete board; nonblocking local improvements stay queued.
 Authentication, tenant/credential isolation, state consistency and data loss remain
-material acceptance requirements. Other harnesses and protocol Subagent execution
-are deferred without changing the complete pinned protocol target.
+material acceptance requirements. Additional harness implementations and protocol Subagent execution
+remain queued without changing the complete pinned protocol target.
 
 The current hosted architecture is V1: Core runs independently; each Environment
 sandbox contains its daemon, selected native harness, local tools and workspace.
@@ -382,7 +382,7 @@ implementation behind its adapter. Core acts on verified capabilities and runtim
 conditions; a capability declaration alone never grants public feature admission.
 Extend existing interfaces during related functional work without introducing a
 second framework or a broad rewrite. The completed MVP remains Codex/Docker.
-The next accepted engine profile is Claude SDK on the same dedicated Docker
+Claude SDK is an equal first-class engine on the same dedicated Docker
 Runtime; qualify each image with the common full-loop acceptance before deploying.
 E2B, other engines and hosted remote-executor separation remain outside this batch.
 Later engines must satisfy the same applicable acceptance contract while keeping
@@ -1928,6 +1928,34 @@ must close their query, await their native child and drain observations before
 publishing completion. Process groups are lifecycle supervision, not OS isolation
 or containment of descendants that deliberately leave the group.
 
+### Harness qualification and onboarding
+
+Codex, Claude and future harnesses have equal architectural status. The common
+Runtime wire protocol and Factory/Session/Prepared interfaces own lifecycle,
+input receipts, cancellation, recovery and resource access; each native adapter
+retains its implementation and model/tool loop. A new engine supplies an adapter,
+a qualified profile in `services/agents-api/internal/engine`, registration and
+an independently verified deployment. It does not add engine-name branches to
+API handlers, persistence, dispatch or scheduling.
+
+The small static profile catalog owns engine-specific public admission and value
+limits. Profile callbacks are pure and use existing public/protocol types; they
+cannot query business data, decrypt credentials or control native processes.
+Public schema validation, qualified engine support and actual Runtime capabilities
+remain separate. Runtime advertisements alone never enable public operations.
+Shared dispatch checks capability combinations, not a whitelist of engine names.
+Use the same public acceptance assertions for both engines, retaining native
+isolation tests where appropriate. Record unsupported or unverified combinations
+as implementation gaps; do not reduce another engine's functionality to claim
+parity or equate accepted parameters with applied native behavior.
+
+Claude hosted functions compose the existing SDK function bridge with the native
+workspace sandbox. Only declared function tools and the verified native tool
+inventory are available. The bundle advertises this combination separately from
+basic workspace execution; older bundles cannot receive function preparations.
+External hosted MCP remains unqualified. Function callbacks do not change file,
+credential, history, subagent or network authority.
+
 ### Claude dedicated Docker Runtime
 
 Build the pinned SDK bundle with `scripts/build-claude-sdk-runtime.sh`, then use
@@ -1957,8 +1985,9 @@ The SDK adapter advertises `local_runtime_v1` only for its Linux bridge contract
 Registration combines that contract with the verified operator binding. Core uses
 an explicit accepted engine profile independently of advertisements. This profile
 supports native Bash/Read/Edit, preparation, shared Files/Artifacts, cancellation
-and same-history continuation. Functions and MCP in this workspace profile remain
-unqualified and reject before persistence; their existing `none` support is retained.
+and same-history continuation. The separately advertised `workspace_functions`
+combination supports declared public functions with text results. External HTTP
+MCP remains unqualified here; its existing `none` support is retained.
 Native Bash network access uses the harness's HTTP proxy; no alternate networking
 or tool loop is implemented by Core.
 
@@ -1987,8 +2016,8 @@ their streamed partial text. No phase is inferred from the final result.
 SDK/native child release and output draining precede daemon completion.
 
 `claudesdk.Config.Workspace` is a private, trusted operator binding for one
-qualified placement. It enables only native Bash/Read/Edit in the existing SDK
-loop. The entire factory must already run inside an outer mount/process boundary
+qualified placement. It enables native Bash/Read/Edit and declared host functions
+in the existing SDK loop. The entire factory must already run inside an outer mount/process boundary
 that excludes application, daemon and other-tenant credentials and host policy.
 The factory does not create that boundary. The dedicated Docker profile below
 selects this binding at startup; cwd and request options cannot select its policy.
@@ -2011,7 +2040,7 @@ strict sandbox with no fallback or weaker isolation. Separate native file-tool
 permissions and a session tool hook restrict Read/Edit to the bound workspace
 and deny protected roots; background/unsandboxed Bash requests are rejected.
 The deployment must retain these controls, including the SDK-owned hook.
-Functions, MCP and remote-environment combinations are rejected in this private
+External MCP and remote-environment combinations remain rejected in this private
 profile until separately qualified. The existing `none` profile retains its
 behavior. Packaged `workspace_tools` establishes bridge support only, not host
 isolation or a public capability. The dedicated Runtime integration composes
@@ -2213,7 +2242,7 @@ Operators may configure the daemon provider environment or the existing transien
 (`base_url` HTTPS and `bearer_token`). Core forwards these opaque options without
 persisting them in Session configuration. The adapter exclusively selects the
 provider environment and removes credentials from native tool environments. Product `claude_code` and product execution are unchanged.
-The public profile accepts only
+The `none` public profile accepts only
 text, explicit model/system instructions, managed state, exact native resume and
 declared functions with ordered text results, and the HTTP MCP subset
 described above. It rejects unsupported request

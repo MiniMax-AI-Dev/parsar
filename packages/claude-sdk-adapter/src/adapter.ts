@@ -30,10 +30,12 @@ export type Event =
   | { type: "error"; code: "invalid_request" | "history_unavailable" | "execution_failed" | "cancelled" };
 
 export async function execute(request: Start | Prepare, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit), inputs = new Inputs(request.type === "start" ? request.prompt : undefined), reads = new WorkspaceReads(emit, abort), directories = new WorkspaceDirectories(emit, abort)): Promise<void> {
-  const workspace = request.workspace === undefined ? undefined : new WorkspaceProfile(request.cwd, request.workspace);
+  const definitions = (request.functions ?? []).map(tool => ({ name: tool.name, description: tool.description, inputSchema: tool.parameters }));
+  const names = definitions.map(tool => `mcp__functions__${tool.name}`);
+  const workspace = request.workspace === undefined ? undefined : new WorkspaceProfile(request.cwd, request.workspace, names);
   const commands = workspace ? new CommandObserver() : undefined;
   if (request.type === "prepare" && !workspace) throw new Error("invalid_request");
-  if (workspace && ("functions" in request || "mcp_http_servers" in request)) throw new Error("invalid_request");
+  if (workspace && "mcp_http_servers" in request) throw new Error("invalid_request");
   if (request.require_history && !request.resume) {
     const recovered = await recoverSession(request.cwd);
     if (!recovered) {
@@ -46,8 +48,6 @@ export async function execute(request: Start | Prepare, emit: (event: Event) => 
     await emit({ type: "error", code: "history_unavailable" });
     return;
   }
-  const definitions = (request.functions ?? []).map(tool => ({ name: tool.name, description: tool.description, inputSchema: tool.parameters }));
-  const names = definitions.map(tool => `mcp__functions__${tool.name}`);
   const mcpServers: Record<string, McpServerConfig> = Object.create(null);
   if (definitions.length) mcpServers.functions = createFunctionServer(definitions, functions.invoke);
   const profile = request.mcp_http_servers === undefined ? undefined : new MCPProfile(request.mcp_http_servers, names);
@@ -72,7 +72,7 @@ export async function execute(request: Start | Prepare, emit: (event: Event) => 
         model: request.model,
         systemPrompt: request.system_prompt,
         ...(request.resume ? { resume: request.resume } : {}),
-        tools: [], mcpServers, allowedTools: profile?.allowed ?? names, strictMcpConfig: true, settingSources: [],
+        tools: [], allowedTools: profile?.allowed ?? names, strictMcpConfig: true, settingSources: [],
         ...(profile ? {
           agent: "parsar_root", disallowedTools: profile.denied,
           hooks: { PreToolUse: [{ hooks: [profile.beforeTool] }] },
@@ -82,6 +82,7 @@ export async function execute(request: Start | Prepare, emit: (event: Event) => 
         persistSession: true, includePartialMessages: true, abortController: abort,
         canUseTool: async () => ({ behavior: "deny", message: "Tools are unavailable in this execution profile." }),
         ...(workspace?.options ?? {}),
+        mcpServers,
         spawnClaudeCodeProcess: options => {
           const child = spawnNative(options);
           nativeAlive = true;

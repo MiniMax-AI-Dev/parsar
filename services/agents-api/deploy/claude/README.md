@@ -42,8 +42,8 @@ Follow the existing Core setup for independent PostgreSQL credentials, migration
 API authentication and managed Runtime enrollment. Parsar is not a dependency.
 
 The supported hosted profile accepts text execution with medium verbosity and
-native Bash/Read/Edit. Files and Artifacts use the shared public interfaces.
-Workspace functions/MCP, multi-agent, structured output, user-managed enrollment
+native Bash/Read/Edit and declared public functions with text results. Files and Artifacts use the shared public interfaces.
+Workspace HTTP MCP, multi-agent, structured output, user-managed enrollment
 and other environment installations remain explicit gaps. The existing
 `environment:none` function/MCP profile is separate. This is not complete upstream
 protocol compatibility.
@@ -71,8 +71,8 @@ confirms input receipts, and implements cancellation and preparation ownership.
 for output settlement. Reuse the shared process runner and existing error types.
 Native history belongs to the bound API Session, not the device descriptor.
 
-Add the qualified placement and value constraints to the small execution
-`acceptedEngine` declaration. That declaration gates public support independently
+Add the qualified placement and value constraints to the qualified profile in
+`services/agents-api/internal/engine/` and register it in its catalog. That declaration gates public support independently
 of Runtime capability flags. Do not add engine branches to handlers, stores,
 resource managers or scheduling. A genuinely new public capability may require a
 bounded extension of the shared contract; registration alone cannot make an

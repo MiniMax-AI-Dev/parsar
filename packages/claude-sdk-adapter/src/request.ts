@@ -38,7 +38,7 @@ export function parseRequest(line: string): Start | Prepare {
   parseHTTPServers(request.mcp_http_servers);
   const workspace = parseWorkspace(request.workspace, request.cwd);
   if (request.require_history && !workspace) throw new Error("invalid_request");
-  if ((workspace && ("functions" in request || "mcp_http_servers" in request)) ||
+  if ((workspace && "mcp_http_servers" in request) ||
       (request.type === "prepare" && !workspace)) throw new Error("invalid_request");
   return request as Start | Prepare;
 }
