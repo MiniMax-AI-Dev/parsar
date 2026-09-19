@@ -39,7 +39,7 @@ func (w *Worker) validateEnvironmentAdmission(engine string, configuration json.
 	default:
 		return store.ErrInvalidInput
 	}
-	return ValidateSessionConfiguration(engine, configuration)
+	return w.dispatcher.ValidateSessionConfiguration(engine, configuration)
 }
 
 func (w *Worker) validateCreation(ctx context.Context, input store.CreateSessionInput) error {
@@ -59,7 +59,7 @@ func (w *Worker) validateCreation(ctx context.Context, input store.CreateSession
 		}
 		return w.checkAdmissionOwnership(ctx)
 	}
-	if !canAdmitInputs(input.Engine, input.Configuration) {
+	if !w.dispatcher.canAdmitInputs(input.Engine, input.Configuration) {
 		return store.ErrInvalidInput
 	}
 	return nil

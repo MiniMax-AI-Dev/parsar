@@ -33,6 +33,7 @@ type ResourceStore interface {
 }
 
 type Handler struct {
+	policy             execution.Policy
 	store              ResourceStore
 	auth               *Authenticator
 	engine             string
@@ -192,7 +193,7 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err == nil {
-		err = execution.ValidateSessionConfiguration(h.engine, configuration)
+		err = h.policy.ValidateSessionConfiguration(h.engine, configuration)
 	}
 	if err != nil {
 		if h.recoverSessionCreation(w, r, key, creationRequest, input.Stream) {

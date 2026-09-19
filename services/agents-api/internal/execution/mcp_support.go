@@ -5,16 +5,15 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
-	engineprofile "github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/engine"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
 
-func mcpCredentialBindings(engine string, snapshot Snapshot) (map[string]store.MCPCredentialBinding, error) {
+func (p Policy) mcpCredentialBindings(engine string, snapshot Snapshot) (map[string]store.MCPCredentialBinding, error) {
 	selected, err := selectedMCPCredentials(snapshot)
 	if err != nil {
 		return nil, err
 	}
-	profile, qualified := engineprofile.Lookup(engine)
+	profile, qualified := p.Engines.Lookup(engine)
 	if len(selected) > 0 && (!qualified || !profile.MCPBearer) {
 		return nil, errors.New("The configured engine currently supports anonymous HTTP MCP only.")
 	}
@@ -23,14 +22,14 @@ func mcpCredentialBindings(engine string, snapshot Snapshot) (map[string]store.M
 
 // Selection, final preclaim and request construction use the same combination
 // checks. This function never reads plaintext credentials or native configuration.
-func mcpExecutionCredentials(engine string, snapshot Snapshot, servers []proto.MCPHTTPServer, caps device.KindCapabilities) (map[string]store.MCPCredentialBinding, error) {
+func (p Policy) mcpExecutionCredentials(engine string, snapshot Snapshot, servers []proto.MCPHTTPServer, caps device.KindCapabilities) (map[string]store.MCPCredentialBinding, error) {
 	fail := func(message string) (map[string]store.MCPCredentialBinding, error) {
 		return nil, errors.New(message)
 	}
 	if len(servers) > 0 && (!caps.MCPHTTPTools || snapshot.Environment == nil || (snapshot.Environment.Type != "none" && snapshot.Environment.Type != "self_hosted") || snapshot.Daemon != nil) {
 		return fail("device must support the service-side HTTP MCP profile")
 	}
-	selected, err := mcpCredentialBindings(engine, snapshot)
+	selected, err := p.mcpCredentialBindings(engine, snapshot)
 	if err != nil {
 		return nil, err
 	}

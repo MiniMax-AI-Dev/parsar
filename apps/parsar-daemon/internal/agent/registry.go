@@ -14,12 +14,6 @@
 //   - Session.Cancel is best-effort and idempotent: a session that
 //     already finished naturally must accept a Cancel call without
 //     panicking.
-//
-//   - Session.SubmitPermission delivers a permission_decision back to
-//     the agent. The permID is the daemon-minted "perm_<8hex>"
-//     identifier from the matching upstream permission_request.
-//     Returns ErrUnknownPermission for unknown / expired permission ids
-//     so callers can decide whether to log or surface.
 package agent
 
 import (
@@ -44,24 +38,14 @@ type Session interface {
 	// Cancel signals the session to abort. Idempotent. Actual teardown
 	// happens asynchronously and is signalled via the out channel close.
 	Cancel(ctx context.Context) error
-
-	// SubmitPermission delivers a human verdict for an outstanding
-	// permission_request. Returns ErrUnknownPermission when permID is
-	// unknown / already resolved / expired.
-	SubmitPermission(ctx context.Context, permID string, decision proto.PermissionDecisionPayload) error
-
-	// SubmitPromptForUserChoice delivers a human's answer for an
-	// outstanding prompt_for_user_choice (Claude Code AskUserQuestion).
-	// Returns ErrUnknownAsk when askID is unknown / already resolved.
-	SubmitPromptForUserChoice(ctx context.Context, askID string, decision proto.PromptForUserChoiceDecisionPayload) error
 }
 
-// ErrUnknownPermission is returned by Session.SubmitPermission when
+// ErrUnknownPermission is returned by PermissionResponder.SubmitPermission when
 // the permID doesn't match any outstanding request. The router uses
 // this to distinguish a benign race from a real forwarding failure.
 var ErrUnknownPermission = errors.New("agent: unknown permission id")
 
-// ErrUnknownAsk is returned by Session.SubmitPromptForUserChoice when
+// ErrUnknownAsk is returned by UserChoiceResponder.SubmitPromptForUserChoice when
 // the askID doesn't match any outstanding ask. Same race semantics as
 // ErrUnknownPermission.
 var ErrUnknownAsk = errors.New("agent: unknown ask id")

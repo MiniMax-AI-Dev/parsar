@@ -22,7 +22,7 @@ func TestMCPRequiresSupportedServicePlacement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := ValidateSessionConfiguration(profile.engine, raw); (err == nil) != profile.valid {
+		if err := (Policy{}).ValidateSessionConfiguration(profile.engine, raw); (err == nil) != profile.valid {
 			t.Fatalf("%s/%s: %v", profile.engine, profile.environment, err)
 		}
 	}

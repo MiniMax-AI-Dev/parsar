@@ -1948,10 +1948,29 @@ cannot query business data, decrypt credentials or control native processes.
 Public schema validation, qualified engine support and actual Runtime capabilities
 remain separate. Runtime advertisements alone never enable public operations.
 Shared dispatch checks capability combinations, not a whitelist of engine names.
-Use the same public acceptance assertions for both engines, retaining native
-isolation tests where appropriate. Record unsupported or unverified combinations
-as implementation gaps; do not reduce another engine's functionality to claim
-parity or equate accepted parameters with applied native behavior.
+Harness onboarding does not require feature equality. Verify common lifecycle
+obligations and use the same public assertions for each declared operation,
+retaining native isolation tests where appropriate. Optional native differences
+remain independently prioritized capability/protocol work, not onboarding blockers.
+Keep the complete pinned public protocol target and accepted functionality intact.
+Never equate accepted parameters with applied native behavior.
+
+The base daemon `Session` owns cancellation. Permission and user-choice response
+methods are optional `PermissionResponder` and `UserChoiceResponder` interfaces;
+an adapter only implements them when it emits those interactions. Unsupported
+responses receive a negative receipt, never fabricated application. The router
+retains its existing interaction routing and retry ownership.
+
+`execution.Policy` supplies immutable service qualification to HTTP admission,
+Worker device selection and final dispatch. Custom service composition must give
+the same Policy to `api.WithExecutionPolicy` and `Dispatcher.Policy`. Zero values
+use built-in profiles; an explicitly empty catalog authorizes none. Runtime
+advertisements cannot add service profiles. No mutable global registration or
+compatibility fallback is permitted. The synthetic third-harness acceptance under
+`services/agents-api/internal/store` exercises the actual gateway and daemon router;
+its fixture under `apps/parsar-daemon/testdata` is never a production engine.
+See [the integration guide](contracts/agents-api/harnesses.md) for contract and
+operation-specific acceptance.
 
 Claude hosted functions compose the existing SDK function bridge with the native
 workspace sandbox. Only declared function tools and the verified native tool

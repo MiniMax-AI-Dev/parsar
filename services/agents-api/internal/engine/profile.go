@@ -23,6 +23,8 @@ func (p Profile) Accepts(placement string) bool {
 	return slices.Contains(p.Placements, placement)
 }
 
+// Catalog is immutable after construction. Its zero value selects built-in profiles.
+// NewCatalog with an empty map explicitly qualifies no engines.
 type Catalog struct {
 	profiles map[string]Profile
 }
@@ -37,6 +39,9 @@ func NewCatalog(profiles map[string]Profile) Catalog {
 }
 
 func (c Catalog) Lookup(kind string) (Profile, bool) {
+	if c.profiles == nil {
+		c = qualified
+	}
 	profile, ok := c.profiles[kind]
 	profile.Placements = slices.Clone(profile.Placements)
 	return profile, ok
@@ -46,7 +51,3 @@ var qualified = NewCatalog(map[string]Profile{
 	"codex":      codexProfile(),
 	"claude_sdk": claudeProfile(),
 })
-
-func Lookup(kind string) (Profile, bool) {
-	return qualified.Lookup(kind)
-}

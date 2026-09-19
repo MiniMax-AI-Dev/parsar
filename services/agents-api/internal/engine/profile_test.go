@@ -22,7 +22,18 @@ func TestCatalogOwnsQualification(t *testing.T) {
 	if _, ok := catalog.Lookup("unqualified"); ok {
 		t.Fatal("caller registered an engine after catalog construction")
 	}
-	if _, ok := Lookup("fixture"); ok {
+	if _, ok := (Catalog{}).Lookup("fixture"); ok {
 		t.Fatal("fixture widened the service catalog")
+	}
+}
+
+func TestExplicitCatalogDoesNotInheritBuiltins(t *testing.T) {
+	for _, catalog := range []Catalog{NewCatalog(nil), NewCatalog(map[string]Profile{"fixture": {Placements: []string{"none"}}})} {
+		if _, ok := catalog.Lookup("codex"); ok {
+			t.Fatal("explicit catalog inherited built-in qualification")
+		}
+	}
+	if _, ok := (Catalog{}).Lookup("codex"); !ok {
+		t.Fatal("zero-value catalog lost built-in qualification")
 	}
 }

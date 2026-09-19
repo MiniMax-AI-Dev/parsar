@@ -305,10 +305,3 @@ func bridgeFailure(code string) error {
 		return fmt.Errorf("claudesdk: unknown SDK bridge failure")
 	}
 }
-
-func (s *session) SubmitPermission(context.Context, string, proto.PermissionDecisionPayload) error {
-	return agent.ErrUnknownPermission
-}
-func (s *session) SubmitPromptForUserChoice(context.Context, string, proto.PromptForUserChoiceDecisionPayload) error {
-	return agent.ErrUnknownAsk
-}

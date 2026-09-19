@@ -3,7 +3,6 @@ package pi_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"slices"
 	"strings"
@@ -277,22 +276,13 @@ func TestSessionCancelClosesOutAndEmitsTerminalFrames(t *testing.T) {
 	}
 }
 
-func TestSessionSubmitPermissionUnknownReturnsErrUnknown(t *testing.T) {
-	out := make(chan proto.Envelope, 16)
-	sess, err := pi.NewSessionForTest(context.Background(),
-		piHelperReq("run_perm", "hello", "hang"), out, piHelperConfig())
-	if err != nil {
-		t.Fatalf("NewSessionForTest: %v", err)
+func TestSessionDoesNotDeclareHumanResponses(t *testing.T) {
+	var session any = (*pi.Session)(nil)
+	if _, ok := session.(agent.PermissionResponder); ok {
+		t.Fatal("unexpected permission responder")
 	}
-	defer sess.Cancel(context.Background())
-
-	err = sess.SubmitPermission(context.Background(), "perm_nope", proto.PermissionDecisionPayload{Approved: true})
-	if !errors.Is(err, agent.ErrUnknownPermission) {
-		t.Fatalf("SubmitPermission err = %v, want ErrUnknownPermission", err)
-	}
-	err = sess.SubmitPromptForUserChoice(context.Background(), "ask_nope", proto.PromptForUserChoiceDecisionPayload{})
-	if !errors.Is(err, agent.ErrUnknownAsk) {
-		t.Fatalf("SubmitPromptForUserChoice err = %v, want ErrUnknownAsk", err)
+	if _, ok := session.(agent.UserChoiceResponder); ok {
+		t.Fatal("unexpected user-choice responder")
 	}
 }
 

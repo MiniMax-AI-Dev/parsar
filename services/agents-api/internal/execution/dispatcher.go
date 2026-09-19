@@ -28,6 +28,7 @@ type DaemonConfig struct {
 }
 
 type Dispatcher struct {
+	Policy
 	Store    *store.Store
 	Registry *gateway.Registry
 	// Options resolves transient engine credentials; they are never stored here.
@@ -64,7 +65,7 @@ func (d *Dispatcher) Run(ctx context.Context, tenantID, sessionID, turnID string
 	if json.Unmarshal(session.Configuration, &snapshot) != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
 		return store.Turn{}, store.ErrInvalidInput
 	}
-	caps, err := engineCapabilities(peer, session.Engine, snapshot)
+	caps, err := d.engineCapabilities(peer, session.Engine, snapshot)
 	if err != nil {
 		return store.Turn{}, err
 	}

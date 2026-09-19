@@ -32,13 +32,13 @@ func TestMCPPublicBearerPolicyIsIndependentOfRuntimeCapabilities(t *testing.T) {
 			snapshot, servers, caps := mcpSupportFixture(t)
 			raw, _ := json.Marshal(snapshot)
 			allowed := engine == "codex" || engine == "claude_sdk"
-			if err := ValidateSessionConfiguration(engine, raw); (err == nil) != allowed {
+			if err := (Policy{}).ValidateSessionConfiguration(engine, raw); (err == nil) != allowed {
 				t.Fatal("creation bypassed public credential policy", err)
 			}
-			if canAdmitInputs(engine, raw) != allowed {
+			if (Policy{}).canAdmitInputs(engine, raw) != allowed {
 				t.Fatal("later input bypassed public credential policy")
 			}
-			if _, err := mcpExecutionCredentials(engine, snapshot, servers, caps); (err == nil) != allowed {
+			if _, err := (Policy{}).mcpExecutionCredentials(engine, snapshot, servers, caps); (err == nil) != allowed {
 				t.Fatal("runtime capabilities widened public admission", err)
 			}
 			request, err := (&Dispatcher{}).executionRequest(t.Context(), store.Session{Engine: engine}, snapshot, caps, store.SessionExecutionBinding{})
@@ -90,7 +90,7 @@ func TestMCPExecutionChecksRequireVerifiedCapabilityCombinations(t *testing.T) {
 					snapshot.Environment = nil
 				}
 				allowed := missing == "" || placement == "none" && (missing == "preparation" || missing == "remote-mcp" || missing == "remote-bearer")
-				selected, err := mcpExecutionCredentials("codex", snapshot, servers, caps)
+				selected, err := (Policy{}).mcpExecutionCredentials("codex", snapshot, servers, caps)
 				if (err == nil) != allowed || allowed && len(selected) != 1 {
 					t.Fatal("incorrect combined MCP capability decision", err)
 				}
@@ -123,7 +123,7 @@ func TestMCPAnonymousExecutionPreservesFrozenDecision(t *testing.T) {
 				}
 				raw, _ := json.Marshal(snapshot)
 				allowed := mode != "invalid binding"
-				if err := ValidateSessionConfiguration(engine, raw); (err == nil) != allowed || canAdmitInputs(engine, raw) != allowed {
+				if err := (Policy{}).ValidateSessionConfiguration(engine, raw); (err == nil) != allowed || (Policy{}).canAdmitInputs(engine, raw) != allowed {
 					t.Fatal("anonymous binding validation changed", err)
 				}
 				request, err := (&Dispatcher{}).executionRequest(t.Context(), store.Session{Engine: engine}, snapshot, caps, store.SessionExecutionBinding{})

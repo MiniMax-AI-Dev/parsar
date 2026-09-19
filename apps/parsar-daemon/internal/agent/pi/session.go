@@ -147,14 +147,6 @@ func (s *Session) Cancel(context.Context) error {
 	return nil
 }
 
-func (s *Session) SubmitPermission(context.Context, string, proto.PermissionDecisionPayload) error {
-	return agent.ErrUnknownPermission
-}
-
-func (s *Session) SubmitPromptForUserChoice(context.Context, string, proto.PromptForUserChoiceDecisionPayload) error {
-	return agent.ErrUnknownAsk
-}
-
 func (s *Session) run(stdout io.Reader) {
 	defer s.cleanup()
 	defer s.closeOut()
