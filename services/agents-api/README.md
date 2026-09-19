@@ -227,7 +227,7 @@ public removal: Session/history reads and new input become unavailable. Active
 work receives a cancellation request; existing streams close on observing removal.
 Already claimed work may still complete. Creation keys stay reserved; deletion
 never affects other Sessions, saved Agents or their shared device. Internal records
-are retained for execution settlement. Managed Docker deletion separately revokes
+are retained for execution settlement. Managed Docker/E2B deletion separately revokes
 authority and reclaims owned compute/workspace/history; caller-managed compute
 is not reclaimed by this service. Local repeated deletion returns 404 and creation-key reuse returns
 409; exact hosted errors and overlapping stream timing are unverified.
@@ -244,14 +244,18 @@ Non-text message input, Subagents, Environment templates and populated
 installation metadata remain unsupported. Saving optional Agent configuration does not make
 it executable. Unsupported requests fail explicitly. `/healthz` reports liveness only.
 
-## Managed Docker-hosted execution
+## Managed hosted execution
 
-The basic Codex `openai_hosted` profile is an explicit operator opt-in. Follow the
-[Runtime image and service configuration](deploy/codex/README.md#standalone-operator-configuration).
+The basic `openai_hosted` profiles for Codex, Claude Code and MiniMax Code require
+explicit operator configuration. Select the qualified native image using the
+[engine profile guides](../../contracts/agents-api/README.md#public-engine-profiles),
+then follow the [Docker setup](deploy/codex/README.md#standalone-operator-configuration)
+or [E2B template/provider setup](deploy/e2b/README.md).
 Core remains independently deployed with its own database. Public idle and initial
 text Sessions share the existing preparation, execution, Files and recovery paths.
 Networking defaults to enabled; disabled is also supported. Restricted domains,
-templates, populated startup installations and other hosted engines remain gaps.
+templates and populated startup installations remain gaps. Additional harnesses
+require separate integration and qualification.
 Connected describes the authenticated Runtime connection, not native readiness.
 Exact hosted failure/expiry semantics remain unverified.
 

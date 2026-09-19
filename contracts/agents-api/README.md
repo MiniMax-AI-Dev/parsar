@@ -371,7 +371,7 @@ including further deployment qualification; this inventory describes merged beha
 | Execution ownership | Immutable Session engine/device, durable input receipts and database writer fencing; uncertain claimed work fails on restart, without blind replay |
 | Files and Artifacts | Bounded Environment listing and inline/file_id copies into qualified V1 workspaces; source-file lifecycle and immutable output capture/download/deletion; [Files limits](environment-files.md), [source limits](source-files.md) |
 | Clients | Fixed Python SDK 3.13.0 and official Go SDK v3.61.0; raw HTTP and real provider acceptance supplement controlled tests |
-| Release and product | Registry publication and Parsar cutover remain open; basic Docker provisioning is operator opt-in; business Team orchestration is deferred |
+| Release and product | Registry publication and Parsar cutover remain open; basic Docker/E2B provisioning is operator opt-in; business Team orchestration is deferred |
 
 ### Public engine profiles
 
@@ -383,22 +383,25 @@ operation and placement; native support is not public admission by itself.
 
 | Engine | Qualified placements and limits |
 | --- | --- |
-| `codex` (default) | `none`, the bounded official `self_hosted` path and Docker `openai_hosted`; public functions with ordered text/image results; service-origin HTTP MCP on `none`/`self_hosted`, not hosted; supported verbosity follows the native policy below |
-| `claude_sdk` | `none` and Docker `openai_hosted`; medium verbosity, object-root function schemas and text-only function results; anonymous/static-bearer HTTP MCP with either required value on `none`; hosted HTTP MCP remains unsupported |
-| `mcode` | `none` text and Docker `openai_hosted` workspace execution; medium verbosity; public functions/MCP, image input and complete public usage breakdown remain unsupported |
+| `codex` (default) | `none`, the bounded official `self_hosted` path and Docker/E2B `openai_hosted`; public functions with ordered text/image results; service-origin HTTP MCP on `none`/`self_hosted`, not hosted; supported verbosity follows the native policy below |
+| `claude_sdk` | `none` and Docker/E2B `openai_hosted`; medium verbosity, object-root function schemas and text-only function results; anonymous/static-bearer HTTP MCP with either required value on `none`; hosted HTTP MCP remains unsupported |
+| `mcode` | `none` text and Docker/E2B `openai_hosted` workspace execution; medium verbosity; public functions/MCP, image input and complete public usage breakdown remain unsupported |
 
-All three hosted profiles reuse the [Docker lifecycle](environments.md#basic-public-docker-hosted-profile),
+All three hosted profiles reuse the [Docker](environments.md#basic-public-docker-hosted-profile)
+or [E2B](environments.md#basic-public-e2b-hosted-profile) provider lifecycle,
 workspace Files/Artifacts, cancellation and recovery queries, with engine-specific
-native isolation. Configuration and immutable Runtime images require explicit
+native isolation. Configuration and immutable Runtime images/templates require explicit
 operator setup: [Codex](../../services/agents-api/deploy/codex/README.md),
 [Claude Code](../../services/agents-api/deploy/claude/README.md), and
-[MiniMax Code](../../services/agents-api/deploy/mcode/README.md).
+[MiniMax Code](../../services/agents-api/deploy/mcode/README.md). The
+[E2B guide](../../services/agents-api/deploy/e2b/README.md) packages those qualified
+images as pinned templates.
 Populated startup installations, restricted domains, templates and hosted public
 HTTP MCP remain outside these accepted profiles. MiniMax's private MCP tool bridge
 is internal transport, not public MCP support.
 
 The [Codex self-hosted profile](environments.md) remains distinct from managed
-Docker and from future user-managed Runtime enrollment. Product `claude_code`
+Docker/E2B and from future user-managed Runtime enrollment. Product `claude_code`
 is likewise a separate integration from the API's `claude_sdk` engine key.
 Unsupported configurations fail before Session creation; unsupported results fail
 before a batch write. Native capability claims cannot replace service profile
