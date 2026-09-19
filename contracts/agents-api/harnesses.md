@@ -8,6 +8,9 @@ means implementing its observable semantics. Harnesses do not need identical
 feature sets. Optional native limitations are separate capability work and do not
 block completion of otherwise qualified onboarding.
 
+For implementation steps and interface obligations, see
+[Add a native harness](harness-onboarding.md).
+
 ## Integration surface
 
 1. Implement the existing daemon `agent.Factory`/`Session` and, for prepared

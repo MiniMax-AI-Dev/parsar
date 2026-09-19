@@ -2,7 +2,6 @@ package mcode
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -36,6 +35,9 @@ type Session struct {
 	questions      map[string]pendingQuestion
 	exitErr        error
 	nextID         int
+	responses      map[string]chan rpcFrame
+	steeringReady  bool
+	steeringTurn   string
 	sequence       uint64
 	active         bool
 	content        strings.Builder
@@ -60,11 +62,11 @@ func newSession(ctx context.Context, req proto.PromptRequestPayload, out chan<- 
 	if err != nil {
 		return nil, err
 	}
-	process, err := clirunner.Start(clirunner.StartOptions{Parent: ctx, Binary: binary, Args: []string{"acp"}, Dir: opts.Dir, Env: opts.Env, NeedStdin: true})
+	process, err := clirunner.Start(clirunner.StartOptions{Parent: ctx, Binary: binary, Args: []string{"acp"}, Dir: opts.Dir, Env: opts.Env, NeedStdin: true, OwnProcessGroup: req.StrictResume})
 	if err != nil {
 		return nil, err
 	}
-	s := &Session{ctx: ctx, req: req, opts: opts, process: process, out: out, frames: make(chan rpcFrame, 32), exited: make(chan struct{}), finished: make(chan struct{}), permissions: map[string]pendingPermission{}, questions: map[string]pendingQuestion{}, tools: map[string]toolUpdate{}, completedTools: map[string]bool{}}
+	s := &Session{ctx: ctx, req: req, opts: opts, process: process, out: out, frames: make(chan rpcFrame, 32), exited: make(chan struct{}), finished: make(chan struct{}), responses: map[string]chan rpcFrame{}, permissions: map[string]pendingPermission{}, questions: map[string]pendingQuestion{}, tools: map[string]toolUpdate{}, completedTools: map[string]bool{}}
 	go func() { _, _ = io.Copy(io.Discard, process.Stderr) }()
 	go s.read()
 	go s.run()
@@ -83,6 +85,18 @@ func (s *Session) read() {
 			readErr = fmt.Errorf("mcode: malformed ACP response")
 			s.process.Cancel()
 			break
+		}
+		if frame.Method == "" {
+			s.mu.Lock()
+			response := s.responses[string(frame.ID)]
+			s.mu.Unlock()
+			if response != nil {
+				select {
+				case response <- frame:
+				default:
+				}
+				continue
+			}
 		}
 		select {
 		case s.frames <- frame:
@@ -106,6 +120,9 @@ func (s *Session) run() {
 	defer close(s.out)
 	defer close(s.finished)
 	err := s.execute()
+	s.mu.Lock()
+	s.steeringReady = false
+	s.mu.Unlock()
 	if err != nil {
 		s.process.Cancel()
 		s.emit(proto.TypeError, proto.ErrorPayload{Error: err.Error()})
@@ -161,7 +178,11 @@ func (s *Session) execute() error {
 	if err != nil {
 		return err
 	}
-	for _, config := range []struct{ key, value string }{{"model", model}, {"permissionMode", s.opts.Mode}} {
+	settings := []struct{ key, value string }{{"model", model}}
+	if !s.req.StrictResume {
+		settings = append(settings, struct{ key, value string }{"permissionMode", s.opts.Mode})
+	}
+	for _, config := range settings {
 		if err := s.call("session/set_config_option", map[string]any{"sessionId": session.SessionID, "configId": config.key, "value": config.value}, nil, false); err != nil {
 			return err
 		}
@@ -170,8 +191,11 @@ func (s *Session) execute() error {
 	var result struct {
 		StopReason string `json:"stopReason"`
 	}
-	err = s.call("session/prompt", map[string]any{"sessionId": session.SessionID, "prompt": []map[string]string{{"type": "text", "text": s.req.Prompt}}}, &result, true)
+	err = s.call("session/prompt", map[string]any{"sessionId": session.SessionID, "prompt": promptContent(s.req.Prompt, s.req.StrictResume)}, &result, true)
 	s.active = false
+	s.mu.Lock()
+	s.steeringReady = false
+	s.mu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -209,13 +233,13 @@ func advertisedModel(options []configOption, model string) (string, error) {
 }
 
 func (s *Session) call(method string, params any, result any, prompt bool) error {
-	s.nextID++
-	id := json.RawMessage(strconv.Itoa(s.nextID))
+	id, _ := s.reserveResponse()
+	s.removeResponse(id)
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
-	if err := s.write(rpcFrame{JSONRPC: "2.0", ID: id, Method: method, Params: raw}); err != nil {
+	if err := s.write(rpcFrame{JSONRPC: "2.0", ID: json.RawMessage(id), Method: method, Params: raw}); err != nil {
 		return err
 	}
 	ctx := s.process.Context()
@@ -239,7 +263,7 @@ func (s *Session) call(method string, params any, result any, prompt bool) error
 				}
 				continue
 			}
-			if !bytes.Equal(frame.ID, id) {
+			if string(frame.ID) != id {
 				continue
 			}
 			if frame.Error != nil {
@@ -272,9 +296,22 @@ func (s *Session) emit(kind string, payload any) {
 	}
 }
 
-func (s *Session) Cancel(context.Context) error {
+func (s *Session) Cancel(ctx context.Context) error {
 	s.process.Cancel()
-	return nil
+	if !s.req.StrictResume {
+		return nil
+	}
+	select {
+	case <-s.exited:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case <-s.finished:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *Session) SubmitPermission(_ context.Context, id string, decision proto.PermissionDecisionPayload) error {
@@ -300,4 +337,19 @@ func (s *Session) SubmitPermission(_ context.Context, id string, decision proto.
 	}
 	delete(s.permissions, id)
 	return nil
+}
+
+func (s *Session) reserveResponse() (string, chan rpcFrame) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.nextID++
+	id := strconv.Itoa(s.nextID)
+	reply := make(chan rpcFrame, 1)
+	s.responses[id] = reply
+	return id, reply
+}
+func (s *Session) removeResponse(id string) {
+	s.mu.Lock()
+	delete(s.responses, id)
+	s.mu.Unlock()
 }

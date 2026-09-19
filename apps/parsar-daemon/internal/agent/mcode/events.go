@@ -31,6 +31,9 @@ func (s *Session) handle(frame rpcFrame) error {
 	if event.SessionID != s.sessionID {
 		return nil
 	}
+	s.mu.Lock()
+	s.steeringReady = true
+	s.mu.Unlock()
 	switch event.Update.Kind {
 	case "agent_message_chunk":
 		if event.Update.Content.Type != "text" {

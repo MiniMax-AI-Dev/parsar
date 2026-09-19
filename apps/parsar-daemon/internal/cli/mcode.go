@@ -21,6 +21,15 @@ func discoverMCode(rc *runContext, check func(context.Context, string) (string, 
 		return result
 	}
 	result.Available, result.Version = true, version
+	if mcode.SupportsExecution(version) {
+		result.Capabilities.Steering = true
+		result.Capabilities.DurableTurns = true
+		result.Capabilities.DurableInputReceipts = true
+		result.Capabilities.ExecutionControls = true
+		result.Capabilities.ToolObservations = true
+		result.Capabilities.SubagentControl = true
+		result.Capabilities.EnvironmentNone = true
+	}
 	fmt.Fprintf(rc.stdout, "mcode preflight ok (%s)\n", version)
 	return result
 }
