@@ -33,6 +33,10 @@ func (info RuntimeInfo) SupportsHTTPMCPBearer() bool {
 	return info.SupportsHTTPMCP() && slices.Contains(info.Features, "mcp_http_bearer_auth")
 }
 
+func (info RuntimeInfo) SupportsHTTPMCPRequired() bool {
+	return info.SupportsHTTPMCP() && slices.Contains(info.Features, "mcp_http_required")
+}
+
 func (info RuntimeInfo) supportsWorkspace() bool {
 	return slices.Contains(info.Features, "workspace_tools")
 }

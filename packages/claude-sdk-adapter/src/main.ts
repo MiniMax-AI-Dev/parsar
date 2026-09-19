@@ -4,7 +4,7 @@ import { Inputs } from "./inputs.js";
 import { FunctionBridge } from "./function_bridge.js";
 import { createInterface } from "node:readline";
 import { execute, type Event } from "./adapter.js";
-import { parseRequest, preparedPrompt } from "./request.js";
+import { immediatePrompt, parseRequest, preparedPrompt } from "./request.js";
 
 const abort = new AbortController();
 const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
@@ -29,7 +29,7 @@ try {
   const functions = new FunctionBridge(output);
   const reads = new WorkspaceReads(output, abort);
   const directories = new WorkspaceDirectories(output, abort);
-  const prompts = new Inputs(request.type === "start" ? request.prompt : undefined);
+  const prompts = new Inputs(immediatePrompt(request));
   const incoming = (async () => {
     try {
       for await (const line of { [Symbol.asyncIterator]: () => input }) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -132,13 +133,13 @@ func TestClaudeSDKMCPFeatureDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv(claudeSDKNodeEnv, node)
-	for _, features := range [][]string{nil, {"mcp_http_tools"}, {"mcp_http_bearer_auth"}, {"mcp_http_tools", "mcp_http_bearer_auth"}} {
+	for _, features := range [][]string{nil, {"mcp_http_tools"}, {"mcp_http_bearer_auth"}, {"mcp_http_tools", "mcp_http_bearer_auth"}, {"mcp_http_required"}, {"mcp_http_tools", "mcp_http_required"}} {
 		out := discoverClaudeSDK(&runContext{stdout: &strings.Builder{}, stderr: &strings.Builder{}}, "default", func(context.Context, claudesdk.Config) (claudesdk.RuntimeInfo, error) {
 			info := claudesdk.RuntimeInfo{SDK: "0.3.269", Native: "2.1.269 (Claude Code)", Features: features}
 			return info, nil
 		})
 		supported := len(features) > 0 && features[0] == "mcp_http_tools"
-		if out == nil || !out.Info.Available || out.Info.Capabilities.MCPHTTPTools != supported || out.Info.Capabilities.MCPHTTPBearerAuth != (len(features) == 2) || out.Info.Capabilities.MCPHTTPRequired {
+		if out == nil || !out.Info.Available || out.Info.Capabilities.MCPHTTPTools != supported || out.Info.Capabilities.MCPHTTPBearerAuth != (supported && slices.Contains(features, "mcp_http_bearer_auth")) || out.Info.Capabilities.MCPHTTPRequired != (supported && slices.Contains(features, "mcp_http_required")) {
 			t.Fatal("MCP feature discovery widened the runtime profile")
 		}
 	}

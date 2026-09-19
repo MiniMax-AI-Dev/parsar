@@ -30,7 +30,7 @@ func TestClaudeSessionConfigurationAdmission(t *testing.T) {
 				{"MCP null", `,"tools":[` + strings.TrimSuffix(publicMCP, "}") + `,"allowed_tools":null}]`, true},
 				{"MCP empty", `,"tools":[` + strings.TrimSuffix(publicMCP, "}") + `,"allowed_tools":[]}]`, true},
 				{"MCP selected", `,"tools":[` + strings.TrimSuffix(publicMCP, "}") + `,"allowed_tools":["lookup.v1"]}]`, true},
-				{"MCP required", `,"tools":[` + strings.TrimSuffix(publicMCP, "}") + `,"required":true}]`, false},
+				{"MCP required", `,"tools":[` + strings.TrimSuffix(publicMCP, "}") + `,"required":true}]`, true},
 				{"MCP reserved label", `,"tools":[` + strings.Replace(publicMCP, `"records"`, `"functions"`, 1) + `]`, false},
 				{"MCP invalid label", `,"tools":[` + strings.Replace(publicMCP, `"records"`, `"records.v1"`, 1) + `]`, false},
 				{"MCP wildcard name", `,"tools":[` + strings.TrimSuffix(publicMCP, "}") + `,"allowed_tools":["*"]}]`, false},

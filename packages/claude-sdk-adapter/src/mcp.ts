@@ -4,6 +4,7 @@ export type HTTPServer = {
   server_label: string;
   server_url: string;
   allowed_tools: string[] | null;
+  required?: boolean;
   bearer_token_env_var?: string;
 };
 export type ToolIdentity = { server: string; name: string };
@@ -21,7 +22,8 @@ export function parseHTTPServers(value: unknown): HTTPServer[] | undefined {
   const references = new Set<string>();
   for (const server of value) {
     if (!server || typeof server !== "object" ||
-        Object.keys(server).some(key => !["server_label", "server_url", "allowed_tools", "bearer_token_env_var"].includes(key)) ||
+        Object.keys(server).some(key => !["server_label", "server_url", "allowed_tools", "bearer_token_env_var", "required"].includes(key)) ||
+        (server.required !== undefined && typeof server.required !== "boolean") ||
         typeof server.server_label !== "string" || !/^[a-zA-Z0-9_-]+$/.test(server.server_label) ||
         server.server_label === "functions" || labels.has(server.server_label) ||
         typeof server.server_url !== "string" ||
@@ -122,6 +124,15 @@ export class MCPProfile {
     this.sessionID = sessionID;
     this.admitted = true;
     this.release(true);
+  }
+
+  verifyRequired(statuses: McpServerStatus[]): void {
+    for (const server of this.declarations.filter(server => server.required)) {
+      const matches = statuses.filter(status => status.name === server.server_label);
+      if (matches.length !== 1 || matches[0].status !== "connected") {
+        throw new Error("required native MCP server unavailable");
+      }
+    }
   }
 
   close(): void { this.admitted = false; this.release(false); }

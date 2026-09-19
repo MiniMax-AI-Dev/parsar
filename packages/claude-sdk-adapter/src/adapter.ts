@@ -11,7 +11,7 @@ import { MCPProfile } from "./mcp.js";
 import { MCPObserver, type MCPEvent } from "./mcp_observer.js";
 import { CommandObserver, type CommandEvent } from "./command_observer.js";
 import { WorkspaceProfile } from "./workspace.js";
-import type { Prepare, Start } from "./request.js";
+import { immediatePrompt, type Prepare, type Start } from "./request.js";
 import { recoverSession } from "./recovery.js";
 export { parseStart, type Start } from "./request.js";
 
@@ -29,7 +29,7 @@ export type Event =
   | { type: "result"; session_id: string; text: string }
   | { type: "error"; code: "invalid_request" | "history_unavailable" | "execution_failed" | "cancelled" };
 
-export async function execute(request: Start | Prepare, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit), inputs = new Inputs(request.type === "start" ? request.prompt : undefined), reads = new WorkspaceReads(emit, abort), directories = new WorkspaceDirectories(emit, abort)): Promise<void> {
+export async function execute(request: Start | Prepare, emit: (event: Event) => Promise<void>, abort: AbortController, functions = new FunctionBridge(emit), inputs = new Inputs(immediatePrompt(request)), reads = new WorkspaceReads(emit, abort), directories = new WorkspaceDirectories(emit, abort)): Promise<void> {
   const definitions = (request.functions ?? []).map(tool => ({ name: tool.name, description: tool.description, inputSchema: tool.parameters }));
   const names = definitions.map(tool => `mcp__functions__${tool.name}`);
   const workspace = request.workspace === undefined ? undefined : new WorkspaceProfile(request.cwd, request.workspace, names);
@@ -101,6 +101,15 @@ export async function execute(request: Start | Prepare, emit: (event: Event) => 
       reads.bind(stream, request.cwd);
       if (process.platform === "linux") await directories.bind(request.cwd);
       await emit({ type: "prepared" });
+    } else if (profile) {
+      if (inputs.hasInput) throw new Error("MCP input released before initialization");
+      warm = await startup({ options, initializeTimeoutMs: 15000 });
+      stream = warm.query(inputs);
+      const initialized = await stream.initializationResult();
+      if (initialized.hooks_applied !== true || children.length !== 1) throw new Error("MCP initialization unavailable");
+      if (request.mcp_http_servers?.some(server => server.required)) profile.verifyRequired(await stream.mcpServerStatus());
+      if (abort.signal.aborted || !nativeAlive) throw new Error("MCP initialization interrupted");
+      inputs.release(request.prompt);
     } else stream = query({ prompt: inputs, options });
     for await (const message of stream) {
       await functions.consume(message, nativeID);

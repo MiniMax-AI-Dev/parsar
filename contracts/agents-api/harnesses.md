@@ -60,7 +60,7 @@ syntactically or everything either upstream harness can theoretically perform.
 | Public functions in `none` | Qualified | Qualified; object-root schemas and text results |
 | Public functions alongside hosted workspace tools | Qualified | Qualified; object-root schemas and text results |
 | HTTP MCP and static-bearer Vault credentials in `none` | Qualified | Qualified subset |
-| Required MCP initialization | Qualified | Gap; currently rejected |
+| Required MCP initialization | Qualified | Qualified on `none`; native readiness before initial input |
 | Hosted HTTP MCP | Gap | Gap |
 | Function image results | Supported subset | Gap; currently rejected |
 | Non-default verbosity | Native/model-dependent support | No equivalent qualified; medium only |

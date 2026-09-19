@@ -14,22 +14,26 @@ import (
 )
 
 func TestClaudeMCPWaitsForCapableRuntime(t *testing.T) {
-	for _, authenticated := range []bool{false, true} {
+	for _, requirement := range []string{"anonymous", "bearer", "required"} {
+		authenticated, required := requirement == "bearer", requirement == "required"
 		for _, prebound := range []bool{false, true} {
-			t.Run(fmt.Sprintf("bearer=%t/bound=%t", authenticated, prebound), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s/bound=%t", requirement, prebound), func(t *testing.T) {
 				h := newFunctionHarness(t)
 				configuration, token := mcpWorkerConfiguration, ""
 				if authenticated {
 					configuration, token = mcpBearerWorkerConfiguration(t, h)
 				}
+				if required {
+					configuration = strings.Replace(configuration, `"required":false`, `"required":true`, 1)
+				}
 				claudeSession(t, h, configuration, prebound)
-				// An older bundle may support anonymous MCP but not bearer authentication.
-				caps := proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, DurableInputReceipts: true, ExecutionControls: true, EnvironmentNone: true, SubagentControl: true, ToolObservations: true, MCPHTTPTools: authenticated}
+				// Base MCP support does not imply authentication or required initialization.
+				caps := proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, DurableInputReceipts: true, ExecutionControls: true, EnvironmentNone: true, SubagentControl: true, ToolObservations: true, MCPHTTPTools: authenticated || required}
 				h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "claude_sdk", Available: true, Capabilities: caps}}})
 				awaitDaemonRemoteCondition(t, t.Context(), 3*time.Second, "Claude MCP heartbeat", func() bool {
 					peer, _ := h.registry.LookupDevice(h.device.ID)
 					info, found, known := peer.AgentKindStatus("claude_sdk")
-					return known && found && info.Capabilities.MCPHTTPTools == authenticated && !info.Capabilities.MCPHTTPBearerAuth
+					return known && found && info.Capabilities.MCPHTTPTools == (authenticated || required) && !info.Capabilities.MCPHTTPBearerAuth && !info.Capabilities.MCPHTTPRequired
 				})
 				input := h.message("start", "Use declared tools only")
 				if prebound {
@@ -64,13 +68,14 @@ func TestClaudeMCPWaitsForCapableRuntime(t *testing.T) {
 					}
 				}
 				caps.MCPHTTPTools, caps.MCPHTTPBearerAuth = true, authenticated
+				caps.MCPHTTPRequired = required
 				h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "claude_sdk", Available: true, Capabilities: caps}}})
 				var prompt proto.PromptRequestPayload
 				if h.read(proto.TypePromptRequest).DecodePayload(&prompt) != nil || prompt.AgentKind != "claude_sdk" || prompt.MCPHTTPServers == nil || len(*prompt.MCPHTTPServers) != 1 {
 					t.Fatal("missing typed MCP dispatch")
 				}
 				server := (*prompt.MCPHTTPServers)[0]
-				if server.ServerLabel != "tickets" || server.AllowedTools == nil || len(*server.AllowedTools) != 0 || server.Required || !prompt.DisableExecutionEnvironment || !prompt.DisableSubagents {
+				if server.ServerLabel != "tickets" || server.AllowedTools == nil || len(*server.AllowedTools) != 0 || server.Required != required || !prompt.DisableExecutionEnvironment || !prompt.DisableSubagents {
 					t.Fatal("MCP configuration changed during dispatch")
 				}
 				endpoint := "http://127.0.0.1:9191/mcp"
@@ -88,18 +93,21 @@ func TestClaudeMCPWaitsForCapableRuntime(t *testing.T) {
 }
 
 func TestClaudeMCPUnsupportedSnapshotRejectedBeforeClaim(t *testing.T) {
-	for _, profile := range []string{"required", "reserved label"} {
+	for _, profile := range []string{"missing required capability", "reserved label"} {
 		t.Run(profile, func(t *testing.T) {
 			h := newDispatchHarness(t)
 			configuration := mcpWorkerConfiguration
 			switch profile {
-			case "required":
+			case "missing required capability":
 				configuration = strings.Replace(configuration, `"required":false`, `"required":true`, 1)
 			case "reserved label":
 				configuration = strings.Replace(configuration, `"tickets"`, `"functions"`, 1)
 			}
 			claudeSession(t, h, configuration, true)
 			caps := proto.AgentKindCapabilities{Streaming: true, Steering: true, DurableTurns: true, DurableInputReceipts: true, ExecutionControls: true, EnvironmentNone: true, SubagentControl: true, ToolObservations: true, MCPHTTPTools: true, MCPHTTPRequired: true, MCPHTTPBearerAuth: true}
+			if profile == "missing required capability" {
+				caps.MCPHTTPRequired = false
+			}
 			h.write("", proto.TypeHeartbeat, proto.HeartbeatPayload{SupportedAgentKinds: []proto.SupportedAgentKind{{Kind: "claude_sdk", Available: true, Capabilities: caps}}})
 			deadline := time.Now().Add(3 * time.Second)
 			for {
