@@ -1938,6 +1938,10 @@ a qualified profile in `services/agents-api/internal/engine`, registration and
 an independently verified deployment. It does not add engine-name branches to
 API handlers, persistence, dispatch or scheduling.
 
+Agents Core is pre-release. Replace superseded internal interfaces and execution
+paths cleanly; do not retain version fallbacks or compatibility shims. Preserve
+the pinned official public protocol, valid data and still-used infrastructure.
+
 The small static profile catalog owns engine-specific public admission and value
 limits. Profile callbacks are pure and use existing public/protocol types; they
 cannot query business data, decrypt credentials or control native processes.
@@ -1952,7 +1956,7 @@ parity or equate accepted parameters with applied native behavior.
 Claude hosted functions compose the existing SDK function bridge with the native
 workspace sandbox. Only declared function tools and the verified native tool
 inventory are available. The bundle advertises this combination separately from
-basic workspace execution; older bundles cannot receive function preparations.
+basic workspace execution; function preparations require that verified combination.
 External hosted MCP remains unqualified. Function callbacks do not change file,
 credential, history, subagent or network authority.
 
@@ -2179,8 +2183,19 @@ status/configuration or control responses. Diagnostic projections must whitelist
 safe fields. This does not permit filtering actual model/tool output to hide a leak.
 The bounded adapter profile currently requires connected servers, reserves the
 `functions` label, accepts alphanumeric/underscore/hyphen server labels and
-alphanumeric/underscore/hyphen/dot selected tool names, and excludes required startup
-and remote environments. Public Claude static-bearer HTTPS MCP reuses the shared
+alphanumeric/underscore/hyphen/dot selected tool names, and excludes remote
+environments. Required startup is separately qualified by `mcp_http_required`.
+All HTTP MCP queries use native SDK startup and an empty input iterator to
+confirm initialization hooks. Required declarations additionally check connected
+server status before the initial prompt is released exactly once. Pending, failed,
+missing or ambiguous required status rejects before input; native startup timeouts are retained without
+an adapter retry loop. Normal system/init still verifies Session identity and the
+complete inventory before input readiness/tool authority. Optional servers retain
+their existing inventory checks without a new pre-input connection requirement.
+A Runtime must advertise the concrete required-initialization capability; there
+is no fallback to an older execution path.
+
+Public Claude static-bearer HTTPS MCP reuses the shared
 Vault attachment, frozen selection and scoped decryption path. Selection and final
 preclaim require the existing bearer capability; shared authentication dispatch
 uses capability/placement checks rather than a Codex-name restriction. Missing keys

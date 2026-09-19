@@ -17,6 +17,19 @@ import (
 
 const readyReport = `{"type":"runtime_ready","protocol":1,"node":"22.22.2","sdk":"0.3.269","mcp":"1.30.0","native":"2.1.269 (Claude Code)"}`
 
+func TestRequiredMCPNeedsQualifiedRuntime(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("PARSAR_HOME", root)
+	config := Config{Node: os.Args[0], Entrypoint: filepath.Join(root, "main.js"), StateDir: filepath.Join(root, "state"), Env: []string{
+		"GO_CLAUDE_READINESS_HELPER=1", "READINESS_MODE=ready-http-mcp", "GORACE=atexit_sleep_ms=0",
+	}}
+	req := proto.PromptRequestPayload{RunID: "run", Prompt: "hello", DisableExecutionEnvironment: true,
+		AgentOptions: map[string]any{"model": "fixture"}, MCPHTTPServers: &[]proto.MCPHTTPServer{{ServerLabel: "fixture", ServerURL: "https://example.invalid/mcp", Required: true}}}
+	if _, err := NewFactory(config)(t.Context(), req, make(chan proto.Envelope, 1)); err == nil || err.Error() != "claudesdk: packaged runtime does not support required HTTP MCP" {
+		t.Fatalf("unqualified runtime executed required MCP: %v", err)
+	}
+}
+
 func TestHTTPMCPRejectsOldPackagedRuntime(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("PARSAR_HOME", root)

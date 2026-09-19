@@ -30,7 +30,7 @@ test("invalid remote declarations and wildcard injection fail at the bridge boun
   for (const value of [null, {}, [declaration(["*"])], [{ ...declaration(null), server_label: "functions" }],
     [{ ...declaration(null), server_url: "https://user:secret@example.invalid/mcp" }],
     [{ ...declaration(null), server_url: "https://example.invalid/mcp?" }],
-    [{ ...declaration(null), required: true }], [declaration(null), declaration([])]]) {
+    [{ ...declaration(null), required: "true" }], [{ ...declaration(null), required: null }], [declaration(null), declaration([])]]) {
     assert.throws(() => parseStart(JSON.stringify({ ...start, mcp_http_servers: value })));
   }
   assert.deepEqual(parseStart(JSON.stringify({ ...start, mcp_http_servers: [declaration(null), { ...declaration([]), server_label: "empty" }] })).mcp_http_servers,

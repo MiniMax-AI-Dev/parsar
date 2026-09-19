@@ -47,7 +47,7 @@ func TestHTTPMCPDeclaration(t *testing.T) {
 				req.DisableExecutionEnvironment = false
 			}
 			start, _, err := prepare(config, req)
-			valid := mode == "unrestricted" || mode == "selected" || mode == "empty" || mode == "nil-slice" || mode == "auth"
+			valid := mode == "unrestricted" || mode == "selected" || mode == "empty" || mode == "nil-slice" || mode == "auth" || mode == "required"
 			if (err == nil) != valid {
 				t.Fatalf("unexpected admission: %v", err)
 			}
@@ -55,6 +55,9 @@ func TestHTTPMCPDeclaration(t *testing.T) {
 				return
 			}
 			raw, _ := json.Marshal(start)
+			if mode == "required" && !strings.Contains(string(raw), `"required":true`) {
+				t.Fatal("required initialization was discarded")
+			}
 			if (mode == "empty" || mode == "nil-slice") && !strings.Contains(string(raw), `"allowed_tools":[]`) {
 				t.Fatal("empty selection widened")
 			}

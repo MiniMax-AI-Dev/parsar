@@ -29,8 +29,7 @@ func validateMCP(req proto.PromptRequestPayload) error {
 		endpoint, err := url.Parse(server.ServerURL)
 		if !mcpLabel.MatchString(server.ServerLabel) || server.ServerLabel == "functions" || labels[server.ServerLabel] ||
 			err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Hostname() == "" || endpoint.User != nil ||
-			strings.ContainsAny(server.ServerURL, "?#") || endpoint.Opaque != "" ||
-			server.Required {
+			strings.ContainsAny(server.ServerURL, "?#") || endpoint.Opaque != "" {
 			return fmt.Errorf("claudesdk: unsupported HTTP MCP declaration")
 		}
 		if server.BearerToken != nil && (endpoint.Scheme != "https" || !agent.ValidMCPHTTPBearerToken(*server.BearerToken)) {
@@ -54,6 +53,7 @@ type mcpHTTPServer struct {
 	ServerLabel       string    `json:"server_label"`
 	ServerURL         string    `json:"server_url"`
 	AllowedTools      *[]string `json:"allowed_tools"`
+	Required          bool      `json:"required,omitempty"`
 	BearerTokenEnvVar string    `json:"bearer_token_env_var,omitempty"`
 }
 
@@ -64,7 +64,7 @@ func prepareMCPHTTP(declarations *[]proto.MCPHTTPServer) (*[]mcpHTTPServer, []st
 	servers := make([]mcpHTTPServer, len(*declarations))
 	var env []string
 	for i, declaration := range *declarations {
-		server := mcpHTTPServer{ServerLabel: declaration.ServerLabel, ServerURL: declaration.ServerURL}
+		server := mcpHTTPServer{ServerLabel: declaration.ServerLabel, ServerURL: declaration.ServerURL, Required: declaration.Required}
 		if declaration.AllowedTools != nil {
 			tools := append([]string{}, (*declaration.AllowedTools)...)
 			server.AllowedTools = &tools

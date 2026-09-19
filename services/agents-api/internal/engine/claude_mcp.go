@@ -15,7 +15,7 @@ var claudeMCPTool = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
 // Shared resolution still owns URL, transport and credential-binding validation.
 func validateClaudeMCP(servers []proto.MCPHTTPServer) error {
 	for _, server := range servers {
-		if !claudeMCPLabel.MatchString(server.ServerLabel) || server.ServerLabel == "functions" || server.Required || strings.ContainsAny(server.ServerURL, "?#") {
+		if !claudeMCPLabel.MatchString(server.ServerLabel) || server.ServerLabel == "functions" || strings.ContainsAny(server.ServerURL, "?#") {
 			return errors.New("The configured engine does not support this HTTP MCP declaration.")
 		}
 		if server.AllowedTools != nil {
