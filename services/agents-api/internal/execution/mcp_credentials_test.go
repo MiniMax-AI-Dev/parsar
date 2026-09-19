@@ -49,7 +49,7 @@ func TestMCPFrozenCredentialAdmission(t *testing.T) {
 			valid := mode == "implicit" || mode == "explicit" || mode == "anonymous" || mode == "self-hosted anonymous" || mode == "self-hosted implicit" || mode == "self-hosted explicit"
 			for _, engine := range []string{"codex", "claude_sdk"} {
 				supported := valid && (engine == "codex" || !strings.HasPrefix(mode, "self-hosted"))
-				if err := ValidateSessionConfiguration(engine, raw); (err == nil) != supported {
+				if err := (Policy{}).ValidateSessionConfiguration(engine, raw); (err == nil) != supported {
 					t.Fatal("frozen binding profile decision differs", engine, err)
 				}
 			}

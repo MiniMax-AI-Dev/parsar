@@ -45,7 +45,7 @@ func (d *Dispatcher) executionRequest(ctx context.Context, session store.Session
 		ObserveSubagentIdentities: snapshot.Agent.MultiAgent.Enabled,
 		DisableSubagents:          !snapshot.Agent.MultiAgent.Enabled}
 	if len(mcp) != 0 {
-		selected, err := mcpExecutionCredentials(session.Engine, snapshot, mcp, caps)
+		selected, err := d.mcpExecutionCredentials(session.Engine, snapshot, mcp, caps)
 		if err != nil {
 			return proto.PromptRequestPayload{}, err
 		}

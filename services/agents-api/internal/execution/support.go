@@ -8,21 +8,20 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/device"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
-	engineprofile "github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/engine"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
 
 // ValidateSessionConfiguration checks engine placement and configuration before persistence.
-func ValidateSessionConfiguration(engine string, configuration json.RawMessage) error {
+func (p Policy) ValidateSessionConfiguration(engine string, configuration json.RawMessage) error {
 	var snapshot Snapshot
 	if json.Unmarshal(configuration, &snapshot) != nil {
 		return store.ErrInvalidInput
 	}
-	profile, ok := engineprofile.Lookup(engine)
+	profile, ok := p.Engines.Lookup(engine)
 	if !ok || (snapshot.Environment != nil && !profile.Accepts(snapshot.Environment.Type)) {
 		return store.ErrInvalidInput
 	}
-	_, err := mcpCredentialBindings(engine, snapshot)
+	_, err := p.mcpCredentialBindings(engine, snapshot)
 	if err != nil {
 		return err
 	}
@@ -45,16 +44,16 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 	return validateProfileConfiguration(profile, snapshot)
 }
 
-func canAdmitInputs(engine string, configuration json.RawMessage) bool {
+func (p Policy) canAdmitInputs(engine string, configuration json.RawMessage) bool {
 	var snapshot Snapshot
 	if json.Unmarshal(configuration, &snapshot) != nil || snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil {
 		return false
 	}
-	return ValidateSessionConfiguration(engine, configuration) == nil
+	return p.ValidateSessionConfiguration(engine, configuration) == nil
 }
 
-func validateEngineInputs(engine string, inputs []store.Input) error {
-	profile, ok := engineprofile.Lookup(engine)
+func (p Policy) validateEngineInputs(engine string, inputs []store.Input) error {
+	profile, ok := p.Engines.Lookup(engine)
 	if !ok {
 		return store.ErrInvalidInput
 	}
@@ -63,11 +62,11 @@ func validateEngineInputs(engine string, inputs []store.Input) error {
 
 // engineCapabilities is shared by device selection and the final preclaim check.
 // Capability bits describe the adapter; supported values still depend on its profile.
-func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot) (device.KindCapabilities, error) {
+func (p Policy) engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot) (device.KindCapabilities, error) {
 	fail := func(message string) (device.KindCapabilities, error) {
 		return device.KindCapabilities{}, errors.New(message)
 	}
-	profile, ok := engineprofile.Lookup(engine)
+	profile, ok := p.Engines.Lookup(engine)
 	if !ok || (snapshot.Environment != nil && !profile.Accepts(snapshot.Environment.Type)) {
 		return fail("execution engine placement is not supported")
 	}
@@ -103,7 +102,7 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	if len(functions) > 0 && !caps.FunctionTools {
 		return fail("device must advertise function_tools")
 	}
-	if _, err := mcpExecutionCredentials(engine, snapshot, mcp, caps); err != nil {
+	if _, err := p.mcpExecutionCredentials(engine, snapshot, mcp, caps); err != nil {
 		return device.KindCapabilities{}, err
 	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" && (!caps.Preparation || !caps.RemoteEnvironment) {

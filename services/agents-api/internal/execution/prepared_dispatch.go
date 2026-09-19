@@ -48,7 +48,7 @@ func (d *Dispatcher) RunEnvironmentInput(ctx context.Context, tenantID, sessionI
 	if err != nil {
 		return run, err
 	}
-	caps, err := engineCapabilities(peer, session.Engine, snapshot)
+	caps, err := d.engineCapabilities(peer, session.Engine, snapshot)
 	if err != nil {
 		return run, err
 	}

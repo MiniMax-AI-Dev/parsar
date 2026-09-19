@@ -20,7 +20,7 @@ func TestAcceptedEnginePlacements(t *testing.T) {
 			}
 			raw = append(raw, []byte(`}}`)...)
 			want := engine != "unregistered" && !(engine == "claude_sdk" && placement == "self_hosted")
-			if err := ValidateSessionConfiguration(engine, raw); (err == nil) != want {
+			if err := (Policy{}).ValidateSessionConfiguration(engine, raw); (err == nil) != want {
 				t.Fatalf("%s/%s: %v", engine, placement, err)
 			}
 		}
@@ -75,7 +75,7 @@ func TestClaudeHostedToolsRequireSeparateQualification(t *testing.T) {
 	for index, tools := range []string{`[{"type":"function","name":"f","parameters":{"type":"object"},"defer_loading":false}]`, `[{"type":"mcp","server_label":"s","transport":{"type":"http","server_url":"https://example.test/mcp"},"connection_origin":"service"}]`} {
 		for _, placement := range []string{"none", "openai_hosted"} {
 			raw := json.RawMessage(`{"agent":{"model":"fixture","tools":` + tools + `},"environment":{"type":"` + placement + `"}}`)
-			if err := ValidateSessionConfiguration("claude_sdk", raw); (err == nil) != (placement == "none" || index == 0) {
+			if err := (Policy{}).ValidateSessionConfiguration("claude_sdk", raw); (err == nil) != (placement == "none" || index == 0) {
 				t.Fatalf("%s: %v", placement, err)
 			}
 		}

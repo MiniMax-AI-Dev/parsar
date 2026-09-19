@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -352,18 +351,13 @@ func TestSessionCancelClosesOutAndEmitsTerminalFrames(t *testing.T) {
 	}
 }
 
-func TestSessionSubmitPermissionUnknownReturnsErrUnknown(t *testing.T) {
-	out := make(chan proto.Envelope, 16)
-	sess, err := opencode.NewSessionForTest(context.Background(),
-		opencodeHelperReq("run_perm", "hello", "hang"), out, opencodeHelperConfig())
-	if err != nil {
-		t.Fatalf("NewSessionForTest: %v", err)
+func TestSessionDoesNotDeclareHumanResponses(t *testing.T) {
+	var session any = (*opencode.Session)(nil)
+	if _, ok := session.(agent.PermissionResponder); ok {
+		t.Fatal("unexpected permission responder")
 	}
-	defer sess.Cancel(context.Background())
-
-	err = sess.SubmitPermission(context.Background(), "perm_nope", proto.PermissionDecisionPayload{Approved: true})
-	if !errors.Is(err, agent.ErrUnknownPermission) {
-		t.Fatalf("SubmitPermission err = %v, want ErrUnknownPermission", err)
+	if _, ok := session.(agent.UserChoiceResponder); ok {
+		t.Fatal("unexpected user-choice responder")
 	}
 }
 

@@ -84,6 +84,6 @@ func (w *Worker) ready(deviceID, engine string, snapshot Snapshot) bool {
 	if err != nil {
 		return false
 	}
-	_, err = engineCapabilities(peer, engine, snapshot)
+	_, err = w.dispatcher.engineCapabilities(peer, engine, snapshot)
 	return err == nil
 }
