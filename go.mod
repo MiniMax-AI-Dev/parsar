@@ -3,6 +3,7 @@ module github.com/MiniMax-AI-Dev/parsar
 go 1.25.13
 
 require (
+	connectrpc.com/connect v1.18.1
 	github.com/BurntSushi/toml v1.6.0
 	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.5.3
 	github.com/bwmarrin/discordgo v0.29.0

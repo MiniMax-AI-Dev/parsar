@@ -261,6 +261,24 @@ RunCommand is for initialization only. Daily execution and Files use Runtime and
 native or bounded local capabilities. Docker's lack of a native renewable lease
 does not remove service-owned hosted expiry and cleanup requirements.
 
+The E2B Provider uses an explicit `templateID:build_UUID` and the same qualified
+colocated Runtime. Its root-private bootstrap input and final atomic receipt live
+on persistent disk, never template `/run`. Running compute alone does not establish
+completed initialization. Inspect exact installation/tenant/Environment/allocation
+metadata and the matching Session/device receipt; never replay uncertain Create or
+bootstrap. Credentials stay out of provider metadata, template environment and
+command arguments. Use the existing one-hour disconnect grace with an E2B lease of
+at least two hours. Expiry, pause or lost state cannot silently recreate/resume a
+VM. Before launching daemon, trusted root bootstrap must correct E2B's writable
+program/boot paths and disable its unused passwordless privileged account; qualify
+these protections after provider finalization, not just in the source image.
+The [E2B operator guide](services/agents-api/deploy/e2b/README.md) owns packaging,
+configuration and real-cloud acceptance. The pinned official envd process schema
+and generated Go messages live together under `internal/sandbox/e2b/envdprocess`;
+regenerate with the documented tools when that source changes. Do not hand-write
+Connect framing or add SDK subprocesses to the static Core. Provider envd file and
+command access is initialization-only; public Files and execution remain on Runtime.
+
 The independent Docker Provider consumes an immutable Runtime image and retains
 one caller-owned allocation reference through partial creation and cleanup. Persist
 that reference before Create and serialize its lifecycle; resolve a lost response
