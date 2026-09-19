@@ -138,3 +138,9 @@ See [the MiniMax Code deployment guide](../../services/agents-api/deploy/mcode/R
 for setup, real-provider acceptance and limits. Hosted workspace, Files/Artifacts,
 public functions and MCP are not qualified by the text profile. Native differences
 remain separately tracked work; they do not require feature equality for onboarding.
+
+The requested MiniMax Code workspace Runtime is qualified separately in
+[MCODE-WORKSPACE-V1-001](mcode-workspace-v1.md). Its explicit scope includes
+workspace execution and shared Files/Artifacts, cancellation/recovery and independent
+Docker deployment. Text-only qualification is an intermediate milestone for that
+scope, not completion of the requested Runtime integration.

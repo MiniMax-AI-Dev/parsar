@@ -26,7 +26,12 @@ func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery, s
 		})
 	}
 	registerProductAgentKind(registry, agentCLIs.Pi, withSkillUploadServer(withCapabilityDownloads(pi.Factory, serverURL), serverURL))
-	registerProductAgentKind(registry, agentCLIs.MCode, withSkillUploadServer(withCapabilityDownloads(mcode.Factory, serverURL), serverURL))
+	if agentCLIs.MCodeWorkspace != nil {
+		registry.RegisterKind(agentCLIs.MCode, mcode.Factory)
+		registry.RegisterPreparation("mcode", true, mcode.NewPreparationFactory(*agentCLIs.MCodeWorkspace))
+	} else {
+		registerProductAgentKind(registry, agentCLIs.MCode, withSkillUploadServer(withCapabilityDownloads(mcode.Factory, serverURL), serverURL))
+	}
 	registerClaudeSDK(registry, agentCLIs.ClaudeSDK)
 }
 

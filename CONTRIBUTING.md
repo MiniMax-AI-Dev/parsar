@@ -198,13 +198,17 @@ the same transaction as its Session and creation identity when this resource is
 implemented. Keep mutable connection/registration state out of immutable
 configuration; replacement ownership must fence stale observations.
 
-The accepted delivery baseline is the shared Codex/Claude single-Agent path: Session
+The current MVP covers Codex, Claude Code and MiniMax Code through the shared
+single-Agent path: Session
 creation, environment preparation, native execution, files/artifacts, cancellation,
 reconnection/recovery queries, and standalone deployment acceptance. Select each
 bounded task from the complete board; nonblocking local improvements stay queued.
 Authentication, tenant/credential isolation, state consistency and data loss remain
-material acceptance requirements. Additional harness implementations and protocol Subagent execution
-remain queued without changing the complete pinned protocol target.
+material acceptance requirements. Optional feature equality is not required. After
+the three profiles pass merged-main validation, publish the results, limitations
+and backlog, then stop development until new user direction. Additional harness
+implementations and protocol Subagent execution remain queued without changing the
+complete pinned protocol target.
 
 The current hosted architecture is V1: Core runs independently; each Environment
 sandbox contains its daemon, selected native harness, local tools and workspace.
@@ -1982,6 +1986,21 @@ environment. Active-input application requires a native ACP receipt, cancellatio
 settles the process and output, and continuation requires the exact owned native
 history. Do not infer history IDs or qualify hosted execution from this text
 profile. See [deployment and acceptance](services/agents-api/deploy/mcode/README.md).
+
+The MiniMax workspace profile retains the published CLI and isolates native
+workspace tools behind its standard MCP client. The process and native Session
+share one private control directory; public workspace files cannot configure that
+process or become privileged project instructions. A trusted adapter-owned bridge
+runs the original six tool implementations in the upstream Linux sandbox, with no
+unsandboxed fallback. Keep native history bound to the control directory and Files/
+Artifacts bound to the public workspace. Core and shared file helpers remain engine
+neutral. This internal MCP transport does not admit public MCP configuration.
+Record published CLI and worker-source provenance separately; complete
+[workspace acceptance](contracts/agents-api/mcode-workspace-v1.md) before enabling
+hosted execution. The standalone companion uses its own npm lock; `make check`
+runs its lifecycle tests and script checks, while its exact-source Linux build and
+Docker qualification (including `native.test.mjs` under both network policies)
+are required when the companion changes.
 
 Claude hosted functions compose the existing SDK function bridge with the native
 workspace sandbox. Only declared function tools and the verified native tool

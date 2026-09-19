@@ -89,7 +89,7 @@ dev: dev-db
 
 # The full gate runs independent API tests once, after their isolated build.
 check: GO_TEST_EXCLUDE = $(if $(strip $(GO_TEST_RUN) $(GO_TEST_ARGS)),,github.com/MiniMax-AI-Dev/parsar/services/agents-api/% github.com/MiniMax-AI-Dev/parsar/packages/agents-client/%)
-check: check-go check-store check-web check-cli check-hygiene check-installer check-agents-api check-agents-executor check-agents-harness
+check: check-go check-store check-web check-cli check-hygiene check-installer check-agents-api check-agents-executor check-agents-harness check-mcode-harness
 	@printf 'Parsar harness checks passed.\n'
 
 check-setup:
@@ -131,6 +131,12 @@ check-cli: check-setup node-deps
 .PHONY: check-installer
 check-installer:
 	bash scripts/check-installer.sh
+
+.PHONY: check-mcode-harness
+check-mcode-harness:
+	node --test packages/mcode-harness/*.test.mjs
+	@for script in packages/mcode-harness/*.mjs; do node --check "$$script"; done
+	bash -n scripts/build-mcode-harness.sh scripts/build-mcode-runtime.sh
 
 check-hygiene: check-setup
 	@for polluted in .parsar logs state cache config; do \

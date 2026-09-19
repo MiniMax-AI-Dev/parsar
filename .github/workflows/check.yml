@@ -17,6 +17,7 @@ on:
       - "packages/cli/**"
       - "packages/opencode-plugin/**"
       - "packages/claude-sdk-adapter/**"
+      - "packages/mcode-harness/**"
       - "packages/eslint-config/**"
       - "packages/tsconfig/**"
       - "scripts/**"
@@ -42,6 +43,7 @@ on:
       - "packages/cli/**"
       - "packages/opencode-plugin/**"
       - "packages/claude-sdk-adapter/**"
+      - "packages/mcode-harness/**"
       - "packages/eslint-config/**"
       - "packages/tsconfig/**"
       - "scripts/**"
@@ -116,7 +118,7 @@ jobs:
               apps/web/*)
                 web=true
                 ;;
-              packages/cli/*|packages/opencode-plugin/*|packages/claude-sdk-adapter/*)
+              packages/cli/*|packages/opencode-plugin/*|packages/claude-sdk-adapter/*|packages/mcode-harness/*)
                 cli=true
                 ;;
               packages/eslint-config/*)
@@ -237,7 +239,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: make check-cli
+      - run: make check-cli check-mcode-harness
 
   check-gate:
     needs: [changes, check-go, check-store, check-web, check-cli]

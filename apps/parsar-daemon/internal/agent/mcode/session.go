@@ -62,6 +62,15 @@ func newSession(ctx context.Context, req proto.PromptRequestPayload, out chan<- 
 	if err != nil {
 		return nil, err
 	}
+	s, err := launch(ctx, req, opts, binary, out)
+	if err != nil {
+		return nil, err
+	}
+	go s.run(nil)
+	return s, nil
+}
+
+func launch(ctx context.Context, req proto.PromptRequestPayload, opts launchOptions, binary string, out chan<- proto.Envelope) (*Session, error) {
 	process, err := clirunner.Start(clirunner.StartOptions{Parent: ctx, Binary: binary, Args: []string{"acp"}, Dir: opts.Dir, Env: opts.Env, NeedStdin: true, OwnProcessGroup: req.StrictResume})
 	if err != nil {
 		return nil, err
@@ -69,7 +78,6 @@ func newSession(ctx context.Context, req proto.PromptRequestPayload, out chan<- 
 	s := &Session{ctx: ctx, req: req, opts: opts, process: process, out: out, frames: make(chan rpcFrame, 32), exited: make(chan struct{}), finished: make(chan struct{}), responses: map[string]chan rpcFrame{}, permissions: map[string]pendingPermission{}, questions: map[string]pendingQuestion{}, tools: map[string]toolUpdate{}, completedTools: map[string]bool{}}
 	go func() { _, _ = io.Copy(io.Discard, process.Stderr) }()
 	go s.read()
-	go s.run()
 	return s, nil
 }
 
@@ -116,10 +124,27 @@ func (s *Session) read() {
 	}
 }
 
-func (s *Session) run() {
-	defer close(s.out)
+func (s *Session) run(p *prepared) {
+	defer func() {
+		if s.out != nil {
+			close(s.out)
+		}
+	}()
 	defer close(s.finished)
-	err := s.execute()
+	err := s.prepareNative()
+	if p != nil {
+		err = p.awaitStart(err)
+	}
+	if err == nil {
+		err = s.executePrompt()
+	}
+	if p != nil || err != nil {
+		s.process.Cancel()
+		<-s.exited
+	}
+	if s.out == nil {
+		return
+	}
 	s.mu.Lock()
 	s.steeringReady = false
 	s.mu.Unlock()
@@ -140,7 +165,7 @@ func (s *Session) run() {
 	s.emit(proto.TypeDone, proto.DonePayload{Content: s.content.String(), Metadata: metadata})
 }
 
-func (s *Session) execute() error {
+func (s *Session) prepareNative() error {
 	var initialized struct {
 		ProtocolVersion int `json:"protocolVersion"`
 	}
@@ -181,11 +206,15 @@ func (s *Session) execute() error {
 	if err := s.call("session/set_config_option", map[string]any{"sessionId": session.SessionID, "configId": "model", "value": model}, nil, false); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *Session) executePrompt() error {
 	s.active = true
 	var result struct {
 		StopReason string `json:"stopReason"`
 	}
-	err = s.call("session/prompt", map[string]any{"sessionId": session.SessionID, "prompt": promptContent(s.req.Prompt, s.req.StrictResume)}, &result, true)
+	err := s.call("session/prompt", map[string]any{"sessionId": s.sessionID, "prompt": promptContent(s.req.Prompt, s.req.StrictResume)}, &result, true)
 	s.active = false
 	s.mu.Lock()
 	s.steeringReady = false

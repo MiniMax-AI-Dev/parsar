@@ -66,11 +66,14 @@ func (s *Session) emitTool(update toolUpdate) {
 	if update.RawInput == nil {
 		update.RawInput = previous.RawInput
 	}
+	if s.req.ObserveToolObservations {
+		started = workspaceToolObservation(previous, "before") != nil
+	}
 	if !started {
-		s.emit(proto.TypeToolCall, proto.ToolCallPayload{ID: update.ID, Name: update.Name, Stage: "before", Args: update.RawInput})
+		s.emitToolStage(update, "before")
 	}
 	if update.Status == "completed" || update.Status == "failed" {
-		s.emit(proto.TypeToolCall, proto.ToolCallPayload{ID: update.ID, Name: update.Name, Stage: "after", Result: map[string]any{"output": update.RawOutput, "status": update.Status}})
+		s.emitToolStage(update, "after")
 		delete(s.tools, update.ID)
 		s.completedTools[update.ID] = true
 	} else {

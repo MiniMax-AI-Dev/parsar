@@ -1,0 +1,28 @@
+{
+  "name": "parsar-mcode-harness",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "dependencies": {
+    "@pondwader/socks5-server": "1.0.10",
+    "@silvia-odwyer/photon-node": "0.3.4",
+    "@sinclair/typebox": "0.34.52",
+    "chalk": "5.6.2",
+    "cross-spawn": "7.0.6",
+    "diff": "8.0.4",
+    "get-east-asian-width": "1.6.0",
+    "highlight.js": "10.7.3",
+    "marked": "18.0.12",
+    "minimatch": "10.2.6",
+    "node-forge": "1.4.0",
+    "typebox": "1.1.38",
+    "unpdf": "1.8.1",
+    "zod": "3.25.76",
+    "@modelcontextprotocol/sdk": "1.30.0"
+  },
+  "scripts": {
+    "test": "node --test *.test.mjs"
+  }
+}
