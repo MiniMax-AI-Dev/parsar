@@ -12,6 +12,7 @@ import { MCPObserver, type MCPEvent } from "./mcp_observer.js";
 import { CommandObserver, type CommandEvent } from "./command_observer.js";
 import { WorkspaceProfile } from "./workspace.js";
 import type { Prepare, Start } from "./request.js";
+import { recoverSession } from "./recovery.js";
 export { parseStart, type Start } from "./request.js";
 
 export type Event =
@@ -33,6 +34,14 @@ export async function execute(request: Start | Prepare, emit: (event: Event) => 
   const commands = workspace ? new CommandObserver() : undefined;
   if (request.type === "prepare" && !workspace) throw new Error("invalid_request");
   if (workspace && ("functions" in request || "mcp_http_servers" in request)) throw new Error("invalid_request");
+  if (request.require_history && !request.resume) {
+    const recovered = await recoverSession(request.cwd);
+    if (!recovered) {
+      await emit({ type: "error", code: "history_unavailable" });
+      return;
+    }
+    request = { ...request, resume: recovered };
+  }
   if (request.resume && !await getSessionInfo(request.resume, { dir: request.cwd })) {
     await emit({ type: "error", code: "history_unavailable" });
     return;

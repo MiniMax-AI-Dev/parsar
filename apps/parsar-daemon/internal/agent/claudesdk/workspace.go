@@ -13,13 +13,16 @@ import (
 // WorkspaceConfig binds one trusted private placement. It does not create an
 // isolation boundary or authorize a public Environment. The operator must place
 // the entire factory inside the qualified outer mount/process boundary first.
-// All directories must already exist, be canonical and be mutually disjoint.
+// State directories must already exist, be canonical and be mutually disjoint.
+// PublicDirectory may name a second mount of the same workspace inode.
 type WorkspaceConfig struct {
-	Directory      string
-	HomeDir        string
-	ScratchDir     string
-	ProtectedDirs  []string
-	DependencyPath string
+	Directory       string
+	PublicDirectory string
+	NetworkAccess   string
+	HomeDir         string
+	ScratchDir      string
+	ProtectedDirs   []string
+	DependencyPath  string
 }
 
 type workspaceProfile struct {
@@ -29,6 +32,7 @@ type workspaceProfile struct {
 	ProtectedDirs  []string `json:"protected_dirs"`
 	DependencyPath string   `json:"dependency_path"`
 	EnvNames       []string `json:"env_names"`
+	NetworkAccess  string   `json:"network_access,omitempty"`
 }
 
 func prepareWorkspace(config Config, req proto.PromptRequestPayload) (*workspaceProfile, []string, error) {
@@ -38,7 +42,17 @@ func prepareWorkspace(config Config, req proto.PromptRequestPayload) (*workspace
 	if req.WorkDir != "" && req.WorkDir != config.Workspace.Directory {
 		return nil, nil, fmt.Errorf("claudesdk: work_dir conflicts with the trusted workspace binding")
 	}
+	if req.LocalEnvironment != nil && (config.Workspace.NetworkAccess == "" || req.LocalEnvironment.NetworkAccess != config.Workspace.NetworkAccess) {
+		return nil, nil, fmt.Errorf("claudesdk: local Runtime network policy mismatch")
+	}
 	return workspaceEnvironment(config)
+}
+
+func workspaceCwd(w *WorkspaceConfig) string {
+	if w.PublicDirectory != "" {
+		return w.PublicDirectory
+	}
+	return w.Directory
 }
 
 // Workspace Env is a replacement, unlike the existing none profile's overlay.
@@ -50,6 +64,16 @@ func workspaceEnvironment(config Config) (*workspaceProfile, []string, error) {
 	w := config.Workspace
 	if w == nil || !filepath.IsAbs(config.Node) || !filepath.IsAbs(config.Entrypoint) {
 		return fail()
+	}
+	if w.NetworkAccess != "" && w.NetworkAccess != "disabled" && w.NetworkAccess != "enabled" {
+		return fail()
+	}
+	if w.PublicDirectory != "" {
+		actual, err := os.Stat(w.Directory)
+		alias, aliasErr := os.Stat(w.PublicDirectory)
+		if !canonicalWorkspaceDir(w.Directory) || !canonicalWorkspaceDir(w.PublicDirectory) || err != nil || aliasErr != nil || !os.SameFile(actual, alias) {
+			return fail()
+		}
 	}
 	runtimeDir := filepath.Dir(filepath.Dir(config.Entrypoint))
 	if config.Entrypoint != filepath.Join(runtimeDir, "dist", "main.js") || !canonicalWorkspaceDir(runtimeDir) {
@@ -65,7 +89,7 @@ func workspaceEnvironment(config Config) (*workspaceProfile, []string, error) {
 			return fail()
 		}
 	}
-	roots := append([]string{w.Directory, config.StateDir, w.HomeDir, w.ScratchDir}, w.ProtectedDirs...)
+	roots := append([]string{workspaceCwd(w), config.StateDir, w.HomeDir, w.ScratchDir}, w.ProtectedDirs...)
 	for i, dir := range roots {
 		if !canonicalWorkspaceDir(dir) || pathContains(runtimeDir, dir) || pathContains(dir, runtimeDir) {
 			return fail()
@@ -111,7 +135,7 @@ func workspaceEnvironment(config Config) (*workspaceProfile, []string, error) {
 	}
 	dependencyPath := strings.Join(dependencies, string(os.PathListSeparator))
 	profile := &workspaceProfile{Home: w.HomeDir, State: config.StateDir, Scratch: w.ScratchDir,
-		ProtectedDirs: append([]string{}, w.ProtectedDirs...), DependencyPath: dependencyPath, EnvNames: []string{}}
+		ProtectedDirs: append([]string{}, w.ProtectedDirs...), DependencyPath: dependencyPath, EnvNames: []string{}, NetworkAccess: w.NetworkAccess}
 	env := []string{"PATH=" + dependencyPath, "HOME=" + w.HomeDir, "TMPDIR=" + w.ScratchDir,
 		"CLAUDE_CONFIG_DIR=" + config.StateDir, "DISABLE_TELEMETRY=1", "DISABLE_ERROR_REPORTING=1",
 		"DISABLE_AUTOUPDATER=1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1"}

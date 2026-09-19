@@ -159,3 +159,19 @@ test("workspace permissions and pre-tool hook reject outside paths and unsafe Ba
   assert.equal((await profile.canUseTool("Bash", { command: "true" }, { ...options, agentID: "child" })).behavior, "deny");
   assert.equal((await profile.canUseTool("Bash", { command: "true" }, { ...options, signal: AbortSignal.abort() })).behavior, "deny");
 });
+
+test("dedicated Runtime carries an explicit native network policy", t => {
+  const { dirs, config, request } = fixture(t);
+  for (const network_access of ["enabled", "disabled"]) {
+    const workspace = { ...config, network_access };
+    const parsed = parseStart(JSON.stringify({ ...request, workspace, require_history: true }));
+    assert.equal(parsed.require_history, true);
+    const options = new WorkspaceProfile(dirs.workspace, workspace).options;
+    assert.deepEqual(options.sandbox.network.allowedDomains, network_access === "enabled" ? ["*"] : []);
+    assert.equal(options.sandbox.enableWeakerNestedSandbox, false);
+    assert.equal(options.sandbox.allowUnsandboxedCommands, false);
+  }
+  assert.throws(() => parseStart(JSON.stringify({ ...request, workspace: { ...config, network_access: "restricted" } })), /invalid_request/);
+  const { workspace, ...none } = request;
+  assert.throws(() => parseStart(JSON.stringify({ ...none, require_history: true })), /invalid_request/);
+});

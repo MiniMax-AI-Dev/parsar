@@ -9,6 +9,7 @@ export type Workspace = {
   protected_dirs: string[];
   dependency_path: string;
   env_names: string[];
+  network_access?: "enabled" | "disabled";
 };
 
 const environmentNames = new Set([
@@ -38,7 +39,8 @@ export function parseWorkspace(value: unknown, cwd: string): Workspace | undefin
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_request");
   const config = value as Record<string, unknown>;
-  if (Object.keys(config).some(key => !["home", "state", "scratch", "protected_dirs", "dependency_path", "env_names"].includes(key)) ||
+  if (Object.keys(config).some(key => !["home", "state", "scratch", "protected_dirs", "dependency_path", "env_names", "network_access"].includes(key)) ||
+      (config.network_access !== undefined && config.network_access !== "enabled" && config.network_access !== "disabled") ||
       !Array.isArray(config.protected_dirs) || !Array.isArray(config.env_names) ||
       typeof config.dependency_path !== "string" || !config.dependency_path ||
       config.env_names.some(name => typeof name !== "string" || !environmentNames.has(name)) ||
@@ -95,7 +97,7 @@ export class WorkspaceProfile {
           envVars: [...new Set([...credentialNames, ...config.env_names])].map(name => ({ name, mode: "deny" })),
           files: protectedRoots.map(path => ({ path, mode: "deny" })),
         },
-        network: { allowedDomains: [], strictAllowlist: true, allowAllUnixSockets: false, allowLocalBinding: false },
+        network: { allowedDomains: config.network_access === "enabled" ? ["*"] : [], strictAllowlist: true, allowAllUnixSockets: false, allowLocalBinding: false },
       },
       canUseTool: this.canUseTool,
       hooks: { PreToolUse: [{ hooks: [this.beforeTool] }] },

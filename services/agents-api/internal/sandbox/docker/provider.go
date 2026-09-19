@@ -27,6 +27,7 @@ const labelPrefix = "io.parsar.agents-api."
 type Config struct {
 	InstallationID, Image, Network, Seccomp string
 	ExtraHosts                              []string
+	NestedSandbox                           bool
 }
 type Provider struct {
 	client *client.Client
@@ -135,9 +136,20 @@ func (p *Provider) Create(ctx context.Context, b sandbox.Bootstrap) (sandbox.Inf
 		}
 	}
 	limit := int64(128)
+	// A nested native sandbox must mount its own procfs. Keep sysfs secrets
+	// masked; only this qualified image profile opts out of Docker's proc masks.
+	var masked, readonly []string
+	var init *bool
+	if p.config.NestedSandbox {
+		masked = []string{"/sys/firmware", "/sys/devices/virtual/powercap"}
+		readonly = []string{}
+		enabled := true
+		init = &enabled
+	}
 	v, e := p.client.ContainerCreate(ctx, client.ContainerCreateOptions{Name: name, Image: p.config.Image,
 		Config: &container.Config{User: "1000:1000", WorkingDir: "/environment/workspace", Labels: p.labels(b.Reference), Env: []string{"PARSAR_RUNTIME_ENVIRONMENT_ID=" + b.EnvironmentID, "PARSAR_RUNTIME_SESSION_ID=" + b.SessionID, "PARSAR_RUNTIME_NETWORK_ACCESS=" + b.NetworkAccess}},
 		HostConfig: &container.HostConfig{ReadonlyRootfs: true, CapDrop: []string{"ALL"}, SecurityOpt: []string{"no-new-privileges", "seccomp=" + p.config.Seccomp, "apparmor=unconfined"}, NetworkMode: container.NetworkMode(p.config.Network), ExtraHosts: p.config.ExtraHosts,
+			MaskedPaths: masked, ReadonlyPaths: readonly, Init: init,
 			Resources: container.Resources{PidsLimit: &limit, Memory: 2 * 1024 * 1024 * 1024, NanoCPUs: 2 * 1000000000}, Tmpfs: map[string]string{"/tmp": "rw,nosuid,nodev,size=128m"},
 			Mounts: []mount.Mount{
 				{Type: mount.TypeVolume, Source: name + "-home", Target: "/home"},

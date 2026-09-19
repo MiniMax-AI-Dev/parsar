@@ -9,6 +9,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/claudesdk"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/localworkspace"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/paths"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
@@ -58,6 +59,27 @@ func discoverClaudeSDK(rc *runContext, profile string, check func(context.Contex
 		return fail(err)
 	}
 	out.Config = claudesdk.Config{Node: node, Entrypoint: entrypoint, StateDir: filepath.Join(profileDir, "runtime", "claude-sdk")}
+	if mode := os.Getenv("PARSAR_CLAUDE_SDK_WORKSPACE"); mode != "" {
+		if mode != "managed" {
+			return fail(fmt.Errorf("unsupported Claude SDK workspace profile"))
+		}
+		binding, err := localworkspace.Load()
+		if err != nil || binding == nil {
+			return fail(fmt.Errorf("Claude SDK workspace requires a dedicated local Runtime binding"))
+		}
+		root, err := paths.Root()
+		if err != nil {
+			return fail(err)
+		}
+		out.Config.Node, err = filepath.EvalSymlinks(node)
+		if err != nil {
+			return fail(err)
+		}
+		out.Config, err = claudesdk.ConfigureLocal(out.Config, root, os.Getenv("PARSAR_RUNTIME_WORKSPACE"), binding.NetworkAccess(), os.Getenv("PARSAR_RUNTIME_STAGING"))
+		if err != nil {
+			return fail(err)
+		}
+	}
 	if check == nil {
 		check = claudesdk.CheckRuntime
 	}
@@ -65,9 +87,21 @@ func discoverClaudeSDK(rc *runContext, profile string, check func(context.Contex
 	if err != nil {
 		return fail(err)
 	}
+	if out.Config.Workspace != nil {
+		if !info.SupportsLocalRuntime() {
+			return fail(fmt.Errorf("Claude SDK bundle does not support the local Runtime contract"))
+		}
+		caps := &out.Info.Capabilities
+		caps.EnvironmentNone, caps.FunctionTools = false, false
+		caps.Preparation, caps.LocalEnvironment, caps.LocalEnvironmentNetworkPolicy = true, true, true
+		caps.WorkspaceReadPreparation, caps.NativeSessionRecovery = true, true
+	}
 	out.Info.Available, out.Info.Version = true, info.SDK
 	out.Info.Capabilities.MCPHTTPTools = info.SupportsHTTPMCP()
 	out.Info.Capabilities.MCPHTTPBearerAuth = info.SupportsHTTPMCPBearer()
+	if out.Config.Workspace != nil {
+		out.Info.Capabilities.MCPHTTPTools, out.Info.Capabilities.MCPHTTPBearerAuth = false, false
+	}
 	fmt.Fprintf(rc.stdout, "Claude SDK preflight ok (SDK %s, %s)\n", info.SDK, info.Native)
 	return out
 }
@@ -83,4 +117,7 @@ func registerClaudeSDK(registry *agent.Registry, discovery *claudeSDKDiscovery) 
 		}
 	}
 	registry.RegisterKind(discovery.Info, factory)
+	if discovery.Info.Available && discovery.Info.Capabilities.LocalEnvironment {
+		registry.RegisterPreparation("claude_sdk", true, claudesdk.NewPreparationFactory(discovery.Config))
+	}
 }

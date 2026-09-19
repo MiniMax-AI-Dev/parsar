@@ -1933,11 +1933,12 @@ paths:
         recorded intent retain resolved-snapshot retry rules. These conflict policies
         are local and not verified hosted parity. Creation retries observe future
         events without replay; retry with stream=false to retrieve the Session. Non-text
-        initial input remains unsupported. Basic Codex openai_hosted creation requires
-        an explicitly configured managed provider. Idle Sessions provision automatically;
-        initial provisioning has no caller connection action. Network defaults to
-        enabled; disabled is also supported, while restricted domains and populated
-        startup installations are rejected.
+        initial input remains unsupported. Basic Codex and Claude SDK openai_hosted
+        creation requires an explicitly configured managed provider. The Claude workspace
+        profile currently rejects function and MCP tools. Idle Sessions provision
+        automatically; initial provisioning has no caller connection action. Network
+        defaults to enabled; disabled is also supported, while restricted domains
+        and populated startup installations are rejected.
       parameters:
       - description: agents=v1
         in: header

@@ -48,7 +48,7 @@ func testHandler(t *testing.T, options ...Option) (http.Handler, *recordingStore
 		t.Fatal(err)
 	}
 	s := &recordingStore{}
-	h, err := NewHandler(s, auth, "claude_code", options...)
+	h, err := NewHandler(s, auth, "codex", options...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestHTTPConfigurationAndTenantIdentity(t *testing.T) {
 	request.Header.Set("X-Tenant-ID", "untrusted-tenant")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, request)
-	if w.Code != http.StatusOK || s.tenant != tenant || s.input.Engine != "claude_code" || s.input.IdempotencyKey != "retry-key" {
+	if w.Code != http.StatusOK || s.tenant != tenant || s.input.Engine != "codex" || s.input.IdempotencyKey != "retry-key" {
 		t.Fatalf("request = %d %s; tenant=%s, engine=%s", w.Code, w.Body, s.tenant, s.input.Engine)
 	}
 	var response v1.Session
@@ -88,7 +88,7 @@ func TestHTTPRejectsUntrustedOrUnsupportedRequests(t *testing.T) {
 		{"missing beta", "Bearer test-api-key", "", "/v1/agents/sessions", valid, 400},
 		{"tenant query", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions?tenant_id=other", valid, 400},
 		{"tenant body", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"agent":`, `"tenant_id":"other","agent":`, 1), 400},
-		{"hosted environment on unqualified engine", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"none"`, `"openai_hosted"`, 1), 400},
+		{"hosted environment without managed deployment", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"none"`, `"openai_hosted"`, 1), 503},
 		{"self-hosted environment", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"none"`, `"self_hosted"`, 1), 400},
 		{"initial input", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"agent":`, `"input":"run it","agent":`, 1), 503},
 		{"stream unavailable", "Bearer test-api-key", "agents=v1", "/v1/agents/sessions", strings.Replace(valid, `"agent":`, `"stream":true,"agent":`, 1), 503},
