@@ -26,6 +26,9 @@ func testRequest(t *testing.T) proto.PromptRequestPayload {
 func helperSession(t *testing.T, scenario string, resume bool) (*Session, <-chan proto.Envelope) {
 	t.Helper()
 	req := testRequest(t)
+	if scenario == "strict-cancel" {
+		req = executionRequest(t)
+	}
 	if resume {
 		req.AgentSessionID = "native-1"
 	}
@@ -35,7 +38,7 @@ func helperSession(t *testing.T, scenario string, resume bool) (*Session, <-chan
 		t.Fatal(err)
 	}
 	binary := filepath.Join(t.TempDir(), "mcode")
-	script := "#!/bin/sh\nexec '" + strings.ReplaceAll(exe, "'", "'\\''") + "' -test.run=^TestMCodeProcess$ -- \"$@\"\n"
+	script := "#!/bin/sh\nexport PARSAR_MCODE_TEST_HELPER=" + scenario + "\nexec '" + strings.ReplaceAll(exe, "'", "'\\''") + "' -test.run=^TestMCodeProcess$ -- \"$@\"\n"
 	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -233,6 +236,25 @@ func TestMCodeProcess(t *testing.T) {
 				os.Exit(4)
 			}
 		case "session/prompt":
+			var input struct {
+				Prompt []map[string]string `json:"prompt"`
+			}
+			_ = json.Unmarshal(frame.Params, &input)
+			if (scenario == "strict-cancel" && len(input.Prompt) != 2) || (scenario != "strict-cancel" && len(input.Prompt) != 1) {
+				os.Exit(9)
+			}
+			if scenario == "steering" || scenario == "steer-rejected" || scenario == "steer-lost" || scenario == "strict-cancel" {
+				promptID = frame.ID
+				update("agent_message_chunk", map[string]any{"content": map[string]string{"type": "text", "text": "ready"}})
+				continue
+			}
+			if scenario == "many-frames" {
+				for range 100 {
+					update("agent_message_chunk", map[string]any{"content": map[string]string{"type": "text", "text": "x"}})
+				}
+				result = map[string]string{"stopReason": "end_turn"}
+				break
+			}
 			if scenario == "rpc-error" {
 				send(rpcFrame{JSONRPC: "2.0", ID: frame.ID, Error: &rpcError{Code: -32603, Message: "Fixture provider unavailable"}})
 				continue
@@ -250,6 +272,20 @@ func TestMCodeProcess(t *testing.T) {
 			}
 			update("usage_update", map[string]any{"used": 2000, "size": 64000, "cost": map[string]any{"amount": 2, "currency": "USD"}})
 			result = map[string]string{"stopReason": "end_turn"}
+		case "mcode/session/steer":
+			if scenario == "steer-lost" {
+				os.Exit(0)
+			}
+			if scenario == "steer-rejected" {
+				send(rpcFrame{JSONRPC: "2.0", ID: frame.ID, Error: &rpcError{Code: -32602, Message: "inactive"}})
+				continue
+			}
+			raw, _ := json.Marshal(map[string]string{"turnId": "native-turn", "mode": "steered"})
+			send(rpcFrame{JSONRPC: "2.0", ID: frame.ID, Result: raw})
+			update("agent_message_chunk", map[string]any{"content": map[string]string{"type": "text", "text": "-steered"}})
+			raw, _ = json.Marshal(map[string]string{"stopReason": "end_turn"})
+			send(rpcFrame{JSONRPC: "2.0", ID: promptID, Result: raw})
+			continue
 		case "":
 			if string(frame.ID) == `"permission-1"` {
 				var reply struct {

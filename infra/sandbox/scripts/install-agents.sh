@@ -10,7 +10,7 @@
 #   CLAUDE_CODE_VERSION   default: latest
 #   CODEX_VERSION         default: 0.141.0
 #   PI_VERSION            default: 0.80.6
-#   MCODE_VERSION         default: 0.3.11
+#   MCODE_VERSION         default: 0.4.12
 #
 # All installs are FAIL-LOUD: `set -e` + a `--version` sanity check after
 # each one. A silently missing CLI would only surface at run time when a
@@ -22,7 +22,7 @@ TARGETARCH="${1:?install-agents.sh: TARGETARCH required (amd64|arm64)}"
 CLAUDE_CODE_VERSION="${CLAUDE_CODE_VERSION:-}"
 CODEX_VERSION="${CODEX_VERSION:-0.141.0}"
 PI_VERSION="${PI_VERSION:-0.80.6}"
-MCODE_VERSION="${MCODE_VERSION:-0.3.11}"
+MCODE_VERSION="${MCODE_VERSION:-0.4.12}"
 
 case "$TARGETARCH" in
   amd64) CLAUDE_ARCH=linux-x64 CODEX_ARCH=x86_64-unknown-linux-musl ;;

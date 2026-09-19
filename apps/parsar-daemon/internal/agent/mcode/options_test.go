@@ -25,6 +25,7 @@ func TestOptionsRefreshManagedState(t *testing.T) {
 		t.Fatal("state override did not win")
 	}
 	req.AgentOptions["system_prompt"] = ""
+	req.AgentOptions["mode"] = "default"
 	req.AgentSessionID = "native-1"
 	refreshed, err := prepareOptions(context.Background(), req)
 	if err != nil {
@@ -44,6 +45,9 @@ func TestOptionsRefreshManagedState(t *testing.T) {
 	var cfg map[string]any
 	if json.Unmarshal(data, &cfg) != nil {
 		t.Fatal("invalid config")
+	}
+	if cfg["permissionMode"] != "default" {
+		t.Fatal("requested native permission mode was not refreshed")
 	}
 	if cfg["skills"].(map[string]any)["external"].(map[string]any)["enabled"] != false {
 		t.Fatal("external discovery enabled")

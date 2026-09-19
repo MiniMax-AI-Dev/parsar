@@ -16,13 +16,18 @@ import (
 )
 
 type launchOptions struct {
-	Dir, DataDir, Model, Mode string
-	Env                       []string
-	MCP                       []map[string]any
+	Dir, DataDir, Model string
+	Env                 []string
+	MCP                 []map[string]any
 }
 
 func prepareOptions(ctx context.Context, req proto.PromptRequestPayload) (launchOptions, error) {
 	var result launchOptions
+	if req.StrictResume {
+		if err := validateExecutionRequest(req); err != nil {
+			return result, err
+		}
+	}
 	if len(req.Attachments) > 0 {
 		return result, fmt.Errorf("mcode: ACP does not support attachments")
 	}
@@ -71,6 +76,17 @@ func prepareOptions(ctx context.Context, req proto.PromptRequestPayload) (launch
 	if result.Model == "" {
 		return result, fmt.Errorf("mcode: model is required")
 	}
+	if req.StrictResume {
+		configureTextExecution(config)
+	}
+	mode := optionString(opts, "mode")
+	if mode == "" {
+		mode = "auto"
+	}
+	if mode != "auto" && mode != "default" && mode != "bypassPermissions" {
+		return result, fmt.Errorf("mcode: unsupported permission mode")
+	}
+	config["permissionMode"] = mode
 	data, err := json.Marshal(config)
 	if err != nil {
 		return result, err
@@ -79,7 +95,10 @@ func prepareOptions(ctx context.Context, req proto.PromptRequestPayload) (launch
 		return result, err
 	}
 	result.Env = append([]string{}, os.Environ()...)
-	if raw := opts["env"]; raw != nil {
+	if req.StrictResume {
+		result.Env = executionEnvironment()
+	}
+	if raw := opts["env"]; raw != nil && !req.StrictResume {
 		env, ok := raw.(map[string]any)
 		if !ok {
 			return result, fmt.Errorf("mcode: env must be an object")
@@ -94,12 +113,8 @@ func prepareOptions(ctx context.Context, req proto.PromptRequestPayload) (launch
 	}
 	// The adapter owns the native state location, including after cold resume.
 	result.Env = append(result.Env, "MINIMAX_DATA_DIR="+result.DataDir)
-	result.Mode = optionString(opts, "mode")
-	if result.Mode == "" {
-		result.Mode = "auto"
-	}
-	if result.Mode != "auto" && result.Mode != "default" && result.Mode != "bypassPermissions" {
-		return result, fmt.Errorf("mcode: unsupported permission mode")
+	if req.StrictResume {
+		result.Env = append(result.Env, "HOME="+result.DataDir, "USERPROFILE="+result.DataDir)
 	}
 	result.MCP, err = mcpServers(opts["mcp_servers"])
 	return result, err

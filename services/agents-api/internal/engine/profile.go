@@ -50,4 +50,5 @@ func (c Catalog) Lookup(kind string) (Profile, bool) {
 var qualified = NewCatalog(map[string]Profile{
 	"codex":      codexProfile(),
 	"claude_sdk": claudeProfile(),
+	"mcode":      mcodeProfile(),
 })

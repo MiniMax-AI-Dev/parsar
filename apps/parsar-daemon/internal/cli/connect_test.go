@@ -148,7 +148,7 @@ func TestDiscoverAgentCLIsBothAvailable(t *testing.T) {
 	stdout, stderr := &strings.Builder{}, &strings.Builder{}
 	rc := &runContext{stdout: stdout, stderr: stderr}
 	got, err := discoverAgentCLIs(rc, "default", agentCLIChecks{
-		MCode: func(context.Context, string) (string, error) { return "0.3.11", nil },
+		MCode: func(context.Context, string) (string, error) { return "0.4.12", nil },
 		ClaudeCode: func(context.Context, string) (string, error) {
 			return "claude 2.0.0", nil
 		},
@@ -197,7 +197,7 @@ func TestDiscoverAgentCLIsBothAvailable(t *testing.T) {
 func TestRegisterAgentKindsPreservesDescriptors(t *testing.T) {
 	reg := agent.NewRegistry()
 	registerAgentKinds(reg, agentCLIDiscovery{
-		MCode: proto.SupportedAgentKind{Kind: "mcode", Available: true, Version: "0.3.11", Capabilities: proto.AgentKindCapabilities{Streaming: true, Permissions: true, Resume: true}},
+		MCode: proto.SupportedAgentKind{Kind: "mcode", Available: true, Version: "0.4.12", Capabilities: proto.AgentKindCapabilities{Streaming: true, Permissions: true, Resume: true}},
 		ClaudeCode: proto.SupportedAgentKind{
 			Kind:      "claude_code",
 			Available: true,

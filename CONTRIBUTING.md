@@ -1970,7 +1970,18 @@ compatibility fallback is permitted. The synthetic third-harness acceptance unde
 `services/agents-api/internal/store` exercises the actual gateway and daemon router;
 its fixture under `apps/parsar-daemon/testdata` is never a production engine.
 See [the integration guide](contracts/agents-api/harnesses.md) for contract and
-operation-specific acceptance.
+operation-specific acceptance and the [onboarding reference](contracts/agents-api/harness-onboarding.md)
+for implementation and registration steps.
+
+MiniMax Code's opt-in Agents API profile qualifies native ACP 0.4.12 for
+`environment:none` text execution. It reuses the shared lifecycle without public
+workspace, functions, MCP or native Subagents. Native configuration disables
+file/shell authority and external
+capability discovery; the child receives a private Session home and a restricted
+environment. Active-input application requires a native ACP receipt, cancellation
+settles the process and output, and continuation requires the exact owned native
+history. Do not infer history IDs or qualify hosted execution from this text
+profile. See [deployment and acceptance](services/agents-api/deploy/mcode/README.md).
 
 Claude hosted functions compose the existing SDK function bridge with the native
 workspace sandbox. Only declared function tools and the verified native tool
