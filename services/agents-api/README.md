@@ -4,9 +4,9 @@ Independent execution service implementing part of the pinned OpenAI Agents API.
 It owns reusable Agents, durable Sessions/Turns/Items, live events, function actions
 and a daemon execution worker. Public execution supports qualified Codex, Claude Code
 (`claude_sdk`) and MiniMax Code (`mcode`) profiles through the shared Runtime contract.
-The three-harness Linux amd64 Docker V1 MVP is accepted; E2B qualification is a
-separate active batch and is not certified by the Docker results. It builds and
-runs with its own PostgreSQL database and credentials;
+The three-harness Linux amd64 Docker V1 MVP and the separate
+[E2B V1 deployment](deploy/e2b/README.md) qualification are accepted.
+It builds and runs with its own PostgreSQL database and credentials;
 Parsar's product service, frontend and database are not required.
 
 Use this guide to build, configure and connect a client. The
@@ -201,7 +201,7 @@ resources); general Files routes do not. Supported operations include:
   configuration or a saved `agent_id`, field replacements, optional initial text
   and ordinary or streaming responses.
 - Session event submission and live streaming, Turn retrieve/list and Items list.
-- Environment retrieve for supported Codex self-hosted and three-harness Docker
+- Environment retrieve for supported Codex self-hosted and three-harness Docker/E2B
   profiles, bounded live file listing, and inline/source copies into qualified
   local workspaces. Shared Artifacts support capture, list/retrieve/content and
   deletion independently of the live Runtime after publication.
@@ -227,7 +227,7 @@ public removal: Session/history reads and new input become unavailable. Active
 work receives a cancellation request; existing streams close on observing removal.
 Already claimed work may still complete. Creation keys stay reserved; deletion
 never affects other Sessions, saved Agents or their shared device. Internal records
-are retained for execution settlement. Managed Docker deletion separately revokes
+are retained for execution settlement. Managed Docker/E2B deletion separately revokes
 authority and reclaims owned compute/workspace/history; caller-managed compute
 is not reclaimed by this service. Local repeated deletion returns 404 and creation-key reuse returns
 409; exact hosted errors and overlapping stream timing are unverified.
@@ -244,14 +244,18 @@ Non-text message input, Subagents, Environment templates and populated
 installation metadata remain unsupported. Saving optional Agent configuration does not make
 it executable. Unsupported requests fail explicitly. `/healthz` reports liveness only.
 
-## Managed Docker-hosted execution
+## Managed hosted execution
 
-The basic Codex `openai_hosted` profile is an explicit operator opt-in. Follow the
-[Runtime image and service configuration](deploy/codex/README.md#standalone-operator-configuration).
+The basic `openai_hosted` profiles for Codex, Claude Code and MiniMax Code require
+explicit operator configuration. Select the qualified native image using the
+[engine profile guides](../../contracts/agents-api/README.md#public-engine-profiles),
+then follow the [Docker setup](deploy/codex/README.md#standalone-operator-configuration)
+or [E2B template/provider setup](deploy/e2b/README.md).
 Core remains independently deployed with its own database. Public idle and initial
 text Sessions share the existing preparation, execution, Files and recovery paths.
 Networking defaults to enabled; disabled is also supported. Restricted domains,
-templates, populated startup installations and other hosted engines remain gaps.
+templates and populated startup installations remain gaps. Additional harnesses
+require separate integration and qualification.
 Connected describes the authenticated Runtime connection, not native readiness.
 Exact hosted failure/expiry semantics remain unverified.
 
@@ -292,8 +296,8 @@ device, preserves that assignment across retries/restarts, and refuses a silent
 move to another device. Revoked bindings cannot be used for dispatch. Device
 connections alone do not start a Turn. Submit text, cancellation or function results
 through the official Session events endpoint; the worker assigns a same-tenant host and preserves that
-binding. Managed Docker lifecycle is qualified within the three-harness V1 profile;
-other provider qualification and full protocol semantics remain separate. See the [ownership rules](../../CONTRIBUTING.md#product-and-execution-service-separation).
+binding. Managed Docker/E2B lifecycle is qualified within the three-harness V1 profiles;
+additional provider qualification and full protocol semantics remain separate. See the [ownership rules](../../CONTRIBUTING.md#product-and-execution-service-separation).
 
 ### Enable Claude SDK execution
 

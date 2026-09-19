@@ -3,7 +3,8 @@
 This assessment covers the fixed [Python SDK contract](upstream.json). It is an
 implementation plan with partial current coverage. Public execution admits
 `environment.type=none` on Codex and Claude SDK, the Codex self-hosted text/function
-profile, and the operator-configured basic Codex/Docker hosted profile below.
+profile, and operator-configured Docker/E2B hosted profiles for Codex, Claude Code
+and MiniMax Code below.
 Environment retrieval supports safe metadata for these environment profiles;
 populated startup installations and templates remain missing. Live file listing
 and local inline/source writes have [partial coverage and explicit local policies](environment-files.md).
@@ -71,6 +72,19 @@ pending input atomically before external reclamation. Matching retries preserve
 outcomes; new inputs reject terminal Environments. Expiry has no invented SSE
 variant. Local failure codes and exact event ordering remain unverified upstream
 semantics; this profile does not establish complete Environment compatibility.
+
+## Basic public E2B-hosted profile
+
+The [E2B operator configuration](../../services/agents-api/deploy/e2b/README.md)
+selects a qualified immutable template/build for the same three harnesses and
+`type=openai_hosted` admission. It retains the shared Runtime execution, Files,
+Artifacts and recovery paths and the public configuration limits above. Actual
+[three-harness E2B acceptance](README.md#e2b-v1-qualification) is separate from
+Docker evidence. The Provider's five operations manage allocation, initialization,
+lease renewal and cleanup only. A minimum two-hour renewable lease is required;
+expiry destroys volatile VM workspace/history and cannot authorize replay or
+transparent recreation. Pausing, migration and user-managed enrollment are not
+part of this qualified profile.
 
 ## Initial public self-hosted profile
 

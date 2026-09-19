@@ -404,14 +404,14 @@ actual image must qualify both native profiles before public deployment. Omitted
 network settings mean enabled upstream and must not be silently treated as disabled.
 
 Core and Runtime use common preparation, start, input-receipt, cancellation,
-release and recovery semantics for Codex and Claude. Retain each harness's native
-implementation behind its adapter. Core acts on verified capabilities and runtime
+release and recovery semantics for Codex, Claude Code and MiniMax Code. Retain each
+harness's native implementation behind its adapter. Core acts on verified capabilities and runtime
 conditions; a capability declaration alone never grants public feature admission.
 Extend existing interfaces during related functional work without introducing a
-second framework or a broad rewrite. The completed MVP remains Codex/Docker.
-Claude SDK is an equal first-class engine on the same dedicated Docker
-Runtime; qualify each image with the common full-loop acceptance before deploying.
-E2B, other engines and hosted remote-executor separation remain outside this batch.
+second framework or a broad rewrite. Codex, Claude Code and MiniMax Code have
+qualified dedicated Docker and E2B V1 profiles. Each harness has equal standing;
+qualify each image/template with the common full-loop acceptance before deploying.
+Additional engines and hosted remote-executor separation remain separate work.
 Later engines must satisfy the same applicable acceptance contract while keeping
 their suitable native deployment layout.
 
