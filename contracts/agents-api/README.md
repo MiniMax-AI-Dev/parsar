@@ -53,7 +53,8 @@ The three-harness Docker V1 MVP is accepted: Codex, Claude Code and MiniMax Code
 share the execution/workspace contract, with independent Core/database deployment,
 Files/Artifacts, cancellation and owned-history continuation. Optional features
 still differ. See the [accepted scope and evidence](#accepted-milestone-and-evidence).
-E2B qualification is a separate active batch, not an accepted deployment profile.
+The same three harnesses also passed separate real E2B V1 qualification in PR #705;
+see the [E2B operator guide](../../services/agents-api/deploy/e2b/README.md).
 Select further work only within current user authorization. Parsar cutover and
 business Team orchestration are separate from protocol coverage.
 
@@ -78,17 +79,17 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | Resource | Upstream operations | Current coverage |
 | --- | --- | --- |
 | Root reusable Agents | create, retrieve, update, list, delete | Partial create/retrieve/update/list/delete and Session references; configuration/error gaps remain |
-| sessions | create, retrieve, update, list, delete | Create (ordinary/live), retrieve, list with root-Agent filter, metadata-only update, public deletion with owned Docker cleanup; general physical cleanup and exact hosted semantics remain open |
+| sessions | create, retrieve, update, list, delete | Create (ordinary/live), retrieve, list with root-Agent filter, metadata-only update, public deletion with owned Docker/E2B cleanup; general physical cleanup and exact hosted semantics remain open |
 | sessions.events | create, stream | Text/cancel/function-result admission and live events; function-action state snapshots supported |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
 | sessions.items | list | Partial Item variants |
-| sessions.artifacts | retrieve, list, delete, content | Shared output capture and immutable stored reads/deletion on the accepted three-harness Docker profiles, including retained downloads after Runtime loss; exact upstream defaults/errors, unchanged-file republishing and cancellation-edge parity remain unverified |
+| sessions.artifacts | retrieve, list, delete, content | Shared output capture and immutable stored reads/deletion on the accepted three-harness Docker/E2B profiles, including retained downloads after Runtime loss; exact upstream defaults/errors, unchanged-file republishing and cancellation-edge parity remain unverified |
 | sessions.subagents | retrieve, list | Missing |
 | sessions.subagents.items | list | Missing |
 | sessions.subagents.turns | retrieve, list | Missing |
 | sessions.subagents.turns.items | list | Missing |
-| environments | retrieve | Supported Codex self-hosted and three-harness Docker hosted profiles: durable status and safe empty installation metadata; populated installation inventory and full lifecycle parity remain gaps |
-| environments.files | create, list | [Bounded live listing and inline/source-file creation](environment-files.md) on qualified Docker workspaces; Codex self-hosted listing is a separate supported path. Full listing, overwrite and error semantics remain partial |
+| environments | retrieve | Supported Codex self-hosted and three-harness Docker/E2B hosted profiles: durable status and safe empty installation metadata; populated installation inventory and full lifecycle parity remain gaps |
+| environments.files | create, list | [Bounded live listing and inline/source-file creation](environment-files.md) on qualified Docker/E2B workspaces; Codex self-hosted listing is a separate supported path. Full listing, overwrite and error semantics remain partial |
 | environments.templates | create, retrieve, update, list, delete | Missing |
 | vaults | create, retrieve, list, delete | Create/retrieve/list/delete with independent tenant persistence, stored status filtering, atomic Credential cascade and frozen Session attachments; archive semantics and full hosted lifecycle parity remain missing |
 | vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve/list/token replacement/deletion with scoped encrypted storage; Session attachment and exact-URL HTTPS MCP binding; OAuth, archive semantics and full hosted lifecycle parity remain missing |
@@ -130,6 +131,26 @@ HA, E2B, or Anthropic-model acceptance for Claude Code. No exactly-once guarante
 is made for future model choices: the recorded Kimi continuation limitation is a
 new model-issued command after a recovery prompt, not automatic API replay.
 
+### E2B V1 qualification
+
+PR #705 (`9cd1c46c7fab6eeef8cb35ce71f1ea0ca2cf8bc1`) separately qualified
+Codex, Claude Code and MiniMax Code with actual E2B and real Kimi/MiniMax APIs.
+Fixed SDK/raw HTTP acceptance covered independent Core/database deployment,
+Files/Artifacts, auth/tenant and native credential/history isolation, cancellation,
+Core/Runtime crashes, exact-history continuation without replay and native network
+restrictions. All three runs completed cleanup without fallback. The five Provider
+operations passed real lifecycle/race acceptance; `make check` and fresh independent
+Astra high review passed. The merged tree matches the accepted candidate.
+
+Evidence: `~/.parsar/remediation/20260920/e2b-runtime-v1/` on `zju_a100_2`, including
+`acceptance-results.json`, `provider-real-final.log`, `make-check.log`,
+`blind-review.md` and exact image/template build pins. This uses the existing
+colocated Runtime contract, with no public resource or protocol expansion.
+The qualified Linux amd64 templates require a reachable HTTPS/WSS Core and a
+minimum two-hour renewable E2B lease. Expiry destroys volatile workspace/history;
+unknown effects cannot authorize recreation or replay. Pools, migration and
+user-managed enrollment remain outside this qualification.
+
 ### Remaining protocol work
 
 | Area | Missing or unverified scope |
@@ -144,7 +165,7 @@ new model-issued command after a recovery prompt, not automatic API replay.
 An implementation gap and an unknown upstream behavior require different follow-up
 work. Retain both explicitly; a restrictive local policy or successful SDK parse
 cannot establish upstream equivalence. The Feishu board owns live task selection,
-including E2B qualification; this inventory describes merged behavior.
+including further deployment qualification; this inventory describes merged behavior.
 
 ## Public semantics
 

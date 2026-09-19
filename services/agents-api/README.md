@@ -4,9 +4,9 @@ Independent execution service implementing part of the pinned OpenAI Agents API.
 It owns reusable Agents, durable Sessions/Turns/Items, live events, function actions
 and a daemon execution worker. Public execution supports qualified Codex, Claude Code
 (`claude_sdk`) and MiniMax Code (`mcode`) profiles through the shared Runtime contract.
-The three-harness Linux amd64 Docker V1 MVP is accepted; E2B qualification is a
-separate active batch and is not certified by the Docker results. It builds and
-runs with its own PostgreSQL database and credentials;
+The three-harness Linux amd64 Docker V1 MVP and the separate
+[E2B V1 deployment](deploy/e2b/README.md) qualification are accepted.
+It builds and runs with its own PostgreSQL database and credentials;
 Parsar's product service, frontend and database are not required.
 
 Use this guide to build, configure and connect a client. The
