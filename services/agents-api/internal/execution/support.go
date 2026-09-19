@@ -17,12 +17,16 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 	if json.Unmarshal(configuration, &snapshot) != nil {
 		return store.ErrInvalidInput
 	}
+	profile, ok := acceptedEngine(engine)
+	if !ok || (snapshot.Environment != nil && !profile.accepts(snapshot.Environment.Type)) {
+		return store.ErrInvalidInput
+	}
 	_, err := mcpCredentialBindings(engine, snapshot)
 	if err != nil {
 		return err
 	}
 	if snapshot.Environment != nil && snapshot.Environment.Type == "self_hosted" {
-		if engine != "codex" || snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" || !path.IsAbs(snapshot.Environment.WorkspaceDirectory) || strings.ContainsAny(snapshot.Environment.WorkspaceDirectory, "\x00\r\n\\") || len(snapshot.Environment.CapabilityDirectories) != 0 {
+		if snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" || !path.IsAbs(snapshot.Environment.WorkspaceDirectory) || strings.ContainsAny(snapshot.Environment.WorkspaceDirectory, "\x00\r\n\\") || len(snapshot.Environment.CapabilityDirectories) != 0 {
 			return store.ErrInvalidInput
 		}
 		_, _, err := executionTools(snapshot.Agent.Tools)
@@ -31,7 +35,7 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 	if snapshot.Environment != nil && snapshot.Environment.Type == "openai_hosted" {
 		// Only this placement/engine combination has current native qualification.
 		// Runtime capability checks still apply before any execution claim.
-		if engine != "codex" || snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
+		if snapshot.Daemon != nil || strings.TrimSpace(snapshot.Agent.Model) == "" {
 			return store.ErrInvalidInput
 		}
 		configuration, err := json.Marshal(snapshot.Environment)
@@ -39,77 +43,31 @@ func ValidateSessionConfiguration(engine string, configuration json.RawMessage) 
 			return store.ErrInvalidInput
 		}
 	}
-	if engine != "claude_sdk" {
+	if profile.validateConfiguration == nil {
 		_, mcp, err := executionTools(snapshot.Agent.Tools)
-		if len(mcp) != 0 && (engine != "codex" || snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil) {
+		if len(mcp) != 0 && (snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil) {
 			return errors.New("HTTP MCP execution currently requires the Codex service-side environment:none profile")
 		}
 		return err
 	}
-	return validateClaudeConfiguration(snapshot)
-}
-
-func validateClaudeConfiguration(snapshot Snapshot) error {
-	agent := snapshot.Agent
-	if snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil || strings.TrimSpace(agent.Model) == "" {
-		return store.ErrInvalidInput
-	}
-	if agent.Text.Verbosity != "" && agent.Text.Verbosity != "medium" {
-		return errors.New("The configured engine currently supports medium text verbosity only.")
-	}
-	if agent.MultiAgent.Enabled || agent.MultiAgent.MaxConcurrentSubagents != nil || agent.Reasoning.Effort != nil || agent.Reasoning.Summary != nil || (agent.ServiceTier != "" && agent.ServiceTier != "auto") || (agent.Text.Format.Type != "" && agent.Text.Format.Type != "text") {
-		return store.ErrInvalidInput
-	}
-	tools, mcp, err := executionTools(agent.Tools)
-	if err != nil {
-		return err
-	}
-	if err := validateClaudeMCP(mcp); err != nil {
-		return err
-	}
-	for _, tool := range tools {
-		var schema struct {
-			Type string `json:"type"`
-		}
-		if json.Unmarshal(tool.Parameters, &schema) != nil || schema.Type != "object" {
-			return errors.New("The configured engine currently requires function schemas with root type object.")
-		}
-	}
-	return nil
+	return profile.validateConfiguration(snapshot)
 }
 
 func canAdmitInputs(engine string, configuration json.RawMessage) bool {
 	var snapshot Snapshot
-	if (engine != "codex" && engine != "claude_sdk") || json.Unmarshal(configuration, &snapshot) != nil || snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil {
+	if json.Unmarshal(configuration, &snapshot) != nil || snapshot.Environment == nil || snapshot.Environment.Type != "none" || snapshot.Daemon != nil {
 		return false
 	}
-	if _, err := mcpCredentialBindings(engine, snapshot); err != nil {
-		return false
-	}
-	return engine != "claude_sdk" || validateClaudeConfiguration(snapshot) == nil
+	return ValidateSessionConfiguration(engine, configuration) == nil
 }
 
 func validateEngineInputs(engine string, inputs []store.Input) error {
-	if engine != "claude_sdk" {
-		return nil
+	profile, ok := acceptedEngine(engine)
+	if !ok {
+		return store.ErrInvalidInput
 	}
-	for _, input := range inputs {
-		if input.Kind != "tool_result" {
-			continue
-		}
-		var value store.FunctionResultInput
-		if json.Unmarshal(input.Payload, &value) != nil {
-			return store.ErrInvalidInput
-		}
-		result, err := functionResult(store.FunctionCall{CallID: value.CallID, Result: value.Result})
-		if err != nil {
-			return store.ErrInvalidInput
-		}
-		for _, part := range result.Content {
-			if part.Type != "input_text" {
-				return store.ErrInvalidInput
-			}
-		}
+	if profile.validateInputs != nil {
+		return profile.validateInputs(inputs)
 	}
 	return nil
 }
@@ -120,14 +78,14 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	fail := func(message string) (device.KindCapabilities, error) {
 		return device.KindCapabilities{}, errors.New(message)
 	}
-	switch engine {
-	case "codex":
-	case "claude_sdk":
-		if err := validateClaudeConfiguration(snapshot); err != nil {
+	profile, ok := acceptedEngine(engine)
+	if !ok || (snapshot.Environment != nil && !profile.accepts(snapshot.Environment.Type)) {
+		return fail("execution engine placement is not supported")
+	}
+	if profile.validateConfiguration != nil {
+		if err := profile.validateConfiguration(snapshot); err != nil {
 			return device.KindCapabilities{}, err
 		}
-	default:
-		return fail("execution engine is not supported")
 	}
 	info, found, known := peer.AgentKindStatus(engine)
 	caps := info.Capabilities
@@ -137,10 +95,10 @@ func engineCapabilities(peer *gateway.Session, engine string, snapshot Snapshot)
 	if !caps.ExecutionControls {
 		return fail("device must advertise execution_controls")
 	}
-	if engine == "codex" && !caps.WebSearchControl {
+	if profile.webSearchControl && !caps.WebSearchControl {
 		return fail("device must advertise web_search_control")
 	}
-	if engine == "codex" && !caps.TextVerbosity {
+	if profile.textVerbosity && !caps.TextVerbosity {
 		return fail("device must advertise text_verbosity")
 	}
 	if !caps.ToolObservations {

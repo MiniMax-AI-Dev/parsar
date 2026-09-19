@@ -29,6 +29,7 @@ type startRequest struct {
 	Functions        []proto.FunctionTool `json:"functions,omitempty"`
 	MCPHTTPServers   *[]mcpHTTPServer     `json:"mcp_http_servers,omitempty"`
 	Workspace        *workspaceProfile    `json:"workspace,omitempty"`
+	RequireHistory   bool                 `json:"require_history,omitempty"`
 	observeFunctions bool
 }
 
@@ -45,7 +46,7 @@ func prepare(config Config, req proto.PromptRequestPayload) (startRequest, []str
 }
 
 func prepareConfiguration(config Config, req proto.PromptRequestPayload) (startRequest, []string, error) {
-	start := startRequest{Type: "start", Resume: req.AgentSessionID, ObserveMessages: req.ObserveMessages, Functions: req.FunctionTools, observeFunctions: req.ObserveToolObservations}
+	start := startRequest{Type: "start", Resume: req.AgentSessionID, RequireHistory: req.RequireExistingNativeSession, ObserveMessages: req.ObserveMessages, Functions: req.FunctionTools, observeFunctions: req.ObserveToolObservations}
 	fail := func(reason string) (startRequest, []string, error) {
 		return startRequest{}, nil, fmt.Errorf("claudesdk: %s", reason)
 	}
@@ -65,7 +66,16 @@ func prepareConfiguration(config Config, req proto.PromptRequestPayload) (startR
 	if err := validateFunctions(req.FunctionTools); err != nil {
 		return startRequest{}, nil, err
 	}
+	var provider []string
 	for name, raw := range req.AgentOptions {
+		if name == "claude_provider" {
+			var err error
+			provider, err = providerEnvironment(raw)
+			if err != nil {
+				return startRequest{}, nil, err
+			}
+			continue
+		}
 		if name == "system_prompt" && raw == nil {
 			continue
 		}
@@ -88,14 +98,18 @@ func prepareConfiguration(config Config, req proto.PromptRequestPayload) (startR
 	if !filepath.IsAbs(config.Entrypoint) {
 		return fail("SDK entrypoint must be absolute")
 	}
+	config.Env = withProvider(config.Env, provider)
 	if config.Workspace != nil {
 		profile, env, err := prepareWorkspace(config, req)
 		if err != nil {
 			return startRequest{}, nil, err
 		}
 		start.Workspace = profile
-		start.Cwd = config.Workspace.Directory
+		start.Cwd = workspaceCwd(config.Workspace)
 		return start, env, nil
+	}
+	if req.LocalEnvironment != nil || req.RequireExistingNativeSession {
+		return fail("local execution and history recovery require a dedicated workspace")
 	}
 	root, err := paths.Root()
 	if err != nil {
@@ -124,7 +138,7 @@ func prepareConfiguration(config Config, req proto.PromptRequestPayload) (startR
 			return startRequest{}, nil, err
 		}
 	}
-	env := append(append([]string{}, os.Environ()...), config.Env...)
+	env := withProvider(append(append([]string{}, os.Environ()...), config.Env...), provider)
 	env = append(env, "CLAUDE_CONFIG_DIR="+config.StateDir, "TMPDIR="+filepath.Join(config.StateDir, "tmp"), "DISABLE_TELEMETRY=1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1")
 	var mcpEnv []string
 	start.MCPHTTPServers, mcpEnv = prepareMCPHTTP(req.MCPHTTPServers)

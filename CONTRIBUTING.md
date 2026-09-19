@@ -381,10 +381,10 @@ release and recovery semantics for Codex and Claude. Retain each harness's nativ
 implementation behind its adapter. Core acts on verified capabilities and runtime
 conditions; a capability declaration alone never grants public feature admission.
 Extend existing interfaces during related functional work without introducing a
-second framework or a broad rewrite. The current MVP accepts Codex only, with
-Docker-hosted delivery first and E2B afterward. Preserve existing Claude code and
-evidence; further Claude integration is deferred and hosted remote-executor
-separation is outside the current roadmap.
+second framework or a broad rewrite. The completed MVP remains Codex/Docker.
+The next accepted engine profile is Claude SDK on the same dedicated Docker
+Runtime; qualify each image with the common full-loop acceptance before deploying.
+E2B, other engines and hosted remote-executor separation remain outside this batch.
 Later engines must satisfy the same applicable acceptance contract while keeping
 their suitable native deployment layout.
 
@@ -1577,7 +1577,8 @@ replaced; do not carry obsolete compatibility code forward to satisfy this secti
   The operator-selected
   `AGENTS_API_ENGINE` is separate from the requested model.
   Public execution supports Codex and Claude SDK with environment `none`, plus
-  the Codex self-hosted text/function profile defined above; reject unsupported
+  the Codex self-hosted text/function profile and the qualified Codex/Claude dedicated
+  Docker hosted profiles; reject unsupported
   input/environment/agent options explicitly.
 - `packages/agents-client/v1` configures the pinned official `openai-go` Session
   service. Use SDK request/response types, pagination and errors directly rather
@@ -1927,6 +1928,47 @@ must close their query, await their native child and drain observations before
 publishing completion. Process groups are lifecycle supervision, not OS isolation
 or containment of descendants that deliberately leave the group.
 
+### Claude dedicated Docker Runtime
+
+Build the pinned SDK bundle with `scripts/build-claude-sdk-runtime.sh`, then use
+`scripts/build-claude-runtime.sh` with the existing shared workspace helper build.
+See [deployment and engine onboarding](services/agents-api/deploy/claude/README.md).
+The helper executables retain their historical Codex names; their local directory,
+write and export operations are shared and do not launch an engine.
+
+`PARSAR_CLAUDE_SDK_WORKSPACE=managed` requires the shared dedicated local binding,
+canonical workspace and its same-inode `/workspace` mount, and explicit immutable
+network policy. Native history, home and scratch live separately under
+`PARSAR_HOME/runtime/claude-sdk`; daemon authentication stays under
+`PARSAR_HOME/parsar-daemon`. The trusted image and protected staging directory
+remain outside writable workspace roots. No product state or native user profile
+is imported. The separate unbound `environment:none` profile keeps its behavior.
+
+The Docker operator option `nested_sandbox` is false by default. The qualified
+Claude image requires it: Docker supplies an init process and permits nested procfs
+mounting by removing its outer `/proc` masks/read-only submounts. `/sys/firmware`
+and powercap remain masked; the root and sysfs mounts remain read-only, capabilities
+remain dropped, and the existing seccomp/no-new-privileges policy remains enabled.
+Do not enable privileged mode, weaken the native sandbox, mount host process state,
+or apply host-global policy changes. This is an image deployment prerequisite,
+not a public API option or an engine-name branch in the Provider.
+
+The SDK adapter advertises `local_runtime_v1` only for its Linux bridge contract.
+Registration combines that contract with the verified operator binding. Core uses
+an explicit accepted engine profile independently of advertisements. This profile
+supports native Bash/Read/Edit, preparation, shared Files/Artifacts, cancellation
+and same-history continuation. Functions and MCP in this workspace profile remain
+unqualified and reject before persistence; their existing `none` support is retained.
+Native Bash network access uses the harness's HTTP proxy; no alternate networking
+or tool loop is implemented by Core.
+
+Recovery uses the SDK's history APIs. An explicitly supplied native identity must
+exist. If Core requires existing history without having recorded an identity, the
+adapter accepts only one nonempty native history for the exact bound cwd. Missing,
+foreign, ambiguous or metadata-only history rejects before model input. The Runtime
+volume and shared Environment/Session binding establish ownership; this lookup
+cannot select another Session's home or infer ownership from a model response.
+
 ### Claude SDK adapter foundation
 
 `packages/claude-sdk-adapter` privately owns the pinned official TypeScript SDK
@@ -1948,8 +1990,8 @@ SDK/native child release and output draining precede daemon completion.
 qualified placement. It enables only native Bash/Read/Edit in the existing SDK
 loop. The entire factory must already run inside an outer mount/process boundary
 that excludes application, daemon and other-tenant credentials and host policy.
-The factory does not create that boundary. Public discovery/admission remains
-unchanged; cwd and request options cannot select the workspace policy.
+The factory does not create that boundary. The dedicated Docker profile below
+selects this binding at startup; cwd and request options cannot select its policy.
 The workspace, managed history, runtime home, scratch and protected secret roots
 must be pre-existing canonical, separate directories. Runtime code and dependency
 search paths must remain outside those roots and be read-only in the placement.
@@ -1972,8 +2014,8 @@ The deployment must retain these controls, including the SDK-owned hook.
 Functions, MCP and remote-environment combinations are rejected in this private
 profile until separately qualified. The existing `none` profile retains its
 behavior. Packaged `workspace_tools` establishes bridge support only, not host
-isolation or a public capability. Public command/file Item delivery, public
-preparation, shared placement quotas and Files ownership remain separate work.
+isolation or a public capability. The dedicated Runtime integration composes
+public preparation, shared placement quotas, command Items and Files ownership.
 `TestLiveClaudeWorkspaceFactory` is explicit real-provider acceptance inside a
 qualified placement, including effects, cancellation and same-history continuation.
 
@@ -2051,7 +2093,8 @@ are returned only from distinguishable filesystem outcomes; unknown results stop
 owner. Each operation closes its directory and intermediate descriptors before a
 successful receipt; the root descriptor remains owned until bridge release.
 Caller cancellation, Start transfer and owner shutdown retain the existing workspace
-read settlement rules. This adapter gap fill does not enable public Claude Files.
+read settlement rules. This adapter gap fill alone does not enable public Claude Files; the dedicated
+Runtime integration supplies public placement and ownership.
 
 With `ObserveToolObservations`, private workspace execution requires the packaged
 `workspace_command_observations` feature and emits the existing neutral command
@@ -2165,8 +2208,11 @@ schemas. Function-result batches normalize through the existing shared parser an
 reject non-text content before any batch write, preserving pending calls and retry
 identity. These are implementation limits, not changes to the upstream contract.
 Do not bypass them by dropping fields, changing model identity or fabricating usage.
-The server owns no provider credential: operators configure the daemon's native SDK
-provider environment. Product `claude_code` and product execution are unchanged.
+Operators may configure the daemon provider environment or the existing transient
+`AGENTS_API_EXECUTION_OPTIONS_FILE` with adapter-owned `claude_provider`
+(`base_url` HTTPS and `bearer_token`). Core forwards these opaque options without
+persisting them in Session configuration. The adapter exclusively selects the
+provider environment and removes credentials from native tool environments. Product `claude_code` and product execution are unchanged.
 The public profile accepts only
 text, explicit model/system instructions, managed state, exact native resume and
 declared functions with ordered text results, and the HTTP MCP subset

@@ -21,11 +21,12 @@ type managedRuntimeConfig struct {
 }
 
 type managedDockerConfig struct {
-	Host        string   `json:"host"`
-	Image       string   `json:"image"`
-	Network     string   `json:"network"`
-	SeccompFile string   `json:"seccomp_file"`
-	ExtraHosts  []string `json:"extra_hosts"`
+	Host          string   `json:"host"`
+	Image         string   `json:"image"`
+	Network       string   `json:"network"`
+	SeccompFile   string   `json:"seccomp_file"`
+	ExtraHosts    []string `json:"extra_hosts"`
+	NestedSandbox bool     `json:"nested_sandbox"`
 }
 
 // Each provider key pins an explicit Docker endpoint, independently of ambient
@@ -79,7 +80,7 @@ func managedRuntimes() (*execution.RuntimeProviders, func(), error) {
 			return nil, func() {}, errors.New("invalid managed Docker endpoint")
 		}
 		clients = append(clients, c)
-		provider, err := sandboxdocker.New(c, sandboxdocker.Config{InstallationID: key, Image: entry.Image, Network: entry.Network, Seccomp: string(seccomp), ExtraHosts: entry.ExtraHosts})
+		provider, err := sandboxdocker.New(c, sandboxdocker.Config{InstallationID: key, Image: entry.Image, Network: entry.Network, Seccomp: string(seccomp), ExtraHosts: entry.ExtraHosts, NestedSandbox: entry.NestedSandbox})
 		if err != nil {
 			closeAll()
 			return nil, func() {}, errors.New("invalid managed Docker provider configuration")
