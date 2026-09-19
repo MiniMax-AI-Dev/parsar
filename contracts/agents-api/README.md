@@ -49,19 +49,28 @@ unimplemented; see the [Environment scope](environments.md).
 Initial messages commit with creation and a connection action; an initial deadline
 failure is queryable before a Turn exists. Ordinary and streamed creation share this path.
 
-Remaining work includes physical Session cleanup/content variants, broader configuration
-and tools, execution recovery, environments/files, Vaults and protocol Subagents.
-Reusable Agent routes and two public execution profiles are available within the
-limits below. Select each bounded task from the complete Feishu board by value,
-dependencies, risk and effort. Parsar cutover and its business Team loop are separate.
+The three-harness Docker V1 MVP is accepted: Codex, Claude Code and MiniMax Code
+share the execution/workspace contract, with independent Core/database deployment,
+Files/Artifacts, cancellation and owned-history continuation. Optional features
+still differ. See the [accepted scope and evidence](#accepted-milestone-and-evidence).
+E2B qualification is a separate active batch, not an accepted deployment profile.
+Select further work only within current user authorization. Parsar cutover and
+business Team orchestration are separate from protocol coverage.
 
 ## Upstream resource inventory
 
 This inventory is based on the pinned Python source, not our generated OpenAPI.
 It contains 42 distinct HTTP operations in 15 resource classes, excluding async
-duplicates, overloads and client-side helpers. Handlers below are partial coverage,
-not a compatibility score. They implement only part of the upstream input,
-configuration and event variants.
+duplicates, overloads and client-side helpers. At merged PR #703
+(`6959654c94645aec9934ad682e277841492f7897`), 31 have handler entries and 11 are
+missing: six Subagent reads and five Environment Template operations. The separate
+general `/v1/files` source-file API is outside this 42-operation count.
+
+An implemented route is not complete semantic compatibility. **Accepted** below
+means a recorded workflow passed under a specific profile; **partial** means some
+variants work; **missing** means no implementation; **unverified** means behavior
+has not been shown to match upstream. Do not convert the route count into a
+compatibility percentage or treat a Docker result as E2B qualification.
 
 Paths below are SDK resource paths beneath `client.beta.agents`. Method names use
 the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
@@ -73,13 +82,13 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | sessions.events | create, stream | Text/cancel/function-result admission and live events; function-action state snapshots supported |
 | sessions.turns | retrieve, list | Implemented reads; lifecycle conformance still partial |
 | sessions.items | list | Partial Item variants |
-| sessions.artifacts | retrieve, list, delete, content | Codex/Docker hosted output capture and immutable stored reads/deletion, including after Environment expiry; exact upstream defaults/errors, unchanged-file republishing and cancellation-edge parity remain unverified |
+| sessions.artifacts | retrieve, list, delete, content | Shared output capture and immutable stored reads/deletion on the accepted three-harness Docker profiles, including retained downloads after Runtime loss; exact upstream defaults/errors, unchanged-file republishing and cancellation-edge parity remain unverified |
 | sessions.subagents | retrieve, list | Missing |
 | sessions.subagents.items | list | Missing |
 | sessions.subagents.turns | retrieve, list | Missing |
 | sessions.subagents.turns.items | list | Missing |
-| environments | retrieve | Supported self-hosted and basic Codex/Docker hosted profiles: durable status and safe empty installation metadata; populated inventory remains missing |
-| environments.files | create, list | [Partial bounded Codex list](environment-files.md); create remains missing |
+| environments | retrieve | Supported Codex self-hosted and three-harness Docker hosted profiles: durable status and safe empty installation metadata; populated installation inventory and full lifecycle parity remain gaps |
+| environments.files | create, list | [Bounded live listing and inline/source-file creation](environment-files.md) on qualified Docker workspaces; Codex self-hosted listing is a separate supported path. Full listing, overwrite and error semantics remain partial |
 | environments.templates | create, retrieve, update, list, delete | Missing |
 | vaults | create, retrieve, list, delete | Create/retrieve/list/delete with independent tenant persistence, stored status filtering, atomic Credential cascade and frozen Session attachments; archive semantics and full hosted lifecycle parity remain missing |
 | vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve/list/token replacement/deletion with scoped encrypted storage; Session attachment and exact-URL HTTPS MCP binding; OAuth, archive semantics and full hosted lifecycle parity remain missing |
@@ -93,6 +102,49 @@ fields and cannot prove that reported configuration matches the running engine.
 Where SDK types or public documentation do not establish behavior, record the
 uncertainty and obtain upstream evidence before marking it conformant. Temporary
 unsupported errors are implementation gaps, never evidence of full compatibility.
+
+## Accepted milestone and evidence
+
+The three-harness Docker V1 milestone was accepted on 2026-09-20 after
+[PR #703](https://github.com/MiniMax-AI-Dev/parsar/pull/703). A fresh source-free Core
+package and main-built daemon passed fixed Python SDK 3.13.0/raw HTTP/real Kimi K3
+regressions for Codex, Claude Code and MiniMax Code. The profiles use independent
+execution databases and no Parsar services or product database.
+
+These final regressions supplement, rather than repeat, every earlier check.
+Codex's full 26-check deployment evidence, Claude's hosted/Artifact/crash/security
+evidence, and MiniMax's real MiniMax Artifact and Core/Runtime SIGKILL evidence
+retain their exact tested scope. The full gate, focused race checks and fresh
+Astra high review passed for the candidate; no additional live run is claimed by
+this documentation update. Evidence on `zju_a100_2`:
+
+- `~/.parsar/remediation/20260920/three-harness-mvp/REPORT.md` and
+  `acceptance-results.json`: final baseline, runs, reused evidence and cleanup.
+- `~/.parsar/remediation/20260919/docker-mvp/` and `claude-v1/`:
+  preceding deployment and safety acceptance.
+- [MiniMax workspace qualification](mcode-workspace-v1.md) and
+  `~/.parsar/remediation/20260919/mcode-workspace/`: native isolation and recovery.
+
+Qualification is Linux amd64 Docker V1, not arbitrary host isolation, production
+HA, E2B, or Anthropic-model acceptance for Claude Code. No exactly-once guarantee
+is made for future model choices: the recorded Kimi continuation limitation is a
+new model-issued command after a recovery prompt, not automatic API replay.
+
+### Remaining protocol work
+
+| Area | Missing or unverified scope |
+| --- | --- |
+| Subagents / multi_agent | Six public child read operations, enabled execution, child lifecycle/interactions and full recovery; deferred outside the MVP |
+| Environment Templates | All five CRUD/list operations; populated installation metadata and additional Environment configurations remain separate gaps |
+| Input and configuration | Non-text initial input, broader content/configuration unions, structured output and reasoning/verbosity combinations |
+| Tools and interactions | Deferred functions, other tool types, effective tool-set enforcement and result/cancel publication ordering; MiniMax public functions/MCP remain unsupported |
+| Vault and Credentials | OAuth/refresh, archive semantics, revocation/concurrent mutation and exact hosted selection/error behavior; static bearer CRUD/token replacement is already present |
+| Existing resources | Full Item/SSE/Usage variants, omitted/null/default/error semantics, pagination and overlapping lifecycle behavior beyond recorded cases |
+
+An implementation gap and an unknown upstream behavior require different follow-up
+work. Retain both explicitly; a restrictive local policy or successful SDK parse
+cannot establish upstream equivalence. The Feishu board owns live task selection,
+including E2B qualification; this inventory describes merged behavior.
 
 ## Public semantics
 
@@ -184,8 +236,9 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   asynchronous cancellation request while internal finalization remains available.
   Existing streams close on observing removal without an invented deletion event.
   Creation keys remain reserved (local 409); missing/repeated deletion locally
-  returns 404. Physical SQL/native history cleanup, immediate native quiescence
-  and exact hosted error/retry/overlapping-stream semantics remain unverified or
+  returns 404. Qualified managed Docker deletion also reclaims its owned Runtime;
+  broader physical SQL/native history cleanup, immediate native quiescence and
+  exact hosted error/retry/overlapping-stream semantics remain unverified or
   unimplemented. Shared devices, saved Agents and other Sessions are independent.
 - `DELETE /agents/{agent_id}` removes the tenant-owned saved configuration and
   returns `id`, `object=agent.deleted`, and `deleted=true`. Existing Sessions and
@@ -282,20 +335,20 @@ unsupported errors are implementation gaps, never evidence of full compatibility
   describe native discovery or workspace files created by commands. Unknown
   installation configurations are rejected, not reported as empty. Reads use the
   owning live Session's project partition and do not require execution setup.
-  Populated metadata schemas, installation/files/templates, hosted lifecycle and
+  Populated installation metadata/configuration, templates, full hosted lifecycle and
   exact hosted error semantics remain gaps.
 
 ## Delivery and verification
 
 | Capability | Current state |
 | --- | --- |
-| Independent deployment | Isolated API/migrator/device binaries and Linux amd64 container; own PostgreSQL database/account/migrations and project/principal key authentication; daemon/harness installed separately |
+| Independent deployment | Source-free Core package and separate execution PostgreSQL ownership; managed Docker Runtime co-locates daemon, selected harness and workspace; no Parsar dependency |
 | Saved Agents and Sessions | Saved Agent routes, immutable inline/referenced Session configuration, metadata updates, root-Agent filtering and scoped cursor pagination |
-| Public execution | Initial or later text, active input, function success/error and cancellation through a registered same-tenant Codex or Claude SDK host; profile limits below |
+| Public execution | Initial/later text, active input and cancellation through Codex, Claude Code or MiniMax Code; Codex/Claude additionally support qualified public functions; see profile limits below |
 | Pending function actions | Persisted calls/results/application receipts, `required_actions`, Session `requires_action`, Turn `waiting`, and live state snapshots; other interactions remain incomplete |
 | Public recovery and SSE | Persisted Turn/Items queries and partial Usage; live lifecycle/Item/text events, creation streaming and the official one-Turn tool-handler helper |
 | Execution ownership | Immutable Session engine/device, durable input receipts and database writer fencing; uncertain claimed work fails on restart, without blind replay |
-| Files | Bounded live Environment listing and inline/file_id copies into a qualified preconfigured V1 local workspace; project-owned user_data source upload/list/retrieve/content/delete; [scope and limits](source-files.md) |
+| Files and Artifacts | Bounded Environment listing and inline/file_id copies into qualified V1 workspaces; source-file lifecycle and immutable output capture/download/deletion; [Files limits](environment-files.md), [source limits](source-files.md) |
 | Clients | Fixed Python SDK 3.13.0 and official Go SDK v3.61.0; raw HTTP and real provider acceptance supplement controlled tests |
 | Release and product | Registry publication and Parsar cutover remain open; basic Docker provisioning is operator opt-in; business Team orchestration is deferred |
 
@@ -303,30 +356,34 @@ unsupported errors are implementation gaps, never evidence of full compatibility
 
 `AGENTS_API_ENGINE` chooses the engine for new Sessions; existing Sessions keep
 that immutable choice. The public request supplies a model, not a harness selector.
-Both no-environment profiles require disabled `multi_agent`, implicit reasoning,
-service tier `auto`, ordinary text and non-deferred functions. Codex additionally
-supports anonymous or attached static-bearer service-origin HTTP MCP on `none`.
-Claude SDK supports the bounded service-origin HTTP MCP profile on `none`,
-with optional attached static-bearer credentials over HTTPS.
-The [basic Codex/Docker hosted profile](environments.md#basic-public-docker-hosted-profile)
-uses one colocated Runtime with enabled/disabled native networking and scoped local
-Files. It requires explicit operator composition and does not implement populated
-startup installations, restricted domains, hosted MCP or other hosted engines.
-The self-hosted profile supports text/functions and anonymous or attached
-static-bearer service-origin HTTP MCP as described in the Environment contract. See the
-[HTTP MCP profile and limits](../../services/agents-api/README.md#http-mcp-execution).
+All three profiles require disabled `multi_agent`, implicit reasoning, service tier
+`auto` and ordinary text output. Optional tools/configuration are qualified per
+operation and placement; native support is not public admission by itself.
 
-| Profile | Current limits |
+| Engine | Qualified placements and limits |
 | --- | --- |
-| `codex` (default) | Native app-server execution, disabled environment/search/subagent tools; low/medium/high verbosity requires the supported Unix adapter and native model policy below; ordered text/image function results |
-| `claude_sdk` (operator opt-in) | Registered packaged SDK runtime; medium verbosity, object-root function schemas and text-only function results; anonymous or attached static-bearer service-origin HTTP MCP with `required:false` and advertised runtime support; built-in tools and undeclared MCP discovery disabled |
+| `codex` (default) | `none`, the bounded official `self_hosted` path and Docker `openai_hosted`; public functions with ordered text/image results; service-origin HTTP MCP on `none`/`self_hosted`, not hosted; supported verbosity follows the native policy below |
+| `claude_sdk` | `none` and Docker `openai_hosted`; medium verbosity, object-root function schemas and text-only function results; anonymous/static-bearer HTTP MCP with either required value on `none`; hosted HTTP MCP remains unsupported |
+| `mcode` | `none` text and Docker `openai_hosted` workspace execution; medium verbosity; public functions/MCP, image input and complete public usage breakdown remain unsupported |
 
-The SDK profile rejects unsupported configuration before Session creation and
-non-text function results before any batch write. Host selection and the final
-preclaim check require the selected engine's capabilities. A missing compatible
-host leaves work queued; an existing Session never silently changes engine/device.
-Product `claude_code` is a separate integration. Persisting other engine names
-for idle Sessions does not establish public execution support.
+All three hosted profiles reuse the [Docker lifecycle](environments.md#basic-public-docker-hosted-profile),
+workspace Files/Artifacts, cancellation and recovery queries, with engine-specific
+native isolation. Configuration and immutable Runtime images require explicit
+operator setup: [Codex](../../services/agents-api/deploy/codex/README.md),
+[Claude Code](../../services/agents-api/deploy/claude/README.md), and
+[MiniMax Code](../../services/agents-api/deploy/mcode/README.md).
+Populated startup installations, restricted domains, templates and hosted public
+HTTP MCP remain outside these accepted profiles. MiniMax's private MCP tool bridge
+is internal transport, not public MCP support.
+
+The [Codex self-hosted profile](environments.md) remains distinct from managed
+Docker and from future user-managed Runtime enrollment. Product `claude_code`
+is likewise a separate integration from the API's `claude_sdk` engine key.
+Unsupported configurations fail before Session creation; unsupported results fail
+before a batch write. Native capability claims cannot replace service profile
+qualification, tenant authority or exact binding checks. An existing Session
+never silently changes engine/device. See the
+[HTTP MCP limits](../../services/agents-api/README.md#http-mcp-execution).
 
 The Store's internal DTO is not the upstream response model. The API layer must
 validate and resolve the upstream schema before persistence, and report only

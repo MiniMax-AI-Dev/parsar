@@ -2,9 +2,12 @@
 
 The complete protocol target remains the SDK pinned in [upstream.json](upstream.json).
 The public GET and POST `/agents/environments/{id}/files` have partial coverage.
-Inline and source-file (`file_id`) creation target a preconfigured V1 local
-Environment. [Source Files](source-files.md) have their own project-owned lifecycle.
-Artifacts and public hosted Session provisioning remain unimplemented.
+Inline and source-file (`file_id`) creation target a qualified V1 local Environment,
+including the managed Docker profiles for Codex, Claude Code and MiniMax Code.
+[Source Files](source-files.md) have their own project-owned lifecycle. Managed
+hosted provisioning and shared Artifacts are accepted within the
+[recorded Docker MVP scope](README.md#accepted-milestone-and-evidence); complete
+Files/Environment semantics and other providers are not implied.
 
 ## Pinned contract
 
@@ -76,9 +79,10 @@ frames. These are local limits and policies, not verified upstream restrictions.
 Creation uses the same tenant Environment lookup as listing. The Worker checks the
 stored local profile, immutable exact device/Environment binding and live capability.
 It never starts a model for upload or supplies a filesystem root from the request.
-The deployment must qualify the protected sibling workspace/staging layout in the
-[Codex profile](../../services/agents-api/deploy/codex/README.md). A capability or
-path declaration alone does not establish isolation or public hosted admission.
+The deployment must qualify the protected sibling workspace/staging layout and
+its selected native adapter. The [engine profile guides](README.md#public-engine-profiles)
+describe accepted Docker configurations. A capability or path declaration alone
+does not establish isolation or public hosted admission.
 
 Before sending any bytes, persist the mutation identity and request digest under
 the Session lock. Pending input/execution and another unresolved upload exclude a
