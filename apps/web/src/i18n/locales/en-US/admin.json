@@ -2921,6 +2921,10 @@
     "skillsPending": "Import, edit and version Skill assets in the capability library. Loading them for an Agent requires Core environment initialization support, which is not connected yet. Saving an asset does not activate it for execution.",
     "memberEnvironment": "Choose an environment when starting a new conversation. Each conversation uses its own Core session and environment; an Agent does not own a permanent container or share a workspace across conversations.",
     "templateSupport": "Name and enabled/disabled network access are connected. Packages, setup commands, environment variables, restricted network rules and capability installation are waiting for Core support.",
-    "assetManagementHint": "Manage Parsar capability assets and MCP configuration here. Importing or authorizing an asset does not enable Agent execution. Runtime loading belongs to Core and is not connected yet."
+    "assetManagementHint": "Manage Parsar capability assets and MCP configuration here. Importing or authorizing an asset does not enable Agent execution. Runtime loading belongs to Core and is not connected yet.",
+    "executionDefaults": "Default execution configuration",
+    "defaultHarness": "Core default harness",
+    "harnessHint": "Uses a harness configured in Core. Unavailable harnesses and unsupported model or environment combinations fail explicitly.",
+    "executionDefaultsHint": "Saving does not start an environment. The first message creates an independent environment, reused by this chat. Changes apply to new chats only."
   }
 }

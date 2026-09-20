@@ -5,6 +5,7 @@ import "encoding/json"
 // CreateAgentRequest describes reusable configuration, not an execution request.
 // MCP/web-search tools and model-derived reasoning defaults remain incomplete.
 type CreateAgentRequest struct {
+	XAgentsCore  *AgentsCore          `json:"x_agents_core,omitempty" extensions:"x-nullable"`
 	Model        *string              `json:"model" binding:"required"`
 	Name         *string              `json:"name,omitempty" extensions:"x-nullable" maxLength:"128"`
 	Instructions *string              `json:"instructions,omitempty" extensions:"x-nullable"`
@@ -18,6 +19,7 @@ type CreateAgentRequest struct {
 
 // UpdateAgentRequest replaces supplied fields and preserves omitted fields.
 type UpdateAgentRequest struct {
+	XAgentsCore  *AgentsCore          `json:"x_agents_core,omitempty" extensions:"x-nullable"`
 	Model        *string              `json:"model,omitempty"`
 	Name         *string              `json:"name,omitempty" extensions:"x-nullable" maxLength:"128"`
 	Instructions *string              `json:"instructions,omitempty" extensions:"x-nullable"`
@@ -47,6 +49,7 @@ type SavedAgentTextFormat struct {
 // SavedAgentConfiguration excludes resource identity and mutable metadata. It is
 // not the immutable effective configuration of an execution Session.
 type SavedAgentConfiguration struct {
+	XAgentsCore  *AgentsCore       `json:"x_agents_core,omitempty" extensions:"x-nullable"`
 	Model        string            `json:"model" binding:"required"`
 	Name         *string           `json:"name" extensions:"x-nullable"`
 	Instructions *string           `json:"instructions" extensions:"x-nullable"`

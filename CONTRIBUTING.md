@@ -2360,7 +2360,8 @@ raw tool Items, general web-search control or text-verbosity levels. Router admi
 for `environment:none` uses the available engine capability, not an engine name.
 The independent API selects new Session engines through `AGENTS_API_ENGINE`
 (`codex` by default, `claude_sdk` or `mcode`); existing Sessions keep their stored engine.
-This is operator configuration, not a public harness-selector field. API admission,
+This remains the deployment default; the optional Core harness extension selects
+an enabled engine for one saved or inline Agent configuration. API admission,
 device selection and the final preclaim check share the execution service's narrow
 engine policy without importing native adapters. Selected engines require the common
 durable execution capabilities. Codex retains its general search/verbosity checks;
@@ -2617,12 +2618,42 @@ or filesystem isolation. Automatic installation remains separate.
   four platforms. Companion installation does not grant API authorization;
   task-scoped uploads keep the current run requester and workspace checks.
 
+### Harness selection and Agent defaults
+
+Core accepts the optional `agent.x_agents_core.harness` extension through the
+saved Agent and inline Session configuration paths. Define the extension once in
+`contracts/agents-api/v1`; never use metadata or a competing top-level selector.
+Resolve saved overrides before selecting the existing Session engine, and apply
+that engine's execution policy before persistence. Omitted selection preserves
+the deployment default; explicit unavailable selection fails without fallback.
+Effective reads use the persisted engine. See the [extension contract](contracts/agents-api/harness-selection.md)
+for null/retry behavior and operator configuration.
+
+Hosted engine-to-provider selection belongs to Core composition. Admission and
+initial allocation share the mapping; retained allocations use their persisted
+provider identity. Runtime images must satisfy their existing qualification rules.
+Transient model options are partitioned by engine and must not expose another
+engine's credentials. Do not infer an engine from a model name or template.
+
+Parsar Agents save default model, harness extension and a typed, non-confidential
+`config.environment` selector. The environment selector is product configuration;
+it becomes the official Session `environment`, never part of the protocol Agent.
+Only a template reference or supported environment selector is stored, not live
+container identity or initialization secrets. An explicitly chosen conversation
+environment retains its existing override behavior. Otherwise the first message
+uses the Agent defaults. Creating an Agent or opening an empty chat performs no
+Core Session or container creation. One conversation/Agent binding freezes the
+request on first execution; later messages and observer retries reuse it. Separate
+conversations get independent Sessions and environments. Edits affect future
+Sessions only. Keep the existing product navigation and direct empty-chat composer.
+
 ### Product Core execution
 
 - Product Agent configuration uses the complete pinned inline Agent contract:
   model, instructions (mapped once from the product `system_prompt` field), tools,
   service_tier, reasoning, text and multi_agent. Do not narrow this schema to the
-  current Core MVP. Reject old engine/device/provider settings; Core validates
+  current Core MVP. The explicit Core harness extension and product environment
+  defaults follow the rules above. Reject old engine/device/provider settings; Core validates
   its current execution support. Business display/visibility stay in Parsar.
   A supplied product `config` replaces the execution configuration; omitted config
   preserves it. The separately supplied SP remains independent of that replacement.
@@ -3290,8 +3321,8 @@ wrapped rows grow naturally. Keep this behavior in the shared header, with
 `actionClassName` reserved for page-specific action arrangements.
 
 Agent forms edit the model, instructions and pinned upstream Agent configuration.
-Environment templates belong to Core; Session creation chooses a template or
-an explicit environment type. Preserve drafts when an upstream operation fails
+Environment templates belong to Core; Agent forms save a default template or
+explicit environment type for new Sessions. Preserve drafts when an upstream operation fails
 and show unavailable features without inventing a successful local substitute.
 New and cloned Agents default invocation scope to workspace. Scope choices
 explain the Feishu gate without implying anonymous Web/API access.

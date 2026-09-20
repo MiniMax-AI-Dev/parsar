@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/openai/openai-go/v3"
 )
 
@@ -23,7 +24,7 @@ func (c *Connector) sessionRequest(ctx context.Context, in connector.PromptInput
 		return openai.BetaAgentSessionNewParams{}, errors.New("this Core product integration does not support capability bindings yet")
 	}
 	config := make(map[string]any, len(in.AgentConfig))
-	for _, key := range []string{"model", "tools", "service_tier", "multi_agent", "reasoning", "text"} {
+	for _, key := range []string{"model", "tools", "service_tier", "multi_agent", "reasoning", "text", "x_agents_core"} {
 		if value, ok := in.AgentConfig[key]; ok {
 			config[key] = value
 		}
@@ -43,7 +44,14 @@ func (c *Connector) sessionRequest(ctx context.Context, in connector.PromptInput
 		return openai.BetaAgentSessionNewParams{}, errPersistence
 	}
 	environment := openai.EnvironmentParamUnion{OfParamOpenAIHosted: &openai.EnvironmentParamOpenAIHosted{}}
-	if selection, ok := conversation.Metadata["core_environment"]; ok {
+	selection, ok := conversation.Metadata["core_environment"]
+	if !ok {
+		selection, ok = in.AgentConfig["environment"]
+	}
+	if ok {
+		if _, err := store.ParseCoreEnvironment(selection); err != nil {
+			return openai.BetaAgentSessionNewParams{}, err
+		}
 		environment = openai.EnvironmentParamUnion{}
 		raw, err := json.Marshal(selection)
 		if err != nil {

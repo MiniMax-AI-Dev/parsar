@@ -15,7 +15,7 @@ member pages and conversations; the upstream dashboard is not a UI specification
 | --- | --- | --- |
 | Agent as a working member | Parsar identity, description, permissions and SP; execution fields become Session `agent` | Connected through inline configuration. Description is display-only; SP maps to additional `instructions`, not replacement of Core's base instructions. |
 | Reusable execution definition | Core `/agents` CRUD | Implemented by Core; product does not currently use saved Agents. No additional product Agent-template object is required. |
-| Environment selection | `POST /agents/sessions` with `environment` | Selected for a new conversation. No invented permanent Agent-to-Environment binding or container ownership. |
+| Environment selection | `POST /agents/sessions` with `environment` | Saved once in the Agent defaults and passed on the first message. Explicit conversation selectors remain overrides; no running container is bound to the Agent. |
 | Environment template | `/agents/environments/templates` CRUD | Name and enabled/disabled network are implemented. Installation fields and restricted domains await Core support. |
 | Actual environment | Created with Session; `/agents/environments/{id}` reads | Owned by Core. Multiple conversations for a member use separate contexts; the product does not manage provider allocations. |
 | Skill / MCP asset management | Parsar assets, versions, configuration and authorization | Retained. Import, preview, upload, publication and credential authorization do not mean runtime activation. |
@@ -79,7 +79,7 @@ For a single native workspace, the equivalent explicit configuration is
 
 ## Product workflow and contract
 
-1. Create an Agent with a model and instructions. Advanced configuration accepts
+1. Create an Agent with a model, Harness, default environment/template and instructions. Advanced configuration accepts
    `tools`, `service_tier`, `reasoning`, `text` and `multi_agent` from the pinned
    official inline Agent contract.
 2. Optionally create a Core environment template. The UI enables name and basic
@@ -87,7 +87,7 @@ For a single native workspace, the equivalent explicit configuration is
    and other initialization fields as awaiting Core. API requests preserve official
    fields and let Core explicitly reject unsupported values. The product does not cache their confidential payloads. Template updates
    preserve omitted fields; secret values are never prefilled from list responses.
-3. Start a conversation with an Agent and a hosted template or no environment. The first
+3. Select an Agent to open an empty chat directly. The first
    message creates a Core execution session. Subsequent inputs reuse that session;
    Agent edits apply to new conversations. Existing sessions keep their snapshots.
 4. Observe text, tool activity, reasoning summaries and usage; cancel when needed.
@@ -127,3 +127,21 @@ delivery, credential injection, provider allocation and native execution paths.
 Capability-library and member pages distinguish managed assets from execution
 availability. Existing unsupported capability bindings fail explicitly rather than
 being silently ignored or loaded through an old connector.
+
+## Default execution configuration
+
+Parsar stores `config.x_agents_core.harness` and `config.environment` alongside the
+model. The former is the [Core extension](../../contracts/agents-api/harness-selection.md);
+the latter is a product default mapped to the separate official Session environment.
+Neither is stored in metadata. Existing explicit conversation environment overrides
+remain readable. Agent create/read/edit requires no executing container. Opening
+an empty chat requires no Core Session; the first message freezes one request and
+starts execution through the existing durable Core binding. Two chats with the
+same Agent have separate contexts and environments. Later messages reuse their
+original environment even after Agent defaults change.
+
+Configure the desired harnesses and their qualified Runtime providers in Core
+before using them. The product offers the existing harness identifiers, with a
+clear error for a deployment that has not enabled the selection. Protocol-valid
+configuration may still exceed a harness's supported model/environment/tool profile;
+Core and its selected adapter retain those validation boundaries.

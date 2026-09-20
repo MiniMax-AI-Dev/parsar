@@ -64,7 +64,7 @@ func (request decodedSessionRequest) validated() (sessionRequest, error) {
 		return input, err
 	}
 	if len(request.Agent) > 0 {
-		if decodeInputObject(request.Agent, &input.Agent, "model", "instructions", "multi_agent", "reasoning", "service_tier", "text", "tools") != nil {
+		if decodeInputObject(request.Agent, &input.Agent, "model", "instructions", "multi_agent", "reasoning", "service_tier", "text", "tools", "x_agents_core") != nil {
 			return input, store.ErrInvalidInput
 		}
 		if err := json.Unmarshal(request.Agent, &input.agentFields); err != nil {

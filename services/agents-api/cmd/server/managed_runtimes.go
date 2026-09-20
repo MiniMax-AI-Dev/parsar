@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/engine"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/execution"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/sandbox"
 	sandboxdocker "github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/sandbox/docker"
@@ -17,6 +18,7 @@ import (
 
 type managedRuntimeConfig struct {
 	CoreURL         string                         `json:"core_url"`
+	EngineProviders map[string]string              `json:"engine_providers"`
 	DefaultProvider string                         `json:"default_provider"`
 	Docker          map[string]managedDockerConfig `json:"docker"`
 	E2B             map[string]managedE2BConfig    `json:"e2b"`
@@ -65,13 +67,31 @@ func managedRuntimes() (*execution.RuntimeProviders, func(), error) {
 			return nil, closeAll, errors.New("managed default provider is not configured")
 		}
 	}
+	if config.EngineProviders == nil {
+		config.EngineProviders = map[string]string{}
+	}
+	defaultEngine := os.Getenv("AGENTS_API_ENGINE")
+	if defaultEngine == "" {
+		defaultEngine = "codex"
+	}
+	if config.DefaultProvider != "" && config.EngineProviders[defaultEngine] == "" {
+		config.EngineProviders[defaultEngine] = config.DefaultProvider
+	}
+	for kind, key := range config.EngineProviders {
+		_, qualified := (engine.Catalog{}).Lookup(kind)
+		_, dockerOK := config.Docker[key]
+		_, e2bOK := config.E2B[key]
+		if !qualified || key == "" || (!dockerOK && !e2bOK) {
+			return nil, closeAll, errors.New("invalid managed engine provider mapping")
+		}
+	}
 	var clients []*client.Client
 	closeAll = func() {
 		for _, c := range clients {
 			_ = c.Close()
 		}
 	}
-	result := &execution.RuntimeProviders{CoreURL: config.CoreURL, DefaultProvider: config.DefaultProvider, Providers: map[string]sandbox.Provider{}}
+	result := &execution.RuntimeProviders{EngineProviders: config.EngineProviders, CoreURL: config.CoreURL, DefaultProvider: config.DefaultProvider, Providers: map[string]sandbox.Provider{}}
 	for key, entry := range config.E2B {
 		if _, duplicate := config.Docker[key]; duplicate {
 			return nil, closeAll, errors.New("managed provider keys must be unique")

@@ -110,6 +110,7 @@ export interface NavigateOptions {
   item?: string | null
   from?: string | null
   pendingCapability?: string | null
+  agent?: string | null
   focus?: string | null
 }
 
@@ -172,6 +173,7 @@ export function useNavigateAdmin() {
     setOptionalParam(url, "item", opts?.item)
     setOptionalParam(url, "from", opts?.from)
     setOptionalParam(url, "pendingCapability", opts?.pendingCapability)
+    setOneShotParam(url, "agent", opts?.agent)
     setOneShotParam(url, "focus", opts?.focus)
     window.history.pushState({}, "", url.toString())
     window.dispatchEvent(new Event("admin:navigate"))
@@ -217,6 +219,7 @@ export function navigateAdmin(next: AdminView, opts?: NavigateOptions) {
   setOptionalParam(url, "item", opts?.item)
   setOptionalParam(url, "from", opts?.from)
   setOptionalParam(url, "pendingCapability", opts?.pendingCapability)
+  setOneShotParam(url, "agent", opts?.agent)
   setOneShotParam(url, "focus", opts?.focus)
   window.history.pushState({}, "", url.toString())
   window.dispatchEvent(new Event("admin:navigate"))

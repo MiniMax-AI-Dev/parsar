@@ -1,11 +1,12 @@
 import { Textarea } from "../../components/ui/textarea"
-import { jsonObject, type CoreAgentConfig } from "../../lib/core-api"
+import { jsonObject, coreExecutionDefaults, type CoreAgentConfig } from "../../lib/core-api"
 import { useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "../../components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
+import { AgentExecutionFields } from "./agents/AgentExecutionFields"
 import { AgentInstructionsField } from "./agents/AgentInstructionsField"
 import { AgentVisibilityField } from "./agents/AgentVisibilityField"
 import { AgentSaveErrorDialog } from "./agents/AgentSaveErrorDialog"
@@ -36,6 +37,7 @@ export function CreateAgentDialog(props: CreateAgentDialogProps) {
   const id = useId()
   const submitRef = useRef<HTMLButtonElement>(null)
   const scopeRef = useRef<HTMLDivElement>(null)
+  const [execution, setExecution] = useState(() => coreExecutionDefaults(props.agent?.config))
   const [name, setName] = useState(props.agent?.name ?? "")
   const [description, setDescription] = useState(props.agent?.description ?? "")
   const [model, setModel] = useState(String(props.agent?.config?.model ?? ""))
@@ -57,7 +59,7 @@ export function CreateAgentDialog(props: CreateAgentDialogProps) {
         } catch (error) { setConfigurationError(error instanceof Error ? error.message : t("core.failed")); return }
         props.onSubmit({
           agentID: props.mode === "edit" ? props.agent?.id : undefined,
-          body: { name: name.trim(), description: description.trim(), connector_type: "agents_api", system_prompt: instructions, config: { ...extra, model: model.trim() } as CoreAgentConfig, ...(props.mode === "create" ? { visibility } : {}) },
+          body: { name: name.trim(), description: description.trim(), connector_type: "agents_api", system_prompt: instructions, config: { ...extra, model: model.trim(), environment: execution.environment, ...(execution.harness ? { x_agents_core: { harness: execution.harness } } : {}) } as CoreAgentConfig, ...(props.mode === "create" ? { visibility } : {}) },
         })
       }}>
         <DialogHeader>
@@ -68,6 +70,7 @@ export function CreateAgentDialog(props: CreateAgentDialogProps) {
           <div><Label htmlFor={`${id}-name`}>{t("agents.core.name")}</Label><Input id={`${id}-name`} value={name} onChange={(event) => setName(event.target.value)} disabled={props.pending} required /></div>
           <div><Label htmlFor={`${id}-description`}>{t("agents.core.summary")}</Label><Input id={`${id}-description`} value={description} onChange={(event) => setDescription(event.target.value)} disabled={props.pending} /></div>
           <div><Label htmlFor={`${id}-model`}>{t("agents.core.model")}</Label><Input id={`${id}-model`} value={model} onChange={(event) => setModel(event.target.value)} disabled={props.pending} required aria-describedby={`${id}-hint`} /><p id={`${id}-hint`} className="mt-1 text-xs text-fg-muted">{t("agents.core.modelHint")}</p></div>
+          <AgentExecutionFields workspaceID={props.workspaceID} harness={execution.harness} environment={execution.environment} onHarnessChange={harness => setExecution(value => ({ ...value, harness }))} onEnvironmentChange={environment => setExecution(value => ({ ...value, environment }))} disabled={props.pending} />
           <AgentInstructionsField value={instructions} onChange={setInstructions} disabled={props.pending} />
           {props.mode === "create" && <AgentVisibilityField value={visibility} onChange={setVisibility} disabled={props.pending} />}
           <details><summary className="cursor-pointer text-sm font-medium">{t("core.advanced")}</summary><p className="my-2 text-xs text-fg-muted">{t("core.agentAdvancedHint")}</p><Textarea aria-label={t("core.advanced")} value={advanced} onChange={event => setAdvanced(event.target.value)} disabled={props.pending} spellCheck={false} /></details>

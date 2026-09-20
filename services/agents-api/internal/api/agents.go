@@ -40,7 +40,7 @@ func (h *Handler) createAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request v1.CreateAgentRequest
-	if decodeInputObject(raw, &request, "model", "name", "instructions", "metadata", "multi_agent", "reasoning", "service_tier", "text", "tools") != nil {
+	if decodeInputObject(raw, &request, "model", "name", "instructions", "metadata", "multi_agent", "reasoning", "service_tier", "text", "tools", "x_agents_core") != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", "Request must be a JSON object containing supported fields.")
 		return
 	}

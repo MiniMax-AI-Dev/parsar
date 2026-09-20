@@ -8,7 +8,6 @@ export function AgentConfigTab({ agent, modelLabel }: { agent: AgentDetail; work
   const { t } = useTranslation("admin")
   return <div className="space-y-6">
     <AgentConfigSummary agent={agent} modelLabel={modelLabel} />
-    <DetailSection title={t("core.environment")}><p className="text-sm text-fg-muted">{t("core.memberEnvironment")}</p></DetailSection>
     <DetailSection title={t("core.skillsTitle")}><p className="text-sm font-medium">{t("core.awaitingCore")}</p><p className="mt-2 text-sm text-fg-muted">{t("core.skillsPending")}</p></DetailSection>
   </div>
 }

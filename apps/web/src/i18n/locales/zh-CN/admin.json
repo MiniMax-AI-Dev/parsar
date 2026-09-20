@@ -2921,6 +2921,10 @@
     "skillsPending": "Skills 资产可在能力库中导入、编辑和管理版本。将它们加载给 Agent 运行，需要 Core 的环境初始化支持，目前等待实现。保存资产不表示已在 Agent 中启用。",
     "memberEnvironment": "发起新对话时选择运行环境。每段对话有独立的 Core 会话和环境；Agent 不永久占用容器，也不默认跨对话共享工作目录。",
     "templateSupport": "名称和启用／禁用网络已接通。软件包、初始化命令、环境变量、域名限制及能力安装等待 Core 实现。",
-    "assetManagementHint": "这里管理 Parsar 的能力资产和 MCP 配置。导入或授权成功不代表已可供 Agent 运行；运行时加载由 Core 承载，目前尚未接通。"
+    "assetManagementHint": "这里管理 Parsar 的能力资产和 MCP 配置。导入或授权成功不代表已可供 Agent 运行；运行时加载由 Core 承载，目前尚未接通。",
+    "executionDefaults": "默认执行配置",
+    "defaultHarness": "Core 默认 Harness",
+    "harnessHint": "使用 Core 已配置的 Harness。未启用或不支持的模型与环境组合会明确报错。",
+    "executionDefaultsHint": "只保存配置。第一条消息才创建独立环境；同一聊天持续复用。修改仅影响之后的新聊天。"
   }
 }

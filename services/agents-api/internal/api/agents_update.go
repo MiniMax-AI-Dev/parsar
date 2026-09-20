@@ -51,7 +51,7 @@ func (h *Handler) updateAgent(w http.ResponseWriter, r *http.Request) {
 
 func resolveAgentUpdate(raw []byte) (store.UpdateAgentInput, error) {
 	var request v1.UpdateAgentRequest
-	if decodeInputObject(raw, &request, "model", "name", "instructions", "metadata", "multi_agent", "reasoning", "service_tier", "text", "tools") != nil {
+	if decodeInputObject(raw, &request, "model", "name", "instructions", "metadata", "multi_agent", "reasoning", "service_tier", "text", "tools", "x_agents_core") != nil {
 		return store.UpdateAgentInput{}, errors.New("Request must be a JSON object containing supported fields.")
 	}
 	var fields map[string]json.RawMessage
@@ -68,6 +68,9 @@ func resolveAgentUpdate(raw []byte) (store.UpdateAgentInput, error) {
 	var patch map[string]json.RawMessage
 	if err := json.Unmarshal(normalized.Configuration, &patch); err != nil {
 		return store.UpdateAgentInput{}, err
+	}
+	if _, supplied := fields["x_agents_core"]; supplied && request.XAgentsCore == nil {
+		patch["x_agents_core"] = json.RawMessage(`null`)
 	}
 	for field := range patch {
 		if _, supplied := fields[field]; !supplied {

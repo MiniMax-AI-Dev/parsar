@@ -42,6 +42,10 @@ definitions:
         items:
           type: object
         type: array
+      x_agents_core:
+        allOf:
+        - $ref: '#/definitions/v1.AgentsCore'
+        x-nullable: true
     required:
     - id
     - model
@@ -67,6 +71,17 @@ definitions:
     - deleted
     - id
     - object
+    type: object
+  v1.AgentsCore:
+    properties:
+      harness:
+        enum:
+        - codex
+        - claude_sdk
+        - mcode
+        type: string
+    required:
+    - harness
     type: object
   v1.CreateAgentRequest:
     properties:
@@ -108,6 +123,10 @@ definitions:
         items:
           type: object
         type: array
+        x-nullable: true
+      x_agents_core:
+        allOf:
+        - $ref: '#/definitions/v1.AgentsCore'
         x-nullable: true
     required:
     - model
@@ -604,6 +623,10 @@ definitions:
           type: object
         type: array
         x-nullable: true
+      x_agents_core:
+        allOf:
+        - $ref: '#/definitions/v1.AgentsCore'
+        x-nullable: true
     type: object
   v1.InputContent:
     properties:
@@ -817,6 +840,10 @@ definitions:
         type: array
       updated_at:
         type: integer
+      x_agents_core:
+        allOf:
+        - $ref: '#/definitions/v1.AgentsCore'
+        x-nullable: true
     required:
     - created_at
     - id
@@ -1427,6 +1454,10 @@ definitions:
         items:
           type: object
         type: array
+        x-nullable: true
+      x_agents_core:
+        allOf:
+        - $ref: '#/definitions/v1.AgentsCore'
         x-nullable: true
     type: object
   v1.UpdateCredentialRequest:

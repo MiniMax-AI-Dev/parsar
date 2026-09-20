@@ -41,3 +41,33 @@ func TestExecutionOptionsStayTransientAndPerRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestExecutionOptionsSeparateHarnessCredentials(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "options.json")
+	t.Setenv("AGENTS_API_EXECUTION_OPTIONS_FILE", file)
+	t.Setenv("AGENTS_API_ENGINE", "codex")
+	if err := os.WriteFile(file, []byte(`{"by_harness":{"codex":{"codex_provider":{"bearer_token":"codex-secret"}},"mcode":{"mcode_provider":{"api_key":"mcode-secret"}}}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	resolve, err := executionOptions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	options, err := resolve(t.Context(), store.Session{Engine: "mcode"})
+	if err != nil || options["codex_provider"] != nil || options["mcode_provider"] == nil {
+		t.Fatalf("wrong credential partition: %v", err)
+	}
+	if _, err := resolve(t.Context(), store.Session{Engine: "claude_sdk"}); err == nil {
+		t.Fatal("missing harness fell back")
+	}
+	if err := os.WriteFile(file, []byte(`{"codex_provider":{"bearer_token":"codex-secret"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	resolve, err = executionOptions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolve(t.Context(), store.Session{Engine: "mcode"}); err == nil {
+		t.Fatal("legacy credentials crossed harness boundary")
+	}
+}

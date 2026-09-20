@@ -1,8 +1,10 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/openai/openai-go/v3"
 	"strings"
 )
@@ -16,6 +18,24 @@ func foldCoreAgentConfig(dst, src map[string]any) error {
 				return fmt.Errorf("%w: model must be a nonempty Core model name", ErrInvalidInput)
 			}
 			dst[key] = strings.TrimSpace(model)
+		case "x_agents_core":
+			raw, err := json.Marshal(value)
+			var extension *v1.AgentsCore
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.DisallowUnknownFields()
+			if err != nil || decoder.Decode(&extension) != nil {
+				return fmt.Errorf("%w: invalid x_agents_core configuration", ErrInvalidInput)
+			}
+			if err := extension.Validate(); err != nil {
+				return fmt.Errorf("%w: %s", ErrInvalidInput, err)
+			}
+			dst[key] = extension
+		case "environment":
+			selection, err := ParseCoreEnvironment(value)
+			if err != nil {
+				return err
+			}
+			dst[key] = selection
 		case "tools", "multi_agent", "reasoning", "text", "service_tier":
 			dst[key] = value
 		case "credential_bindings", "model_credential_binding":

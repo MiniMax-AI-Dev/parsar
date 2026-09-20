@@ -24,6 +24,7 @@ type UpdateSessionRequest struct {
 // InlineAgent supplies a complete inline configuration or per-Session overrides.
 // With agent_id, omitted fields inherit and supplied fields replace saved values.
 type InlineAgent struct {
+	XAgentsCore  *AgentsCore          `json:"x_agents_core,omitempty" extensions:"x-nullable"`
 	Model        *string              `json:"model,omitempty"`
 	Instructions *string              `json:"instructions,omitempty" extensions:"x-nullable"`
 	MultiAgent   json.RawMessage      `json:"multi_agent,omitempty" swaggertype:"object" extensions:"x-nullable"`
@@ -47,6 +48,7 @@ type Environment struct {
 }
 
 type Agent struct {
+	XAgentsCore  *AgentsCore       `json:"x_agents_core,omitempty" extensions:"x-nullable"`
 	ID           string            `json:"id" binding:"required"`
 	Instructions *string           `json:"instructions" extensions:"x-nullable"`
 	Model        string            `json:"model" binding:"required"`
