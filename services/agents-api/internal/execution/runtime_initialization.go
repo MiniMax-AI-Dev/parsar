@@ -17,6 +17,8 @@ import (
 type runtimeInitialization struct {
 	owner       store.RuntimeAllocation
 	next, count int
+	files       int
+	operations  []runtimeSetupOperation
 	deadline    time.Time
 }
 
@@ -39,9 +41,19 @@ func (r *runtimeLifecycle) observeInitialization(ctx context.Context, owner stor
 		return err
 	}
 	var cfg struct {
-		Files []store.InitialFileMetadata `json:"files"`
+		Initialization bool                        `json:"initialization"`
+		Files          []store.InitialFileMetadata `json:"files"`
 	}
-	if json.Unmarshal(environment.Configuration, &cfg) != nil || len(cfg.Files) == 0 || len(cfg.Files) > 50 {
+	if json.Unmarshal(environment.Configuration, &cfg) != nil || len(cfg.Files) > 50 {
+		_, err = r.store.RequestRuntimeCleanup(ctx, owner)
+		return err
+	}
+	setup, err := r.store.ReadEnvironmentSetup(ctx, owner.TenantID, owner.SessionID)
+	if err != nil {
+		return err
+	}
+	operations := setupOperations(setup)
+	if len(cfg.Files)+len(operations) == 0 || cfg.Initialization != !setup.Empty() {
 		_, err = r.store.RequestRuntimeCleanup(ctx, owner)
 		return err
 	}
@@ -49,11 +61,11 @@ func (r *runtimeLifecycle) observeInitialization(ctx context.Context, owner stor
 	if err != nil {
 		return err
 	}
-	r.initializing = &runtimeInitialization{owner: claimed, count: len(cfg.Files), deadline: time.Now().Add(30 * time.Minute)}
+	r.initializing = &runtimeInitialization{owner: claimed, count: len(cfg.Files) + len(operations), files: len(cfg.Files), operations: operations, deadline: time.Now().Add(30 * time.Minute)}
 	return nil
 }
 
-// One bounded file follows a full maintenance scan; other allocations get serviced between files.
+// One bounded operation follows a full maintenance scan; other allocations get serviced between operations.
 func (r *runtimeLifecycle) advanceInitialization(ctx context.Context) error {
 	active := r.initializing
 	if active == nil {
@@ -85,9 +97,15 @@ func (r *runtimeLifecycle) advanceInitialization(ctx context.Context) error {
 		r.initializing = nil
 		return err
 	}
-	file, body, err := r.store.ReadInitialEnvironmentFile(operation, owner.TenantID, owner.SessionID, active.next)
-	if err == nil {
-		err = installInitialFile(operation, r.config.Providers[owner.ProviderKey], runtimeReference(owner), file, body)
+	if active.next < active.files {
+		var file store.InitialFileMetadata
+		var body []byte
+		file, body, err = r.store.ReadInitialEnvironmentFile(operation, owner.TenantID, owner.SessionID, active.next)
+		if err == nil {
+			err = installInitialFile(operation, r.config.Providers[owner.ProviderKey], runtimeReference(owner), file, body)
+		}
+	} else {
+		err = runRuntimeSetup(operation, r.config.Providers[owner.ProviderKey], runtimeReference(owner), active.operations[active.next-active.files])
 	}
 	if err != nil {
 		// Clearing the in-memory owner makes the next observation request cleanup,

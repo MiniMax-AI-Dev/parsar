@@ -23,6 +23,7 @@ type decodedSessionRequest struct {
 
 type sessionRequest struct {
 	initialFiles        []store.InitialFile
+	initialization      store.EnvironmentSetup
 	originalEnvironment json.RawMessage
 	v1.CreateSessionRequest
 	Input               json.RawMessage
@@ -50,6 +51,10 @@ func (request decodedSessionRequest) validated() (sessionRequest, error) {
 		return input, store.ErrInvalidInput
 	}
 	var err error
+	input.initialization, err = decodeEnvironmentSetup(environmentFields)
+	if err != nil {
+		return input, err
+	}
 	input.initialFiles, err = decodeInitialFiles(environmentFields["files"])
 	if err != nil {
 		return input, err

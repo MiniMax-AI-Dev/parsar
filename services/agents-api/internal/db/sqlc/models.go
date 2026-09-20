@@ -75,6 +75,11 @@ type EnvironmentInputReservation struct {
 	IsInitial      bool               `json:"is_initial"`
 }
 
+type EnvironmentSetup struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	Contents  []byte      `json:"contents"`
+}
+
 type EnvironmentTemplate struct {
 	ID            pgtype.UUID        `json:"id"`
 	TenantID      pgtype.UUID        `json:"tenant_id"`
@@ -84,6 +89,9 @@ type EnvironmentTemplate struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 	Files         []byte             `json:"files"`
 	FileContents  []byte             `json:"file_contents"`
+	Packages      []byte             `json:"packages"`
+	EnvContents   []byte             `json:"env_contents"`
+	SetupContents []byte             `json:"setup_contents"`
 }
 
 type ExecutionProjectScope struct {

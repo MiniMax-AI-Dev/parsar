@@ -266,19 +266,38 @@ Session creation freezes tenant-authorized source bytes in the same commit, inde
 of later source/template deletion. Public resource reads must not require decryption
 or load encrypted file bodies. Record original creation intent before resolution.
 
+Template parsing, persistence and resolution must not select a harness or Provider,
+or depend on native tool names and private harness paths. The shared initializer
+uses the packaged Runtime contract for trusted commands, workspace/staging paths,
+confidential input and completion receipts. Each Provider supplies that same
+Runtime and carries initialization commands through RunCommand; each adapter owns
+native tool configuration. A new harness or Provider must not require template
+business-logic changes. Reuse qualified shared helpers even when their executable
+names have historical engine prefixes; renaming is not a boundary fix. Select real
+regressions by the changed shared, Provider and adapter boundaries, rather than
+repeating every deployment combination for each configuration field.
+
 The allocation lifecycle owns pending/running/complete initialization. Authentication
 may connect the daemon during initialization; execution bindings, native preparation,
 live Files and connected publication wait for completion. Keep Provider bootstrap
-settlement distinct. Advance at most one bounded file per full maintenance scan,
+settlement distinct. Advance at most one bounded initialization operation per full
+maintenance scan,
 using process-local progress and the existing lifecycle gate. A recovered or uncertain
 running installation fails and uses existing cleanup, without replaying writes.
 Completed environments never reinstall initial files on reconnect or native recovery.
 Provider RunCommand carries bounded stdin, not confidential argv. Only fixed trusted
-initializers may run with Runtime authority; user setup scripts remain unsupported.
+initializers may run with Runtime authority. User setup and package install hooks
+run in the common packaged sandbox, without daemon credentials or native history.
+Files and npm/Python packages precede ordered setup commands. Initialization has
+provisioning network access; requested network restrictions apply to native tools
+after setup. Confidential env and setup snapshots are encrypted independently of
+ordinary metadata. Adapters apply tool env only after isolation, never to the
+credential-bearing daemon/native harness launcher.
 Reuse the packaged atomic file writer and anchored parent creation across all profiles.
 
-Name, enabled/disabled network and initial files are qualified independently of other
-installation fields. Reject unsupported inputs rather than persisting them for silent
+Name, enabled/disabled network, initial files and env/setup/npm/Python are
+implemented independently of remaining installation fields. Reject unsupported
+inputs rather than persisting them for silent
 omission; expand inline and template initialization together in separately qualified
 batches. Resource reads need only tenant authorization, not a live Runtime.
 See the [Template coverage and unresolved semantics](contracts/agents-api/environment-templates.md).

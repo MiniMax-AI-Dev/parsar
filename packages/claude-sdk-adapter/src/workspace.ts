@@ -9,6 +9,7 @@ export type Workspace = {
   protected_dirs: string[];
   dependency_path: string;
   env_names: string[];
+  tool_environment?: boolean;
   network_access?: "enabled" | "disabled";
 };
 
@@ -39,7 +40,8 @@ export function parseWorkspace(value: unknown, cwd: string): Workspace | undefin
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_request");
   const config = value as Record<string, unknown>;
-  if (Object.keys(config).some(key => !["home", "state", "scratch", "protected_dirs", "dependency_path", "env_names", "network_access"].includes(key)) ||
+  if (Object.keys(config).some(key => !["home", "state", "scratch", "protected_dirs", "dependency_path", "env_names", "network_access", "tool_environment"].includes(key)) ||
+      (config.tool_environment !== undefined && typeof config.tool_environment !== "boolean") ||
       (config.network_access !== undefined && config.network_access !== "enabled" && config.network_access !== "disabled") ||
       !Array.isArray(config.protected_dirs) || !Array.isArray(config.env_names) ||
       typeof config.dependency_path !== "string" || !config.dependency_path ||
@@ -61,7 +63,7 @@ export function parseWorkspace(value: unknown, cwd: string): Workspace | undefin
 export class WorkspaceProfile {
   readonly options: Options;
 
-  constructor(private readonly cwd: string, config: Workspace, private readonly functions: readonly string[] = []) {
+  constructor(private readonly cwd: string, private readonly config: Workspace, private readonly functions: readonly string[] = []) {
     config = parseWorkspace(config, cwd)!;
     // SDK history lookup reads the bridge environment, independently of query.env.
     if (process.env.HOME !== config.home || process.env.CLAUDE_CONFIG_DIR !== config.state ||
@@ -91,7 +93,7 @@ export class WorkspaceProfile {
       sandbox: {
         enabled: true, failIfUnavailable: true, autoAllowBashIfSandboxed: false, allowUnsandboxedCommands: false,
         excludedCommands: [], enableWeakerNestedSandbox: false, enableWeakerNetworkIsolation: false,
-        filesystem: { disabled: false, allowWrite: [cwd, config.scratch], denyRead: protectedRoots,
+        filesystem: { disabled: false, allowWrite: [cwd, config.scratch, ...(config.tool_environment ? ["/environment/packages"] : [])], denyRead: protectedRoots,
           denyWrite: protectedRoots, allowRead: [] },
         credentials: {
           envVars: [...new Set([...credentialNames, ...config.env_names])].map(name => ({ name, mode: "deny" })),
@@ -122,6 +124,12 @@ export class WorkspaceProfile {
   readonly beforeTool: HookCallback = async (input, id, { signal }) => {
     if (!signal.aborted && input.hook_event_name === "PreToolUse" && input.agent_id === undefined &&
         (id === undefined || id === input.tool_use_id) && this.permits(input.tool_name, input.tool_input)) {
+      if (input.tool_name === "Bash" && this.config.tool_environment) {
+        const toolInput = input.tool_input as Record<string, unknown>;
+        const quote = (text: string) => "'" + text.replaceAll("'", "'\\''") + "'";
+        return { hookSpecificOutput: { hookEventName: "PreToolUse", updatedInput: { ...toolInput,
+          command: ". /environment/initialization/tool-env.sh && eval -- " + quote(toolInput.command as string) } } };
+      }
       return input.tool_name !== "Read" && input.tool_name !== "Edit" ? {} : { hookSpecificOutput: { hookEventName: "PreToolUse",
         updatedInput: this.absoluteInput(input.tool_name, input.tool_input as Record<string, unknown>) } };
     }

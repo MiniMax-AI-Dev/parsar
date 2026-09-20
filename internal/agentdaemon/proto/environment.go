@@ -3,6 +3,8 @@ package proto
 // LocalEnvironment references a deployment-bound workspace; it never supplies a path.
 type LocalEnvironment struct {
 	ID string `json:"id"`
+	// ToolEnvironment consumes Core-completed confidential initialization.
+	ToolEnvironment bool `json:"tool_environment,omitempty"`
 	// NetworkAccess must match the immutable Runtime policy for execution.
 	NetworkAccess string `json:"network_access,omitempty"`
 }

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/localworkspace"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
@@ -77,6 +78,16 @@ func prepareWorkspaceOptions(ctx context.Context, c WorkspaceConfig, req proto.P
 		return opts, err
 	}
 	profile := map[string]any{"workspace": "/workspace", "scratch": c.Scratch, "network": c.Network, "protectedDirs": slices.Clone(c.ProtectedDirs)}
+	if req.LocalEnvironment.ToolEnvironment {
+		if err := localworkspace.VerifyToolEnvironment(); err != nil {
+			return opts, err
+		}
+		profile["toolEnvironment"] = true
+		// Initialization exposes only user env/packages; private staging and
+		// daemon/native history remain explicitly denied.
+		protected := slices.Clone(c.ProtectedDirs)
+		profile["protectedDirs"] = slices.DeleteFunc(protected, func(path string) bool { return path == "/environment" })
+	}
 	raw, err = json.Marshal(profile)
 	if err != nil {
 		return opts, err

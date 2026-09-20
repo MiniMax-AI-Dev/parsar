@@ -13,7 +13,7 @@ import (
 
 const createRuntimeAllocation = `-- name: CreateRuntimeAllocation :one
 INSERT INTO runtime_allocations (id, environment_id, device_id, provider_key, initialization)
-VALUES ($1, $2, $3, $4, CASE WHEN EXISTS (SELECT 1 FROM initial_environment_files f JOIN environments e ON e.session_id = f.session_id WHERE e.id = $2) THEN 'pending' ELSE 'complete' END) RETURNING id, environment_id, device_id, provider_key, state, create_settled, created_at, kept_at, released_at, initialization
+VALUES ($1, $2, $3, $4, CASE WHEN EXISTS (SELECT 1 FROM initial_environment_files f JOIN environments e ON e.session_id = f.session_id WHERE e.id = $2) OR EXISTS (SELECT 1 FROM environment_setups f JOIN environments e ON e.session_id = f.session_id WHERE e.id = $2) THEN 'pending' ELSE 'complete' END) RETURNING id, environment_id, device_id, provider_key, state, create_settled, created_at, kept_at, released_at, initialization
 `
 
 type CreateRuntimeAllocationParams struct {

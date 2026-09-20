@@ -38,7 +38,8 @@ subprocess.run(['mount', '--bind', '/environment/workspace', '/workspace'], chec
 profile = Path('/home/runtime/.parsar/parsar-daemon/default')
 profile.mkdir(mode=0o700, parents=True, exist_ok=True)
 for directory in [Path('/home/runtime'), Path('/home/runtime/.parsar'), profile.parent, profile,
-                  Path('/environment/workspace'), Path('/environment/staging')]:
+                  Path('/environment/workspace'), Path('/environment/staging'),
+                  Path('/environment/initialization'), Path('/environment/packages')]:
     os.chown(directory, 1000, 1000)
     directory.chmod(0o700)
 auth = profile / 'auth.json'

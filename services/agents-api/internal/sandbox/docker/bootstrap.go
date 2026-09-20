@@ -36,7 +36,7 @@ func (p *Provider) bootstrap(ctx context.Context, id string, b sandbox.Bootstrap
 	}); e != nil {
 		return e
 	}
-	return p.copy(ctx, id, "/environment", []entry{{name: "workspace", directory: true}, {name: "staging", directory: true}})
+	return p.copy(ctx, id, "/environment", []entry{{name: "workspace", directory: true}, {name: "staging", directory: true}, {name: "initialization", directory: true}, {name: "packages", directory: true}})
 }
 func (p *Provider) copy(ctx context.Context, id, path string, entries []entry) error {
 	var content bytes.Buffer

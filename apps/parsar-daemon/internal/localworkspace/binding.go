@@ -93,6 +93,11 @@ func (b *Binding) Configure(r proto.PromptRequestPayload) (proto.PromptRequestPa
 		return r, errors.New("request does not match the local Runtime network policy")
 	}
 	if !r.WorkspaceReadOnly {
+		if r.LocalEnvironment.ToolEnvironment {
+			if err := VerifyToolEnvironment(); err != nil {
+				return r, err
+			}
+		}
 		r.WorkDir = b.workspace
 	}
 	return r, nil

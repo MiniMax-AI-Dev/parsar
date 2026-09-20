@@ -20,6 +20,19 @@ const tool = tools.find(value => value.def.name === request.tool);
 if (!tool || !request.input || typeof request.input !== 'object' || Array.isArray(request.input) ||
     !isRuntimeToolInputValid(tools, request.tool, request.input))
   throw new Error('invalid tool request');
+if (process.argv[3] === '--tool-environment') {
+  const env = JSON.parse(readFileSync('/environment/initialization/tool-env.json', 'utf8'));
+  for (const [name, value] of Object.entries(env)) {
+    if (typeof value !== 'string') throw new Error('invalid initialized tool environment');
+    process.env[name] = value;
+  }
+  // The native Bash boundary strips native identity variables even in mode:off.
+  // Reapply user values in the already isolated shell without changing tools.
+  if (request.tool === 'bash') {
+    const quote = (text: string) => "'" + text.replaceAll("'", "'\\''") + "'";
+    request.input.command = '. /environment/initialization/tool-env.sh && eval -- ' + quote(request.input.command);
+  }
+}
 const context = { sessionId: 'worker', turnId: 'call', allowBashAutoPromotion: false,
   canConsumeBackgroundBashOutput: false };
 try {

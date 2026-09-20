@@ -116,7 +116,8 @@ const getSessionInitializationReady = `-- name: GetSessionInitializationReady :o
 SELECT NOT EXISTS (
  SELECT 1 FROM runtime_allocations a JOIN environments e ON e.id = a.environment_id
  WHERE e.session_id = s.id AND a.initialization <> 'complete'
-) AND (NOT EXISTS (SELECT 1 FROM initial_environment_files f WHERE f.session_id = s.id)
+) AND ((NOT EXISTS (SELECT 1 FROM initial_environment_files f WHERE f.session_id = s.id)
+ AND NOT EXISTS (SELECT 1 FROM environment_setups f WHERE f.session_id = s.id))
  OR EXISTS (SELECT 1 FROM runtime_allocations a JOIN environments e ON e.id = a.environment_id
  WHERE e.session_id = s.id AND a.initialization = 'complete')) AS ready
 FROM sessions s WHERE s.tenant_id = $1 AND s.id = $2

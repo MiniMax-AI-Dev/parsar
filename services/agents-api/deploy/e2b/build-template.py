@@ -58,14 +58,14 @@ with tempfile.TemporaryDirectory(dir=state) as temporary:
     (context / 'init.py').write_bytes(Path(__file__).with_name('init.py').read_bytes())
     template = (Template(file_context_path=context).from_image(BASE)
                 .run_cmd('apt-get update && apt-get install -y --no-install-recommends '
-                         'ca-certificates bash git python3 ripgrep bubblewrap socat util-linux '
+                         'ca-certificates bash git python3 python3-pip ripgrep bubblewrap socat util-linux '
                          '&& rm -rf /var/lib/apt/lists/*', user='root')
                 .copy('runtime.tar.gz', '/root/runtime.tar.gz', user='root')
                 .copy('runtime-env.json', '/etc/parsar-runtime-env.json', user='root')
                 .copy('init.py', '/opt/parsar-e2b/init.py', user='root')
                 .run_cmd('tar --no-same-owner -xzf /root/runtime.tar.gz -C / && rm /root/runtime.tar.gz '
                          '&& usermod -l runtime -d /home/runtime node '
-                         '&& mkdir -p /home/runtime/.parsar /environment/workspace /environment/staging /workspace '
+                         '&& mkdir -p /home/runtime/.parsar /environment/workspace /environment/staging /environment/initialization /environment/packages /workspace '
                          '&& chown -R 1000:1000 /home/runtime /environment '
                          '&& chmod 0700 /home/runtime/.parsar /environment/staging '
                          '&& chmod 0444 /etc/parsar-runtime-env.json '

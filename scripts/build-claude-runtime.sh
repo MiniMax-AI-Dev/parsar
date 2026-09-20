@@ -27,6 +27,7 @@ for helper in agents-api-codex-directory agents-api-codex-write agents-api-works
   cp "$helpers_dir/$helper" "$context/"
 done
 cp "$repo_root/services/agents-api/deploy/claude/Dockerfile" "$context/Dockerfile"
+cp "$repo_root/services/agents-api/deploy/runtime/initialize.py" "$context/runtime-initialize.py"
 mkdir -p "$output_dir"
 cp -R "$context/." "$output_dir/"
 printf 'Claude Runtime image context: %s\n' "$output_dir"

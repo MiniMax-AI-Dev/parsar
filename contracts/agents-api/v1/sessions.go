@@ -35,6 +35,9 @@ type InlineAgent struct {
 
 // Environment contains supported request variants; self-hosted creation requires a workspace directory.
 type Environment struct {
+	Env                   map[string]string        `json:"env,omitempty" extensions:"x-nullable"`
+	SetupCommands         []json.RawMessage        `json:"setup_commands,omitempty" extensions:"x-nullable" swaggertype:"array,object"`
+	Packages              *EnvironmentPackages     `json:"packages,omitempty" extensions:"x-nullable"`
 	Files                 []json.RawMessage        `json:"files,omitempty" swaggertype:"array,object" extensions:"x-nullable"`
 	EnvironmentTemplateID string                   `json:"environment_template_id,omitempty"`
 	Type                  string                   `json:"type" enums:"none,self_hosted,openai_hosted" binding:"required"`
