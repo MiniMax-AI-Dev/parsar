@@ -5,6 +5,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates bash git python3 python3-pip ripgrep bubblewrap socat \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /environment/workspace /workspace /home/runtime
+COPY build-system-seed.py /tmp/build-system-seed.py
+RUN python3 -I -S /tmp/build-system-seed.py && rm /tmp/build-system-seed.py
+COPY --chmod=0555 tool-root.py /usr/local/bin/agents-api-tool-root
 COPY --chmod=0555 parsar-daemon agents-api-codex-directory agents-api-codex-write agents-api-workspace-export /usr/local/bin/
 COPY claude-sdk /opt/claude-sdk
 COPY --chmod=0444 runtime-initialize.py /usr/local/bin/agents-api-runtime-initialize

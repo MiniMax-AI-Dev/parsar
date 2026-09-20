@@ -94,10 +94,11 @@ func prepareWorkspaceOptions(ctx context.Context, c WorkspaceConfig, req proto.P
 	}
 	profile := map[string]any{"workspace": "/workspace", "scratch": c.Scratch, "network": c.Network, "protectedDirs": slices.Clone(c.ProtectedDirs), "skills": len(req.LocalEnvironment.Skills) > 0}
 	if req.LocalEnvironment.ToolEnvironment {
-		if err := localworkspace.VerifyToolEnvironment(); err != nil {
+		if err := localworkspace.VerifyToolEnvironment(req.LocalEnvironment.SystemPackages); err != nil {
 			return opts, err
 		}
 		profile["toolEnvironment"] = true
+		profile["systemPackages"] = req.LocalEnvironment.SystemPackages
 		// Initialization exposes only user env/packages; private staging and
 		// daemon/native history remain explicitly denied.
 		protected := slices.Clone(c.ProtectedDirs)

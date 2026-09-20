@@ -15,9 +15,12 @@ try:
         raise ValueError('invalid hook input')
     if not Path('/environment/initialization/tool-env.sh').is_file():
         raise ValueError('missing tool environment')
+    rewritten = '. /environment/initialization/tool-env.sh && eval -- ' + shlex.quote(command)
+    if os.environ.get('PARSAR_RUNTIME_SYSTEM_PACKAGES') == '1':
+        rewritten = '/usr/bin/python3 -I -S /usr/local/bin/agents-api-tool-root ' + shlex.quote(command)
     print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse',
           'permissionDecision': 'allow', 'updatedInput': {
-          'command': '. /environment/initialization/tool-env.sh && eval -- ' + shlex.quote(command)}}}))
+          'command': rewritten}}}))
 except Exception:
     # Native exit 2 denies the tool. Never return a partial rewrite or input.
     print('Initialized tool configuration unavailable', file=sys.stderr)

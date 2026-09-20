@@ -17,6 +17,7 @@ bootstrap = json.loads(source.read_text())
 # Restore trusted executable ownership before launching the unprivileged Runtime.
 subprocess.run(['chown', '-R', 'root:root', '/usr/local'], check=True)
 subprocess.run(['chmod', '-R', 'go-w', '/usr/local'], check=True)
+os.chmod('/usr/local/bin/agents-api-tool-root', 0o555)
 # The provider also injects these root service/boot files with mode 0777.
 for protected in ['/usr/bin/envd', '/etc/inittab', '/etc/init.d/rcS']:
     # Some cloud images omit rcS after boot; no absent startup file needs access.

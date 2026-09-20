@@ -30,6 +30,7 @@ type WorkspaceConfig struct {
 type workspaceProfile struct {
 	Skills          []agentskill.Metadata `json:"skills,omitempty"`
 	ToolEnvironment bool                  `json:"tool_environment,omitempty"`
+	SystemPackages  bool                  `json:"system_packages,omitempty"`
 	Home            string                `json:"home"`
 	State           string                `json:"state"`
 	Scratch         string                `json:"scratch"`
@@ -54,10 +55,11 @@ func prepareWorkspace(config Config, req proto.PromptRequestPayload) (*workspace
 		return nil, nil, err
 	}
 	if req.LocalEnvironment != nil && req.LocalEnvironment.ToolEnvironment {
-		if err := localworkspace.VerifyToolEnvironment(); err != nil {
+		if err := localworkspace.VerifyToolEnvironment(req.LocalEnvironment.SystemPackages); err != nil {
 			return nil, nil, err
 		}
 		profile.ToolEnvironment = true
+		profile.SystemPackages = req.LocalEnvironment.SystemPackages
 	}
 	if req.LocalEnvironment != nil {
 		if err := localworkspace.VerifySkills(req.LocalEnvironment.Skills); err != nil {

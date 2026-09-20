@@ -35,11 +35,18 @@ func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg
 	}
 
 	if req.LocalEnvironment != nil && req.LocalEnvironment.ToolEnvironment {
-		if err := localworkspace.VerifyToolEnvironment(); err != nil {
+		if err := localworkspace.VerifyToolEnvironment(req.LocalEnvironment.SystemPackages); err != nil {
 			plan.Cleanup()
 			return SessionPlan{}, "", err
 		}
 		plan.Env = append(plan.Env, "PARSAR_RUNTIME_TOOL_ENV=1")
+		if req.LocalEnvironment.SystemPackages {
+			if err := prepareSystemToolAnchor(); err != nil {
+				plan.Cleanup()
+				return SessionPlan{}, "", err
+			}
+			plan.Env = append(plan.Env, "PARSAR_RUNTIME_SYSTEM_PACKAGES=1")
+		}
 		plan.ExtraConfig = append(plan.ExtraConfig, [2]string{"features.hooks", "true"})
 	}
 

@@ -30,6 +30,8 @@ if config.get('verify_initial_files') and not config.get('verify_environment_tem
     raise ValueError('Initial-file acceptance requires verify_environment_templates')
 if config.get('verify_environment_setup') and not config.get('verify_initial_files'):
     raise ValueError('Setup acceptance requires verify_initial_files')
+if config.get('verify_system_packages') and not config.get('verify_environment_setup'):
+    raise ValueError('System-package acceptance requires verify_environment_setup')
 if config.get('verify_initialization_restart') and not config.get('verify_initial_files'):
     raise ValueError('Initialization restart acceptance requires verify_initial_files')
 root = Path(config['proof_root'])
@@ -191,7 +193,8 @@ def prompt(sid, text, n):
 
 
 def connected(eid):
-    return until(lambda: client.beta.agents.environments.retrieve(eid).status == 'connected')
+    return until(lambda: client.beta.agents.environments.retrieve(eid).status == 'connected',
+                 300 if config.get('verify_system_packages') else 120)
 
 
 def native_id(sid):
@@ -236,6 +239,9 @@ try:
         enabled_template, disabled_template = verify_environment_templates(client, foreign, http)
         public_templates.extend([enabled_template, disabled_template])
         verify_template_session_rejections(client, foreign, http, agent, enabled_template, disabled_template)
+        if config.get('verify_system_packages'):
+            from official_environment_setup import verify_system_package_configuration
+            verify_system_package_configuration(client, http)
         environment['environment_template_id'] = enabled_template
         check('template_sdk_http_crud_pagination_redaction_and_tenant_isolation')
     initial_expected = {}
@@ -245,7 +251,7 @@ try:
         sources.append(initial_source)
     if config.get('verify_environment_setup'):
         from official_environment_setup import setup_configuration, attach_setup, verify_setup_metadata, native_setup_script
-        setup, setup_marker = setup_configuration()
+        setup, setup_marker = setup_configuration(system_packages=config.get('verify_system_packages', False))
         environment = attach_setup(client, foreign, http, environment, setup, enabled_template, network='enabled')
     session = sessions.create(agent=agent, environment=environment, extra_headers={'Idempotency-Key': 'idle'})
     created.append(session.id)
@@ -290,12 +296,34 @@ print('protected')
 CHECK""", user='runtime')
     assert protection.stdout == 'protected\n'
     check('actual_runtime_code_ownership_and_privileged_account_denial')
+    if config.get('verify_system_packages'):
+        seed = vm.commands.run("""python3 -I -S - <<'CHECK'
+from pathlib import Path
+import hashlib,json,os
+root = Path('/opt/agents-runtime')
+for path in [root, root/'system-root.tar.gz', root/'system-root.json', Path('/usr/local/bin/agents-api-tool-root')]:
+    stat = path.stat()
+    assert stat.st_uid == 0 and stat.st_mode & 0o022 == 0
+    assert not os.access(path, os.W_OK)
+assert Path('/usr/local/bin/agents-api-tool-root').stat().st_mode & 0o777 == 0o555
+with (root/'system-root.tar.gz').open('rb') as stream:
+    digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+assert json.loads((root/'system-root.json').read_text()) == {
+    'version': 1, 'sha256': digest, 'size_bytes': (root/'system-root.tar.gz').stat().st_size}
+print(digest)
+CHECK""", user='runtime')
+        record['system_seed_sha256'] = seed.stdout.strip()
+        check('finalized_system_seed_and_launcher_are_immutable_and_verified')
+
     for resource in ['/agents/sessions/' + session.id, '/agents/environments/' + eid]:
         assert http.get(base + '/v1' + resource, headers={**headers, 'Authorization': 'Bearer ' + tokens[1]}).status_code == 404
     marker, memory = secrets.token_hex(24), secrets.token_hex(24)
     expected_files = {p: len(body) for p, body in initial_expected.items()}
     if config.get('verify_environment_setup'):
         expected_files.update({'/workspace/setup-once': 11, '/workspace/setup-version': 6})
+    if config.get('verify_system_packages'):
+        for path in ['/workspace/system-library.c', '/workspace/system-library']:
+            expected_files[path] = len(read(vm, path))
     for name, data in [('input.txt', marker.encode()), ('binary.bin', bytes(range(256))), ('empty', b'')]:
         expected_files['/workspace/' + name] = upload(eid, '/workspace/' + name, data)
     source = client.files.create(file=('source.bin', b'source-bytes\x00\xff'), purpose='user_data')
@@ -309,9 +337,28 @@ CHECK""", user='runtime')
     if initial_expected:
         script = 'from pathlib import Path\n' + assert_initial_bytes_script(initial_expected) + script
     if config.get('verify_environment_setup'):
-        script = native_setup_script(setup_marker) + script
+        script = native_setup_script(setup_marker, system_packages=config.get('verify_system_packages', False)) + script
+    execution_prompt = 'Run exactly `python3 /workspace/publish.py`.'
+    if config.get('verify_system_packages') and config['engine'] == 'codex':
+        script += '''import sys
+assert str(Path.cwd()) == sys.argv[1]
+Path('/workspace/cwd-' + Path.cwd().name).write_text(str(Path.cwd()))
+'''
+        execution_prompt = (
+            'Make two separate native shell tool calls. Set the tool workdir parameter; do not use cd. '
+            'First use workdir /environment/workspace with exactly '
+            '`python3 /workspace/publish.py /environment/workspace`. '
+            'Then use workdir /environment/workspace/setup-sub with exactly '
+            '`python3 /workspace/publish.py /environment/workspace/setup-sub`. Do not modify the script.')
     upload(eid, '/workspace/publish.py', script)
-    first = prompt(session.id, 'Run exactly `python3 /workspace/publish.py`. Remember this conversation-only marker: ' + memory, 1)
+    first = prompt(session.id, execution_prompt + ' Remember this conversation-only marker: ' + memory, 1)
+    if config.get('verify_system_packages') and config['engine'] == 'codex':
+        commands = [item for item in sessions.items.list(session.id, limit=100).data
+                    if item.type == 'command_execution' and item.turn_id == first.id]
+        for cwd in ['/environment/workspace', '/environment/workspace/setup-sub']:
+            assert read(vm, '/workspace/cwd-' + Path(cwd).name).decode() == cwd
+            assert any(item.cwd == cwd and item.exit_code == 0 for item in commands), cwd
+        check('real_native_default_workspace_and_subdirectory_preserved')
     identity = native_id(session.id)
     assert identity
     expected_artifacts = {first.id: {'/workspace/outputs/a.bin': bytes(range(256)), '/workspace/outputs/empty': b''}}
@@ -395,7 +442,7 @@ CHECK""", user='runtime')
         check('recovery_preserves_user_changes_without_reinstalling_initial_files')
     if config.get('verify_environment_setup'):
         assert read(vm, '/workspace/setup-once') == b'preserved-setup-change'
-        inline_setup, inline_setup_marker = setup_configuration()
+        inline_setup, inline_setup_marker = setup_configuration(system_packages=config.get('verify_system_packages', False))
         disabled_environment = attach_setup(client, foreign, http, disabled_environment, inline_setup)
         check('recovery_does_not_repeat_completed_setup')
     disabled = sessions.create(agent=agent, environment=disabled_environment)
@@ -416,7 +463,7 @@ CHECK""", user='runtime')
         network_script = 'from pathlib import Path\n' + assert_initial_bytes_script(inline_expected) + network_script
     if config.get('verify_environment_setup'):
         verify_setup_metadata(client, disabled, inline_setup)
-        network_script = native_setup_script(inline_setup_marker) + network_script
+        network_script = native_setup_script(inline_setup_marker, system_packages=config.get('verify_system_packages', False)) + network_script
     upload(disabled.environment.id, '/workspace/network.py', network_script)
     prompt(disabled.id, 'Run exactly `python3 /workspace/network.py`. Do not modify it.', 1)
     assert json.loads(read(restricted, '/workspace/network-result.json')) == {'blocked': True}

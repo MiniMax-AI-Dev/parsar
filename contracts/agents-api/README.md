@@ -155,7 +155,7 @@ user-managed enrollment remain outside this qualification.
 | Area | Missing or unverified scope |
 | --- | --- |
 | Subagents / multi_agent | Six public child read operations, enabled execution, child lifecycle/interactions and full recovery; deferred outside the MVP |
-| Environment Templates | Skills references, Plugins, system packages, capability directories, restricted network, installation overrides/null network and exact hosted errors; CRUD/list, files, env/setup/npm/Python, inline Skills and Session references are supported |
+| Environment Templates | Skills references, Plugins, capability directories, restricted network, installation overrides/null network and exact hosted errors; CRUD/list, files, env/setup/system/npm/Python, inline Skills and Session references are supported |
 | Input and configuration | Non-text initial input, broader content/configuration unions, structured output and reasoning/verbosity combinations |
 | Tools and interactions | Deferred functions, other tool types, effective tool-set enforcement and result/cancel publication ordering; MiniMax public functions/MCP remain unsupported |
 | Vault and Credentials | OAuth/refresh, archive semantics, revocation/concurrent mutation and exact hosted selection/error behavior; static bearer CRUD/token replacement is already present |
@@ -355,7 +355,7 @@ including further deployment qualification; this inventory describes merged beha
   describe native discovery or workspace files created by commands. Unknown
   installation configurations are rejected, not reported as empty. Reads use the
   owning live Session's project partition and do not require execution setup.
-  System packages and remaining unsupported installation configuration, full hosted lifecycle and
+  Remaining unsupported installation configuration, full hosted lifecycle and
   exact hosted error semantics remain gaps.
 
 [Environment Templates](environment-templates.md) provide tenant-owned CRUD/list
@@ -400,10 +400,10 @@ operator setup: [Codex](../../services/agents-api/deploy/codex/README.md),
 [MiniMax Code](../../services/agents-api/deploy/mcode/README.md). The
 [E2B guide](../../services/agents-api/deploy/e2b/README.md) packages those qualified
 images as pinned templates.
-The env/setup/npm/Python initialization batch extends these profiles; see its
-[current evidence boundary](environment-templates.md#current-setup-batch). System
-packages, remaining unsupported startup installations, restricted domains and hosted public
-HTTP MCP remain outside these accepted profiles. MiniMax's private MCP tool bridge
+The shared initialization path supports env/setup and system/npm/Python packages;
+see the [evidence and limits](environment-templates.md#verification). Remaining
+unsupported startup installations, restricted domains and hosted public HTTP MCP
+remain outside these accepted profiles. MiniMax's private MCP tool bridge
 is internal transport, not public MCP support.
 
 The [Codex self-hosted profile](environments.md) remains distinct from managed

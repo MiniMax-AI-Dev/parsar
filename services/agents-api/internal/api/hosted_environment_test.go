@@ -16,6 +16,7 @@ import (
 func TestHostedEnvironmentDefaultsAndExplicitGaps(t *testing.T) {
 	for _, raw := range []string{
 		`{"type":"openai_hosted"}`,
+		`{"type":"openai_hosted","packages":{"system":["jq","libpq-dev"]}}`,
 		`{"type":"openai_hosted","network":null,"env":null,"files":null,"packages":null,"plugins":null,"skills":null,"setup_commands":null,"capability_directories":null}`,
 		`{"type":"openai_hosted","network":{"access":"enabled","allowed_domains":null},"env":{},"files":[],"packages":{"npm":[],"python":null,"system":[]},"plugins":[],"skills":[],"setup_commands":[],"capability_directories":[]}`,
 	} {
@@ -31,7 +32,7 @@ func TestHostedEnvironmentDefaultsAndExplicitGaps(t *testing.T) {
 	for _, field := range []string{
 		`"network":{}`, `"network":{"access":null}`, `"network":{"access":"restricted"}`,
 		`"network":{"access":"disabled","allowed_domains":["example.com"]}`, `"network":{"access":"enabled","unknown":true}`,
-		`"env":{"SECRET":null}`, `"files":[{}]`, `"packages":{"system":["package"]}`,
+		`"env":{"SECRET":null}`, `"files":[{}]`, `"packages":{"system":[null]}`,
 		`"packages":{"unknown":[]}`, `"plugins":[{}]`, `"skills":[{}]`, `"setup_commands":["echo test"]`,
 		`"capability_directories":["/workspace"]`, `"template_id":"template"`, `"workspace_directory":"/workspace"`,
 		`"files":{}`, `"env":[]`, `"packages":[]`, `"network":[]`, `"unknown":null`,

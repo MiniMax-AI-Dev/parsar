@@ -9,6 +9,8 @@ type LocalEnvironment struct {
 	Skills []agentskill.Metadata `json:"skills,omitempty"`
 	// ToolEnvironment consumes Core-completed confidential initialization.
 	ToolEnvironment bool `json:"tool_environment,omitempty"`
+	// SystemPackages requires the installed Runtime tool root during execution.
+	SystemPackages bool `json:"system_packages,omitempty"`
 	// NetworkAccess must match the immutable Runtime policy for execution.
 	NetworkAccess string `json:"network_access,omitempty"`
 }

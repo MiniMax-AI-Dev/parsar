@@ -10,6 +10,8 @@ managed-workspace-enabled = true
 "/workspace" = "write"
 "/environment/initialization" = "read"
 "/environment/packages" = "write"
+"/environment/packages/system" = "read"
+"/tmp/parsar-tool-root" = "read"
 [permissions.managed-workspace.network]
 enabled = false
 [permissions.managed-workspace-enabled]

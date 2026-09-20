@@ -43,7 +43,7 @@ func (s EnvironmentSetup) Validate() error {
 	ordinary := s
 	ordinary.Skills = nil
 	raw, err := json.Marshal(ordinary)
-	if err != nil || len(raw) > 512*1024 || len(s.Packages.System) > 0 {
+	if err != nil || len(raw) > 512*1024 {
 		return ErrInvalidInput
 	}
 	for name, value := range s.Env {
@@ -58,7 +58,7 @@ func (s EnvironmentSetup) Validate() error {
 			return ErrInvalidInput
 		}
 	}
-	for _, packages := range [][]string{s.Packages.NPM, s.Packages.Python} {
+	for _, packages := range [][]string{s.Packages.NPM, s.Packages.Python, s.Packages.System} {
 		for _, item := range packages {
 			if item == "" || strings.HasPrefix(item, "-") || strings.ContainsRune(item, 0) {
 				return ErrInvalidInput

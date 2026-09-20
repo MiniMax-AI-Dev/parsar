@@ -44,8 +44,12 @@ result['sensitive_process_leaks'] = leaks
 assert not leaks, 'protected outer process credential accessible'
 for name, command in [('sudo', ['sudo', '-n', 'id', '-u']),
                       ('privileged_account', ['su', 'user', '-c', 'id -u'])]:
-    process = subprocess.run(command, input='', capture_output=True, text=True, timeout=8)
-    result[name + '_denied'] = process.returncode != 0
+    try:
+        process = subprocess.run(command, input='', capture_output=True, text=True, timeout=8)
+        result[name + '_denied'] = process.returncode != 0
+    except FileNotFoundError:
+        result[name + '_unavailable'] = True
+        result[name + '_denied'] = True
     assert result[name + '_denied'], 'native shell gained privileged account'
 try:
     urllib.request.urlopen('http://127.0.0.1:49983/envs', timeout=5)

@@ -12,6 +12,7 @@ export type Workspace = {
   env_names: string[];
   skills?: WorkspaceSkill[];
   tool_environment?: boolean;
+  system_packages?: boolean;
   network_access?: "enabled" | "disabled";
 };
 
@@ -42,8 +43,10 @@ export function parseWorkspace(value: unknown, cwd: string): Workspace | undefin
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_request");
   const config = value as Record<string, unknown>;
-  if (Object.keys(config).some(key => !["home", "state", "scratch", "protected_dirs", "dependency_path", "env_names", "network_access", "tool_environment", "skills"].includes(key)) ||
+  if (Object.keys(config).some(key => !["home", "state", "scratch", "protected_dirs", "dependency_path", "env_names", "network_access", "tool_environment", "system_packages", "skills"].includes(key)) ||
       (config.tool_environment !== undefined && typeof config.tool_environment !== "boolean") ||
+      (config.system_packages !== undefined && typeof config.system_packages !== "boolean") ||
+      (config.system_packages === true && config.tool_environment !== true) ||
       (config.network_access !== undefined && config.network_access !== "enabled" && config.network_access !== "disabled") ||
       !Array.isArray(config.protected_dirs) || !Array.isArray(config.env_names) ||
       typeof config.dependency_path !== "string" || !config.dependency_path ||
@@ -81,6 +84,10 @@ export class WorkspaceProfile {
       if (value === undefined) throw new Error("invalid_request");
       env[name] = value;
     }
+    if (config.system_packages) {
+      env.CLAUDE_CODE_SHELL_PREFIX = "/usr/local/bin/agents-api-tool-root";
+      env.PARSAR_RUNTIME_TOOL_SCRATCH = config.scratch;
+    }
     const skills = workspaceSkills(config.state, config.skills ?? []);
     this.skillNames = skills?.names ?? [];
     const skillTools = skills ? ["Skill"] : [];
@@ -102,7 +109,8 @@ export class WorkspaceProfile {
         enabled: true, failIfUnavailable: true, autoAllowBashIfSandboxed: false, allowUnsandboxedCommands: false,
         excludedCommands: [], enableWeakerNestedSandbox: false, enableWeakerNetworkIsolation: false,
         filesystem: { disabled: false, allowWrite: [cwd, config.scratch, ...(config.tool_environment ? ["/environment/packages"] : [])], denyRead: protectedRoots,
-          denyWrite: [...protectedRoots, ...(skills ? ["/environment/initialization/capabilities"] : [])], allowRead: [] },
+          denyWrite: [...protectedRoots, ...(skills ? ["/environment/initialization/capabilities"] : []),
+            ...(config.system_packages ? ["/environment/packages/system"] : [])], allowRead: [] },
         credentials: {
           envVars: [...new Set([...credentialNames, ...config.env_names])].map(name => ({ name, mode: "deny" })),
           files: protectedRoots.map(path => ({ path, mode: "deny" })),

@@ -40,6 +40,9 @@ func setupOperations(setup store.EnvironmentSetup) []runtimeSetupOperation {
 	// The public network policy applies after setup completes. Provisioning uses
 	// the isolated initializer's network; adapters enforce the runtime policy.
 	const network = "enabled"
+	if len(setup.Packages.System) > 0 {
+		result = append(result, runtimeSetupOperation{Version: 1, Action: "system", Network: network, Packages: setup.Packages.System})
+	}
 	if len(setup.Packages.NPM) > 0 {
 		result = append(result, runtimeSetupOperation{Version: 1, Action: "npm", Network: network, Packages: setup.Packages.NPM})
 	}

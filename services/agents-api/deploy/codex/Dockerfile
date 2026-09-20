@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /environment/workspace /workspace /home/runtime \
     && groupadd --gid 1000 runtime \
     && useradd --uid 1000 --gid 1000 --home-dir /home/runtime --no-create-home runtime
+COPY build-system-seed.py /tmp/build-system-seed.py
+RUN python3 -I -S /tmp/build-system-seed.py && rm /tmp/build-system-seed.py
+COPY --chmod=0555 tool-root.py /usr/local/bin/agents-api-tool-root
 COPY --chmod=0555 parsar-daemon agents-api-codex-directory agents-api-codex-write agents-api-workspace-export codex /usr/local/bin/
 COPY codex-resources /usr/local/codex-resources
 COPY requirements.toml /etc/codex/requirements.toml

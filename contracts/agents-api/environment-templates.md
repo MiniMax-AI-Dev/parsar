@@ -18,7 +18,7 @@ and five-operation SandboxProvider path as inline configuration.
   or network replaces, with null clearing name or resetting network.
 - Empty/null installation fields retain empty defaults. Responses contain safe
   metadata and never `env`, `setup_commands` or inline file data. Initial files are
-  supported as described below, together with inline Skills, env, ordered setup and npm/Python packages; remaining populated installations reject explicitly.
+  supported as described below, together with inline Skills, env, ordered setup and system/npm/Python packages; remaining populated installations reject explicitly.
 - Listing uses `after`, `limit` (1–100, default 20), and `order` (default `desc`).
   Creation timestamp plus ID supplies stable local ordering. Missing/foreign IDs
   and cursors return the same not-found result. No compute is allocated by CRUD.
@@ -180,9 +180,39 @@ The adapter verifies the required trusted managed hook before preparation and
 stops the Turn on an observed failed hook. Earlier command effects may already
 exist; this is not an atomic hook-failure prevention guarantee.
 
+## System packages
+
+`packages.system` accepts package names for the Runtime's Debian apt repositories,
+in both templates and inline hosted configuration. Real apt/dpkg installs packages
+and runs package scripts before npm/Python dependencies and setup commands. Template
+updates replace the package object; omission preserves it and null clears it.
+Referencing Sessions freeze the existing template configuration.
+
+Each Runtime image supplies a seed built before daemon, harness and credential
+installation. The common initializer extracts it into
+`/environment/packages/system` under the unprivileged Runtime identity. Matching
+package databases and base tools are included; private Runtime files and native
+history are absent. Installation uses its own process/filesystem view. Package
+output is not exposed in public diagnostics. A failed or uncertain installation
+fails the Environment through the existing lifecycle and is not replayed.
+
+Setup and native shell tools enter this installed root read-only, with the same
+workspace and adapter-owned temporary storage. Trusted launchers stay outside the
+package-controlled root. Codex uses its managed hook, Claude its full-shell prefix,
+and MiniMax Code its existing tool worker; native execution and cancellation retain
+their existing owners. Core carries only the required initialized-tool condition.
+Files operations retain their existing authorization and initialization boundary.
+
+This is a single-UID tool environment, not a full operating-system service manager.
+Packages requiring additional Unix identities, privileged operations or background
+system services may fail explicitly. There is no apt mirror, package cache, arbitrary
+root installation or package retry mechanism. Existing operation and initialization
+time budgets apply. New harnesses implement the same Runtime contract rather than
+adding template-specific business logic.
+
 ## Explicit gaps and evidence boundaries
 
-System packages, nonempty `capability_directories` and `plugins`, and Skills API references,
+Nonempty `capability_directories` and `plugins`, and Skills API references,
 plus restricted-domain network policy, remain unsupported
 for both templates and inline initialization. The separate live Files API remains
 available after initialization. Unsupported requests reject without echoing payloads.
@@ -196,12 +226,12 @@ Template updates replace each supplied field; omission preserves it and null cle
 it. Referenced Sessions inherit the snapshot; explicit env/packages/setup overrides
 with a template ID reject while override semantics remain unconfirmed.
 
-Files and inline Skills are installed first, followed by npm/Python packages and ordered commands;
+Files and inline Skills are installed first, followed by system, npm/Python packages and ordered commands;
 the default cwd is `/workspace`. One command or package operation has the existing
 two-minute local budget, within the thirty-minute initialization budget. No command
 is retried after unknown effects. Completed setup never runs on reconnect.
 Package dependencies are available to native tools across working directories.
-System-level packages remain a separate privilege-boundary gap.
+System packages use the isolated tool root described above.
 
 The [update Reference](https://developers.openai.com/api/reference/python/resources/beta/subresources/agents/subresources/environments/subresources/templates/methods/update)
 defines runtime network as post-setup and packages as preceding that policy.
@@ -272,7 +302,7 @@ Core/Runtime restart order. They are not claimed as fixed. Sanitized run results
 checks, build hashes and failed attempts are retained under the private
 `environment-template-files` acceptance directory and the linked task record.
 
-### Current setup batch
+### Accepted env/setup and npm/Python batch
 
 `official_environment_setup.py` adds fixed-client/raw-response assertions for
 confidential snapshots, safe package metadata, real registry dependencies, ordered
@@ -300,8 +330,9 @@ One MiniMax inline post-restart model request reported an upstream timeout after
 transport changes; this does not establish or fix the timeout cause. All completed
 runs confirmed owned resource cleanup. The three-harness-by-two-Provider matrix
 was not repeated: shared E2B initialization and the changed native adapter paths
-were covered separately. System packages and unconfirmed reference overrides
-remain gaps, and native Codex hook failure retains the limitation stated above.
+were covered separately. System packages were outside that batch; their current
+qualification is recorded separately. Unconfirmed reference overrides remain gaps,
+and native Codex hook failure retains the limitation stated above.
 Private sanitized run/check/build evidence is retained under
 `~/.parsar/remediation/20260920/environment-template-setup/` and the linked board.
 These results do not establish complete Template or Agents API compatibility.
@@ -341,3 +372,75 @@ receipts retain their inherited historical manifest fields; accompanying source,
 Core and image hashes identify the actual candidates. Evidence is retained under
 `~/.parsar/remediation/20260920/environment-template-skills` and the linked board
 record. This profile does not establish complete upstream Skill semantics.
+
+### System-package qualification (2026-09-20)
+
+The batch passed standalone Docker acceptance with current-source Core/daemon and
+newly packaged Codex, Claude Code and MiniMax Code Runtimes. Fixed SDK 3.13.0 and
+raw HTTP exercised public templates; Codex also exercised inline configuration.
+Actual Kimi/MiniMax requests verified jq, compiler/libpq linkage, dependent
+npm/Python packages, ordered setup, native visibility, read-only installed roots,
+Skill/credential protection, Files/Artifacts, public cancellation and retained
+workspace/native history after Core and Runtime restart. Cancellation checks
+observed tool identities disappear before sandbox teardown. All three completed
+runs reported clean resource cleanup. Template omission, replacement, null/empty
+values and atomic invalid-input rejection received additional real HTTP checks.
+
+The Core SHA-256 was
+`9466a8419fd0e4ad8cd4fb1786ef131c2cc504513bf77642fca43ce07b8114a6`.
+The Codex template/inline run took 599.72 seconds; Claude and MiniMax template
+runs took 271.69 and 357.34 seconds. Real initialization mechanism checks separately
+covered isolated package scripts and compilation. Focused Go/SDK tests, OpenAPI
+generation and `make check` passed. The optional native build probe skipped by
+the default gate is not counted as real acceptance.
+
+E2B finalization rewrites `/usr/local` permissions. Its trusted bootstrap must
+restore the common system-tool launcher's packaged `0555` mode before native
+preparation; root ownership alone does not satisfy that Runtime receipt check.
+The first qualified Codex E2B template passed real Kimi template and inline acceptance in
+576.41 seconds, including final seed/launcher protection, actual package/setup
+visibility, Files/Artifacts, credential/history/process/envd isolation, public
+cancellation, separate Core/Runtime crashes, continued owned history without
+input or initialization replay, preserved user files, and disabled native-tool
+networking. Cleanup completed without fallback errors. This run uses the updated
+daemon with the bounded discovery adjustment described below. The immutable build
+is `1b60xhq0j13fnr5zipkg:7d11189a-b2bd-4690-bc3f-da0792439f91`. The full
+three-harness E2B matrix was not repeated: shared initialization and the changed
+native adapter paths were covered separately.
+
+Independent review then identified a missing native cwd alias: the installed tool
+root exposed `/workspace`, while Codex retained `/environment/workspace`. Both
+now mount the same authorized workspace. A rebuilt Docker Runtime passed actual
+system/npm/Python initialization and entry from the default directory and its
+subdirectory in 106.30 seconds, including private-state isolation and read-only
+tools. The earlier model runs selected `/workspace` and do not prove this fix.
+The rebuilt E2B template
+`1b60xhq0j13fnr5zipkg:e6437586-927e-4683-99fe-632b51a974fd` then passed the
+real Kimi template/inline loop in 457.91 seconds. Native command Items and actual
+effects verified the default directory and subdirectory; the same run passed
+Files/Artifacts, private-state isolation, cancellation, Core/Runtime recovery,
+preserved history and user modifications, and disabled tool networking. Cleanup
+reported no errors. The final mount-only correction received this actual regression
+and Python source checks; the two full `make check` runs precede it.
+
+Failed attempts are retained: early admission incorrectly required the private
+initialization receipt; execution preparation now owns that check. Test-only proxy
+configuration and simultaneous package installation attempts failed before the
+sequential accepted runs, without extending production budgets. E2B cold discovery
+once killed `codex --version`; unchanged discovery subsequently passed, but a later cold deployment repeated
+the failure with no observed OOM. The shared CLI availability probe now allows
+15 seconds instead of five; no retry or Provider-specific startup path is added.
+The precise initial paging/contention cause remains unconfirmed. Docker execution
+results above precede this isolated startup-budget adjustment. The E2B launcher-mode mismatch failed preparation before any
+native input was applied. The subsequent native isolation fixture assumed
+`sudo` existed; the real tool transcript showed `FileNotFoundError`. The fixture
+now records an absent privilege command explicitly while retaining all authority
+and private-state checks. Interactive PTY behavior and packages needing additional
+Unix identities or privileged services are not qualified by these results.
+
+Sanitized results, image/source hashes, full checks and failed evidence are retained
+under `~/.parsar/remediation/20260920/environment-template-capabilities` and the board.
+Early Docker result manifests contain inherited installer archive fields; those
+fields do not qualify a new installer archive. Current binary and image hashes
+identify the tested deployment. These checks do not establish complete upstream
+Template or Agents API compatibility.
