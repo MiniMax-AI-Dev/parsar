@@ -6,6 +6,8 @@ import { Button } from "../../components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
+import { useModelCatalog, supportsCatalogModel } from "../../lib/model-catalog"
+import { AgentModelField } from "./agents/AgentModelField"
 import { AgentExecutionFields } from "./agents/AgentExecutionFields"
 import { AgentInstructionsField } from "./agents/AgentInstructionsField"
 import { AgentVisibilityField } from "./agents/AgentVisibilityField"
@@ -40,12 +42,14 @@ export function CreateAgentDialog(props: CreateAgentDialogProps) {
   const [execution, setExecution] = useState(() => coreExecutionDefaults(props.agent?.config))
   const [name, setName] = useState(props.agent?.name ?? "")
   const [description, setDescription] = useState(props.agent?.description ?? "")
-  const [model, setModel] = useState(String(props.agent?.config?.model ?? ""))
+  const [modelID, setModelID] = useState(String(props.agent?.config?.model_id ?? ""))
+  const catalog = useModelCatalog(props.workspaceID)
+  const model = catalog.data?.models.find(row => row.id === modelID)
   const [instructions, setInstructions] = useState(String(props.agent?.config?.system_prompt ?? ""))
   const [advanced, setAdvanced] = useState(() => JSON.stringify(Object.fromEntries(Object.entries(props.agent?.config ?? {}).filter(([key]) => ["tools", "service_tier", "multi_agent", "reasoning", "text"].includes(key))), null, 2))
   const [configurationError, setConfigurationError] = useState<string | null>(null)
   const [visibility, setVisibility] = useState<AgentVisibility>(props.agent?.visibility ?? "workspace")
-  const valid = name.trim() !== "" && model.trim() !== "" && execution.harness !== "" && props.workspaceID !== null
+  const valid = name.trim() !== "" && !!model && supportsCatalogModel(model, execution.harness) && execution.environment.type === "openai_hosted" && execution.harness !== "" && props.workspaceID !== null
   return <Dialog open={props.open} onOpenChange={props.onOpenChange}>
     <DialogContent ref={scopeRef} className="max-h-[90dvh] overflow-y-auto">
       <form onSubmit={(event) => {
@@ -59,7 +63,7 @@ export function CreateAgentDialog(props: CreateAgentDialogProps) {
         } catch (error) { setConfigurationError(error instanceof Error ? error.message : t("core.failed")); return }
         props.onSubmit({
           agentID: props.mode === "edit" ? props.agent?.id : undefined,
-          body: { name: name.trim(), description: description.trim(), connector_type: "agents_api", system_prompt: instructions, config: { ...extra, model: model.trim(), environment: execution.environment, x_agents_core: { harness: execution.harness } } as CoreAgentConfig, ...(props.mode === "create" ? { visibility } : {}) },
+          body: { name: name.trim(), description: description.trim(), connector_type: "agents_api", system_prompt: instructions, config: { ...extra, model: model!.model_key, model_id: modelID, environment: execution.environment, x_agents_core: { harness: execution.harness } } as CoreAgentConfig, ...(props.mode === "create" ? { visibility } : {}) },
         })
       }}>
         <DialogHeader>
@@ -69,8 +73,9 @@ export function CreateAgentDialog(props: CreateAgentDialogProps) {
         <div className="my-4 space-y-4">
           <div><Label htmlFor={`${id}-name`}>{t("agents.core.name")}</Label><Input id={`${id}-name`} value={name} onChange={(event) => setName(event.target.value)} disabled={props.pending} required /></div>
           <div><Label htmlFor={`${id}-description`}>{t("agents.core.summary")}</Label><Input id={`${id}-description`} value={description} onChange={(event) => setDescription(event.target.value)} disabled={props.pending} /></div>
-          <div><Label htmlFor={`${id}-model`}>{t("agents.core.model")}</Label><Input id={`${id}-model`} value={model} onChange={(event) => setModel(event.target.value)} disabled={props.pending} required aria-describedby={`${id}-hint`} /><p id={`${id}-hint`} className="mt-1 text-xs text-fg-muted">{t("agents.core.modelHint")}</p></div>
+          <AgentModelField workspaceID={props.workspaceID} value={modelID} legacyModel={String(props.agent?.config?.model ?? "")} harness={execution.harness} onChange={setModelID} disabled={props.pending} />
           <AgentExecutionFields workspaceID={props.workspaceID} harness={execution.harness} environment={execution.environment} onHarnessChange={harness => setExecution(value => ({ ...value, harness }))} onEnvironmentChange={environment => setExecution(value => ({ ...value, environment }))} disabled={props.pending} />
+          {model && (!supportsCatalogModel(model, execution.harness) || execution.environment.type !== "openai_hosted") && <p role="alert" className="text-sm text-danger">{t("catalog.incompatible")}</p>}
           <AgentInstructionsField value={instructions} onChange={setInstructions} disabled={props.pending} />
           {props.mode === "create" && <AgentVisibilityField value={visibility} onChange={setVisibility} disabled={props.pending} />}
           <details><summary className="cursor-pointer text-sm font-medium">{t("core.advanced")}</summary><p className="my-2 text-xs text-fg-muted">{t("core.agentAdvancedHint")}</p><Textarea aria-label={t("core.advanced")} value={advanced} onChange={event => setAdvanced(event.target.value)} disabled={props.pending} spellCheck={false} /></details>

@@ -128,6 +128,7 @@ const menuGroups: MenuGroup[] = [
     // and the platforms it can be let out on.
     groupKey: "buildGroup",
     items: [
+      { id: "models", itemKey: "models", icon: Database },
       { id: "environments", itemKey: "environments", icon: Database },
       { id: "capabilities", itemKey: "capabilities", icon: Wrench },
       { id: "connections", itemKey: "connections", icon: Plug },

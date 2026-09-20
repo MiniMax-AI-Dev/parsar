@@ -255,11 +255,15 @@ export function LedgerGroup({
   label,
   count,
   defaultOpen = true,
+  onSelect,
+  selected,
   children,
 }: {
   label: React.ReactNode
   count?: number
   defaultOpen?: boolean
+  onSelect?: () => void
+  selected?: boolean
   children: React.ReactNode
 }) {
   const [open, setOpen] = React.useState(defaultOpen)
@@ -267,20 +271,25 @@ export function LedgerGroup({
     <section>
       <button
         type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="flex h-7 w-full items-center gap-1.5 border-b border-line pl-[22px] pr-6 text-left text-xs text-fg-muted hover:app-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
+        aria-expanded={onSelect ? undefined : open}
+        aria-pressed={onSelect ? selected : undefined}
+        onClick={onSelect ?? (() => setOpen(v => !v))}
+        className={cn(
+          "flex h-7 w-full items-center gap-1.5 border-b border-line pl-[22px] pr-6 text-left text-xs text-fg-muted hover:app-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40",
+          onSelect && "h-9 text-sm",
+          selected && "app-selected",
+        )}
       >
-        <ChevronDown
+        {!onSelect && <ChevronDown
           className={cn(
             "h-3.5 w-3.5 text-fg-muted transition-transform duration-200 ease-spring",
             !open && "-rotate-90",
           )}
           strokeWidth={1.5}
           aria-hidden="true"
-        />
+        />}
         <span className="font-medium text-fg">{label}</span>
-        {count !== undefined && <span className="tabular-nums">{count}</span>}
+        {count !== undefined && <span className="text-xs tabular-nums">{count}</span>}
       </button>
       {open && <ul className="m-0 list-none p-0">{children}</ul>}
     </section>
@@ -289,19 +298,20 @@ export function LedgerGroup({
 
 export const LedgerRow = React.forwardRef<
   HTMLLIElement,
-  React.LiHTMLAttributes<HTMLLIElement> & { selected?: boolean }
->(({ selected, className, children, ...props }, ref) => {
+  React.LiHTMLAttributes<HTMLLIElement> & { selected?: boolean; interactive?: boolean }
+>(({ selected, interactive = true, className, children, ...props }, ref) => {
   const { template, trailingActions, columns } = useColumns()
   return (
     <li
       ref={ref}
-      role="option"
-      aria-selected={selected}
-      tabIndex={0}
+      role={interactive ? "option" : undefined}
+      aria-selected={interactive ? selected : undefined}
+      tabIndex={interactive ? 0 : undefined}
       style={{ gridTemplateColumns: template }}
       className={cn(
-        "group relative grid h-9 min-w-min cursor-default items-center gap-x-2.5 border-b border-line text-sm text-fg outline-none transition-colors duration-150 ease-settle hover:app-hover focus-visible:app-hover [&>*]:min-w-0 [&>*]:self-center",
+        "group relative grid h-9 min-w-min cursor-default items-center gap-x-2.5 border-b border-line text-sm text-fg outline-none transition-colors duration-150 ease-settle [&>*]:min-w-0 [&>*]:self-center",
         gutterClass(trailingActions),
+        interactive && "hover:app-hover focus-visible:app-hover",
         selected && "app-selected before:absolute before:bottom-0 before:left-0 before:top-0 before:w-0.5 before:bg-accent before:content-['']",
         className,
       )}

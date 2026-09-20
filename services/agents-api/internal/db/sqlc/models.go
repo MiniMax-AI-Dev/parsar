@@ -185,6 +185,11 @@ type SessionItem struct {
 	OutputIndex pgtype.Int4        `json:"output_index"`
 }
 
+type SessionModelExecution struct {
+	SessionID       pgtype.UUID `json:"session_id"`
+	EncryptedConfig []byte      `json:"encrypted_config"`
+}
+
 type SourceFile struct {
 	ID        pgtype.UUID        `json:"id"`
 	TenantID  pgtype.UUID        `json:"tenant_id"`

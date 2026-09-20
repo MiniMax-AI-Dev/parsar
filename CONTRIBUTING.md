@@ -2555,8 +2555,9 @@ or filesystem isolation. Automatic installation remains separate.
 - Configure product-to-Core access with `PARSAR_CORE_WORKSPACES_FILE`: each
   workspace maps to a distinct Core project and caller key file. See
   [product deployment](docs/deploy/product-core.md) for the complete configuration.
-  Provider credentials belong in the independent Core service. An unconfigured
-  product can start; Core operations return an explicit unavailable error.
+  Workspace model Provider credentials belong to the Parsar catalog and are sent
+  through the write-only Core Session execution extension. Operator defaults remain
+  an independent Core deployment option. An unconfigured product can start; Core operations return an explicit unavailable error.
 - Root Compose deploys the product and its database. It mounts
   `PARSAR_CORE_CONFIG_DIR` read-only for workspace bindings and caller key files.
   The installer creates an empty binding list without overwriting existing
@@ -2619,6 +2620,44 @@ or filesystem isolation. Automatic installation remains separate.
 - The server image and daemon release workflow ship both binaries for the same
   four platforms. Companion installation does not grant API authorization;
   task-scoped uploads keep the current run requester and workspace checks.
+
+### Product model catalog and execution credentials
+
+Parsar owns workspace Model Providers, their write-only API keys, model catalog,
+Agent model selection and business permissions. Reuse the existing `models` table
+with workspace-owned Provider references; do not reactivate legacy product model
+calls, probes or runtime adapters. Core has no product Provider CRUD or catalog.
+Build → Models groups model rows under Providers using the Runs ledger pattern,
+with Provider settings in the detail rail; Credentials remains for
+third-party platform credentials. Members may read safe catalog metadata;
+only workspace owners/admins may mutate it. Audit mutations without keys or input
+payloads. Product keys require `PARSAR_MASTER_KEY` and authenticated workspace and
+resource identity within the existing encrypted envelope.
+
+An Agent saves `config.model_id` plus the exact resolved `model` string. The UI
+selects from its workspace catalog and validates protocol/Harness compatibility.
+Catalog identity and token limits are immutable; rename changes the display label
+only. Anthropic Messages supports Claude Code and MiniMax Code; Responses supports
+Codex. MiniMax Code requires explicit context/output limits. These checks establish
+configuration compatibility, not availability of an arbitrary upstream model.
+
+Before the first Core request, atomically freeze model identity and Provider settings
+under the catalog row locks. Encrypt the private Provider snapshot separately from
+ordinary `product_core_sessions.request`, bound to workspace and binding ID. Recover
+an existing binding before consulting mutable catalog rows. Provider edits/deletion
+and Agent edits apply to new Sessions only. Existing Sessions retain their model,
+endpoint and key; key rotation does not rewrite them. A deleted selection fails new
+execution explicitly. Omitted catalog selection on older Agents preserves their
+existing operator-configured execution behavior.
+
+Only Session creation carries the typed write-only execution configuration; the
+product connector adds it after loading its durable snapshot. Core encrypts it in
+the Session transaction using the existing credential cipher and tenant/Session
+binding. Creation idempotency includes the confidential intent by hash. The native
+adapters consume this snapshot without operator credential fallback. Missing keys,
+decryption failure or incompatible configuration fail closed. Public resources,
+events and ordinary configuration must not expose the key. Current support requires
+a qualified hosted environment. See [Session model execution](contracts/agents-api/model-execution.md).
 
 ### Harness selection and Agent defaults
 

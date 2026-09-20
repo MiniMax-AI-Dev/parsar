@@ -12,6 +12,15 @@ import (
 func foldCoreAgentConfig(dst, src map[string]any) error {
 	for key, value := range src {
 		switch key {
+		case "model_id":
+			id, ok := value.(string)
+			if !ok {
+				return fmt.Errorf("%w: invalid catalog model ID", ErrInvalidInput)
+			}
+			if _, err := uuid(id); err != nil {
+				return fmt.Errorf("%w: invalid catalog model ID", ErrInvalidInput)
+			}
+			dst[key] = id
 		case "model":
 			model, ok := value.(string)
 			if !ok || strings.TrimSpace(model) == "" {

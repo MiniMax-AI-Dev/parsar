@@ -175,6 +175,8 @@ definitions:
         items:
           type: string
         type: array
+      x_agents_core:
+        $ref: '#/definitions/v1.SessionExecutionInput'
     required:
     - environment
     type: object
@@ -753,6 +755,22 @@ definitions:
     - data
     - has_more
     type: object
+  v1.ModelProviderInput:
+    properties:
+      api_key:
+        type: string
+      base_url:
+        type: string
+      context_window:
+        type: integer
+      max_output_tokens:
+        type: integer
+      protocol:
+        enum:
+        - anthropic
+        - responses
+        type: string
+    type: object
   v1.MultiAgentConfig:
     properties:
       enabled:
@@ -1140,6 +1158,11 @@ definitions:
     required:
     - event_id
     - type
+    type: object
+  v1.SessionExecutionInput:
+    properties:
+      model_provider:
+        $ref: '#/definitions/v1.ModelProviderInput'
     type: object
   v1.SessionInput:
     properties:

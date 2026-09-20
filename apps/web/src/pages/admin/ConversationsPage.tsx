@@ -1,6 +1,5 @@
 import { useNewConversation } from "../../lib/use-new-conversation"
 import { requestStartSession } from "../../lib/core-api"
-import { useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
@@ -169,7 +168,6 @@ export function ConversationsPage() {
     })
   }
 
-  const qc = useQueryClient()
   const { openCreate, handleSendFromEmpty, resetFirstSend } = useNewConversation(wsId, selectedAgentId, entityId)
 
   const renameMutation = useUpdateConversationTitle(wsId)

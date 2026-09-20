@@ -14,9 +14,11 @@ import (
 var ErrCoreExecutionClaimed = errors.New("execution is already being observed")
 
 type CoreSessionBinding struct {
-	ID        string
-	SessionID string
-	Request   json.RawMessage
+	WorkspaceID      string
+	ProviderSnapshot []byte `json:"-"`
+	ID               string
+	SessionID        string
+	Request          json.RawMessage
 }
 
 type CoreRunBinding struct {
@@ -164,12 +166,11 @@ func (s *Store) ListRecoverableCoreRuns(ctx context.Context) ([]StreamingDispatc
 
 // GetCoreSession retrieves already-frozen execution without consulting mutable Agent settings.
 func (s *Store) GetCoreSession(ctx context.Context, runID string) (CoreSessionBinding, error) {
-	var result CoreSessionBinding
-	err := s.db.QueryRow(ctx, `select s.id::text, s.core_session_id, s.request from product_core_sessions s join agent_runs r on r.conversation_id=s.conversation_id and r.agent_id=s.agent_id where r.id=$1`, mustUUID(runID)).Scan(&result.ID, &result.SessionID, &result.Request)
+	r, err := sqlc.New(s.db).GetCatalogCoreSession(ctx, mustUUID(runID))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return result, ErrUnknownAgentRun
+		return CoreSessionBinding{}, ErrUnknownAgentRun
 	}
-	return result, err
+	return CoreSessionBinding{ID: r.ID, WorkspaceID: r.WorkspaceID, SessionID: r.CoreSessionID, Request: r.Request, ProviderSnapshot: r.ProviderSnapshot}, err
 }
 
 // GetCoreExecutionStatus is an internal lifecycle read, never a product visibility check.

@@ -78,6 +78,8 @@ engine. No engine inherits another engine's credentials. A legacy flat options
 object is usable only by the deployment default engine. Missing options for a
 selected engine fail execution. Credentials stay in private operator files and
 transient adapter requests, never Agent defaults, metadata or effective responses.
+A Session may instead provide the [write-only model execution extension](model-execution.md);
+its frozen configuration takes precedence without operator fallback.
 
 Model names remain explicit `agent.model` values. The selected native adapter uses
 its configured provider and rejects unsupported model settings without changing

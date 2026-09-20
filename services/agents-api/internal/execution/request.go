@@ -20,7 +20,12 @@ func (d *Dispatcher) executionRequest(ctx context.Context, session store.Session
 		return proto.PromptRequestPayload{}, err
 	}
 	options := map[string]any{}
-	if d.Options != nil {
+	if snapshot.ModelProviderConfigured {
+		options, err = d.sessionModelOptions(ctx, session, snapshot.Agent.Model)
+		if err != nil {
+			return proto.PromptRequestPayload{}, err
+		}
+	} else if d.Options != nil {
 		options, err = d.Options(ctx, session)
 		if err != nil {
 			return proto.PromptRequestPayload{}, err

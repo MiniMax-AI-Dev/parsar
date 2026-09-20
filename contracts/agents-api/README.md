@@ -772,3 +772,7 @@ establish complete ownership, hosted key lifecycle or error compatibility. See t
 [standalone configuration](../../services/agents-api/README.md#standalone-http-service).
 
 Core documents its optional [harness selection extension](harness-selection.md) separately from the pinned upstream contract.
+
+Model endpoints and credentials may be supplied at Session creation through the
+[write-only execution extension](model-execution.md). Provider catalogs and their
+business permissions remain client/product responsibilities.

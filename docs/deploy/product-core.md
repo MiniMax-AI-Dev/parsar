@@ -79,21 +79,30 @@ For a single native workspace, the equivalent explicit configuration is
 
 ## Product workflow and contract
 
-1. Create an Agent with a model, Harness, default environment/template and instructions. Advanced configuration accepts
+1. In Build → Models, create a workspace Provider with its protocol, HTTPS endpoint
+   and API key, then add model identifiers under it. Provider headers open settings;
+   their model rows are read-only. Keys are write-only and separate from Credentials.
+2. Create an Agent by selecting a catalog model, Harness, default hosted environment/template and instructions. Advanced configuration accepts
    `tools`, `service_tier`, `reasoning`, `text` and `multi_agent` from the pinned
    official inline Agent contract.
-2. Optionally create a Core environment template. The UI enables name and basic
+3. Optionally create a Core environment template. The UI enables name and basic
    network configuration, and marks packages, setup commands, environment variables
    and other initialization fields as awaiting Core. API requests preserve official
    fields and let Core explicitly reject unsupported values. The product does not cache their confidential payloads. Template updates
    preserve omitted fields; secret values are never prefilled from list responses.
-3. Select an Agent to open an empty chat directly. The first
+4. Select an Agent to open an empty chat directly. The first
    message creates a Core execution session. Subsequent inputs reuse that session;
    Agent edits apply to new conversations. Existing sessions keep their snapshots.
-4. Observe text, tool activity, reasoning summaries and usage; cancel when needed.
+5. Observe text, tool activity, reasoning summaries and usage; cancel when needed.
    Product restarts recover through durable Core Turns and Items. Deleting a
    conversation cancels pending/running work; internal cleanup continues until
    submitted Core work settles while product history stays hidden.
+
+Catalog keys require the product `PARSAR_MASTER_KEY` and the Core credential key.
+Both services freeze confidential execution configuration with their existing
+encryption services. Provider edits, key rotation and deletion affect new Sessions;
+existing Sessions keep the original model, endpoint and key. See the
+[execution extension contract](../../contracts/agents-api/model-execution.md).
 
 The UI distinguishes protocol configuration from current execution support. Core
 may reject fields it has not implemented; the product must not drop those fields

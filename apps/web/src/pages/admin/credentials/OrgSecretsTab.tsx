@@ -123,7 +123,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
           <span />
         </LedgerHeader>
 
-        <p className="px-4 py-3 text-sm text-fg-muted">{t("agents.core.modelHint")}</p>
+        <p className="px-4 py-3 text-sm text-fg-muted">{t("catalog.providerHint")}</p>
         {otherKeys.length > 0 && (
           <SecretGroup
             workspaceID={workspaceID}

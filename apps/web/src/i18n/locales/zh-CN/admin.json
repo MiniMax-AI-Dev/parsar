@@ -2927,5 +2927,33 @@
     "harnessNotSet": "未设置",
     "harnessHint": "使用 Core 已配置的 Harness。未启用或不支持的模型与环境组合会明确报错。",
     "executionDefaultsHint": "只保存配置。第一条消息才创建独立环境；同一聊天持续复用。修改仅影响之后的新聊天。"
+  },
+  "catalog": {
+    "title": "模型",
+    "model": "模型",
+    "selectModel": "选择模型",
+    "legacy": "请选择目录中的模型（原模型：{{model}}）",
+    "unavailable": "已保存的模型不可用",
+    "agentHint": "从 Build → 模型中选择。Provider 模型需要托管环境；不兼容的 Harness 组合不可选。",
+    "addProvider": "添加 Provider",
+    "editProvider": "编辑 Provider",
+    "addModel": "添加模型",
+    "editModel": "编辑模型名称",
+    "providerHint": "在 Provider 上配置 API Key，再添加它提供的模型。第三方平台凭据单独在 Credentials 中管理。",
+    "modelHint": "模型标识会原样传给 Core。创建后不能修改 Provider 和模型标识。",
+    "protocol": "协议",
+    "modelKey": "模型标识",
+    "contextWindow": "上下文窗口（token）",
+    "outputTokens": "最大输出 token",
+    "limitsHint": "MiniMax Code 必填，请填写模型支持的上限；不使用 MiniMax Code 可填 0。创建后上限不可修改。",
+    "keyUnchanged": "留空保留现有 Key",
+    "keyRequired": "输入 API Key",
+    "configured": "已配置 Key",
+    "search": "搜索 Provider 或模型",
+    "empty": "暂无 Provider",
+    "noModels": "在此 Provider 下添加模型后，即可在 Agent 中选择。",
+    "deleteTitle": "删除 {{name}}？",
+    "deleteHint": "已有 Session 保留原配置。使用此模型或 Provider 的 Agent 需要选择其他模型后才能启动新 Session。",
+    "incompatible": "请为此模型选择兼容的 Harness 和托管环境。"
   }
 }

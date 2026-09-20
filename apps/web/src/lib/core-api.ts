@@ -7,6 +7,7 @@ export type CoreEnvironment =
   | { type: "none" }
 export type CoreHarness = "codex" | "claude_sdk" | "mcode"
 export interface CoreAgentConfig {
+  model_id?: string
   x_agents_core?: { harness: CoreHarness } | null
   environment?: CoreEnvironment
   model: string

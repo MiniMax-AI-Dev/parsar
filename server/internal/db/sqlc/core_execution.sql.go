@@ -14,7 +14,7 @@ import (
 const bindProductCoreSession = `-- name: BindProductCoreSession :one
 UPDATE product_core_sessions SET core_session_id = $1
 WHERE id = $2::uuid AND (core_session_id = '' OR core_session_id = $1)
-RETURNING id, workspace_id, conversation_id, agent_id, request, core_session_id, created_at
+RETURNING id, workspace_id, conversation_id, agent_id, request, core_session_id, created_at, provider_snapshot
 `
 
 type BindProductCoreSessionParams struct {
@@ -33,6 +33,7 @@ func (q *Queries) BindProductCoreSession(ctx context.Context, arg BindProductCor
 		&i.Request,
 		&i.CoreSessionID,
 		&i.CreatedAt,
+		&i.ProviderSnapshot,
 	)
 	return i, err
 }
@@ -100,7 +101,7 @@ INSERT INTO product_core_sessions (id, workspace_id, conversation_id, agent_id, 
 SELECT $1::uuid, r.workspace_id, r.conversation_id, r.agent_id, $2::jsonb
 FROM agent_runs r WHERE r.id = $3::uuid
 ON CONFLICT (conversation_id, agent_id) DO UPDATE SET id = product_core_sessions.id
-RETURNING id, workspace_id, conversation_id, agent_id, request, core_session_id, created_at
+RETURNING id, workspace_id, conversation_id, agent_id, request, core_session_id, created_at, provider_snapshot
 `
 
 type EnsureProductCoreSessionParams struct {
@@ -120,6 +121,7 @@ func (q *Queries) EnsureProductCoreSession(ctx context.Context, arg EnsureProduc
 		&i.Request,
 		&i.CoreSessionID,
 		&i.CreatedAt,
+		&i.ProviderSnapshot,
 	)
 	return i, err
 }

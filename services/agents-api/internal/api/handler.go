@@ -210,6 +210,12 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		selectedEngine, err = h.sessionHarness(configuration)
 	}
+	if err == nil && input.XAgentsCore != nil {
+		err = input.XAgentsCore.ModelProvider.ValidateHarness(selectedEngine)
+		if err == nil && input.Environment.Type != "openai_hosted" {
+			err = fmt.Errorf("caller model credentials currently require a hosted environment")
+		}
+	}
 	if err == nil {
 		if invalid := h.policy.ValidateSessionConfiguration(selectedEngine, configuration); invalid != nil {
 			err = fmt.Errorf("Harness %s does not support the requested Agent/environment configuration: %w", selectedEngine, invalid)
@@ -230,8 +236,13 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "execution_unavailable", "Hosted execution is not configured on this service.")
 		return
 	}
+	var provider *v1.ModelProviderInput
+	if input.XAgentsCore != nil {
+		provider = input.XAgentsCore.ModelProvider
+	}
 	createInput := store.CreateSessionInput{
-		Creator: sessionCreator(r), InitialFiles: input.initialFiles, Initialization: input.initialization,
+		ModelProvider: provider,
+		Creator:       sessionCreator(r), InitialFiles: input.initialFiles, Initialization: input.initialization,
 		Engine: selectedEngine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs, CreationRequest: creationRequest,
 	}
 	if input.Stream {

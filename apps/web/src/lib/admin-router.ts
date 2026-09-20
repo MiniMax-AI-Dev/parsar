@@ -8,6 +8,7 @@ export type AdminView =
   | "approvals"
   | "agents"
   | "environments"
+  | "models"
   | "capabilities"
   | "connections"
   | "members"
@@ -27,6 +28,7 @@ const ALL_ADMIN_VIEWS: AdminView[] = [
   "approvals",
   "agents",
   "environments",
+  "models",
   "capabilities",
   "connections",
   "members",
