@@ -8,15 +8,17 @@ import (
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentskill"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
 
 type environmentPlacement struct {
-	Type                  string   `json:"type"`
-	ToolEnvironment       bool     `json:"initialization,omitempty"`
-	NetworkAccess         string   `json:"-"`
-	WorkspaceDirectory    string   `json:"workspace_directory"`
-	CapabilityDirectories []string `json:"capability_directories"`
+	Skills                []agentskill.Metadata `json:"skills,omitempty"`
+	Type                  string                `json:"type"`
+	ToolEnvironment       bool                  `json:"initialization,omitempty"`
+	NetworkAccess         string                `json:"-"`
+	WorkspaceDirectory    string                `json:"workspace_directory"`
+	CapabilityDirectories []string              `json:"capability_directories"`
 }
 
 // LocalWorkspaceConfiguration recognizes the qualified stored V1 profile. It
@@ -39,6 +41,7 @@ func parseEnvironmentPlacement(configuration json.RawMessage) (environmentPlacem
 	case "openai_hosted":
 		// Qualified local execution currently supports enabled/disabled network only.
 		var local struct {
+			Skills                []agentskill.Metadata       `json:"skills,omitempty"`
 			Files                 []store.InitialFileMetadata `json:"files"`
 			Packages              *v1.EnvironmentPackages     `json:"packages,omitempty"`
 			Initialization        bool                        `json:"initialization,omitempty"`
@@ -81,7 +84,7 @@ func (d *Dispatcher) configurePreparedEnvironment(ctx context.Context, session s
 		return nil, store.ErrInvalidInput
 	}
 	if placement.Type == "openai_hosted" {
-		req.LocalEnvironment = &proto.LocalEnvironment{ID: environment.ID, ToolEnvironment: placement.ToolEnvironment}
+		req.LocalEnvironment = &proto.LocalEnvironment{ID: environment.ID, ToolEnvironment: placement.ToolEnvironment, Skills: placement.Skills}
 		// Keep the previously qualified explicit-disabled internal peer path intact.
 		// New bound-policy peers validate the exact policy during preparation.
 		boundPolicy := placement.NetworkAccess != "disabled"

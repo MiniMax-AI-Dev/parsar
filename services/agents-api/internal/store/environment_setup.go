@@ -22,6 +22,7 @@ type EnvironmentSetup struct {
 	Env      map[string]string      `json:"env,omitempty"`
 	Commands []SetupCommand         `json:"setup_commands,omitempty"`
 	Packages v1.EnvironmentPackages `json:"packages"`
+	Skills   []InlineSkill          `json:"skills,omitempty"`
 }
 
 type SetupCommand struct {
@@ -32,11 +33,16 @@ type SetupCommand struct {
 var environmentName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func (s EnvironmentSetup) Empty() bool {
-	return len(s.Env)+len(s.Commands)+len(s.Packages.NPM)+len(s.Packages.Python)+len(s.Packages.System) == 0
+	return len(s.Env)+len(s.Commands)+len(s.Packages.NPM)+len(s.Packages.Python)+len(s.Packages.System)+len(s.Skills) == 0
 }
 
 func (s EnvironmentSetup) Validate() error {
-	raw, err := json.Marshal(s)
+	if ValidateInlineSkills(s.Skills) != nil {
+		return ErrInvalidInput
+	}
+	ordinary := s
+	ordinary.Skills = nil
+	raw, err := json.Marshal(ordinary)
 	if err != nil || len(raw) > 512*1024 || len(s.Packages.System) > 0 {
 		return ErrInvalidInput
 	}

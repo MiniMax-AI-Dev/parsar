@@ -52,8 +52,11 @@ func environmentResponse(environment store.Environment) (v1.EnvironmentInfo, err
 	if files == nil {
 		files = []json.RawMessage{}
 	}
+	if configuration.Skills == nil {
+		configuration.Skills = []json.RawMessage{}
+	}
 	return v1.EnvironmentInfo{
 		ID: environment.ID, Object: "agent.environment", Type: configuration.Type, Status: environment.Status,
-		Files: files, Plugins: []json.RawMessage{}, Skills: []json.RawMessage{},
+		Files: files, Plugins: []json.RawMessage{}, Skills: configuration.Skills,
 	}, nil
 }

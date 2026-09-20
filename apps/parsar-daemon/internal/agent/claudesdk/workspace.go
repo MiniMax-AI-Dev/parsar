@@ -9,6 +9,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/localworkspace"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/paths"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentskill"
 )
 
 // WorkspaceConfig binds one trusted private placement. It does not create an
@@ -27,14 +28,15 @@ type WorkspaceConfig struct {
 }
 
 type workspaceProfile struct {
-	ToolEnvironment bool     `json:"tool_environment,omitempty"`
-	Home            string   `json:"home"`
-	State           string   `json:"state"`
-	Scratch         string   `json:"scratch"`
-	ProtectedDirs   []string `json:"protected_dirs"`
-	DependencyPath  string   `json:"dependency_path"`
-	EnvNames        []string `json:"env_names"`
-	NetworkAccess   string   `json:"network_access,omitempty"`
+	Skills          []agentskill.Metadata `json:"skills,omitempty"`
+	ToolEnvironment bool                  `json:"tool_environment,omitempty"`
+	Home            string                `json:"home"`
+	State           string                `json:"state"`
+	Scratch         string                `json:"scratch"`
+	ProtectedDirs   []string              `json:"protected_dirs"`
+	DependencyPath  string                `json:"dependency_path"`
+	EnvNames        []string              `json:"env_names"`
+	NetworkAccess   string                `json:"network_access,omitempty"`
 }
 
 func prepareWorkspace(config Config, req proto.PromptRequestPayload) (*workspaceProfile, []string, error) {
@@ -56,6 +58,12 @@ func prepareWorkspace(config Config, req proto.PromptRequestPayload) (*workspace
 			return nil, nil, err
 		}
 		profile.ToolEnvironment = true
+	}
+	if req.LocalEnvironment != nil {
+		if err := localworkspace.VerifySkills(req.LocalEnvironment.Skills); err != nil {
+			return nil, nil, err
+		}
+		profile.Skills = req.LocalEnvironment.Skills
 	}
 	return profile, env, nil
 }

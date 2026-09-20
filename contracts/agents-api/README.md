@@ -89,7 +89,7 @@ the Python SDK. Vault HTTP paths start at `/vaults`, not `/agents/vaults`.
 | sessions.subagents.turns.items | list | Missing |
 | environments | retrieve | Supported Codex self-hosted and three-harness Docker/E2B hosted profiles: durable status and safe initial-file metadata; other installation inventory and full lifecycle parity remain gaps |
 | environments.files | create, list | [Bounded live listing and inline/source-file creation](environment-files.md) on qualified Docker/E2B workspaces; Codex self-hosted listing is a separate supported path. Full listing, overwrite and error semantics remain partial |
-| environments.templates | create, retrieve, update, list, delete | [Reusable network/initial-file configuration and Session snapshots](environment-templates.md); other initialization and full semantics remain gaps |
+| environments.templates | create, retrieve, update, list, delete | [Reusable network, files, env/setup/packages, inline Skills and Session snapshots](environment-templates.md); other initialization and full semantics remain gaps |
 | vaults | create, retrieve, list, delete | Create/retrieve/list/delete with independent tenant persistence, stored status filtering, atomic Credential cascade and frozen Session attachments; archive semantics and full hosted lifecycle parity remain missing |
 | vaults.credentials | create, retrieve, update, list, delete | Static-bearer create/retrieve/list/token replacement/deletion with scoped encrypted storage; Session attachment and exact-URL HTTPS MCP binding; OAuth, archive semantics and full hosted lifecycle parity remain missing |
 
@@ -155,7 +155,7 @@ user-managed enrollment remain outside this qualification.
 | Area | Missing or unverified scope |
 | --- | --- |
 | Subagents / multi_agent | Six public child read operations, enabled execution, child lifecycle/interactions and full recovery; deferred outside the MVP |
-| Environment Templates | Other populated initialization, restricted network, referenced files overrides/null network and exact hosted errors; CRUD/list, initial files and Session references are supported |
+| Environment Templates | Skills references, Plugins, system packages, capability directories, restricted network, installation overrides/null network and exact hosted errors; CRUD/list, files, env/setup/npm/Python, inline Skills and Session references are supported |
 | Input and configuration | Non-text initial input, broader content/configuration unions, structured output and reasoning/verbosity combinations |
 | Tools and interactions | Deferred functions, other tool types, effective tool-set enforcement and result/cancel publication ordering; MiniMax public functions/MCP remain unsupported |
 | Vault and Credentials | OAuth/refresh, archive semantics, revocation/concurrent mutation and exact hosted selection/error behavior; static bearer CRUD/token replacement is already present |
