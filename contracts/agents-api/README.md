@@ -378,8 +378,9 @@ select an E2B image or make unsupported initialization executable.
 
 ### Public engine profiles
 
-`AGENTS_API_ENGINE` chooses the engine for new Sessions; existing Sessions keep
-that immutable choice. The public request supplies a model, not a harness selector.
+`AGENTS_API_ENGINE` supplies the default for new Sessions. The optional
+[Core harness extension](harness-selection.md) explicitly selects an enabled engine;
+existing Sessions retain their immutable choice. Model identity is independent.
 All three profiles require disabled `multi_agent`, implicit reasoning, service tier
 `auto` and ordinary text output. Optional tools/configuration are qualified per
 operation and placement; native support is not public admission by itself.
@@ -769,3 +770,9 @@ and existing native registry. Historical keys remain revoked and unclaimed. This
 executor-specific prerequisite does not open public Environment admission or
 establish complete ownership, hosted key lifecycle or error compatibility. See the
 [standalone configuration](../../services/agents-api/README.md#standalone-http-service).
+
+Core documents its optional [harness selection extension](harness-selection.md) separately from the pinned upstream contract.
+
+Model endpoints and credentials may be supplied at Session creation through the
+[write-only execution extension](model-execution.md). Provider catalogs and their
+business permissions remain client/product responsibilities.

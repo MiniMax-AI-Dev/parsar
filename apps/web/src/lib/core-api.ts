@@ -5,7 +5,11 @@ export type CoreEnvironment =
   | { type: "openai_hosted"; environment_template_id?: string }
   | { type: "self_hosted"; workspace_directory: string; capability_directories?: string[] }
   | { type: "none" }
+export type CoreHarness = "codex" | "claude_sdk" | "mcode"
 export interface CoreAgentConfig {
+  model_id?: string
+  x_agents_core?: { harness: CoreHarness } | null
+  environment?: CoreEnvironment
   model: string
   service_tier?: "auto" | "default" | "flex" | "priority" | "fast" | null
   tools?: Record<string, unknown>[] | null
@@ -53,4 +57,12 @@ export function jsonObject(text: string): Record<string, unknown> {
   const value: unknown = JSON.parse(text || "{}")
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected a JSON object")
   return value as Record<string, unknown>
+}
+
+export function coreExecutionDefaults(config: Record<string, unknown> | null | undefined): { harness: CoreHarness | ""; environment: CoreEnvironment } {
+  const extension = config?.x_agents_core as CoreAgentConfig["x_agents_core"]
+  return { harness: extension?.harness ?? "", environment: (config?.environment as CoreEnvironment | undefined) ?? { type: "openai_hosted" } }
+}
+export function coreHarnessLabel(harness: CoreHarness | ""): string {
+  return { codex: "Codex", claude_sdk: "Claude Code", mcode: "MiniMax Code", "": "" }[harness]
 }

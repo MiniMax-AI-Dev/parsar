@@ -12,6 +12,7 @@ import { Button } from "../../components/ui/button"
 import { ConversationsPage } from "./ConversationsPage"
 import { RunsPage } from "./RunsPage"
 import { EnvironmentsPage } from "./core/EnvironmentsPage"
+import { ModelsPage } from "./models/ModelsPage"
 import { AgentsPage } from "./AgentsPage"
 import { SettingsPage } from "./SettingsPage"
 import { AuditPage } from "./AuditPage"
@@ -42,6 +43,7 @@ export function AdminRouter() {
   if (v === "agents") {
     return <AgentsPage />
   }
+  if (v === "models") return <ModelsPage />
   if (v === "environments") return <EnvironmentsPage />
   if (v === "settings") return <SettingsPage />
   if (v === "audit") return <AuditPage />

@@ -100,6 +100,10 @@ func writeReadError(w http.ResponseWriter, err error, fallback string) {
 	}
 
 	switch {
+	case errors.Is(err, store.ErrCatalogKeyUnavailable):
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+	case errors.Is(err, store.ErrCatalogNotFound):
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, store.ErrInvitationSignInRequired):
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invitation_sign_in_required", "message": err.Error()})
 	case errors.Is(err, store.ErrInvitationInvalid):

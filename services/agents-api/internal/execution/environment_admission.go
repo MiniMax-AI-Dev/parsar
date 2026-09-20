@@ -51,7 +51,7 @@ func (w *Worker) validateCreation(ctx context.Context, input store.CreateSession
 		if err := json.Unmarshal(input.Configuration, &snapshot); err != nil {
 			return store.ErrInvalidInput
 		}
-		if snapshot.Environment.Type == "openai_hosted" && w.runtimes.config.DefaultProvider == "" {
+		if snapshot.Environment.Type == "openai_hosted" && w.runtimes.config.ProviderForEngine(input.Engine) == "" {
 			return ErrExecutionUnavailable
 		}
 		if len(input.InitialInputs) == 0 && snapshot.Environment.Type == "self_hosted" {

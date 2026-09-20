@@ -14,6 +14,7 @@ import (
 func resolveSessionAgent(input sessionRequest, saved *v1.SavedAgent) (v1.Agent, error) {
 	request := v1.CreateAgentRequest{}
 	if agent := input.Agent; agent != nil {
+		request.XAgentsCore = agent.XAgentsCore
 		request.Model, request.Instructions = agent.Model, agent.Instructions
 		request.MultiAgent, request.Reasoning, request.ServiceTier = agent.MultiAgent, agent.Reasoning, agent.ServiceTier
 		request.Text, request.Tools = agent.Text, agent.Tools
@@ -37,6 +38,8 @@ func resolveSessionAgent(input sessionRequest, saved *v1.SavedAgent) (v1.Agent, 
 		cfg = saved.SavedAgentConfiguration
 		for field := range input.agentFields {
 			switch field {
+			case "x_agents_core":
+				cfg.XAgentsCore = override.XAgentsCore
 			case "model":
 				cfg.Model = override.Model
 			case "instructions":
@@ -81,7 +84,7 @@ func admitSessionAgent(cfg v1.SavedAgentConfiguration) (v1.Agent, error) {
 	if err != nil {
 		return v1.Agent{}, err
 	}
-	return v1.Agent{Model: cfg.Model, Name: cfg.Name, Instructions: cfg.Instructions,
+	return v1.Agent{XAgentsCore: cfg.XAgentsCore, Model: cfg.Model, Name: cfg.Name, Instructions: cfg.Instructions,
 		MultiAgent: cfg.MultiAgent, Reasoning: cfg.Reasoning, ServiceTier: cfg.ServiceTier,
 		Text: text, Tools: tools}, nil
 }

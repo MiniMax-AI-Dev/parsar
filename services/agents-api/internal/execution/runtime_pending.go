@@ -10,7 +10,7 @@ import (
 // provisionPending shares the existing lifecycle owner and serial gate. This
 // also recovers idle Session creation interrupted after its database commit.
 func (r *runtimeLifecycle) provisionPending(ctx context.Context) error {
-	if r.config.DefaultProvider == "" {
+	if r.config.DefaultProvider == "" && len(r.config.EngineProviders) == 0 {
 		return nil
 	}
 	rows, err := r.store.ListUnallocatedHostedEnvironments(ctx, r.pendingCursor)
@@ -23,8 +23,12 @@ func (r *runtimeLifecycle) provisionPending(ctx context.Context) error {
 	}
 	for _, environment := range rows {
 		r.pendingCursor = environment.ID
+		provider := r.config.ProviderForEngine(environment.Engine)
+		if provider == "" {
+			continue
+		}
 		operation, cancel := context.WithTimeout(ctx, 30*time.Second)
-		_, err := r.provision(operation, environment.TenantID, environment.ID, r.config.DefaultProvider)
+		_, err := r.provision(operation, environment.TenantID, environment.ID, provider)
 		cancel()
 		if err != nil {
 			if ownership := r.store.CheckExecutionOwnership(ctx); ownership != nil {

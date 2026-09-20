@@ -18,6 +18,9 @@ func sessionResponse(session store.Session, executorURL string) (v1.Session, err
 	if err := json.Unmarshal(session.Configuration, &cfg); err != nil || cfg.Agent.ID == "" || cfg.Agent.Model == "" {
 		return v1.Session{}, errors.New("unsupported stored session configuration")
 	}
+	if cfg.Agent.XAgentsCore != nil && session.Engine != "" {
+		cfg.Agent.XAgentsCore = &v1.AgentsCore{Harness: session.Engine}
+	}
 	environment, err := sessionEnvironment(session, cfg.Environment.Type, executorURL)
 	if err != nil {
 		return v1.Session{}, err

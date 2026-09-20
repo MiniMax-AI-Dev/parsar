@@ -6,9 +6,10 @@ import "encoding/json"
 // CreateSessionRequest supports inline configuration or a saved Agent reference.
 // Initial text input is accepted with ordinary or streaming responses.
 type CreateSessionRequest struct {
-	Agent       *InlineAgent `json:"agent,omitempty"`
-	AgentID     *string      `json:"agent_id,omitempty"`
-	Environment *Environment `json:"environment" binding:"required"`
+	XAgentsCore *SessionExecutionInput `json:"x_agents_core,omitempty"`
+	Agent       *InlineAgent           `json:"agent,omitempty"`
+	AgentID     *string                `json:"agent_id,omitempty"`
+	Environment *Environment           `json:"environment" binding:"required"`
 	// Input accepts a string or an ordered array of user InputMessage objects.
 	// Omission and null create an idle Session; non-text content is not supported yet.
 	Input    any               `json:"input,omitempty" extensions:"x-nullable"`
@@ -24,6 +25,7 @@ type UpdateSessionRequest struct {
 // InlineAgent supplies a complete inline configuration or per-Session overrides.
 // With agent_id, omitted fields inherit and supplied fields replace saved values.
 type InlineAgent struct {
+	XAgentsCore  *AgentsCore          `json:"x_agents_core,omitempty" extensions:"x-nullable"`
 	Model        *string              `json:"model,omitempty"`
 	Instructions *string              `json:"instructions,omitempty" extensions:"x-nullable"`
 	MultiAgent   json.RawMessage      `json:"multi_agent,omitempty" swaggertype:"object" extensions:"x-nullable"`
@@ -48,6 +50,7 @@ type Environment struct {
 }
 
 type Agent struct {
+	XAgentsCore  *AgentsCore       `json:"x_agents_core,omitempty" extensions:"x-nullable"`
 	ID           string            `json:"id" binding:"required"`
 	Instructions *string           `json:"instructions" extensions:"x-nullable"`
 	Model        string            `json:"model" binding:"required"`

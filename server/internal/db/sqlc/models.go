@@ -563,7 +563,23 @@ type Model struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	// Soft-delete marker
-	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	ProviderID      pgtype.UUID        `json:"provider_id"`
+	ContextWindow   int32              `json:"context_window"`
+	MaxOutputTokens int32              `json:"max_output_tokens"`
+}
+
+type ModelProvider struct {
+	ID           pgtype.UUID        `json:"id"`
+	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
+	Name         string             `json:"name"`
+	Protocol     string             `json:"protocol"`
+	BaseUrl      string             `json:"base_url"`
+	EncryptedKey []byte             `json:"encrypted_key"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type ProductCoreRun struct {
@@ -579,13 +595,14 @@ type ProductCoreRun struct {
 }
 
 type ProductCoreSession struct {
-	ID             pgtype.UUID        `json:"id"`
-	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
-	ConversationID pgtype.UUID        `json:"conversation_id"`
-	AgentID        pgtype.UUID        `json:"agent_id"`
-	Request        []byte             `json:"request"`
-	CoreSessionID  string             `json:"core_session_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ID               pgtype.UUID        `json:"id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	ConversationID   pgtype.UUID        `json:"conversation_id"`
+	AgentID          pgtype.UUID        `json:"agent_id"`
+	Request          []byte             `json:"request"`
+	CoreSessionID    string             `json:"core_session_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ProviderSnapshot []byte             `json:"provider_snapshot"`
 }
 
 // Agent runtime registry

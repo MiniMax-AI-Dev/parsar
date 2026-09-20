@@ -16,11 +16,12 @@ import (
 
 // Snapshot is resolved internally; Daemon is not a public environment wire type.
 type Snapshot struct {
-	Agent          v1.Agent                     `json:"agent"`
-	Daemon         *DaemonConfig                `json:"daemon"`
-	Environment    *v1.Environment              `json:"environment"`
-	VaultIDs       []string                     `json:"vault_ids,omitempty"`
-	MCPCredentials []store.MCPCredentialBinding `json:"mcp_credentials,omitempty"`
+	ModelProviderConfigured bool                         `json:"model_provider_configured,omitempty"`
+	Agent                   v1.Agent                     `json:"agent"`
+	Daemon                  *DaemonConfig                `json:"daemon"`
+	Environment             *v1.Environment              `json:"environment"`
+	VaultIDs                []string                     `json:"vault_ids,omitempty"`
+	MCPCredentials          []store.MCPCredentialBinding `json:"mcp_credentials,omitempty"`
 }
 
 type DaemonConfig struct {

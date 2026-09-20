@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -22,7 +23,7 @@ func validateInitialInputs(inputs []Input) ([]Input, json.RawMessage, error) {
 
 // The Session upsert locks retries. Only the new row reserves or admits work, so a
 // retry after completion or later Turns cannot submit the original input again.
-func (s *Store) createSessionResources(ctx context.Context, tenant string, params sqlc.CreateSessionParams, inputs []Input, encodedInput json.RawMessage, files []InitialFile, setup EnvironmentSetup) (sqlc.Session, *Environment, error) {
+func (s *Store) createSessionResources(ctx context.Context, tenant string, params sqlc.CreateSessionParams, inputs []Input, encodedInput json.RawMessage, files []InitialFile, setup EnvironmentSetup, provider *v1.ModelProviderInput) (sqlc.Session, *Environment, error) {
 	var row sqlc.Session
 	var environment *Environment
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -33,6 +34,9 @@ func (s *Store) createSessionResources(ctx context.Context, tenant string, param
 			return err
 		}
 		if row.ID == params.ID {
+			if err := s.saveSessionModelExecution(ctx, q, tenant, row.ID, provider); err != nil {
+				return err
+			}
 			if len(files) > 0 {
 				metadata, err := s.saveInitialFiles(ctx, q, tx, tenant, row.ID, files)
 				if err != nil {

@@ -69,7 +69,7 @@ type updateAgentBody struct {
 // createAgent creates a new agent in a workspace. Owner/admin only.
 //
 //	@Summary		Create an agent in a workspace
-//	@Description	Creates a Core Agent with a model name and instructions. Execution credentials and environments are owned by Core. Owner/admin only.
+//	@Description	Creates an Agent with a workspace catalog model_id, explicit harness and environment. Parsar resolves the execution model; Core runs it. Owner/admin only.
 //	@Tags			agents
 //	@ID				createDevAgent
 //	@Accept			json
@@ -106,6 +106,10 @@ func createAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeStoreAgentError(w, store.ErrInvalidConnectorType)
 			return
 		}
+		if err := resolveCatalogAgentModel(r.Context(), runtimeStore, workspaceID, req.Config); err != nil {
+			writeReadError(w, err, "model selection failed")
+			return
+		}
 		if err := store.ValidateCoreAgentConfig(req.Config, true); err != nil {
 			writeStoreAgentError(w, err)
 			return
@@ -122,7 +126,7 @@ func createAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 // updateAgent applies a partial update to an existing agent.
 //
 //	@Summary		Update mutable agent fields
-//	@Description	Updates Core Agent display fields, model name and instructions. Existing conversations retain their Core configuration snapshot. Unknown fields are rejected.
+//	@Description	Updates Agent display fields, catalog model selection and instructions. Existing conversations retain their Core configuration snapshot. Unknown fields are rejected.
 //	@Tags			agents
 //	@ID				updateDevAgent
 //	@Accept			json
@@ -159,6 +163,10 @@ func updateAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		if req.ConnectorType != nil && *req.ConnectorType != "agents_api" {
 			writeStoreAgentError(w, store.ErrInvalidConnectorType)
+			return
+		}
+		if err := resolveCatalogAgentModel(r.Context(), runtimeStore, agent.WorkspaceID, req.Config); err != nil {
+			writeReadError(w, err, "model selection failed")
 			return
 		}
 		if err := store.ValidateCoreAgentConfig(req.Config, false); err != nil {

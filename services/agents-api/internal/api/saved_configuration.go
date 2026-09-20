@@ -30,7 +30,10 @@ func resolveSavedFields(input v1.CreateAgentRequest) (store.CreateAgentInput, er
 	if err := validateMetadata(metadata); err != nil {
 		return store.CreateAgentInput{}, err
 	}
-	cfg := v1.SavedAgentConfiguration{Name: input.Name, Instructions: input.Instructions, ServiceTier: "auto"}
+	if err := input.XAgentsCore.Validate(); err != nil {
+		return store.CreateAgentInput{}, err
+	}
+	cfg := v1.SavedAgentConfiguration{XAgentsCore: input.XAgentsCore, Name: input.Name, Instructions: input.Instructions, ServiceTier: "auto"}
 	if input.Model != nil {
 		cfg.Model = *input.Model
 	}

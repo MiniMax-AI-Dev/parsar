@@ -135,8 +135,12 @@ func run() error {
 			}
 		}()
 		options = append(options, api.WithExecution(worker), api.WithEnvironmentDirectoryReader(worker), api.WithEnvironmentFileWriter(worker))
-		if managed != nil && managed.DefaultProvider != "" {
-			options = append(options, api.WithHostedEnvironments())
+		if managed != nil && (managed.DefaultProvider != "" || len(managed.EngineProviders) > 0) {
+			kinds := make([]string, 0, len(managed.EngineProviders))
+			for kind := range managed.EngineProviders {
+				kinds = append(kinds, kind)
+			}
+			options = append(options, api.WithHostedEnvironments(), api.WithHarnesses(kinds))
 		}
 	}
 	handler, err := api.NewHandler(executionStore, auth, engine, options...)

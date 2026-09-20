@@ -483,6 +483,11 @@ definitions:
       type:
         type: string
     type: object
+  dev.renameCatalogModelBody:
+    properties:
+      name:
+        type: string
+    type: object
   dev.requeueAgentRunBody:
     properties:
       reason:
@@ -1055,6 +1060,33 @@ definitions:
       visibility:
         type: string
       workspace_id:
+        type: string
+    type: object
+  store.CatalogModelInput:
+    properties:
+      context_window:
+        type: integer
+      max_output_tokens:
+        type: integer
+      model_key:
+        type: string
+      name:
+        type: string
+      provider_id:
+        type: string
+    type: object
+  store.CatalogProviderInput:
+    properties:
+      api_key:
+        type: string
+      base_url:
+        type: string
+      name:
+        type: string
+      protocol:
+        enum:
+        - anthropic
+        - responses
         type: string
     type: object
   store.ConversationRead:
@@ -1947,7 +1979,7 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Updates Core Agent display fields, model name and instructions.
+      description: Updates Agent display fields, catalog model selection and instructions.
         Existing conversations retain their Core configuration snapshot. Unknown fields
         are rejected.
       operationId: updateDevAgent
@@ -4204,8 +4236,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a Core Agent with a model name and instructions. Execution
-        credentials and environments are owned by Core. Owner/admin only.
+      description: Creates an Agent with a workspace catalog model_id, explicit harness
+        and environment. Parsar resolves the execution model; Core runs it. Owner/admin
+        only.
       operationId: createDevAgent
       parameters:
       - description: Workspace UUID
@@ -7017,6 +7050,414 @@ paths:
       summary: Update a workspace member's role
       tags:
       - workspace-members
+  /api/v1/workspaces/{workspaceID}/model-providers:
+    get:
+      description: Workspace members can read; owner/admin can mutate. API keys are
+        write-only. Existing Sessions retain their snapshot.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: listCatalogProviders
+      tags:
+      - models
+    post:
+      consumes:
+      - application/json
+      description: Workspace members can read; owner/admin can mutate. API keys are
+        write-only. Existing Sessions retain their snapshot.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Catalog input
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/store.CatalogProviderInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: createCatalogProvider
+      tags:
+      - models
+  /api/v1/workspaces/{workspaceID}/model-providers/{catalogID}:
+    delete:
+      description: Workspace members can read; owner/admin can mutate. API keys are
+        write-only. Existing Sessions retain their snapshot.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Catalog UUID
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: deleteCatalogProvider
+      tags:
+      - models
+    put:
+      consumes:
+      - application/json
+      description: Workspace members can read; owner/admin can mutate. API keys are
+        write-only. Existing Sessions retain their snapshot.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Catalog UUID
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      - description: Catalog input
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/store.CatalogProviderInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: updateCatalogProvider
+      tags:
+      - models
+  /api/v1/workspaces/{workspaceID}/models:
+    get:
+      description: Workspace members can read; owner/admin can mutate. API keys are
+        write-only. Existing Sessions retain their snapshot.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: listCatalogModels
+      tags:
+      - models
+    post:
+      consumes:
+      - application/json
+      description: Workspace members can read; owner/admin can mutate. API keys are
+        write-only. Existing Sessions retain their snapshot.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Catalog input
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/store.CatalogModelInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: createCatalogModel
+      tags:
+      - models
+  /api/v1/workspaces/{workspaceID}/models/{catalogID}:
+    delete:
+      description: Workspace members can read; owner/admin can mutate. API keys are
+        write-only. Existing Sessions retain their snapshot.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Catalog UUID
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: deleteCatalogModel
+      tags:
+      - models
+    patch:
+      consumes:
+      - application/json
+      description: Workspace members can read; owner/admin can mutate. API keys are
+        write-only. Existing Sessions retain their snapshot.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Catalog UUID
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      - description: Catalog input
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dev.renameCatalogModelBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: renameCatalogModel
+      tags:
+      - models
   /api/v1/workspaces/{workspaceID}/scheduled-tasks:
     get:
       description: Paginated list of every scheduled task in the workspace across

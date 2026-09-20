@@ -506,6 +506,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Get("/scheduled-tasks/{taskID}/runs", listScheduledTaskRuns(runtimeStore))
 			// Runtime binding: user picks which Runtime this agent
 			// runs on. Replaces the legacy auto-sandbox path.
+			registerModelCatalogRoutes(r, runtimeStore)
 			r.Patch("/agents/{agentID}", updateAgent(runtimeStore))
 			r.Patch("/agents/{agentID}/visibility", updateAgentVisibility(runtimeStore))
 			r.Get("/agents/{agentID}/connector/feishu/diagnostics", getAgentFeishuConnectorDiagnostics(runtimeStore))

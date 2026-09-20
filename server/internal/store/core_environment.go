@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -53,10 +54,10 @@ func conversationCoreMetadata(input CreateWorkspaceConversationInput) (map[strin
 		}
 		metadata[key] = value
 	}
-	environment := CoreEnvironmentSelection{Type: "openai_hosted"}
-	if input.Environment != nil {
-		environment = *input.Environment
+	if input.Environment == nil {
+		return metadata, nil
 	}
+	environment := *input.Environment
 	if err := environment.Validate(); err != nil {
 		return nil, err
 	}
@@ -66,4 +67,19 @@ func conversationCoreMetadata(input CreateWorkspaceConversationInput) (map[strin
 	}
 	metadata["core_environment"] = json.RawMessage(raw)
 	return metadata, nil
+}
+
+// ParseCoreEnvironment validates the safe default configuration stored by an Agent.
+func ParseCoreEnvironment(value any) (CoreEnvironmentSelection, error) {
+	var selection CoreEnvironmentSelection
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return selection, fmt.Errorf("%w: invalid environment", ErrInvalidInput)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&selection) != nil {
+		return selection, fmt.Errorf("%w: invalid environment selection", ErrInvalidInput)
+	}
+	return selection, selection.Validate()
 }

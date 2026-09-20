@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -37,6 +38,7 @@ type Handler struct {
 	policy             execution.Policy
 	store              ResourceStore
 	auth               *Authenticator
+	harnesses          map[string]bool
 	engine             string
 	inputs             InputSubmitter
 	executorURL        string
@@ -204,8 +206,20 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	selectedEngine := h.engine
 	if err == nil {
-		err = h.policy.ValidateSessionConfiguration(h.engine, configuration)
+		selectedEngine, err = h.sessionHarness(configuration)
+	}
+	if err == nil && input.XAgentsCore != nil {
+		err = input.XAgentsCore.ModelProvider.ValidateHarness(selectedEngine)
+		if err == nil && input.Environment.Type != "openai_hosted" {
+			err = fmt.Errorf("caller model credentials currently require a hosted environment")
+		}
+	}
+	if err == nil {
+		if invalid := h.policy.ValidateSessionConfiguration(selectedEngine, configuration); invalid != nil {
+			err = fmt.Errorf("Harness %s does not support the requested Agent/environment configuration: %w", selectedEngine, invalid)
+		}
 	}
 	if err != nil {
 		if h.recoverSessionCreation(w, r, key, creationRequest, input.Stream) {
@@ -222,9 +236,14 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "execution_unavailable", "Hosted execution is not configured on this service.")
 		return
 	}
+	var provider *v1.ModelProviderInput
+	if input.XAgentsCore != nil {
+		provider = input.XAgentsCore.ModelProvider
+	}
 	createInput := store.CreateSessionInput{
-		Creator: sessionCreator(r), InitialFiles: input.initialFiles, Initialization: input.initialization,
-		Engine: h.engine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs, CreationRequest: creationRequest,
+		ModelProvider: provider,
+		Creator:       sessionCreator(r), InitialFiles: input.initialFiles, Initialization: input.initialization,
+		Engine: selectedEngine, IdempotencyKey: key, Metadata: input.Metadata, Configuration: configuration, InitialInputs: initialInputs, CreationRequest: creationRequest,
 	}
 	if input.Stream {
 		h.createSessionStream(w, r, createInput)

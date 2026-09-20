@@ -180,8 +180,11 @@ func (c *Connector) execute(ctx context.Context, in connector.PromptInput, reque
 	if err != nil {
 		return err
 	}
-	binding, err := c.store.EnsureCoreSession(ctx, in.RunID, raw)
+	binding, err := c.ensureModelSession(ctx, in, raw)
 	if err != nil {
+		if errors.Is(err, store.ErrCatalogNotFound) || errors.Is(err, store.ErrInvalidInput) || errors.Is(err, store.ErrCatalogKeyUnavailable) {
+			return fmt.Errorf("Core model configuration unavailable: %w", err)
+		}
 		return errPersistence
 	}
 	if err := json.Unmarshal(binding.Request, &request); err != nil {
@@ -196,7 +199,12 @@ func (c *Connector) execute(ctx context.Context, in connector.PromptInput, reque
 	request.Agent.SetExtraFields(frozen.Agent)
 	in.AgentConfig = map[string]any{"model": request.Agent.Model.Value}
 	if binding.SessionID == "" {
-		session, err := c.sessions.New(ctx, request, option.WithHeader("Idempotency-Key", "parsar-session-"+binding.ID))
+		options, err := c.modelSessionOptions(binding)
+		if err != nil {
+			return err
+		}
+		options = append(options, option.WithHeader("Idempotency-Key", "parsar-session-"+binding.ID))
+		session, err := c.sessions.New(ctx, request, options...)
 		if err != nil {
 			return err
 		}

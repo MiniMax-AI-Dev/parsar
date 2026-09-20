@@ -49,6 +49,7 @@ type Session struct {
 }
 
 type CreateSessionInput struct {
+	ModelProvider   *v1.ModelProviderInput
 	Initialization  EnvironmentSetup
 	InitialFiles    []InitialFile
 	Creator         identity.Subject
@@ -117,6 +118,24 @@ func (s *Store) createSession(ctx context.Context, tenantID string, input Create
 			return SessionCreation{}, err
 		}
 	}
+	if input.ModelProvider != nil {
+		if err := input.ModelProvider.ValidateHarness(input.Engine); err != nil {
+			return SessionCreation{}, fmt.Errorf("%w: %s", ErrInvalidInput, err)
+		}
+		var fields map[string]any
+		if json.Unmarshal(configuration, &fields) != nil {
+			return SessionCreation{}, ErrInvalidInput
+		}
+		environment, _ := fields["environment"].(map[string]any)
+		if environment["type"] != "openai_hosted" {
+			return SessionCreation{}, fmt.Errorf("%w: model credentials require a hosted environment", ErrInvalidInput)
+		}
+		fields["model_provider_configured"] = true
+		configuration, err = json.Marshal(fields)
+		if err != nil {
+			return SessionCreation{}, err
+		}
+	}
 	hashConfiguration := configuration
 	// Empty configuration retains the idempotency hashes from the first schema.
 	if string(configuration) == "{}" {
@@ -128,13 +147,14 @@ func (s *Store) createSession(ctx context.Context, tenantID string, input Create
 	}
 	// JSON map keys are sorted by encoding/json, so key order does not affect retries.
 	canonical, err := json.Marshal(struct {
+		ModelProvider  *v1.ModelProviderInput `json:",omitempty"`
 		Engine         string
 		Metadata       map[string]string
 		Configuration  json.RawMessage   `json:",omitempty"`
 		InitialInputs  json.RawMessage   `json:",omitempty"`
 		InitialFiles   []InitialFile     `json:",omitempty"`
 		Initialization *EnvironmentSetup `json:",omitempty"`
-	}{input.Engine, input.Metadata, hashConfiguration, encodedInput, input.InitialFiles, initialization})
+	}{input.ModelProvider, input.Engine, input.Metadata, hashConfiguration, encodedInput, input.InitialFiles, initialization})
 	if err != nil {
 		return SessionCreation{}, fmt.Errorf("%w: input: %v", ErrInvalidInput, err)
 	}
@@ -149,7 +169,7 @@ func (s *Store) createSession(ctx context.Context, tenantID string, input Create
 		Configuration: configuration, CreationRequestHash: creationHash,
 		CreatorKind: pgtype.Text{String: input.Creator.Kind, Valid: true}, CreatorID: pgtype.Text{String: input.Creator.ID, Valid: true},
 	}
-	row, environment, err := s.createSessionResources(ctx, tenantID, params, batch, encodedInput, input.InitialFiles, input.Initialization)
+	row, environment, err := s.createSessionResources(ctx, tenantID, params, batch, encodedInput, input.InitialFiles, input.Initialization, input.ModelProvider)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SessionCreation{}, ErrIdempotencyConflict
 	}

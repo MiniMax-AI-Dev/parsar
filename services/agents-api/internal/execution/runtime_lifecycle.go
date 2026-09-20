@@ -23,6 +23,7 @@ import (
 type RuntimeProviders struct {
 	CoreURL         string
 	DefaultProvider string
+	EngineProviders map[string]string
 	Providers       map[string]sandbox.Provider
 }
 
@@ -47,13 +48,19 @@ func newRuntimeLifecycle(s *store.Store, registry *gateway.Registry, config *Run
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(config.Providers) == 0 || registry == nil {
 		return nil, sandbox.ErrInvalid
 	}
-	copied := RuntimeProviders{CoreURL: config.CoreURL, DefaultProvider: config.DefaultProvider, Providers: make(map[string]sandbox.Provider, len(config.Providers))}
+	copied := RuntimeProviders{EngineProviders: make(map[string]string, len(config.EngineProviders)), CoreURL: config.CoreURL, DefaultProvider: config.DefaultProvider, Providers: make(map[string]sandbox.Provider, len(config.Providers))}
 	for key, provider := range config.Providers {
 		id, err := uuid.Parse(key)
 		if err != nil || id == uuid.Nil || id.String() != key || provider == nil {
 			return nil, sandbox.ErrInvalid
 		}
 		copied.Providers[key] = provider
+	}
+	for kind, key := range config.EngineProviders {
+		if key == "" || copied.Providers[key] == nil {
+			return nil, sandbox.ErrInvalid
+		}
+		copied.EngineProviders[kind] = key
 	}
 	if copied.DefaultProvider != "" && copied.Providers[copied.DefaultProvider] == nil {
 		return nil, sandbox.ErrInvalid

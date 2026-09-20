@@ -167,7 +167,7 @@ func (q *Queries) ListRuntimeAllocations(ctx context.Context, id pgtype.UUID) ([
 }
 
 const listUnallocatedHostedEnvironments = `-- name: ListUnallocatedHostedEnvironments :many
-SELECT e.id, s.tenant_id
+SELECT e.id, s.tenant_id, s.engine
 FROM environments e JOIN sessions s ON s.id = e.session_id
 WHERE e.id > $1 AND s.deleted_at IS NULL AND e.status = 'pending'
   AND s.configuration->'environment'->>'type' = 'openai_hosted'
@@ -178,6 +178,7 @@ ORDER BY e.id LIMIT 32
 type ListUnallocatedHostedEnvironmentsRow struct {
 	ID       pgtype.UUID `json:"id"`
 	TenantID pgtype.UUID `json:"tenant_id"`
+	Engine   string      `json:"engine"`
 }
 
 func (q *Queries) ListUnallocatedHostedEnvironments(ctx context.Context, id pgtype.UUID) ([]ListUnallocatedHostedEnvironmentsRow, error) {
@@ -189,7 +190,7 @@ func (q *Queries) ListUnallocatedHostedEnvironments(ctx context.Context, id pgty
 	items := []ListUnallocatedHostedEnvironmentsRow{}
 	for rows.Next() {
 		var i ListUnallocatedHostedEnvironmentsRow
-		if err := rows.Scan(&i.ID, &i.TenantID); err != nil {
+		if err := rows.Scan(&i.ID, &i.TenantID, &i.Engine); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
