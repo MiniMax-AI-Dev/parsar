@@ -169,7 +169,7 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
     commitMut.mutate(payload, {
       onSuccess: (res) => {
         onOpenChange(false)
-        onCreated?.(res.capability)
+        onCreated?.({ ...res.capability, latest_version_id: res.capability_version.id, latest_version: res.capability_version.version, latest_version_created_at: res.capability_version.created_at })
       },
     })
   }

@@ -26,7 +26,7 @@ func TestCoreAgentContract(t *testing.T) {
 			t.Fatalf("accepted legacy connector %s: %v", kind, err)
 		}
 	}
-	for _, config := range []map[string]any{nil, {"model": ""}, {"model": "test-model", "device_id": "device"}, {"model": "test-model", "credential_bindings": map[string]any{}}} {
+	for _, config := range []map[string]any{nil, {"model": ""}, {"model": "test-model", "device_id": "device"}, {"model": "test-model", "credential_bindings": "invalid"}} {
 		in := base
 		in.AgentConfig = config
 		if _, err := st.CreateAgent(ctx, in); !errors.Is(err, ErrInvalidInput) {
@@ -34,7 +34,7 @@ func TestCoreAgentContract(t *testing.T) {
 		}
 	}
 	for _, in := range []CreateAgentInput{
-		{Runtime: "sandbox"}, {DefaultModelID: ids.BackendAgentID}, {Capabilities: []string{"shell"}}, {InitialCapabilities: []InitialAgentCapabilityInput{{CapabilityVersionID: ids.BackendAgentID}}},
+		{Runtime: "sandbox"}, {DefaultModelID: ids.BackendAgentID}, {Capabilities: []string{"shell"}},
 	} {
 		in.WorkspaceID, in.Name, in.ConnectorType, in.CreatedBy, in.AgentConfig = base.WorkspaceID, base.Name, base.ConnectorType, base.CreatedBy, base.AgentConfig
 		if _, err := st.CreateAgent(ctx, in); !errors.Is(err, ErrInvalidInput) {

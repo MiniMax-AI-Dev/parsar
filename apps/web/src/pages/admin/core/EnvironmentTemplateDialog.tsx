@@ -11,7 +11,7 @@ import { Label } from "../../../components/ui/label"
 import { Select, SelectOption } from "../../../components/ui/select"
 
 const lines = (value: string) => value.split("\n").map(line => line.trim()).filter(Boolean)
-export function EnvironmentTemplateDialog({ workspaceID, template, onClose }: { workspaceID: string; template?: CoreTemplate; onClose: () => void }) {
+export function EnvironmentTemplateDialog({ workspaceID, template, onClose, onSaved }: { workspaceID: string; template?: CoreTemplate; onClose: () => void; onSaved?: (template: CoreTemplate) => void }) {
   const { t } = useTranslation("admin")
   const id = useId()
   const queryClient = useQueryClient()
@@ -33,7 +33,8 @@ export function EnvironmentTemplateDialog({ workspaceID, template, onClose }: { 
         if (Object.keys(extra).some(key => !["files", "plugins", "skills", "capability_directories"].includes(key))) throw new Error(t("core.templateAdvancedHint"))
         if (variables.some(value => !value.key.trim()) || new Set(variables.map(value => value.key.trim())).size !== variables.length) throw new Error(t("core.invalidVariables"))
         const body: CoreTemplateInput = { ...extra, name: name.trim() || null, network: { access, ...(access === "restricted" ? { allowed_domains: lines(domains) } : {}) }, packages: { python: lines(packages.python), npm: lines(packages.npm), system: lines(packages.system) }, ...(commands.length ? { setup_commands: commands.map(value => ({ command: value.command, ...(value.cwd ? { cwd: value.cwd } : {}) })) } : {}), ...(variables.length ? { env: Object.fromEntries(variables.map(value => [value.key.trim(), value.value])) } : {}) }
-        await save.mutateAsync(body)
+        const saved = await save.mutateAsync(body)
+        onSaved?.(saved)
         await queryClient.invalidateQueries({ queryKey: coreTemplateKey(workspaceID) }); onClose()
       } catch (error) {
         const ambiguous = !template && error instanceof ApiError && (error.envelope.unreachable || error.envelope.status >= 500)

@@ -182,6 +182,10 @@ definitions:
         type: string
       name:
         type: string
+      resource_bindings:
+        items:
+          $ref: '#/definitions/store.InitialAgentCapabilityInput'
+        type: array
       slug:
         type: string
       system_prompt:
@@ -237,6 +241,8 @@ definitions:
   dev.createSecretBody:
     properties:
       auth_type:
+        type: string
+      credential_kind_code:
         type: string
       kind:
         type: string
@@ -561,6 +567,10 @@ definitions:
         type: string
       name:
         type: string
+      resource_bindings:
+        items:
+          $ref: '#/definitions/store.InitialAgentCapabilityInput'
+        type: array
       system_prompt:
         type: string
     type: object
@@ -1156,6 +1166,21 @@ definitions:
       value_schema:
         additionalProperties: {}
         type: object
+    type: object
+  store.InitialAgentCapabilityInput:
+    properties:
+      capability_version_id:
+        type: string
+      configuration:
+        additionalProperties: {}
+        type: object
+      pinning_mode:
+        description: |-
+          PinningMode is "latest" or "pinned"; empty falls back to the
+          store-side default ("pinned"). The create-agent dialog defaults the
+          dropdown to "latest" so reuploads of a workspace capability are
+          picked up automatically.
+        type: string
     type: object
   store.RequiredCredential:
     properties:

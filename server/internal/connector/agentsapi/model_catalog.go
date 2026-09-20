@@ -10,6 +10,11 @@ import (
 	"github.com/openai/openai-go/v3/option"
 )
 
+type resourceSessionStore interface {
+	EnsureCoreSessionWithResources(context.Context, string, json.RawMessage, string, map[string]any, string) (store.CoreSessionBinding, error)
+	CoreSessionPrivateEnvironment(store.CoreSessionBinding) (map[string]any, error)
+}
+
 type modelSessionStore interface {
 	EnsureCoreSessionWithModel(context.Context, string, json.RawMessage, string) (store.CoreSessionBinding, error)
 	CoreSessionProvider(store.CoreSessionBinding) (*v1.SessionExecutionInput, error)
@@ -17,6 +22,10 @@ type modelSessionStore interface {
 
 func (c *Connector) ensureModelSession(ctx context.Context, in connector.PromptInput, raw json.RawMessage) (store.CoreSessionBinding, error) {
 	modelID, _ := in.AgentConfig["model_id"].(string)
+	if resources, ok := c.store.(resourceSessionStore); ok {
+		binding, _ := in.AgentConfig["model_credential_binding"].(map[string]any)
+		return resources.EnsureCoreSessionWithResources(ctx, in.RunID, raw, modelID, binding, in.ConversationInitiatorID)
+	}
 	if catalog, ok := c.store.(modelSessionStore); ok {
 		return catalog.EnsureCoreSessionWithModel(ctx, in.RunID, raw, modelID)
 	}
@@ -37,5 +46,15 @@ func (c *Connector) modelSessionOptions(binding store.CoreSessionBinding) ([]opt
 	if err != nil {
 		return nil, err
 	}
-	return []option.RequestOption{option.WithJSONSet("x_agents_core", extension)}, nil
+	options := []option.RequestOption{option.WithJSONSet("x_agents_core", extension)}
+	if resources, ok := c.store.(resourceSessionStore); ok {
+		environment, err := resources.CoreSessionPrivateEnvironment(binding)
+		if err != nil {
+			return nil, err
+		}
+		for key, value := range environment {
+			options = append(options, option.WithJSONSet("environment."+key, value))
+		}
+	}
+	return options, nil
 }

@@ -1,4 +1,5 @@
-import { useId } from "react"
+import { EnvironmentTemplateDialog } from "../core/EnvironmentTemplateDialog"
+import { useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useCoreTemplates, type CoreEnvironment, type CoreHarness } from "../../../lib/core-api"
 import { Button } from "../../../components/ui/button"
@@ -15,6 +16,7 @@ export function AgentExecutionFields({ workspaceID, harness, environment, onHarn
 }) {
   const { t } = useTranslation("admin")
   const id = useId()
+  const [creating, setCreating] = useState(false)
   const templates = useCoreTemplates(workspaceID, environment.type === "openai_hosted")
   return <fieldset className="space-y-3" disabled={disabled}>
     <legend className="mb-2 text-sm font-medium">{t("core.executionDefaults")}</legend>
@@ -26,7 +28,7 @@ export function AgentExecutionFields({ workspaceID, harness, environment, onHarn
         <SelectOption value="mcode">MiniMax Code</SelectOption>
       </Select><p className="mt-1 text-xs text-fg-muted">{t("core.harnessHint")}</p>
     </div>
-    <div><Label htmlFor={`${id}-environment`}>{t("core.environment")}</Label>
+    <div><Label htmlFor={`${id}-environment`}>{t("agentResources.sandbox")}</Label>
       <Select id={`${id}-environment`} value={environment.type} onValueChange={value => onEnvironmentChange(value === "none" ? { type: "none" } : { type: "openai_hosted" })} disabled={disabled}>
         <SelectOption value="openai_hosted">{t("core.environmentTypes.openai_hosted")}</SelectOption>
         <SelectOption value="none">{t("core.environmentTypes.none")}</SelectOption>
@@ -40,6 +42,8 @@ export function AgentExecutionFields({ workspaceID, harness, environment, onHarn
         {environment.environment_template_id && !templates.data?.pages.some(page => page.data.some(template => template.id === environment.environment_template_id)) && <SelectOption value={environment.environment_template_id}>{environment.environment_template_id}</SelectOption>}
         {templates.data?.pages.flatMap(page => page.data).map(template => <SelectOption key={template.id} value={template.id}>{template.name || template.id}</SelectOption>)}
       </Select>
+      <Button type="button" variant="outline" disabled={disabled} onClick={() => setCreating(true)}>{t("core.createTemplate")}</Button>
+      {workspaceID && creating && <EnvironmentTemplateDialog workspaceID={workspaceID} onClose={() => setCreating(false)} onSaved={template => onEnvironmentChange({ type: "openai_hosted", environment_template_id: template.id })} />}
       {templates.hasNextPage && <Button type="button" variant="ghost" disabled={disabled || templates.isFetchingNextPage} onClick={() => void templates.fetchNextPage()}>{t("core.loadMore")}</Button>}
       {templates.error && <p role="alert" className="mt-1 text-sm text-danger">{templates.error.message}</p>}
     </div>}

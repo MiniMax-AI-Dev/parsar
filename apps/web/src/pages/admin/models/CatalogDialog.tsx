@@ -9,7 +9,7 @@ import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { Select, SelectOption } from "../../../components/ui/select"
 export type CatalogEdit = { kind: "provider"; provider?: ModelProvider } | { kind: "model"; provider: ModelProvider; model?: CatalogModel } | { kind: "delete"; resource: "models" | "model-providers"; id: string; name: string }
-export function CatalogDialog({ workspace, edit, onClose }: { workspace: string; edit: CatalogEdit; onClose: () => void }) {
+export function CatalogDialog({ workspace, edit, onClose, onSaved }: { workspace: string; edit: CatalogEdit; onClose: () => void; onSaved?: (value: ModelProvider | CatalogModel) => void }) {
   const { t } = useTranslation("admin")
   const id = useId()
   const cache = useQueryClient()
@@ -30,8 +30,8 @@ export function CatalogDialog({ workspace, edit, onClose }: { workspace: string;
       setPending(true); setError(null)
       try {
         if (edit.kind === "delete") await apiRequest(catalogPath(workspace, edit.resource, edit.id), { method: "DELETE" })
-        else if (edit.kind === "provider") await apiRequest(catalogPath(workspace, "model-providers", current?.id), { method: current ? "PUT" : "POST", body: { name, protocol, base_url: url, ...(key ? { api_key: key } : {}) } })
-        else await apiRequest(catalogPath(workspace, "models", current?.id), { method: current ? "PATCH" : "POST", body: current ? { name } : { name, model_key: modelKey, provider_id: edit.provider.id, context_window: contextWindow, max_output_tokens: outputTokens } })
+        else if (edit.kind === "provider") { const saved = await apiRequest<{ provider: ModelProvider }>(catalogPath(workspace, "model-providers", current?.id), { method: current ? "PUT" : "POST", body: { name, protocol, base_url: url, ...(key ? { api_key: key } : {}) } }); onSaved?.(saved.provider) }
+        else { const saved = await apiRequest<{ model: CatalogModel }>(catalogPath(workspace, "models", current?.id), { method: current ? "PATCH" : "POST", body: current ? { name } : { name, model_key: modelKey, provider_id: edit.provider.id, context_window: contextWindow, max_output_tokens: outputTokens } }); onSaved?.(saved.model) }
         setKey(""); await cache.invalidateQueries({ queryKey: catalogKey(workspace) }); onClose()
       } catch (err) { setError(err instanceof Error ? err.message : t("core.failed")) }
       finally { setPending(false) }

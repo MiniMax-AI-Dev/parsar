@@ -206,6 +206,7 @@ export interface AgentInlineNewSecret {
 }
 
 export interface CreateAgentRequest {
+ resource_bindings?: InitialAgentCapabilityRequest[]
  name: string
  slug?: string
  description?: string
@@ -216,6 +217,7 @@ export interface CreateAgentRequest {
 }
 
 export interface UpdateAgentRequest {
+ resource_bindings?: InitialAgentCapabilityRequest[]
  name?: string
  description?: string
  connector_type?: "agents_api"
@@ -895,6 +897,7 @@ export interface ListSecretsResponse {
 }
 
 export interface CreateSecretRequest {
+  credential_kind_code?: string
   name: string
   /** Defaults to `model_provider` server-side when omitted. */
   kind?: string

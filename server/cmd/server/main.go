@@ -392,6 +392,7 @@ func main() {
 			log.Bg().Error("Core configuration is invalid", "error", err)
 			os.Exit(1)
 		}
+		coreConnector.Blobs = blobStore
 		connectorReg.MustRegister(coreConnector)
 		opts = append(opts, dev.WithCoreAccess(coreConnector.Resolve))
 

@@ -7,17 +7,28 @@ import (
 	"fmt"
 
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/credentialbinding"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
 // EnsureCoreSessionWithModel freezes the model and Provider together before any Core request.
 func (s *Store) EnsureCoreSessionWithModel(ctx context.Context, runID string, request json.RawMessage, modelID string) (CoreSessionBinding, error) {
+	return s.EnsureCoreSessionWithResources(ctx, runID, request, modelID, nil, "")
+}
+
+func (s *Store) EnsureCoreSessionWithResources(ctx context.Context, runID string, request json.RawMessage, modelID string, modelBinding map[string]any, userID string) (CoreSessionBinding, error) {
 	if frozen, err := s.GetCoreSession(ctx, runID); err == nil {
 		return frozen, nil
 	} else if !errors.Is(err, ErrUnknownAgentRun) {
 		return CoreSessionBinding{}, err
 	}
 	if modelID == "" {
+		var payload struct {
+			Environment map[string]any `json:"environment"`
+		}
+		if json.Unmarshal(request, &payload) != nil || payload.Environment["skills"] != nil || modelBinding != nil {
+			return CoreSessionBinding{}, ErrInvalidInput
+		}
 		return s.EnsureCoreSession(ctx, runID, request)
 	}
 	var out CoreSessionBinding
@@ -48,6 +59,17 @@ func (s *Store) EnsureCoreSessionWithModel(ctx context.Context, runID string, re
 		return out, ErrCatalogKeyUnavailable
 	}
 	token, _ := key["api_key"].(string)
+	if modelBinding != nil {
+		kind, _ := modelBinding["kind"].(string)
+		choices, err := credentialbinding.ParseStrict(map[string]any{"credential_bindings": map[string]any{kind: modelBinding}})
+		if err != nil {
+			return out, ErrInvalidInput
+		}
+		token, err = s.ResolveAgentCredential(ctx, workspace, userID, kind, choices[kind])
+		if err != nil {
+			return out, fmt.Errorf("%w: %s", ErrCatalogKeyUnavailable, err)
+		}
+	}
 	provider := v1.ModelProviderInput{Protocol: row.Protocol, BaseURL: row.BaseUrl, APIKey: token, ContextWindow: row.ContextWindow, MaxOutputTokens: row.MaxOutputTokens}
 	var payload struct {
 		Agent       map[string]any `json:"agent"`
@@ -77,8 +99,21 @@ func (s *Store) EnsureCoreSessionWithModel(ctx context.Context, runID string, re
 	if err != nil {
 		return out, err
 	}
+	privateEnvironment := map[string]any{}
+	if skills, exists := payload.Environment["skills"]; exists {
+		privateEnvironment["skills"] = skills
+		delete(payload.Environment, "skills")
+		raw["environment"], err = json.Marshal(payload.Environment)
+		if err != nil {
+			return out, err
+		}
+		request, err = json.Marshal(raw)
+		if err != nil {
+			return out, err
+		}
+	}
 	bindingID := newID()
-	snapshot, err := cipher.Encrypt(map[string]any{"workspace_id": workspace, "binding_id": bindingID, "provider": provider})
+	snapshot, err := cipher.Encrypt(map[string]any{"workspace_id": workspace, "binding_id": bindingID, "provider": provider, "environment": privateEnvironment})
 	if err != nil {
 		return out, ErrCatalogKeyUnavailable
 	}
@@ -114,4 +149,21 @@ func (s *Store) CoreSessionProvider(binding CoreSessionBinding) (*v1.SessionExec
 		return nil, ErrCatalogKeyUnavailable
 	}
 	return &v1.SessionExecutionInput{ModelProvider: &provider}, nil
+}
+
+// CoreSessionPrivateEnvironment restores initialization only at Core dispatch.
+func (s *Store) CoreSessionPrivateEnvironment(binding CoreSessionBinding) (map[string]any, error) {
+	if len(binding.ProviderSnapshot) == 0 {
+		return nil, nil
+	}
+	cipher, err := catalogCipher()
+	if err != nil {
+		return nil, err
+	}
+	payload, err := cipher.Decrypt(binding.ProviderSnapshot)
+	if err != nil || payload["workspace_id"] != binding.WorkspaceID || payload["binding_id"] != binding.ID {
+		return nil, ErrCatalogKeyUnavailable
+	}
+	environment, _ := payload["environment"].(map[string]any)
+	return environment, nil
 }

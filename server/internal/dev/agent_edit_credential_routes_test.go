@@ -67,16 +67,8 @@ func (s *recordingAgentStore) CreateSecret(ctx context.Context, input store.Crea
 	return s.stubRuntimeStore.CreateSecret(ctx, input, encryptedPayload)
 }
 
-// TestUpdateAgentPersistsCredentialBindings verifies the PATCH /agents/{id}
-// path now accepts config.credential_bindings + inline_new_secrets and
-// forwards them to Store.UpdateAgent with ConfigSet=true. Without this the
-// edit dialog can't change the agent's shared secret — which is the bug
-// users originally reported (radio "shared" stays empty even after picking).
-
-// TestUpdateAgentRejectsExecutionCredentials guards the public-agent
-// invariant: lark guests have no platform user_id, so personal credentials
-// can't resolve at dispatch. The handler must 422 before writing anything.
-func TestUpdateAgentRejectsExecutionCredentials(t *testing.T) {
+// Public Agents cannot resolve personal credentials for external callers.
+func TestUpdatePublicAgentRejectsPersonalCredentials(t *testing.T) {
 	r := chi.NewRouter()
 	rec := &recordingAgentStore{getAgentVisibility: "public"}
 	RegisterRoutesWithStore(r, rec)
@@ -88,9 +80,9 @@ func TestUpdateAgentRejectsExecutionCredentials(t *testing.T) {
 	r.ServeHTTP(res, req)
 
 	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 422 for public + personal, got %d: %s", res.Code, res.Body.String())
+		t.Fatalf("expected 400 for public + personal, got %d: %s", res.Code, res.Body.String())
 	}
-	if !strings.Contains(res.Body.String(), "Core") {
+	if !strings.Contains(res.Body.String(), "gitlab_token") {
 		t.Errorf("error message should name the offending kind, got %s", res.Body.String())
 	}
 	// Nothing should have hit UpdateAgent — the input recorder stays empty.

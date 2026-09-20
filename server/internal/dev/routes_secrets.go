@@ -14,11 +14,12 @@ import (
 )
 
 type createSecretBody struct {
-	Name     string         `json:"name"`
-	Kind     string         `json:"kind"`
-	Provider string         `json:"provider"`
-	AuthType string         `json:"auth_type"`
-	Payload  map[string]any `json:"payload"`
+	CredentialKindCode string         `json:"credential_kind_code"`
+	Name               string         `json:"name"`
+	Kind               string         `json:"kind"`
+	Provider           string         `json:"provider"`
+	AuthType           string         `json:"auth_type"`
+	Payload            map[string]any `json:"payload"`
 }
 
 // createSecret adds a secret entry to a workspace's vault.
@@ -54,6 +55,16 @@ func createSecret(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name, provider, and auth_type are required"})
 			return
 		}
+		if req.CredentialKindCode != "" {
+			if req.Kind != "capability_inline" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "credential kind requires capability_inline secret"})
+				return
+			}
+			if _, err := runtimeStore.GetCredentialKindByCode(r.Context(), req.CredentialKindCode); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown credential kind"})
+				return
+			}
+		}
 		serverMasterKey := os.Getenv("PARSAR_MASTER_KEY")
 		if serverMasterKey == "" {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "server has no PARSAR_MASTER_KEY configured; refusing to create a secret"})
@@ -70,13 +81,15 @@ func createSecret(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		secret, err := runtimeStore.CreateSecret(r.Context(), store.CreateSecretInput{
-			WorkspaceID: workspaceID,
-			Name:        req.Name,
-			Kind:        req.Kind,
-			Provider:    req.Provider,
-			AuthType:    req.AuthType,
-			Payload:     req.Payload,
-			Masked:      secrets.MaskPayload(req.Payload),
+			WorkspaceID:        workspaceID,
+			CredentialKindCode: req.CredentialKindCode,
+			CreatedBy:          actorIDFromRequest(r),
+			Name:               req.Name,
+			Kind:               req.Kind,
+			Provider:           req.Provider,
+			AuthType:           req.AuthType,
+			Payload:            req.Payload,
+			Masked:             secrets.MaskPayload(req.Payload),
 		}, encrypted)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create secret"})
