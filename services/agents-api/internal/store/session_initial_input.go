@@ -22,7 +22,7 @@ func validateInitialInputs(inputs []Input) ([]Input, json.RawMessage, error) {
 
 // The Session upsert locks retries. Only the new row reserves or admits work, so a
 // retry after completion or later Turns cannot submit the original input again.
-func (s *Store) createSessionResources(ctx context.Context, tenant string, params sqlc.CreateSessionParams, inputs []Input, encodedInput json.RawMessage) (sqlc.Session, *Environment, error) {
+func (s *Store) createSessionResources(ctx context.Context, tenant string, params sqlc.CreateSessionParams, inputs []Input, encodedInput json.RawMessage, files []InitialFile) (sqlc.Session, *Environment, error) {
 	var row sqlc.Session
 	var environment *Environment
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -33,6 +33,16 @@ func (s *Store) createSessionResources(ctx context.Context, tenant string, param
 			return err
 		}
 		if row.ID == params.ID {
+			if len(files) > 0 {
+				metadata, err := s.saveInitialFiles(ctx, q, tx, tenant, row.ID, files)
+				if err != nil {
+					return err
+				}
+				row, err = q.SetSessionInitialFileMetadata(ctx, sqlc.SetSessionInitialFileMetadataParams{ID: row.ID, Column2: metadata})
+				if err != nil {
+					return err
+				}
+			}
 			if err := createSessionEnvironment(ctx, q, row); err != nil {
 				return err
 			}

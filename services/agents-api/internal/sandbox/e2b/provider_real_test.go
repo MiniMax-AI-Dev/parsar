@@ -1,7 +1,10 @@
 package e2b
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"os"
@@ -47,6 +50,14 @@ func TestRealE2BLifecycle(t *testing.T) {
 		t.Fatal("incomplete real bootstrap")
 	}
 	t.Log("real Create and completed bootstrap")
+	for _, input := range [][]byte{{}, bytes.Repeat([]byte{0, 255, 10, 1, 42}, 10485760)} {
+		result, err := p.RunCommand(ctx, b.Reference, sandbox.Command{Args: []string{"/bin/sh", "-c", "head -c 131072 /dev/zero; sha256sum"}, Stdin: input})
+		digest := sha256.Sum256(input)
+		if err != nil || result.ExitCode != 0 || !strings.HasSuffix(result.Stdout, hex.EncodeToString(digest[:])+"  -\n") || len(result.Stdout) != 131072+68 {
+			t.Fatalf("real stdin/EOF failure: input=%d stdout=%d exit=%d error=%v", len(input), len(result.Stdout), result.ExitCode, err)
+		}
+	}
+	t.Log("real binary stdin, concurrent output and EOF")
 	protection, e := p.RunCommand(ctx, b.Reference, sandbox.Command{Args: []string{"/usr/bin/python3", "-c", `import os, subprocess
 for path in ['/usr/local/bin/parsar-daemon', '/opt/parsar-e2b/init.py', '/usr/bin/envd']:
     assert os.stat(path).st_uid == 0 and os.stat(path).st_mode & 0o022 == 0

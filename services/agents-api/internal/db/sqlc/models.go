@@ -82,6 +82,8 @@ type EnvironmentTemplate struct {
 	NetworkAccess string             `json:"network_access"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	Files         []byte             `json:"files"`
+	FileContents  []byte             `json:"file_contents"`
 }
 
 type ExecutionProjectScope struct {
@@ -102,16 +104,26 @@ type FunctionCall struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type InitialEnvironmentFile struct {
+	ID        pgtype.UUID `json:"id"`
+	SessionID pgtype.UUID `json:"session_id"`
+	Position  int32       `json:"position"`
+	Path      string      `json:"path"`
+	SizeBytes int64       `json:"size_bytes"`
+	Contents  []byte      `json:"contents"`
+}
+
 type RuntimeAllocation struct {
-	ID            pgtype.UUID        `json:"id"`
-	EnvironmentID pgtype.UUID        `json:"environment_id"`
-	DeviceID      pgtype.UUID        `json:"device_id"`
-	ProviderKey   pgtype.UUID        `json:"provider_key"`
-	State         string             `json:"state"`
-	CreateSettled bool               `json:"create_settled"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	KeptAt        pgtype.Timestamptz `json:"kept_at"`
-	ReleasedAt    pgtype.Timestamptz `json:"released_at"`
+	ID             pgtype.UUID        `json:"id"`
+	EnvironmentID  pgtype.UUID        `json:"environment_id"`
+	DeviceID       pgtype.UUID        `json:"device_id"`
+	ProviderKey    pgtype.UUID        `json:"provider_key"`
+	State          string             `json:"state"`
+	CreateSettled  bool               `json:"create_settled"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	KeptAt         pgtype.Timestamptz `json:"kept_at"`
+	ReleasedAt     pgtype.Timestamptz `json:"released_at"`
+	Initialization string             `json:"initialization"`
 }
 
 type Session struct {

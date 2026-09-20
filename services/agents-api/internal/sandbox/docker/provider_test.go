@@ -1,7 +1,10 @@
 package docker
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -62,6 +65,26 @@ func TestDockerProviderLifecycle(t *testing.T) {
 		defer cancel()
 		if e := p.Kill(ctx, b.Reference); e != nil {
 			t.Error(e)
+		}
+	})
+	t.Run("stdin concurrent output and EOF", func(t *testing.T) {
+		inputOwner := bootstrap()
+		if _, err := p.Create(ctx, inputOwner); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			cleanup, stop := context.WithTimeout(context.Background(), 20*time.Second)
+			defer stop()
+			if err := p.Kill(cleanup, inputOwner.Reference); err != nil {
+				t.Error(err)
+			}
+		}()
+		for _, data := range [][]byte{{}, bytes.Repeat([]byte{0, 255, 10, 1, 42}, 900000)} {
+			result, err := p.RunCommand(ctx, inputOwner.Reference, sandbox.Command{Args: []string{"/bin/sh", "-c", "head -c 131072 /dev/zero; sha256sum"}, Stdin: data})
+			digest := sha256.Sum256(data)
+			if err != nil || result.ExitCode != 0 || !strings.HasSuffix(result.Stdout, hex.EncodeToString(digest[:])+"  -\n") || len(result.Stdout) != 131072+68 {
+				t.Fatalf("stdin/EOF failure: input=%d stdout=%d exit=%d error=%v", len(data), len(result.Stdout), result.ExitCode, err)
+			}
 		}
 	})
 	info, e := p.Create(ctx, b)

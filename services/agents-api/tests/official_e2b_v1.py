@@ -26,6 +26,10 @@ from official_environment_files import verify_environment_files, verify_file_ten
 from official_session_artifacts import verify_session_artifacts
 
 config = json.loads(Path(sys.argv[1]).read_text())
+if config.get('verify_initial_files') and not config.get('verify_environment_templates'):
+    raise ValueError('Initial-file acceptance requires verify_environment_templates')
+if config.get('verify_initialization_restart') and not config.get('verify_initial_files'):
+    raise ValueError('Initialization restart acceptance requires verify_initial_files')
 root = Path(config['proof_root'])
 package = Path(config['package'])
 root.mkdir(parents=True, exist_ok=True)
@@ -79,6 +83,11 @@ env = {'HOME': str(Path.home()), 'PATH': '/usr/bin:/bin', 'PARSAR_HOME': str(run
        'AGENTS_API_MANAGED_RUNTIMES_FILE': private('managed.json', {'core_url': public + '/api/v1',
         'default_provider': provider, 'e2b': {provider: {'api_key_file': config['e2b_key_file'],
         'template': config['template'], 'lease_seconds': 7200}}})}
+if config.get('verify_initial_files'):
+    key_path = run / 'initial-file-encryption.key'
+    key_path.write_text(base64.b64encode(secrets.token_bytes(32)).decode())
+    key_path.chmod(0o600)
+    env['AGENTS_API_CREDENTIAL_KEY_FILE'] = str(key_path)
 if os.getenv('HTTPS_PROXY'):
     env['HTTPS_PROXY'] = os.environ['HTTPS_PROXY']
 
@@ -227,9 +236,17 @@ try:
         verify_template_session_rejections(client, foreign, http, agent, enabled_template, disabled_template)
         environment['environment_template_id'] = enabled_template
         check('template_sdk_http_crud_pagination_redaction_and_tenant_isolation')
+    initial_expected = {}
+    if config.get('verify_initial_files'):
+        from official_environment_initial_files import initial_files, verify_initial_snapshot, assert_initial_bytes_script
+        environment, initial_source, initial_expected = initial_files(client, foreign, http, agent, enabled_template)
+        sources.append(initial_source)
     session = sessions.create(agent=agent, environment=environment, extra_headers={'Idempotency-Key': 'idle'})
     created.append(session.id)
     eid = session.environment.id
+    if initial_expected:
+        verify_initial_snapshot(client, http, session, initial_expected, initial_source)
+        sources.remove(initial_source)
     assert sessions.create(agent=agent, environment=environment, extra_headers={'Idempotency-Key': 'idle'}).id == session.id
     if public_templates:
         api = client.beta.agents.environments.templates
@@ -268,7 +285,7 @@ CHECK""", user='runtime')
     for resource in ['/agents/sessions/' + session.id, '/agents/environments/' + eid]:
         assert http.get(base + '/v1' + resource, headers={**headers, 'Authorization': 'Bearer ' + tokens[1]}).status_code == 404
     marker, memory = secrets.token_hex(24), secrets.token_hex(24)
-    expected_files = {}
+    expected_files = {p: len(body) for p, body in initial_expected.items()}
     for name, data in [('input.txt', marker.encode()), ('binary.bin', bytes(range(256))), ('empty', b'')]:
         expected_files['/workspace/' + name] = upload(eid, '/workspace/' + name, data)
     source = client.files.create(file=('source.bin', b'source-bytes\x00\xff'), purpose='user_data')
@@ -279,6 +296,8 @@ CHECK""", user='runtime')
     verify_file_tenant_isolation(client, foreign, http, eid, '/workspace', continuation, list(expected_files))
     check('public_session_binding_files_bytes_sort_pages_and_tenant_isolation')
     script = 'from pathlib import Path\np=Path("/workspace/outputs");p.mkdir(exist_ok=True)\n(p/"a.bin").write_bytes(Path("/workspace/binary.bin").read_bytes());(p/"empty").write_bytes(b"")\nprint(Path("/workspace/input.txt").read_text())\n'
+    if initial_expected:
+        script = 'from pathlib import Path\n' + assert_initial_bytes_script(initial_expected) + script
     upload(eid, '/workspace/publish.py', script)
     first = prompt(session.id, 'Run exactly `python3 /workspace/publish.py`. Remember this conversation-only marker: ' + memory, 1)
     identity = native_id(session.id)
@@ -287,6 +306,9 @@ CHECK""", user='runtime')
     verify_session_artifacts(client, foreign, http, session.id, eid, expected_artifacts)
     committed = {item.id: item.to_dict() for item in sessions.items.list(session.id, limit=100).data}
     check('real_native_execution_and_immutable_artifacts_sdk_http')
+    if initial_expected:
+        check('template_initial_files_exact_native_bytes_and_frozen_source_deletion')
+        upload(eid, '/workspace/initial-inline.bin', b'retained-user-change')
     # The native isolation script is the same actual-tool probe used to qualify all profiles.
     history = config['native_history_root'] + '/e2b-isolation-canary'
     vm.files.write(history, 'synthetic-private-history', user='runtime')
@@ -350,7 +372,16 @@ CHECK""", user='runtime')
     disabled_environment = {'type': 'openai_hosted', 'network': {'access': 'disabled'}}
     if public_templates:
         disabled_environment = {'type': 'openai_hosted', 'environment_template_id': disabled_template}
+    inline_expected = {}
+    if config.get('verify_initial_files'):
+        disabled_environment, inline_source, inline_expected = initial_files(client, foreign, http, agent)
+        sources.append(inline_source)
+        assert read(vm, '/workspace/initial-inline.bin') == b'retained-user-change'
+        check('recovery_preserves_user_changes_without_reinstalling_initial_files')
     disabled = sessions.create(agent=agent, environment=disabled_environment)
+    if inline_expected:
+        verify_initial_snapshot(client, http, disabled, inline_expected, inline_source)
+        sources.remove(inline_source)
     assert disabled.environment.id != eid
     assert disabled.environment.network.access == 'disabled'
     if public_templates:
@@ -361,10 +392,29 @@ CHECK""", user='runtime')
     connected(disabled.environment.id)
     restricted = runtime(disabled.environment.id)
     network_script = 'import urllib.request,urllib.error,json\ntry:\n urllib.request.urlopen("https://api.moonshot.cn/v1/models",timeout=8)\nexcept urllib.error.HTTPError as e:\n assert e.code==403,e.code\nexcept (urllib.error.URLError,PermissionError,TimeoutError):pass\nelse:raise AssertionError("native network was allowed")\nopen("/workspace/network-result.json","w").write(json.dumps({"blocked":True}))\n'
+    if inline_expected:
+        network_script = 'from pathlib import Path\n' + assert_initial_bytes_script(inline_expected) + network_script
     upload(disabled.environment.id, '/workspace/network.py', network_script)
     prompt(disabled.id, 'Run exactly `python3 /workspace/network.py`. Do not modify it.', 1)
     assert json.loads(read(restricted, '/workspace/network-result.json')) == {'blocked': True}
     check('real_model_execution_with_disabled_native_tool_network')
+    if inline_expected:
+        check('inline_initial_files_exact_native_bytes_and_frozen_source_deletion')
+    if config.get('verify_initialization_restart'):
+        interrupted = sessions.create(agent=agent, environment={'type': 'openai_hosted', 'files': [
+            {'type': 'inline', 'path': '/workspace/step-' + str(i), 'data': base64.b64encode(b'startup-data').decode()}
+            for i in range(3)]}, input='Write /workspace/should-not-run containing executed.')
+        created.append(interrupted.id)
+        sql = "SELECT a.initialization FROM runtime_allocations a JOIN environments e ON e.id=a.environment_id WHERE e.session_id='" + interrupted.id + "'"
+        until(lambda: subprocess.check_output(config['psql_command'] + ['-At', '-c', sql], text=True).strip() == 'running')
+        response = http.get(base + '/v1/agents/environments/' + interrupted.environment.id + '/files', headers=headers)
+        assert response.status_code in (409, 503), response.status_code
+        assert sessions.turns.list(interrupted.id).data == [] and not native_id(interrupted.id)
+        stop(crash=True)
+        start()
+        until(lambda: client.beta.agents.environments.retrieve(interrupted.environment.id).status == 'failed')
+        assert sessions.turns.list(interrupted.id).data == [] and not native_id(interrupted.id)
+        check('actual_core_restart_during_initialization_fails_without_native_execution_or_replay')
     record['passed'] = True
 except BaseException:
     record['passed'] = False

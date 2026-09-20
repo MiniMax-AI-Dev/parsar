@@ -2,8 +2,7 @@ package v1
 
 import "encoding/json"
 
-// EnvironmentTemplateRequest exposes the pinned input fields. Populated installations
-// and restricted networking are rejected until their initialization is qualified.
+// EnvironmentTemplateRequest exposes pinned input fields; only qualified installations execute.
 type EnvironmentTemplateRequest struct {
 	Name                  *string                   `json:"name,omitempty" extensions:"x-nullable"`
 	Network               *EnvironmentNetworkInput  `json:"network,omitempty" extensions:"x-nullable"`

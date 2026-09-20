@@ -12,8 +12,8 @@ import (
 )
 
 const createEnvironmentTemplate = `-- name: CreateEnvironmentTemplate :one
-INSERT INTO environment_templates (id, tenant_id, name, network_access)
-VALUES ($1, $2, $3, $4) RETURNING id, tenant_id, name, network_access, created_at, updated_at
+INSERT INTO environment_templates (id, tenant_id, name, network_access, files, file_contents)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, tenant_id, name, network_access, created_at, updated_at, files
 `
 
 type CreateEnvironmentTemplateParams struct {
@@ -21,16 +21,30 @@ type CreateEnvironmentTemplateParams struct {
 	TenantID      pgtype.UUID `json:"tenant_id"`
 	Name          pgtype.Text `json:"name"`
 	NetworkAccess string      `json:"network_access"`
+	Files         []byte      `json:"files"`
+	FileContents  []byte      `json:"file_contents"`
 }
 
-func (q *Queries) CreateEnvironmentTemplate(ctx context.Context, arg CreateEnvironmentTemplateParams) (EnvironmentTemplate, error) {
+type CreateEnvironmentTemplateRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	Name          pgtype.Text        `json:"name"`
+	NetworkAccess string             `json:"network_access"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	Files         []byte             `json:"files"`
+}
+
+func (q *Queries) CreateEnvironmentTemplate(ctx context.Context, arg CreateEnvironmentTemplateParams) (CreateEnvironmentTemplateRow, error) {
 	row := q.db.QueryRow(ctx, createEnvironmentTemplate,
 		arg.ID,
 		arg.TenantID,
 		arg.Name,
 		arg.NetworkAccess,
+		arg.Files,
+		arg.FileContents,
 	)
-	var i EnvironmentTemplate
+	var i CreateEnvironmentTemplateRow
 	err := row.Scan(
 		&i.ID,
 		&i.TenantID,
@@ -38,6 +52,7 @@ func (q *Queries) CreateEnvironmentTemplate(ctx context.Context, arg CreateEnvir
 		&i.NetworkAccess,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Files,
 	)
 	return i, err
 }
@@ -59,7 +74,7 @@ func (q *Queries) DeleteEnvironmentTemplate(ctx context.Context, arg DeleteEnvir
 }
 
 const getEnvironmentTemplate = `-- name: GetEnvironmentTemplate :one
-SELECT id, tenant_id, name, network_access, created_at, updated_at FROM environment_templates WHERE tenant_id = $1 AND id = $2
+SELECT id, tenant_id, name, network_access, created_at, updated_at, files FROM environment_templates WHERE tenant_id = $1 AND id = $2
 `
 
 type GetEnvironmentTemplateParams struct {
@@ -67,9 +82,19 @@ type GetEnvironmentTemplateParams struct {
 	ID       pgtype.UUID `json:"id"`
 }
 
-func (q *Queries) GetEnvironmentTemplate(ctx context.Context, arg GetEnvironmentTemplateParams) (EnvironmentTemplate, error) {
+type GetEnvironmentTemplateRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	Name          pgtype.Text        `json:"name"`
+	NetworkAccess string             `json:"network_access"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	Files         []byte             `json:"files"`
+}
+
+func (q *Queries) GetEnvironmentTemplate(ctx context.Context, arg GetEnvironmentTemplateParams) (GetEnvironmentTemplateRow, error) {
 	row := q.db.QueryRow(ctx, getEnvironmentTemplate, arg.TenantID, arg.ID)
-	var i EnvironmentTemplate
+	var i GetEnvironmentTemplateRow
 	err := row.Scan(
 		&i.ID,
 		&i.TenantID,
@@ -77,12 +102,13 @@ func (q *Queries) GetEnvironmentTemplate(ctx context.Context, arg GetEnvironment
 		&i.NetworkAccess,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Files,
 	)
 	return i, err
 }
 
 const listEnvironmentTemplates = `-- name: ListEnvironmentTemplates :many
-SELECT id, tenant_id, name, network_access, created_at, updated_at FROM environment_templates
+SELECT id, tenant_id, name, network_access, created_at, updated_at, files FROM environment_templates
 WHERE tenant_id = $1
   AND ($2::timestamptz IS NULL
        OR (NOT $3::boolean AND (created_at, id) < ($2::timestamptz, $4::uuid))
@@ -103,7 +129,17 @@ type ListEnvironmentTemplatesParams struct {
 	PageLimit    int32              `json:"page_limit"`
 }
 
-func (q *Queries) ListEnvironmentTemplates(ctx context.Context, arg ListEnvironmentTemplatesParams) ([]EnvironmentTemplate, error) {
+type ListEnvironmentTemplatesRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	Name          pgtype.Text        `json:"name"`
+	NetworkAccess string             `json:"network_access"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	Files         []byte             `json:"files"`
+}
+
+func (q *Queries) ListEnvironmentTemplates(ctx context.Context, arg ListEnvironmentTemplatesParams) ([]ListEnvironmentTemplatesRow, error) {
 	rows, err := q.db.Query(ctx, listEnvironmentTemplates,
 		arg.TenantID,
 		arg.AfterCreated,
@@ -115,9 +151,9 @@ func (q *Queries) ListEnvironmentTemplates(ctx context.Context, arg ListEnvironm
 		return nil, err
 	}
 	defer rows.Close()
-	items := []EnvironmentTemplate{}
+	items := []ListEnvironmentTemplatesRow{}
 	for rows.Next() {
-		var i EnvironmentTemplate
+		var i ListEnvironmentTemplatesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TenantID,
@@ -125,6 +161,7 @@ func (q *Queries) ListEnvironmentTemplates(ctx context.Context, arg ListEnvironm
 			&i.NetworkAccess,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Files,
 		); err != nil {
 			return nil, err
 		}
@@ -136,33 +173,17 @@ func (q *Queries) ListEnvironmentTemplates(ctx context.Context, arg ListEnvironm
 	return items, nil
 }
 
-const updateEnvironmentTemplate = `-- name: UpdateEnvironmentTemplate :one
-UPDATE environment_templates SET
-    name = CASE WHEN $1::boolean THEN $2::text ELSE name END,
-    network_access = CASE WHEN $3::boolean THEN $4::text ELSE network_access END,
-    updated_at = clock_timestamp()
-WHERE tenant_id = $5 AND id = $6
-RETURNING id, tenant_id, name, network_access, created_at, updated_at
+const resolveEnvironmentTemplate = `-- name: ResolveEnvironmentTemplate :one
+SELECT id, tenant_id, name, network_access, created_at, updated_at, files, file_contents FROM environment_templates WHERE tenant_id = $1 AND id = $2
 `
 
-type UpdateEnvironmentTemplateParams struct {
-	SetName       bool        `json:"set_name"`
-	Name          pgtype.Text `json:"name"`
-	SetNetwork    bool        `json:"set_network"`
-	NetworkAccess string      `json:"network_access"`
-	TenantID      pgtype.UUID `json:"tenant_id"`
-	ID            pgtype.UUID `json:"id"`
+type ResolveEnvironmentTemplateParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	ID       pgtype.UUID `json:"id"`
 }
 
-func (q *Queries) UpdateEnvironmentTemplate(ctx context.Context, arg UpdateEnvironmentTemplateParams) (EnvironmentTemplate, error) {
-	row := q.db.QueryRow(ctx, updateEnvironmentTemplate,
-		arg.SetName,
-		arg.Name,
-		arg.SetNetwork,
-		arg.NetworkAccess,
-		arg.TenantID,
-		arg.ID,
-	)
+func (q *Queries) ResolveEnvironmentTemplate(ctx context.Context, arg ResolveEnvironmentTemplateParams) (EnvironmentTemplate, error) {
+	row := q.db.QueryRow(ctx, resolveEnvironmentTemplate, arg.TenantID, arg.ID)
 	var i EnvironmentTemplate
 	err := row.Scan(
 		&i.ID,
@@ -171,6 +192,66 @@ func (q *Queries) UpdateEnvironmentTemplate(ctx context.Context, arg UpdateEnvir
 		&i.NetworkAccess,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Files,
+		&i.FileContents,
+	)
+	return i, err
+}
+
+const updateEnvironmentTemplate = `-- name: UpdateEnvironmentTemplate :one
+UPDATE environment_templates SET
+    name = CASE WHEN $1::boolean THEN $2::text ELSE name END,
+    network_access = CASE WHEN $3::boolean THEN $4::text ELSE network_access END,
+    files = CASE WHEN $5::boolean THEN $6::jsonb ELSE files END,
+    file_contents = CASE WHEN $5::boolean THEN $7::bytea ELSE file_contents END,
+    updated_at = clock_timestamp()
+WHERE tenant_id = $8 AND id = $9
+RETURNING id, tenant_id, name, network_access, created_at, updated_at, files
+`
+
+type UpdateEnvironmentTemplateParams struct {
+	SetName       bool        `json:"set_name"`
+	Name          pgtype.Text `json:"name"`
+	SetNetwork    bool        `json:"set_network"`
+	NetworkAccess string      `json:"network_access"`
+	SetFiles      bool        `json:"set_files"`
+	Files         []byte      `json:"files"`
+	FileContents  []byte      `json:"file_contents"`
+	TenantID      pgtype.UUID `json:"tenant_id"`
+	ID            pgtype.UUID `json:"id"`
+}
+
+type UpdateEnvironmentTemplateRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	Name          pgtype.Text        `json:"name"`
+	NetworkAccess string             `json:"network_access"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	Files         []byte             `json:"files"`
+}
+
+func (q *Queries) UpdateEnvironmentTemplate(ctx context.Context, arg UpdateEnvironmentTemplateParams) (UpdateEnvironmentTemplateRow, error) {
+	row := q.db.QueryRow(ctx, updateEnvironmentTemplate,
+		arg.SetName,
+		arg.Name,
+		arg.SetNetwork,
+		arg.NetworkAccess,
+		arg.SetFiles,
+		arg.Files,
+		arg.FileContents,
+		arg.TenantID,
+		arg.ID,
+	)
+	var i UpdateEnvironmentTemplateRow
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Name,
+		&i.NetworkAccess,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Files,
 	)
 	return i, err
 }

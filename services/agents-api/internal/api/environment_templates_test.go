@@ -17,7 +17,7 @@ func TestTemplateConfigurationRejectsUnqualifiedInputs(t *testing.T) {
 			t.Fatalf("supported input: %s: %v", raw, err)
 		}
 	}
-	for _, raw := range []string{`null`, `[]`, `{"name":""}`, `{"name":42}`, `{"type":"openai_hosted"}`, `{"network":{"access":"restricted","allowed_domains":["example.com"]}}`, `{"env":{"TOKEN":"confidential-canary"}}`, `{"setup_commands":[{"command":"confidential-canary"}]}`, `{"files":[{"type":"inline","path":"/workspace/a","data":"c2VjcmV0"}]}`, `{"packages":{"python":["requests"]}}`, `{"plugins":[{}]}`, `{"skills":[{}]}`, `{"capability_directories":["/workspace"]}`} {
+	for _, raw := range []string{`null`, `[]`, `{"name":""}`, `{"name":42}`, `{"type":"openai_hosted"}`, `{"network":{"access":"restricted","allowed_domains":["example.com"]}}`, `{"env":{"TOKEN":"confidential-canary"}}`, `{"setup_commands":[{"command":"confidential-canary"}]}`, `{"packages":{"python":["requests"]}}`, `{"plugins":[{}]}`, `{"skills":[{}]}`, `{"capability_directories":["/workspace"]}`} {
 		if _, err := decodeTemplateInput([]byte(raw)); err == nil {
 			t.Fatalf("unsupported input accepted: %s", raw)
 		}
@@ -39,9 +39,9 @@ type templateLookupStore struct {
 	tenant  string
 }
 
-func (s *templateLookupStore) GetEnvironmentTemplate(_ context.Context, tenant, id string) (store.EnvironmentTemplate, error) {
+func (s *templateLookupStore) ResolveEnvironmentTemplate(_ context.Context, tenant, id string) (store.EnvironmentTemplate, []store.InitialFile, error) {
 	s.tenant = tenant
-	return store.EnvironmentTemplate{ID: id, NetworkAccess: s.network}, nil
+	return store.EnvironmentTemplate{ID: id, NetworkAccess: s.network}, nil, nil
 }
 
 func TestTemplateResolutionAndCreationIntent(t *testing.T) {

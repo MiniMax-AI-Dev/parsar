@@ -49,6 +49,7 @@ type Session struct {
 }
 
 type CreateSessionInput struct {
+	InitialFiles    []InitialFile
 	Creator         identity.Subject
 	CreationRequest json.RawMessage
 	Engine          string
@@ -126,7 +127,8 @@ func (s *Store) createSession(ctx context.Context, tenantID string, input Create
 		Metadata      map[string]string
 		Configuration json.RawMessage `json:",omitempty"`
 		InitialInputs json.RawMessage `json:",omitempty"`
-	}{input.Engine, input.Metadata, hashConfiguration, encodedInput})
+		InitialFiles  []InitialFile   `json:",omitempty"`
+	}{input.Engine, input.Metadata, hashConfiguration, encodedInput, input.InitialFiles})
 	if err != nil {
 		return SessionCreation{}, fmt.Errorf("%w: input: %v", ErrInvalidInput, err)
 	}
@@ -141,7 +143,7 @@ func (s *Store) createSession(ctx context.Context, tenantID string, input Create
 		Configuration: configuration, CreationRequestHash: creationHash,
 		CreatorKind: pgtype.Text{String: input.Creator.Kind, Valid: true}, CreatorID: pgtype.Text{String: input.Creator.ID, Valid: true},
 	}
-	row, environment, err := s.createSessionResources(ctx, tenantID, params, batch, encodedInput)
+	row, environment, err := s.createSessionResources(ctx, tenantID, params, batch, encodedInput, input.InitialFiles)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SessionCreation{}, ErrIdempotencyConflict
 	}

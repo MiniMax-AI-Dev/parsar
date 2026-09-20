@@ -19,6 +19,9 @@ type runtimeConnection struct {
 }
 
 func (r *runtimeLifecycle) observeConnection(ctx context.Context, owner store.RuntimeAllocation) error {
+	if owner.Initialization != "complete" {
+		return nil
+	}
 	bound, err := r.store.GetSessionDevice(ctx, owner.TenantID, owner.SessionID)
 	if err != nil {
 		return err

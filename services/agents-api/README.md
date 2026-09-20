@@ -240,8 +240,8 @@ only completion snapshots. Pinned native 0.153.4 may also omit early process
 output from both notifications and its final aggregate; this remains an upstream
 execution gap. Recover missed output with Items queries, not SSE replay.
 
-Non-text message input, Subagents and populated
-installation metadata remain unsupported. Saving optional Agent configuration does not make
+Non-text message input, Subagents and installations beyond hosted initial files
+remain unsupported. Saving optional Agent configuration does not make
 it executable. Unsupported requests fail explicitly. `/healthz` reports liveness only.
 
 ## Managed hosted execution
@@ -254,7 +254,7 @@ or [E2B template/provider setup](deploy/e2b/README.md).
 Core remains independently deployed with its own database. Public idle and initial
 text Sessions share the existing preparation, execution, Files and recovery paths.
 Networking defaults to enabled; disabled is also supported. Restricted domains,
-populated startup installations remain gaps. [Basic public Environment Templates](../../contracts/agents-api/environment-templates.md)
+other populated startup installations remain gaps. Initial inline/file_id files and [public Environment Templates](../../contracts/agents-api/environment-templates.md)
 resolve to the same immutable hosted configuration, independently of provider templates. Additional harnesses
 require separate integration and qualification.
 Connected describes the authenticated Runtime connection, not native readiness.

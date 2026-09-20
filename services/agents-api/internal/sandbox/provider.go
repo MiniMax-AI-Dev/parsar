@@ -38,7 +38,12 @@ type Info struct {
 type Command struct {
 	Args      []string
 	Directory string
+	// Stdin carries confidential initialization bytes without exposing them in argv.
+	Stdin []byte
 }
+
+const MaxCommandInputBytes = 50*1024*1024 + 32
+
 type CommandResult struct {
 	Stdout, Stderr string
 	ExitCode       int

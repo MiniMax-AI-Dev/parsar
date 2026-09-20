@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 	"unicode/utf8"
@@ -13,8 +14,9 @@ import (
 )
 
 // EnvironmentTemplate is configuration ownership, independent of provider images.
-// This qualified profile cannot persist confidential installation inputs.
+
 type EnvironmentTemplate struct {
+	Files         []InitialFileMetadata
 	ID            string
 	Name          *string
 	NetworkAccess string
@@ -23,6 +25,8 @@ type EnvironmentTemplate struct {
 }
 
 type EnvironmentTemplateInput struct {
+	Files         []InitialFile
+	SetFiles      bool
 	Name          *string
 	SetName       bool
 	NetworkAccess string
@@ -34,7 +38,9 @@ func (in EnvironmentTemplateInput) valid() bool {
 		(!in.SetNetwork || in.NetworkAccess == "enabled" || in.NetworkAccess == "disabled")
 }
 
-func templateFromRow(row sqlc.EnvironmentTemplate, err error) (EnvironmentTemplate, error) {
+type templateMetadataRow sqlc.GetEnvironmentTemplateRow
+
+func templateFromRow(row templateMetadataRow, err error) (EnvironmentTemplate, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return EnvironmentTemplate{}, ErrNotFound
 	}
@@ -44,6 +50,9 @@ func templateFromRow(row sqlc.EnvironmentTemplate, err error) (EnvironmentTempla
 	result := EnvironmentTemplate{ID: uuid.UUID(row.ID.Bytes).String(), NetworkAccess: row.NetworkAccess, CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time}
 	if row.Name.Valid {
 		result.Name = &row.Name.String
+	}
+	if json.Unmarshal(row.Files, &result.Files) != nil {
+		return EnvironmentTemplate{}, ErrInvalidInput
 	}
 	return result, nil
 }
@@ -64,8 +73,13 @@ func (s *Store) CreateEnvironmentTemplate(ctx context.Context, tenantID string, 
 	if in.Name != nil {
 		name = pgtype.Text{String: *in.Name, Valid: true}
 	}
-	row, err := s.queries.CreateEnvironmentTemplate(ctx, sqlc.CreateEnvironmentTemplateParams{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, TenantID: tenant, Name: name, NetworkAccess: in.NetworkAccess})
-	return templateFromRow(row, err)
+	id := uuid.New()
+	metadata, encrypted, err := s.sealTemplateFiles(uuid.UUID(tenant.Bytes).String(), id.String(), in.Files)
+	if err != nil {
+		return EnvironmentTemplate{}, err
+	}
+	row, err := s.queries.CreateEnvironmentTemplate(ctx, sqlc.CreateEnvironmentTemplateParams{ID: pgtype.UUID{Bytes: id, Valid: true}, TenantID: tenant, Name: name, NetworkAccess: in.NetworkAccess, Files: metadata, FileContents: encrypted})
+	return templateFromRow(templateMetadataRow(row), err)
 }
 
 func (s *Store) GetEnvironmentTemplate(ctx context.Context, tenantID, templateID string) (EnvironmentTemplate, error) {
@@ -78,7 +92,7 @@ func (s *Store) GetEnvironmentTemplate(ctx context.Context, tenantID, templateID
 		return EnvironmentTemplate{}, ErrNotFound
 	}
 	row, err := s.queries.GetEnvironmentTemplate(ctx, sqlc.GetEnvironmentTemplateParams{TenantID: tenant, ID: id})
-	return templateFromRow(row, err)
+	return templateFromRow(templateMetadataRow(row), err)
 }
 
 // Each supplied field replaces atomically, preserving concurrent unrelated updates.
@@ -94,15 +108,19 @@ func (s *Store) UpdateEnvironmentTemplate(ctx context.Context, tenantID, templat
 	if err != nil {
 		return EnvironmentTemplate{}, ErrNotFound
 	}
-	if !in.SetName && !in.SetNetwork {
+	if !in.SetName && !in.SetNetwork && !in.SetFiles {
 		return s.GetEnvironmentTemplate(ctx, tenantID, templateID)
 	}
 	var name pgtype.Text
 	if in.Name != nil {
 		name = pgtype.Text{String: *in.Name, Valid: true}
 	}
-	row, err := s.queries.UpdateEnvironmentTemplate(ctx, sqlc.UpdateEnvironmentTemplateParams{TenantID: tenant, ID: id, Name: name, SetName: in.SetName, NetworkAccess: in.NetworkAccess, SetNetwork: in.SetNetwork})
-	return templateFromRow(row, err)
+	metadata, encrypted, err := s.sealTemplateFiles(uuid.UUID(tenant.Bytes).String(), uuid.UUID(id.Bytes).String(), in.Files)
+	if err != nil {
+		return EnvironmentTemplate{}, err
+	}
+	row, err := s.queries.UpdateEnvironmentTemplate(ctx, sqlc.UpdateEnvironmentTemplateParams{TenantID: tenant, ID: id, Name: name, SetName: in.SetName, NetworkAccess: in.NetworkAccess, SetNetwork: in.SetNetwork, SetFiles: in.SetFiles, Files: metadata, FileContents: encrypted})
+	return templateFromRow(templateMetadataRow(row), err)
 }
 
 func (s *Store) DeleteEnvironmentTemplate(ctx context.Context, tenantID, templateID string) (string, error) {
@@ -155,7 +173,7 @@ func (s *Store) ListEnvironmentTemplates(ctx context.Context, tenantID, cursor s
 		rows = rows[:limit]
 	}
 	for _, row := range rows {
-		value, err := templateFromRow(row, nil)
+		value, err := templateFromRow(templateMetadataRow(row), nil)
 		if err != nil {
 			return EnvironmentTemplatePage{}, err
 		}

@@ -9,7 +9,7 @@ import (
 )
 
 func sessionCreationRequest(input sessionRequest, initial []store.Input) (json.RawMessage, error) {
-	if input.AgentID == nil && input.templateID == "" && !inlineCredentialIntent(input) {
+	if input.AgentID == nil && input.templateID == "" && len(input.initialFiles) == 0 && !inlineCredentialIntent(input) {
 		return nil, nil
 	}
 	agentID := ""
@@ -17,8 +17,11 @@ func sessionCreationRequest(input sessionRequest, initial []store.Input) (json.R
 		agentID = *input.AgentID
 	}
 	var environment any = input.Environment
-	if input.templateID != "" {
-		environment = input.templateEnvironment
+	if input.templateID != "" || len(input.initialFiles) > 0 {
+		environment = input.originalEnvironment
+		if len(input.originalEnvironment) == 0 {
+			environment = input.templateEnvironment
+		}
 	}
 	return json.Marshal(struct {
 		AgentID       string                     `json:"agent_id"`
