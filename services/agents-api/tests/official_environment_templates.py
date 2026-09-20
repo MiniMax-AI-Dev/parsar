@@ -18,7 +18,7 @@ def verify_environment_templates(client, foreign, http):
         assert http.get(base, headers={'OpenAI-Beta': 'agents=v1'}).status_code == 401
         assert http.get(base, headers={'Authorization': 'Bearer ' + client.api_key}).status_code == 400
         assert api.list().data == []
-        for values in ({}, {'name': None, 'network': None, 'env': None, 'setup_commands': None},
+        for values in ({}, {'packages': {}}, {'packages': {'npm': None}}, {'name': None, 'network': None, 'env': None, 'setup_commands': None},
                        {'name': ' preserved ', 'network': {'access': 'disabled'}, 'files': [],
                         'plugins': [], 'skills': [], 'packages': {'python': [], 'npm': None}}):
             response = api.with_raw_response.create(**values)
@@ -36,13 +36,13 @@ def verify_environment_templates(client, foreign, http):
             assert body['created_at'] == body['updated_at']
             assert api.retrieve(template.id) == template
             assert http.get(base + '/' + template.id, headers=headers).json() == body
-        before = api.retrieve(owned[2])
-        updated = api.update(owned[2], name='changed')
+        before = api.retrieve(owned[-1])
+        updated = api.update(owned[-1], name='changed')
         assert updated.name == 'changed' and updated.network == before.network
         assert updated.created_at == before.created_at
-        updated = api.update(owned[2], name=None, network=None)
+        updated = api.update(owned[-1], name=None, network=None)
         assert updated.name is None and updated.network.access == 'enabled'
-        assert api.update(owned[2]).to_dict() == updated.to_dict()
+        assert api.update(owned[-1]).to_dict() == updated.to_dict()
         assert [v.id for v in api.list(order='asc', limit=1)] == owned
         assert [v.id for v in api.list(order='desc', limit=2)] == owned[::-1]
         page = api.list(order='asc', limit=2)

@@ -399,6 +399,24 @@ definitions:
     - python
     - system
     type: object
+  v1.EnvironmentPackagesInput:
+    properties:
+      npm:
+        items:
+          type: string
+        type: array
+        x-nullable: true
+      python:
+        items:
+          type: string
+        type: array
+        x-nullable: true
+      system:
+        items:
+          type: string
+        type: array
+        x-nullable: true
+    type: object
   v1.EnvironmentTemplate:
     properties:
       capability_directories:
@@ -490,14 +508,17 @@ definitions:
         items:
           type: string
         type: array
+        x-nullable: true
       env:
         additionalProperties:
           type: string
         type: object
+        x-nullable: true
       files:
         items:
           type: object
         type: array
+        x-nullable: true
       name:
         type: string
         x-nullable: true
@@ -506,19 +527,24 @@ definitions:
         - $ref: '#/definitions/v1.EnvironmentNetworkInput'
         x-nullable: true
       packages:
-        $ref: '#/definitions/v1.EnvironmentPackages'
+        allOf:
+        - $ref: '#/definitions/v1.EnvironmentPackagesInput'
+        x-nullable: true
       plugins:
         items:
           type: object
         type: array
+        x-nullable: true
       setup_commands:
         items:
           type: object
         type: array
+        x-nullable: true
       skills:
         items:
           type: object
         type: array
+        x-nullable: true
     type: object
   v1.ErrorResponse:
     properties:

@@ -12,7 +12,7 @@ import (
 )
 
 func TestTemplateConfigurationRejectsUnqualifiedInputs(t *testing.T) {
-	for _, raw := range []string{`{}`, `{"name":null,"network":null}`, `{"name":"保存","network":{"access":"disabled"},"env":{},"files":[],"setup_commands":[],"packages":{"npm":null}}`} {
+	for _, raw := range []string{`{}`, `{"packages":{}}`, `{"packages":{"npm":null}}`, `{"name":null,"network":null}`, `{"name":"保存","network":{"access":"disabled"},"env":{},"files":[],"setup_commands":[],"packages":{"npm":null}}`} {
 		if _, err := decodeTemplateInput([]byte(raw)); err != nil {
 			t.Fatalf("supported input: %s: %v", raw, err)
 		}
