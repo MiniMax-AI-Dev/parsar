@@ -127,8 +127,8 @@ envelope, and MiniMax points its native user-global catalog at the shared root.
 MiniMax retains disabled unrestricted built-in tools and uses its existing
 isolated workspace tool worker. No Provider or model/tool loop is added.
 
-Codex `agents/openai.yaml` native dependency configuration and Claude inline/fenced
-shell preprocessing are not qualified in this batch and explicitly fail adapter
+Codex nested `SKILL.md` discovery, `agents/openai.yaml` native dependency
+configuration and Claude inline/fenced shell preprocessing are not qualified in this batch and explicitly fail adapter
 preparation. Other files are not interpreted as a public plugin installation.
 Public `skill_reference`, `/v1/skills` version resolution, generic Plugins and
 capability-directory imports remain separate gaps. Native built-in Skill visibility
@@ -305,3 +305,39 @@ remain gaps, and native Codex hook failure retains the limitation stated above.
 Private sanitized run/check/build evidence is retained under
 `~/.parsar/remediation/20260920/environment-template-setup/` and the linked board.
 These results do not establish complete Template or Agents API compatibility.
+
+
+### Accepted inline-Skill profiles (2026-09-20)
+
+`official_environment_skills.py` supplies fixed-client/raw-HTTP checks and a
+native-discovered Skill whose helper produces an unpredictable Artifact, checks
+private credentials/staging, and attempts to modify its own installed manifest.
+Standalone Core, dedicated PostgreSQL and freshly packaged Docker Runtimes passed
+with Codex 0.153.4/Kimi, Claude SDK 0.3.269 (native 2.1.269)/Kimi, and MiniMax Code
+0.4.12/MiniMax-M3. Codex covered template and inline configuration; Claude and
+MiniMax covered the template path through the same initializer. All verified safe
+metadata, foreign-tenant rejection, frozen snapshots after template clear/delete,
+creation retry, native Skill execution, Files/Artifacts, cancellation, and owned
+history/workspace recovery after Core and Runtime restart. Cleanup completed.
+The Core binary SHA-256 was
+`85be1bc26ca6c03617ba74bf092485656dda9311bb636d507be6576a2f087f16`.
+
+The shared initializer also passed on a real Docker container and E2B VM, including
+binary/executable content, read-only Skill access from setup, duplicate/path
+rejection and private-state isolation. This batch did not repeat the E2B model
+matrix: Provider code is unchanged, while its shared initialization boundary was
+exercised in a real VM. PostgreSQL/API/archive tests, Claude SDK tests/build,
+`make openapi`, `make sqlc-generate` and `make check` passed. The default gate's
+optional native build probe remains skipped and is not counted as live acceptance.
+
+Initial integration failed safely because the proposed Skill parent was root-owned;
+using the existing Runtime initialization directory resolved that packaging
+boundary without broadening permissions. The earlier MiniMax/Kimi native timeout
+and probe-only unrestricted-tool configuration failure remain recorded. The latter
+passed after restoring the unchanged production tool settings. Docker builds reused
+qualified base images after registry DNS failure; current daemon, adapter and
+initializer artifacts were copied using the repository packaging recipe. Raw
+receipts retain their inherited historical manifest fields; accompanying source,
+Core and image hashes identify the actual candidates. Evidence is retained under
+`~/.parsar/remediation/20260920/environment-template-skills` and the linked board
+record. This profile does not establish complete upstream Skill semantics.
