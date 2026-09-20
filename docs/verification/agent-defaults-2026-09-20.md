@@ -4,6 +4,8 @@ Status: ready for PR review. A fresh GPT-6 Astra reviewer with high reasoning an
 independent context reviewed all tracked/untracked changes against the baseline,
 found no grounded actionable issue, and independently passed focused Go tests and
 `git diff --check`. The reviewer did not rerun the full gate or live acceptance.
+The subsequent image packaging/documentation fix did not receive another blind
+review, at the user's explicit direction.
 
 Scope: baseline `6c801316858b120d09668b144861959ed1b030df`, branch
 `feat/agent-execution-defaults`. Agent defaults select a model, existing Core
@@ -24,6 +26,12 @@ ran without exclusions or test modifications.
 
 Logs and wrapper: `~/.parsar/tests/agent-defaults-20260920/{check.sh,make-check.log,make-check.exit}`
 on Linux. Local copy: `~/.parsar/tests/agent-defaults/make-check-linux.log`.
+
+The initial PR image build exposed a missing `contracts/agents-api/v1` directory
+in the product Docker build. The Dockerfile now copies that shared validation
+dependency. A local full-image attempt was blocked by a registry 403 for the
+unchanged Node base image; the Go builder target and GitHub image build validate
+the packaging separately. Final CI results are attached to PR #713.
 
 ## Real execution on mx
 

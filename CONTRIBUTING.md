@@ -104,6 +104,8 @@ that issue instead of expanding the PR. Continue with independent issues.
 - **Execution client**: the product registers only `connector_type=agents_api`
   and uses `packages/agents-client/v1` with the official OpenAI Go SDK.
   Core owns daemon connections, engine selection and environments.
+  Product image builds include `contracts/agents-api/v1` for shared public
+  configuration validation, alongside the client package.
 
 ## Architecture boundaries
 

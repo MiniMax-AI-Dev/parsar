@@ -80,6 +80,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY internal ./internal
 COPY catalog ./catalog
+COPY contracts/agents-api/v1 ./contracts/agents-api/v1
 COPY packages/agents-client ./packages/agents-client
 COPY server ./server
 
