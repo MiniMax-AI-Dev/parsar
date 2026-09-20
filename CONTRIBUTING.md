@@ -2679,7 +2679,8 @@ saved Agent and inline Session configuration paths. Define the extension once in
 Resolve saved overrides before selecting the existing Session engine, and apply
 that engine's execution policy before persistence. Omitted selection preserves
 the deployment default; explicit unavailable selection fails without fallback.
-Effective reads use the persisted engine. See the [extension contract](contracts/agents-api/harness-selection.md)
+Effective extension reads use the persisted engine; Sessions without the extension
+retain the official Agent response shape. See the [extension contract](contracts/agents-api/harness-selection.md)
 for null/retry behavior and operator configuration.
 
 Hosted engine-to-provider selection belongs to Core composition. Admission and

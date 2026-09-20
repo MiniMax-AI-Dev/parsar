@@ -20,8 +20,9 @@ current execution profile.
 Session creation resolves the extension after saved-Agent overrides, validates the
 selected execution profile, and persists the resulting existing `Session.Engine`.
 An explicitly selected harness must be enabled by the deployment; it never falls
-back to a different engine. Effective Session reads report the persisted engine,
-including for historical Sessions without the extension. They never consult current
+back to a different engine. When the effective Agent includes the extension, Session
+reads report its persisted engine. Sessions without the extension retain the official
+Agent response shape, including historical Sessions. Reads never consult current
 Agent defaults or the current deployment default. Explicit-selector creation retries
 retain caller intent before mutable configuration resolution. Changing a selector
 under an existing creation key conflicts.

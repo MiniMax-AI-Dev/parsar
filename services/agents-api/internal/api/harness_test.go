@@ -87,9 +87,21 @@ func TestSavedHarnessReplacementAndEffectiveRead(t *testing.T) {
 	if saved.XAgentsCore.Harness != "claude_sdk" {
 		t.Fatal("mutated saved Agent")
 	}
-	raw, _ := json.Marshal(configuration{Agent: v1.Agent{ID: "agent", Model: "fixture"}, Environment: v1.Environment{Type: "none"}})
+	raw, _ := json.Marshal(configuration{Agent: v1.Agent{ID: "agent", Model: "fixture", XAgentsCore: &v1.AgentsCore{Harness: "claude_sdk"}}, Environment: v1.Environment{Type: "none"}})
 	response, err := sessionResponse(store.Session{Engine: "mcode", Configuration: raw}, "")
 	if err != nil || response.Agent.XAgentsCore.Harness != "mcode" {
 		t.Fatalf("effective read=%+v %v", response, err)
+	}
+}
+
+func TestDefaultHarnessPreservesSessionAgentResponse(t *testing.T) {
+	raw, _ := json.Marshal(configuration{Agent: v1.Agent{ID: "agent", Model: "fixture"}, Environment: v1.Environment{Type: "none"}})
+	response, err := sessionResponse(store.Session{Engine: "codex", Configuration: raw}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(response.Agent)
+	if err != nil || response.Agent.XAgentsCore != nil || strings.Contains(string(encoded), "x_agents_core") {
+		t.Fatalf("default selection changed the protocol Agent: %s %v", encoded, err)
 	}
 }
