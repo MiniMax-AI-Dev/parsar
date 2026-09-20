@@ -92,6 +92,8 @@ type EnvironmentTemplate struct {
 	Packages      []byte             `json:"packages"`
 	EnvContents   []byte             `json:"env_contents"`
 	SetupContents []byte             `json:"setup_contents"`
+	Skills        []byte             `json:"skills"`
+	SkillContents []byte             `json:"skill_contents"`
 }
 
 type ExecutionProjectScope struct {

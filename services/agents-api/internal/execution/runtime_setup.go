@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentskill"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/sandbox"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
@@ -12,13 +13,16 @@ import (
 // runtimeSetupOperation is the packaged initializer's confidential stdin contract.
 // Public templates and native harness configuration never cross this boundary.
 type runtimeSetupOperation struct {
-	Version  int               `json:"version"`
-	Action   string            `json:"action"`
-	Network  string            `json:"network,omitempty"`
-	Env      map[string]string `json:"env"`
-	Packages []string          `json:"packages,omitempty"`
-	Command  string            `json:"command,omitempty"`
-	CWD      string            `json:"cwd,omitempty"`
+	Skill    *store.InlineSkill `json:"-"`
+	Name     string             `json:"name,omitempty"`
+	Files    []agentskill.File  `json:"files,omitempty"`
+	Version  int                `json:"version"`
+	Action   string             `json:"action"`
+	Network  string             `json:"network,omitempty"`
+	Env      map[string]string  `json:"env"`
+	Packages []string           `json:"packages,omitempty"`
+	Command  string             `json:"command,omitempty"`
+	CWD      string             `json:"cwd,omitempty"`
 }
 
 func setupOperations(setup store.EnvironmentSetup) []runtimeSetupOperation {
@@ -30,6 +34,9 @@ func setupOperations(setup store.EnvironmentSetup) []runtimeSetupOperation {
 		env = map[string]string{}
 	}
 	result := []runtimeSetupOperation{{Version: 1, Action: "configure", Env: env}}
+	for i := range setup.Skills {
+		result = append(result, runtimeSetupOperation{Version: 1, Action: "skill", Skill: &setup.Skills[i]})
+	}
 	// The public network policy applies after setup completes. Provisioning uses
 	// the isolated initializer's network; adapters enforce the runtime policy.
 	const network = "enabled"
@@ -52,6 +59,13 @@ func setupOperations(setup store.EnvironmentSetup) []runtimeSetupOperation {
 func runRuntimeSetup(ctx context.Context, provider sandbox.Provider, reference sandbox.Reference, operation runtimeSetupOperation) error {
 	if provider == nil {
 		return sandbox.ErrInvalid
+	}
+	if operation.Skill != nil {
+		files, err := agentskill.Read(operation.Skill.Archive, operation.Skill.Metadata)
+		if err != nil {
+			return err
+		}
+		operation.Name, operation.Files = operation.Skill.Metadata.Name, files
 	}
 	input, err := json.Marshal(operation)
 	if err != nil {

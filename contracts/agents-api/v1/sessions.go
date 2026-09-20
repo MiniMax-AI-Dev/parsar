@@ -37,6 +37,7 @@ type InlineAgent struct {
 
 // Environment contains supported request variants; self-hosted creation requires a workspace directory.
 type Environment struct {
+	Skills                []json.RawMessage        `json:"skills,omitempty" swaggertype:"array,object" extensions:"x-nullable"`
 	Env                   map[string]string        `json:"env,omitempty" extensions:"x-nullable"`
 	SetupCommands         []json.RawMessage        `json:"setup_commands,omitempty" extensions:"x-nullable" swaggertype:"array,object"`
 	Packages              *EnvironmentPackages     `json:"packages,omitempty" extensions:"x-nullable"`

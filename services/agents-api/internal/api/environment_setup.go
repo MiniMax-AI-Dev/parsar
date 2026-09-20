@@ -73,6 +73,11 @@ func decodeEnvironmentSetup(fields map[string]json.RawMessage) (store.Environmen
 			}
 		}
 	}
+	var err error
+	result.Skills, err = decodeInlineSkills(fields["skills"])
+	if err != nil {
+		return result, err
+	}
 	return result, result.Validate()
 }
 

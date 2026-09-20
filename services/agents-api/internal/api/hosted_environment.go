@@ -37,7 +37,9 @@ func decodeHostedEnvironment(raw json.RawMessage) (*v1.Environment, error) {
 				return nil, err
 			}
 			env.Files = initialFileResponse(files)
-		case "capability_directories", "plugins", "skills":
+		case "skills":
+			env.Skills = skillResponse(setup.SkillMetadata())
+		case "capability_directories", "plugins":
 			var list []json.RawMessage
 			if json.Unmarshal(value, &list) != nil || len(list) != 0 {
 				return nil, store.ErrInvalidInput
@@ -68,7 +70,7 @@ func hostedSessionEnvironment(environment store.Environment) (v1.SessionEnvironm
 	directories := []string{}
 	return v1.SessionEnvironment{ID: environment.ID, Type: cfg.Type, CapabilityDirectories: &directories,
 		Network:  &v1.EnvironmentNetwork{Access: cfg.Network.Access, AllowedDomains: []string{}},
-		Packages: func() *v1.EnvironmentPackages { value := packageMetadata(cfg.Packages); return &value }(), Files: &files, Plugins: &empty, Skills: &empty}, nil
+		Packages: func() *v1.EnvironmentPackages { value := packageMetadata(cfg.Packages); return &value }(), Files: &files, Plugins: &empty, Skills: &cfg.Skills}, nil
 }
 
 // WithHostedEnvironments enables admission only for an operator-composed,
@@ -117,6 +119,11 @@ func storedEnvironment(raw json.RawMessage) (*v1.Environment, error) {
 		}
 		delete(fields, "initialization")
 	}
+	skills, err := storedSkills(fields["skills"])
+	if err != nil {
+		return nil, err
+	}
+	delete(fields, "skills")
 	delete(fields, "files")
 	base, err := json.Marshal(fields)
 	if err != nil {
@@ -127,5 +134,6 @@ func storedEnvironment(raw json.RawMessage) (*v1.Environment, error) {
 		return nil, err
 	}
 	cfg.Files = files
+	cfg.Skills = skills
 	return cfg, nil
 }

@@ -104,7 +104,7 @@ func (s *Store) ResolveEnvironmentTemplate(ctx context.Context, tenant, id strin
 		return EnvironmentTemplate{}, nil, ErrNotFound
 	}
 	row, err := s.queries.ResolveEnvironmentTemplate(ctx, sqlc.ResolveEnvironmentTemplateParams{TenantID: lookup.TenantID, ID: lookup.ID})
-	value, err := templateFromRow(templateMetadataRow{ID: row.ID, TenantID: row.TenantID, Name: row.Name, NetworkAccess: row.NetworkAccess, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, Files: row.Files, Packages: row.Packages}, err)
+	value, err := templateFromRow(templateMetadataRow{ID: row.ID, TenantID: row.TenantID, Name: row.Name, NetworkAccess: row.NetworkAccess, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, Files: row.Files, Packages: row.Packages, Skills: row.Skills}, err)
 	if err != nil {
 		return value, nil, err
 	}
@@ -115,6 +115,17 @@ func (s *Store) ResolveEnvironmentTemplate(ctx context.Context, tenant, id strin
 	}
 	if err = s.openEnvironmentSetup(canonicalTenant, "environment_template", value.ID, "setup_commands", row.SetupContents, &value.Initialization.Commands); err != nil {
 		return value, nil, err
+	}
+	if err = s.openEnvironmentSetup(canonicalTenant, "environment_template", value.ID, "skills", row.SkillContents, &value.Initialization.Skills); err != nil {
+		return value, nil, err
+	}
+	if len(value.Skills) != len(value.Initialization.Skills) {
+		return value, nil, ErrInvalidInput
+	}
+	for i, metadata := range value.Skills {
+		if metadata != value.Initialization.Skills[i].Metadata {
+			return value, nil, ErrInvalidInput
+		}
 	}
 	if err = value.Initialization.Validate(); err != nil {
 		return value, nil, err

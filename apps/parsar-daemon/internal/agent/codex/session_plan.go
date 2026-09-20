@@ -65,7 +65,12 @@ func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg
 		plan.Env = append(plan.Env, "CODEX_EXEC_SERVER_URL=none")
 	}
 	skillRoot := ""
-	if !req.DisableExecutionEnvironment && req.RemoteEnvironment == nil {
+	if req.LocalEnvironment != nil && len(req.LocalEnvironment.Skills) > 0 {
+		err = verifyHostedSkills(req.LocalEnvironment.Skills)
+		if err == nil {
+			skillRoot = localworkspace.SkillDirectory
+		}
+	} else if !req.DisableExecutionEnvironment && req.RemoteEnvironment == nil {
 		skillRoot, err = prepareManagedSkills(ctx, cfg.logger, req)
 	}
 	if err != nil {
