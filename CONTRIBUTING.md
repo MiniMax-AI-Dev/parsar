@@ -288,14 +288,26 @@ Completed environments never reinstall initial files on reconnect or native reco
 Provider RunCommand carries bounded stdin, not confidential argv. Only fixed trusted
 initializers may run with Runtime authority. User setup and package install hooks
 run in the common packaged sandbox, without daemon credentials or native history.
-Files and npm/Python packages precede ordered setup commands. Initialization has
+Files, inline Skills and npm/Python packages precede ordered setup commands. Initialization has
 provisioning network access; requested network restrictions apply to native tools
 after setup. Confidential env and setup snapshots are encrypted independently of
 ordinary metadata. Adapters apply tool env only after isolation, never to the
 credential-bearing daemon/native harness launcher.
 Reuse the packaged atomic file writer and anchored parent creation across all profiles.
 
-Name, enabled/disabled network, initial files and env/setup/npm/Python are
+Inline Skill ZIPs use the same confidential initialization snapshot and installer.
+Core validates portable manifests and bounded regular-file archives, returns only
+safe Skill metadata, and freezes content before native preparation. The Runtime
+owns `/environment/initialization/capabilities/skills/<name>`; setup and native tools may read but
+not modify this tree. The common execution descriptor carries Skill metadata,
+never native plugin configuration or template identities. Adapters register native
+Skill roots without changing the execution loop or enabling unrestricted tools.
+Native activation extensions remain adapter-owned and must fail explicitly when
+unqualified. Skills API references, generic Plugins and capability-directory
+imports remain separate work; an adapter-owned Claude plugin envelope does not
+implement public Plugins.
+
+Name, enabled/disabled network, initial files, inline Skills and env/setup/npm/Python are
 implemented independently of remaining installation fields. Reject unsupported
 inputs rather than persisting them for silent
 omission; expand inline and template initialization together in separately qualified

@@ -56,9 +56,24 @@ func prepareWorkspaceOptions(ctx context.Context, c WorkspaceConfig, req proto.P
 	// cwd remains private; only the internal MCP worker receives the public workspace.
 	private := req
 	private.LocalEnvironment, private.WorkDir, private.DisableExecutionEnvironment = nil, "", true
-	opts, err := prepareOptions(ctx, private)
+	opts, err := prepareOptionsWithSkills(ctx, private, false)
 	if err != nil {
 		return opts, err
+	}
+	if err := localworkspace.VerifySkills(req.LocalEnvironment.Skills); err != nil {
+		return opts, err
+	}
+	if len(req.LocalEnvironment.Skills) > 0 {
+		link := filepath.Join(opts.DataDir, "skills")
+		if target, err := os.Readlink(link); err == nil {
+			if target != localworkspace.SkillDirectory {
+				return opts, fmt.Errorf("mcode: unexpected native Skill root")
+			}
+		} else if !os.IsNotExist(err) {
+			return opts, err
+		} else if err := os.Symlink(localworkspace.SkillDirectory, link); err != nil {
+			return opts, err
+		}
 	}
 	raw, err := os.ReadFile(filepath.Join(opts.DataDir, "config.yaml"))
 	if err != nil {
@@ -77,7 +92,7 @@ func prepareWorkspaceOptions(ctx context.Context, c WorkspaceConfig, req proto.P
 	if err = os.WriteFile(filepath.Join(opts.DataDir, "config.yaml"), raw, 0600); err != nil {
 		return opts, err
 	}
-	profile := map[string]any{"workspace": "/workspace", "scratch": c.Scratch, "network": c.Network, "protectedDirs": slices.Clone(c.ProtectedDirs)}
+	profile := map[string]any{"workspace": "/workspace", "scratch": c.Scratch, "network": c.Network, "protectedDirs": slices.Clone(c.ProtectedDirs), "skills": len(req.LocalEnvironment.Skills) > 0}
 	if req.LocalEnvironment.ToolEnvironment {
 		if err := localworkspace.VerifyToolEnvironment(); err != nil {
 			return opts, err

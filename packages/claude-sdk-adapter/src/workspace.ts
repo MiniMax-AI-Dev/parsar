@@ -1,3 +1,4 @@
+import { parseSkills, workspaceSkills, type WorkspaceSkill } from "./workspace_skills.js";
 import type { CanUseTool, HookCallback, Options } from "@anthropic-ai/claude-agent-sdk";
 import { lstatSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -9,6 +10,7 @@ export type Workspace = {
   protected_dirs: string[];
   dependency_path: string;
   env_names: string[];
+  skills?: WorkspaceSkill[];
   tool_environment?: boolean;
   network_access?: "enabled" | "disabled";
 };
@@ -40,7 +42,7 @@ export function parseWorkspace(value: unknown, cwd: string): Workspace | undefin
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_request");
   const config = value as Record<string, unknown>;
-  if (Object.keys(config).some(key => !["home", "state", "scratch", "protected_dirs", "dependency_path", "env_names", "network_access", "tool_environment"].includes(key)) ||
+  if (Object.keys(config).some(key => !["home", "state", "scratch", "protected_dirs", "dependency_path", "env_names", "network_access", "tool_environment", "skills"].includes(key)) ||
       (config.tool_environment !== undefined && typeof config.tool_environment !== "boolean") ||
       (config.network_access !== undefined && config.network_access !== "enabled" && config.network_access !== "disabled") ||
       !Array.isArray(config.protected_dirs) || !Array.isArray(config.env_names) ||
@@ -57,11 +59,12 @@ export function parseWorkspace(value: unknown, cwd: string): Workspace | undefin
         contains(root, actual) || contains(actual, root))) throw new Error("invalid_request");
     return actual;
   });
-  return { ...config, dependency_path: dependencies.join(":") } as Workspace;
+  return { ...config, ...(config.skills === undefined ? {} : { skills: parseSkills(config.skills) }), dependency_path: dependencies.join(":") } as Workspace;
 }
 
 export class WorkspaceProfile {
   readonly options: Options;
+  private readonly skillNames: readonly string[];
 
   constructor(private readonly cwd: string, private readonly config: Workspace, private readonly functions: readonly string[] = []) {
     config = parseWorkspace(config, cwd)!;
@@ -78,11 +81,16 @@ export class WorkspaceProfile {
       if (value === undefined) throw new Error("invalid_request");
       env[name] = value;
     }
+    const skills = workspaceSkills(config.state, config.skills ?? []);
+    this.skillNames = skills?.names ?? [];
+    const skillTools = skills ? ["Skill"] : [];
     const protectedRoots = [config.home, config.state, ...config.protected_dirs];
     this.options = {
-      env, tools: [...nativeTools], allowedTools: [...functions], mcpServers: {}, strictMcpConfig: true,
+      env, tools: [...nativeTools, ...skillTools],
+      ...(skills ? { plugins: [{ type: "local" as const, path: skills.path, skipMcpDiscovery: true }] } : {}), allowedTools: [...functions], mcpServers: {}, strictMcpConfig: true,
       settingSources: [], permissionMode: "default", persistSession: true,
       settings: {
+        ...(skills ? { disableSkillShellExecution: true } : {}),
         permissions: {
           blockReadsOutsideWorkingDirectories: true, disableBypassPermissionsMode: "disable",
           deny: [...protectedRoots, "/proc", "/sys"].flatMap(path => [
@@ -94,7 +102,7 @@ export class WorkspaceProfile {
         enabled: true, failIfUnavailable: true, autoAllowBashIfSandboxed: false, allowUnsandboxedCommands: false,
         excludedCommands: [], enableWeakerNestedSandbox: false, enableWeakerNetworkIsolation: false,
         filesystem: { disabled: false, allowWrite: [cwd, config.scratch, ...(config.tool_environment ? ["/environment/packages"] : [])], denyRead: protectedRoots,
-          denyWrite: protectedRoots, allowRead: [] },
+          denyWrite: [...protectedRoots, ...(skills ? ["/environment/initialization/capabilities"] : [])], allowRead: [] },
         credentials: {
           envVars: [...new Set([...credentialNames, ...config.env_names])].map(name => ({ name, mode: "deny" })),
           files: protectedRoots.map(path => ({ path, mode: "deny" })),
@@ -107,7 +115,7 @@ export class WorkspaceProfile {
   }
 
   verify(tools: string[], servers: { name: string; status: string }[]): void {
-    const expected = [...nativeTools, ...this.functions];
+    const expected = [...nativeTools, ...this.functions, ...(this.skillNames.length ? ["Skill"] : [])];
     if (servers.length !== (this.functions.length ? 1 : 0) ||
         servers.some(server => server.name !== "functions" || server.status !== "connected") ||
         tools.length !== expected.length || new Set(tools).size !== tools.length ||
@@ -144,6 +152,7 @@ export class WorkspaceProfile {
     if (!value || typeof value !== "object" || Array.isArray(value)) return false;
     const input = value as Record<string, unknown>;
     if (this.functions.includes(name)) return true;
+    if (name === "Skill") return typeof input.skill === "string" && this.skillNames.includes(input.skill);
     if (name === "Bash") return typeof input.command === "string" && !!input.command.trim() &&
       (input.run_in_background === undefined || input.run_in_background === false) &&
       (input.dangerouslyDisableSandbox === undefined || input.dangerouslyDisableSandbox === false);

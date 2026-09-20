@@ -266,6 +266,11 @@ definitions:
           type: object
         type: array
         x-nullable: true
+      skills:
+        items:
+          type: object
+        type: array
+        x-nullable: true
       type:
         enum:
         - none
@@ -2056,10 +2061,10 @@ paths:
       - application/json
       description: Saves tenant-owned basic hosted configuration. Supports nullable
         name, enabled/disabled network, initial inline/file_id files, confidential
-        env, ordered setup_commands and npm/Python packages. Omitted/null network
-        defaults to enabled. System packages, other populated installations and restricted
-        network are rejected before persistence without echoing input. No compute
-        is allocated. Exact hosted error/retry semantics remain unverified.
+        env, ordered setup_commands, npm/Python packages and inline Skill ZIPs. Omitted/null
+        network defaults to enabled. System packages, other populated installations
+        and restricted network are rejected before persistence without echoing input.
+        No compute is allocated. Exact hosted error/retry semantics remain unverified.
       parameters:
       - description: agents=v1
         in: header
@@ -2192,8 +2197,10 @@ paths:
         Null name clears and null network resets to the pinned enabled default. Existing
         Session snapshots and creation retries remain unchanged. Initial files replace
         as a list; null/empty clears. File data is encrypted separately and excluded
-        from response metadata. Other populated installations are unsupported. Exact
-        hosted no-op timestamp behavior remains unverified.
+        from response metadata. Skills replace as a list; null/empty clears. Skill
+        archives are encrypted separately and omitted from responses. Other populated
+        installations are unsupported. Exact hosted no-op timestamp behavior remains
+        unverified.
       parameters:
       - description: agents=v1
         in: header

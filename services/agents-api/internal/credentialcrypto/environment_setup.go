@@ -30,7 +30,7 @@ func (c *Cipher) OpenEnvironmentSetup(ciphertext []byte, binding EnvironmentSetu
 }
 
 func environmentSetupData(binding EnvironmentSetupBinding) ([]byte, error) {
-	if (binding.Resource != "environment_template" && binding.Resource != "session") || (binding.Field != "env" && binding.Field != "setup_commands" && binding.Field != "initialization") {
+	if (binding.Resource != "environment_template" && binding.Resource != "session") || (binding.Field != "env" && binding.Field != "setup_commands" && binding.Field != "initialization" && binding.Field != "skills") {
 		return nil, errInvalidBinding
 	}
 	for _, value := range []string{binding.TenantID, binding.OwnerID} {

@@ -22,6 +22,10 @@ type launchOptions struct {
 }
 
 func prepareOptions(ctx context.Context, req proto.PromptRequestPayload) (launchOptions, error) {
+	return prepareOptionsWithSkills(ctx, req, true)
+}
+
+func prepareOptionsWithSkills(ctx context.Context, req proto.PromptRequestPayload, managedSkills bool) (launchOptions, error) {
 	var result launchOptions
 	if req.StrictResume {
 		if err := validateExecutionRequest(req); err != nil {
@@ -48,12 +52,14 @@ func prepareOptions(ctx context.Context, req proto.PromptRequestPayload) (launch
 			return result, err
 		}
 	}
-	installed, err := claudecode.InstallManagedSkills(ctx, log.With("component", "mcode"), root, req.AgentOptions["skills"])
-	if err != nil {
-		return result, err
-	}
-	if len(installed.Warnings) > 0 {
-		return result, fmt.Errorf("mcode: one or more configured Skills could not be installed")
+	if managedSkills {
+		installed, err := claudecode.InstallManagedSkills(ctx, log.With("component", "mcode"), root, req.AgentOptions["skills"])
+		if err != nil {
+			return result, err
+		}
+		if len(installed.Warnings) > 0 {
+			return result, fmt.Errorf("mcode: one or more configured Skills could not be installed")
+		}
 	}
 	opts := req.AgentOptions
 	prompt := optionString(opts, "system_prompt")

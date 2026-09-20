@@ -29,7 +29,7 @@ func decodeTemplateEnvironment(raw json.RawMessage) (*v1.Environment, string, js
 	if value, exists := fields["network"]; exists && bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
 		return nil, "", nil, store.ErrInvalidInput
 	}
-	for _, name := range []string{"files", "env", "setup_commands", "packages"} {
+	for _, name := range []string{"files", "env", "setup_commands", "packages", "skills"} {
 		if _, supplied := fields[name]; supplied {
 			return nil, "", nil, store.ErrInvalidInput
 		}
@@ -61,6 +61,7 @@ func (h *Handler) resolveTemplateEnvironment(ctx context.Context, tenant string,
 		return store.ErrInvalidInput
 	}
 	input.initialization = template.Initialization
+	input.Environment.Skills = skillResponse(template.Skills)
 	packages := template.Initialization.PackageMetadata()
 	input.Environment.Packages = &packages
 	input.initialFiles = files

@@ -17,7 +17,7 @@ try {
  mkdirSync(profile.scratch,{recursive:true});
  await SandboxManager.initialize({
   network:{allowedDomains:[],deniedDomains:profile.network==='disabled'?['*']:[],allowAll:profile.network==='enabled'},
-  filesystem:{denyRead:profile.protectedDirs,allowWrite:[profile.workspace,profile.scratch,...(profile.toolEnvironment ? ['/environment/packages'] : [])],denyWrite:[]},
+  filesystem:{denyRead:profile.protectedDirs,allowWrite:[profile.workspace,profile.scratch,...(profile.toolEnvironment ? ['/environment/packages'] : [])],denyWrite:profile.skills ? ["/environment/initialization/capabilities"] : []},
   seccomp:{applyPath:join(here,'dist/vendor/seccomp/x64/apply-seccomp')},
  },undefined,false);
  const quote=s=>"'"+s.replaceAll("'","'\\''")+"'";

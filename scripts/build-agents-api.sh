@@ -21,7 +21,7 @@ tar -C "$repo_root" -cf - \
   go.mod go.sum \
   contracts/agents-api/v1 \
   internal/agentdaemon/device internal/agentdaemon/gateway internal/agentdaemon/proto \
-  internal/obs/log services/agents-api \
+  internal/agentskill internal/obs/log services/agents-api \
   | tar -C "$build_context" -xf -
 
 (

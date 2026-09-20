@@ -18,7 +18,7 @@ and five-operation SandboxProvider path as inline configuration.
   or network replaces, with null clearing name or resetting network.
 - Empty/null installation fields retain empty defaults. Responses contain safe
   metadata and never `env`, `setup_commands` or inline file data. Initial files are
-  supported as described below, together with env, ordered setup and npm/Python packages; remaining populated installations reject explicitly.
+  supported as described below, together with inline Skills, env, ordered setup and npm/Python packages; remaining populated installations reject explicitly.
 - Listing uses `after`, `limit` (1–100, default 20), and `order` (default `desc`).
   Creation timestamp plus ID supplies stable local ordering. Missing/foreign IDs
   and cursors return the same not-found result. No compute is allocated by CRUD.
@@ -85,6 +85,56 @@ native-history recovery preserve user modifications instead of reinstalling file
 Docker/E2B and all three harnesses use this same lifecycle. The Provider API remains
 five operations; public Templates are never E2B image templates.
 
+## Inline Skills
+
+Both templates and standalone hosted configuration accept inline Skill ZIPs:
+
+```python
+import base64
+from pathlib import Path
+
+skill = {
+    "type": "inline", "name": "report", "description": "Create the report.",
+    "source": {"type": "base64", "media_type": "application/zip",
+               "data": base64.b64encode(Path("report.zip").read_bytes()).decode()},
+}
+template = client.beta.agents.environments.templates.create(skills=[skill])
+```
+
+Each archive contains one top-level folder with `SKILL.md` and optional supporting
+files. The manifest name/description must match the request. Portable descriptive
+frontmatter supports `name`, `description`, `license`, `compatibility` and string
+`metadata`; native hooks, permission controls and subagent directives reject.
+Local limits are 50 Skills, 5 MiB compressed and 20 MiB expanded per archive,
+10 MiB compressed and 50 MiB expanded in total, and 1,000 entries per archive.
+Regular files only: path traversal, links, duplicate destinations, special files
+and invalid manifests reject. Content is inert during installation; executable
+files retain their executable bit. These operational limits are not claims about
+upstream limits.
+
+Responses contain only type/name/description. Archive content stays in encrypted,
+resource-bound template and Session snapshots. Updates replace supplied `skills`;
+omission preserves and null/[] clears. Existing Sessions retain their frozen
+content after template update/deletion. A template reference with an explicit
+Skills override rejects pending confirmation of upstream merge semantics.
+
+The shared initializer installs Skills under
+`/environment/initialization/capabilities/skills/<name>` before setup and native execution.
+Setup and native tools can read that tree but cannot write it; completed recovery
+never reinstalls it. The execution contract carries installed metadata only.
+Codex registers native extra roots, Claude creates its own explicit Skill plugin
+envelope, and MiniMax points its native user-global catalog at the shared root.
+MiniMax retains disabled unrestricted built-in tools and uses its existing
+isolated workspace tool worker. No Provider or model/tool loop is added.
+
+Codex `agents/openai.yaml` native dependency configuration and Claude inline/fenced
+shell preprocessing are not qualified in this batch and explicitly fail adapter
+preparation. Other files are not interpreted as a public plugin installation.
+Public `skill_reference`, `/v1/skills` version resolution, generic Plugins and
+capability-directory imports remain separate gaps. Native built-in Skill visibility
+is not evidence of exact public tool-set parity. Qualification probes alone do not
+establish complete public support; record real service acceptance separately.
+
 ## Packaged Runtime initialization contract
 
 Template handlers and stores resolve public configuration without choosing a
@@ -132,7 +182,7 @@ exist; this is not an atomic hook-failure prevention guarantee.
 
 ## Explicit gaps and evidence boundaries
 
-System packages, nonempty `capability_directories`, `skills` and `plugins`,
+System packages, nonempty `capability_directories` and `plugins`, and Skills API references,
 plus restricted-domain network policy, remain unsupported
 for both templates and inline initialization. The separate live Files API remains
 available after initialization. Unsupported requests reject without echoing payloads.
@@ -146,7 +196,7 @@ Template updates replace each supplied field; omission preserves it and null cle
 it. Referenced Sessions inherit the snapshot; explicit env/packages/setup overrides
 with a template ID reject while override semantics remain unconfirmed.
 
-Files are installed first, followed by npm/Python packages and ordered commands;
+Files and inline Skills are installed first, followed by npm/Python packages and ordered commands;
 the default cwd is `/workspace`. One command or package operation has the existing
 two-minute local budget, within the thirty-minute initialization budget. No command
 is retried after unknown effects. Completed setup never runs on reconnect.

@@ -4,6 +4,7 @@ The fixture must expose writable workspace/packages/initialization roots and
 support the same nested isolation as its deployed Provider. No model is mocked;
 these checks exercise initialization only, not public native-model acceptance.
 """
+import base64
 import json
 import os
 from pathlib import Path
@@ -33,6 +34,18 @@ def main():
     Path('/environment/staging/request').write_text(CANARY)
     os.environ['DAEMON_PRIVATE_CANARY'] = CANARY
     invoke('configure', env={'INITIALIZATION_VALUE': CANARY, 'WITH_QUOTES': "'\n$(false)"})
+    skill = [{'path': 'SKILL.md', 'data': base64.b64encode(b'---\nname: proof\ndescription: A proof.\n---\nRead check.sh.').decode()},
+             {'path': 'scripts/check.sh', 'data': base64.b64encode(b'#!/bin/sh\nprintf skill-proof').decode(), 'executable': True},
+             {'path': 'data.bin', 'data': base64.b64encode(bytes(range(256))).decode()}]
+    invoke('skill', name='proof', files=skill)
+    assert Path('/environment/initialization/capabilities/skills/proof/data.bin').read_bytes() == bytes(range(256))
+    assert Path('/environment/initialization/capabilities/skills/proof/scripts/check.sh').stat().st_mode & 0o777 == 0o500
+    invoke('skill', succeeds=False, name='proof', files=skill)
+    invoke('skill', succeeds=False, name='invalid', files=[{'path': '../../private/credential', 'data': 'YmFk'}])
+    assert Path('/environment/private/credential').read_text() == CANARY
+    invoke('setup', command='/environment/initialization/capabilities/skills/proof/scripts/check.sh > /workspace/skill-result')
+    assert Path('/environment/workspace/skill-result').read_text() == 'skill-proof'
+
     # Re-entry must not replace confidential configuration after any effects.
     invoke('configure', succeeds=False, env={'INITIALIZATION_VALUE': 'changed'})
     invoke('setup', command='printf "%s" "$INITIALIZATION_VALUE" > first; printf secret; printf secret >&2')
@@ -45,7 +58,7 @@ assert os.environ['INITIALIZATION_VALUE'] == 'private-initialization-canary-47a8
 assert os.environ['WITH_QUOTES'] == "'\\n$(false)"
 for p in pathlib.Path('/proc').glob('[0-9]*/environ'):
     assert b'DAEMON_PRIVATE_CANARY=' not in p.read_bytes()
-for path in ('/usr/bin/untrusted', '/environment/initialization/tool-env.sh'):
+for path in ('/usr/bin/untrusted', '/environment/initialization/tool-env.sh', '/environment/initialization/capabilities/skills/proof/SKILL.md'):
     try: pathlib.Path(path).write_text('bad')
     except OSError: pass
     else: raise AssertionError(path)

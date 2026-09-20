@@ -38,6 +38,7 @@ func decodeTemplateInput(raw []byte) (store.EnvironmentTemplateInput, error) {
 	_, in.SetEnv = fields["env"]
 	_, in.SetSetup = fields["setup_commands"]
 	_, in.SetPackages = fields["packages"]
+	_, in.SetSkills = fields["skills"]
 	var setupErr error
 	in.Initialization, setupErr = decodeEnvironmentSetup(fields)
 	if setupErr != nil {
@@ -62,7 +63,7 @@ func decodeTemplateInput(raw []byte) (store.EnvironmentTemplateInput, error) {
 }
 
 func templateResponse(t store.EnvironmentTemplate) v1.EnvironmentTemplate {
-	return v1.EnvironmentTemplate{ID: t.ID, Object: "agent.environment.template", Name: t.Name, CreatedAt: t.CreatedAt.Unix(), UpdatedAt: t.UpdatedAt.Unix(), CapabilityDirectories: []string{}, Network: v1.EnvironmentNetwork{Access: t.NetworkAccess, AllowedDomains: []string{}}, Packages: packageMetadata(&t.Packages), Files: templateFileResponse(t.Files), Plugins: []json.RawMessage{}, Skills: []json.RawMessage{}}
+	return v1.EnvironmentTemplate{ID: t.ID, Object: "agent.environment.template", Name: t.Name, CreatedAt: t.CreatedAt.Unix(), UpdatedAt: t.UpdatedAt.Unix(), CapabilityDirectories: []string{}, Network: v1.EnvironmentNetwork{Access: t.NetworkAccess, AllowedDomains: []string{}}, Packages: packageMetadata(&t.Packages), Files: templateFileResponse(t.Files), Plugins: []json.RawMessage{}, Skills: skillResponse(t.Skills)}
 }
 
 func templateNoQuery(w http.ResponseWriter, r *http.Request) bool {
@@ -83,14 +84,14 @@ func readTemplateInput(w http.ResponseWriter, r *http.Request) (store.Environmen
 	}
 	in, err := decodeTemplateInput(raw)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "unsupported_or_invalid_configuration", "Template fields are invalid or require unsupported initialization. Name, enabled/disabled network, initial files, env, npm/Python packages and setup commands are supported.")
+		writeError(w, http.StatusBadRequest, "unsupported_or_invalid_configuration", "Template fields are invalid or require unsupported initialization. Name, enabled/disabled network, initial files, env, npm/Python packages, setup commands and inline Skill ZIPs are supported.")
 		return in, false
 	}
 	return in, true
 }
 
 // @Summary Create an Environment Template
-// @Description Saves tenant-owned basic hosted configuration. Supports nullable name, enabled/disabled network, initial inline/file_id files, confidential env, ordered setup_commands and npm/Python packages. Omitted/null network defaults to enabled. System packages, other populated installations and restricted network are rejected before persistence without echoing input. No compute is allocated. Exact hosted error/retry semantics remain unverified.
+// @Description Saves tenant-owned basic hosted configuration. Supports nullable name, enabled/disabled network, initial inline/file_id files, confidential env, ordered setup_commands, npm/Python packages and inline Skill ZIPs. Omitted/null network defaults to enabled. System packages, other populated installations and restricted network are rejected before persistence without echoing input. No compute is allocated. Exact hosted error/retry semantics remain unverified.
 // @Tags Environment Templates
 // @Accept json
 // @Produce json
@@ -136,7 +137,7 @@ func (h *Handler) getEnvironmentTemplate(w http.ResponseWriter, r *http.Request)
 }
 
 // @Summary Update an Environment Template
-// @Description Supplied fields replace atomically; omitted fields remain unchanged. Null name clears and null network resets to the pinned enabled default. Existing Session snapshots and creation retries remain unchanged. Initial files replace as a list; null/empty clears. File data is encrypted separately and excluded from response metadata. Other populated installations are unsupported. Exact hosted no-op timestamp behavior remains unverified.
+// @Description Supplied fields replace atomically; omitted fields remain unchanged. Null name clears and null network resets to the pinned enabled default. Existing Session snapshots and creation retries remain unchanged. Initial files replace as a list; null/empty clears. File data is encrypted separately and excluded from response metadata. Skills replace as a list; null/empty clears. Skill archives are encrypted separately and omitted from responses. Other populated installations are unsupported. Exact hosted no-op timestamp behavior remains unverified.
 // @Tags Environment Templates
 // @Accept json
 // @Produce json
