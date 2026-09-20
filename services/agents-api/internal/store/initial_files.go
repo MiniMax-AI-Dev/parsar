@@ -114,7 +114,7 @@ func (s *Store) ResolveEnvironmentTemplate(ctx context.Context, tenant, id strin
 		}
 		return value, nil, nil
 	}
-	plain, err := s.credentialCipher.OpenEnvironmentFile(row.FileContents, credentialcrypto.EnvironmentFileBinding{TenantID: tenant, Resource: "environment_template", OwnerID: id, FileID: "files"})
+	plain, err := s.credentialCipher.OpenEnvironmentFile(row.FileContents, credentialcrypto.EnvironmentFileBinding{TenantID: uuid.UUID(lookup.TenantID.Bytes).String(), Resource: "environment_template", OwnerID: value.ID, FileID: "files"})
 	if err != nil {
 		return value, nil, err
 	}
@@ -129,6 +129,11 @@ func (s *Store) saveInitialFiles(ctx context.Context, q *sqlc.Queries, tx pgx.Tx
 	if err := ValidateInitialFiles(files); err != nil {
 		return nil, err
 	}
+	tenantID, err := parseID(tenant)
+	if err != nil {
+		return nil, err
+	}
+	tenant = uuid.UUID(tenantID.Bytes).String()
 	metadata := initialFileMetadata(files)
 	for i, f := range files {
 		body := f.Data
@@ -186,7 +191,7 @@ func (s *Store) ReadInitialEnvironmentFile(ctx context.Context, tenant, session 
 		return InitialFileMetadata{}, nil, err
 	}
 	id := uuid.UUID(row.ID.Bytes).String()
-	body, err := s.credentialCipher.OpenEnvironmentFile(row.Contents, credentialcrypto.EnvironmentFileBinding{TenantID: tenant, Resource: "session", OwnerID: session, FileID: id})
+	body, err := s.credentialCipher.OpenEnvironmentFile(row.Contents, credentialcrypto.EnvironmentFileBinding{TenantID: uuid.UUID(lookup.TenantID.Bytes).String(), Resource: "session", OwnerID: uuid.UUID(lookup.ID.Bytes).String(), FileID: id})
 	if err == nil && int64(len(body)) != row.SizeBytes {
 		err = ErrInvalidInput
 	}

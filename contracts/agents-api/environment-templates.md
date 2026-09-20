@@ -142,7 +142,12 @@ suites and `make check` passed. The optional native build probe skipped by the
 default gate is not counted as real acceptance. Runtime images were the retained
 qualified builds; Core was built from this batch. E2B runs preceded the final
 readiness guard and store-interface cleanup, which received targeted regression;
-Docker runs used Core SHA-256
+The six-profile matrix preceded final creation-intent size and canonical-identity
+corrections. Real HTTP/PostgreSQL regression accepted a 1 MiB file and two 5 MiB
+inline files with retries, and verified canonical template/file encryption bindings.
+A further rebuilt standalone Docker/Codex run passed a 5 MiB initial file with
+real model reads, Artifacts, cancellation and retained history in 101.23 seconds.
+The original Docker matrix used Core SHA-256
 `31973b17dd96106743e581c400555e3a4b036ad8cb3e68b51530a2b56023abe3`.
 
 Docker MiniMax Code passed with the real MiniMax API at its standard HTTPS origin

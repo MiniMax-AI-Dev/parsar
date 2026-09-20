@@ -74,7 +74,7 @@ func (s *Store) CreateEnvironmentTemplate(ctx context.Context, tenantID string, 
 		name = pgtype.Text{String: *in.Name, Valid: true}
 	}
 	id := uuid.New()
-	metadata, encrypted, err := s.sealTemplateFiles(tenantID, id.String(), in.Files)
+	metadata, encrypted, err := s.sealTemplateFiles(uuid.UUID(tenant.Bytes).String(), id.String(), in.Files)
 	if err != nil {
 		return EnvironmentTemplate{}, err
 	}
@@ -115,7 +115,7 @@ func (s *Store) UpdateEnvironmentTemplate(ctx context.Context, tenantID, templat
 	if in.Name != nil {
 		name = pgtype.Text{String: *in.Name, Valid: true}
 	}
-	metadata, encrypted, err := s.sealTemplateFiles(tenantID, templateID, in.Files)
+	metadata, encrypted, err := s.sealTemplateFiles(uuid.UUID(tenant.Bytes).String(), uuid.UUID(id.Bytes).String(), in.Files)
 	if err != nil {
 		return EnvironmentTemplate{}, err
 	}

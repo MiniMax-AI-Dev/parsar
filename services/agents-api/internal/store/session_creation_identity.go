@@ -19,7 +19,7 @@ func creationRequestHash(raw json.RawMessage) (pgtype.Text, error) {
 	if len(raw) == 0 {
 		return pgtype.Text{}, nil
 	}
-	if len(raw) > 1024*1024 {
+	if len(raw) > 16<<20 {
 		return pgtype.Text{}, ErrInvalidInput
 	}
 	canonical, err := canonicalJSONObject(raw)

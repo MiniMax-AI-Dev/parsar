@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/credentialcrypto"
@@ -39,6 +40,12 @@ func TestInitialFilesFrozenEncryptedIsolatedAndRetryable(t *testing.T) {
 	if _, _, err := s.ResolveEnvironmentTemplate(t.Context(), foreign, template.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("foreign template resolved", err)
 	}
+	if _, err := s.UpdateEnvironmentTemplate(t.Context(), strings.ToUpper(tenant), strings.ToUpper(template.ID), EnvironmentTemplateInput{SetFiles: true, Files: files}); err != nil {
+		t.Fatal("noncanonical update", err)
+	}
+	if _, _, err := s.ResolveEnvironmentTemplate(t.Context(), strings.ToUpper(tenant), strings.ToUpper(template.ID)); err != nil {
+		t.Fatal("noncanonical resolution", err)
+	}
 	_, resolved, err := s.ResolveEnvironmentTemplate(t.Context(), tenant, template.ID)
 	if err != nil || !bytes.Equal(resolved[0].Data, canary) {
 		t.Fatal("template snapshot", err)
@@ -65,7 +72,7 @@ func TestInitialFilesFrozenEncryptedIsolatedAndRetryable(t *testing.T) {
 		t.Fatal("retry re-resolved deleted resources", err)
 	}
 	for position := range files {
-		metadata, body, err := s.ReadInitialEnvironmentFile(t.Context(), tenant, session.ID, position)
+		metadata, body, err := s.ReadInitialEnvironmentFile(t.Context(), strings.ToUpper(tenant), strings.ToUpper(session.ID), position)
 		if err != nil || !bytes.Equal(body, canary) || metadata.ID == "" {
 			t.Fatal("frozen initial content", err)
 		}
