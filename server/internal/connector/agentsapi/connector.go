@@ -13,6 +13,7 @@ import (
 	agentsclient "github.com/MiniMax-AI-Dev/parsar/packages/agents-client/v1"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/coreaccess"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -41,6 +42,7 @@ type Store interface {
 }
 
 type Connector struct {
+	Blobs    blob.Store
 	Resolve  coreaccess.Resolver
 	sessions openai.BetaAgentSessionService
 	store    Store

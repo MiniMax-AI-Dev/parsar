@@ -49,21 +49,23 @@ func enableAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 }
 
 type createAgentBody struct {
-	Name          string         `json:"name"`
-	Description   string         `json:"description"`
-	ConnectorType string         `json:"connector_type"`
-	SystemPrompt  string         `json:"system_prompt"`
-	Config        map[string]any `json:"config"`
-	Visibility    string         `json:"visibility"`
-	Slug          string         `json:"slug"`
+	ResourceBindings []store.InitialAgentCapabilityInput `json:"resource_bindings"`
+	Name             string                              `json:"name"`
+	Description      string                              `json:"description"`
+	ConnectorType    string                              `json:"connector_type"`
+	SystemPrompt     string                              `json:"system_prompt"`
+	Config           map[string]any                      `json:"config"`
+	Visibility       string                              `json:"visibility"`
+	Slug             string                              `json:"slug"`
 }
 
 type updateAgentBody struct {
-	Name          *string        `json:"name"`
-	Description   *string        `json:"description"`
-	ConnectorType *string        `json:"connector_type"`
-	SystemPrompt  *string        `json:"system_prompt"`
-	Config        map[string]any `json:"config"`
+	ResourceBindings *[]store.InitialAgentCapabilityInput `json:"resource_bindings"`
+	Name             *string                              `json:"name"`
+	Description      *string                              `json:"description"`
+	ConnectorType    *string                              `json:"connector_type"`
+	SystemPrompt     *string                              `json:"system_prompt"`
+	Config           map[string]any                       `json:"config"`
 }
 
 // createAgent creates a new agent in a workspace. Owner/admin only.
@@ -114,7 +116,11 @@ func createAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeStoreAgentError(w, err)
 			return
 		}
-		result, err := runtimeStore.CreateAgent(r.Context(), store.CreateAgentInput{WorkspaceID: workspaceID, Name: req.Name, Description: req.Description, ConnectorType: req.ConnectorType, SystemPrompt: req.SystemPrompt, AgentConfig: req.Config, Visibility: req.Visibility, Slug: req.Slug, CreatedBy: actorIDFromRequest(r)})
+		if err := validateAgentResources(r.Context(), runtimeStore, workspaceID, req.Visibility, "", req.Config, req.ResourceBindings); err != nil {
+			writeStoreAgentError(w, err)
+			return
+		}
+		result, err := runtimeStore.CreateAgent(r.Context(), store.CreateAgentInput{WorkspaceID: workspaceID, Name: req.Name, Description: req.Description, ConnectorType: req.ConnectorType, SystemPrompt: req.SystemPrompt, AgentConfig: req.Config, Visibility: req.Visibility, Slug: req.Slug, CreatedBy: actorIDFromRequest(r), InitialCapabilities: req.ResourceBindings})
 		if err != nil {
 			writeStoreAgentError(w, err)
 			return
@@ -173,7 +179,20 @@ func updateAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeStoreAgentError(w, err)
 			return
 		}
-		updated, _, err := runtimeStore.UpdateAgent(r.Context(), store.UpdateAgentInput{AgentID: agentID, ActorID: actorIDFromRequest(r), Name: req.Name, Description: req.Description, ConnectorType: req.ConnectorType, SystemPrompt: req.SystemPrompt, Config: req.Config, ConfigSet: req.Config != nil})
+		config := req.Config
+		if config == nil {
+			config = agent.Config
+		}
+		bindings, err := requestedAgentResources(r.Context(), runtimeStore, agentID, req.ResourceBindings)
+		if err != nil {
+			writeStoreAgentError(w, err)
+			return
+		}
+		if err := validateAgentResources(r.Context(), runtimeStore, agent.WorkspaceID, agent.Visibility, agentID, config, bindings); err != nil {
+			writeStoreAgentError(w, err)
+			return
+		}
+		updated, _, err := runtimeStore.UpdateAgent(r.Context(), store.UpdateAgentInput{AgentID: agentID, ActorID: actorIDFromRequest(r), Name: req.Name, Description: req.Description, ConnectorType: req.ConnectorType, SystemPrompt: req.SystemPrompt, Config: req.Config, ConfigSet: req.Config != nil, ResourceBindings: bindings, ResourceBindingsSet: req.ResourceBindings != nil})
 		if err != nil {
 			writeStoreAgentError(w, err)
 			return

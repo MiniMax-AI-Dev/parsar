@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/credentialbinding"
 	"github.com/openai/openai-go/v3"
 	"strings"
 )
@@ -47,8 +48,27 @@ func foldCoreAgentConfig(dst, src map[string]any) error {
 			dst[key] = selection
 		case "tools", "multi_agent", "reasoning", "text", "service_tier":
 			dst[key] = value
-		case "credential_bindings", "model_credential_binding":
-			return fmt.Errorf("%w: execution credentials are configured in Core", ErrInvalidInput)
+		case "credential_bindings":
+			if _, err := credentialbinding.ParseStrict(map[string]any{key: value}); err != nil {
+				return fmt.Errorf("%w: %s", ErrInvalidInput, err)
+			}
+			dst[key] = value
+		case "model_credential_binding":
+			if value == nil {
+				continue
+			}
+			obj, ok := value.(map[string]any)
+			if !ok {
+				return fmt.Errorf("%w: invalid model credential binding", ErrInvalidInput)
+			}
+			kind, _ := obj["kind"].(string)
+			if !validModelCredentialKind(kind) {
+				return fmt.Errorf("%w: model credentials require openai_api_key or anthropic_api_key", ErrInvalidInput)
+			}
+			if _, err := credentialbinding.ParseStrict(map[string]any{"credential_bindings": map[string]any{kind: obj}}); err != nil {
+				return fmt.Errorf("%w: %s", ErrInvalidInput, err)
+			}
+			dst[key] = value
 		default:
 			return fmt.Errorf("%w: unsupported Core Agent configuration field %s", ErrInvalidInput, key)
 		}

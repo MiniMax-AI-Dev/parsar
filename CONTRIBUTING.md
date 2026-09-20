@@ -2652,6 +2652,50 @@ or filesystem isolation. Automatic installation remains separate.
   four platforms. Companion installation does not grant API authorization;
   task-scoped uploads keep the current run requester and workspace checks.
 
+### Product Agent resource configuration
+
+The V1 product definition lives in the [Agent configuration product document](https://vrfi1sk8a0.feishu.cn/wiki/TEhDwRlRpiGIcRkbKywcfEydn7g).
+The Build inventory is Models, Environments, Capabilities, Integrations and
+Credentials. Agent creation/editing selects those resources plus Harness. Product
+resource selection and credential binding belong to Parsar; public protocol
+features not yet implemented by Core remain explicit reservations, not alternate
+product execution paths or changes to Core's contract.
+
+- `resource_bindings` on Agent create/update contains version, pinning mode and
+  per-resource configuration. Agent changes and the complete binding selection
+  commit atomically. Omitting the field preserves bindings; an empty array clears
+  them. Updating credentials preserves the selected version and pinning mode.
+  Retaining an existing binding does not reapply new-install eligibility after
+  unpublishing or deprecation; changing its version or tracking mode does. Retained
+  foreign private resources never expose later private revisions.
+- Capability bindings reuse `agent_capabilities` and Build imports. Model
+  credentials default to the Provider key; an explicit
+  `config.model_credential_binding` chooses a credential `kind` and personal/shared
+  source. Model bindings accept only `openai_api_key` and `anthropic_api_key`;
+  unrelated personal secrets must never become Provider tokens. Migrations register
+  these model credential kinds without requiring development fixtures. Personal means
+  the run requester, never the creator of a
+  shared Agent. Public Agents require shared credentials. Existing per-capability
+  choices take precedence over Agent-wide defaults. Missing references remain
+  visible and require repair; lookup failures never substitute another credential.
+- Inline resource creation keeps the Agent draft. Workspace communication
+  connectors (Feishu, Slack, Discord and Teams) retain their shared scope and
+  existing management APIs, with immediate-save scope stated in the Agent form.
+  Dedicated Agent Feishu configuration remains owned by its existing API and is
+  preserved when execution configuration is replaced.
+- Skills verify the original owned archive and checksum, then adapt Build rootless
+  ZIP layout and descriptive slug/title metadata to public inline Skill initialization.
+  Supporting bytes and executable modes are preserved; native activation controls
+  remain unsupported. System prompts and knowledge
+  become protocol instructions. Core currently cannot combine a referenced
+  Environment Template with additional Skills, or hosted execution with MCP;
+  Plugins also remain unsupported. Preserve the Template selector and show these
+  gaps. Do not silently drop a binding to start a partially configured Agent.
+- Freeze Skill bytes and selected model credentials in the existing encrypted
+  private Session snapshot, separate from the ordinary request. Restore the
+  existing snapshot before reading mutable resources; decrypt initialization only
+  for the Core request. Editing resources or credentials affects new Sessions.
+
 ### Product model catalog and execution credentials
 
 Parsar owns workspace Model Providers, their write-only API keys, model catalog,
@@ -2793,7 +2837,7 @@ Sessions only. Keep the existing product navigation and direct empty-chat compos
   Auth, workspace membership, conversation ownership, IM, MCP
   access to Agents, scheduling, auditing and billing remain product concerns.
 - The product currently supports text input, assistant text, reasoning summaries,
-  tool observations, raw token usage and cancellation. Capability bindings,
+  tool observations, raw token usage and cancellation. Unsupported capability profiles,
   attachments, interactive approvals, application function results, local-device and sandbox
   administration are unavailable in this product client. Show this limitation in
   the Agent configuration page; reject unsupported input rather than silently
@@ -2807,7 +2851,8 @@ Sessions only. Keep the existing product navigation and direct empty-chat compos
   import/upload, MCP configuration/OAuth, permissions and business orchestration.
   These are product asset operations, not runtime installation. Browser plugin
   extensions also remain product UI behavior. Runtime capability activation and
-  loading must use Core; unsupported execution binding mutations are not exposed.
+  loading must use Core; reserved unsupported bindings must display their execution
+  limitation and fail before Session creation, never silently disappear.
   Asset import or OAuth success must never imply readiness for Agent execution.
   Landed migrations and retained business history are not rewritten or deleted.
 - Soft-deleting an Agent preserves authorized conversation/run history and its

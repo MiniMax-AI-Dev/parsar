@@ -75,13 +75,14 @@ func TestGetEnabledCapabilitiesForAgent_PinningModeLatestFields(t *testing.T) {
 
 	// 2. Reupload as v2 with full storage breadcrumbs.
 	_, err = st.CreateCapabilityVersion(ctx, CreateCapabilityVersionInput{
-		CapabilityID:  capability.ID,
-		Version:       "2.0.0",
-		CreatorID:     ids.UserID,
-		Content:       map[string]any{"kind": "skill"},
-		CanonicalSpec: canonicalV2,
-		OssKey:        "capabilities/skills/test/v2.zip",
-		SHA256:        v2SHA,
+		CapabilityID:        capability.ID,
+		Version:             "2.0.0",
+		CreatorID:           ids.UserID,
+		Content:             map[string]any{"kind": "skill"},
+		CanonicalSpec:       canonicalV2,
+		RequiredCredentials: []RequiredCredential{{Kind: "github_pat", Required: true}},
+		OssKey:              "capabilities/skills/test/v2.zip",
+		SHA256:              v2SHA,
 	})
 	if err != nil {
 		t.Fatalf("CreateCapabilityVersion v2: %v", err)
@@ -117,6 +118,9 @@ func TestGetEnabledCapabilitiesForAgent_PinningModeLatestFields(t *testing.T) {
 	}
 	row := enabled[0]
 
+	if len(row.RequiredCredentials) != 0 || len(row.LatestRequiredCredentials) != 1 || row.LatestRequiredCredentials[0].Kind != "github_pat" {
+		t.Fatal("credential metadata did not follow its version")
+	}
 	// Pinned cv.* columns reflect v1: empty oss_key, empty sha256.
 	if row.OssKey != "" {
 		t.Errorf("pinned OssKey = %q, want empty (v1 is legacy markdown)", row.OssKey)

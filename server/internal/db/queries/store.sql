@@ -3999,6 +3999,7 @@ select
   latest.sha256         as latest_sha256,
   latest.canonical_spec as latest_canonical_spec,
   latest.schema_version as latest_schema_version,
+  latest.required_credentials as latest_required_credentials,
   cv.git_repo_url,
   cv.git_ref,
   cv.path,
@@ -4022,7 +4023,7 @@ join capability_version cv on cv.id = ac.capability_version_id
 join workspaces src_ws on src_ws.id = c.workspace_id
 join lateral (
   select id, version, created_at,
-    oss_key, sha256, canonical_spec, schema_version
+    oss_key, sha256, canonical_spec, schema_version, required_credentials
   from capability_version
   where capability_id = c.id
     -- After a capability is deprecated, latest bindings should freeze
@@ -4033,9 +4034,9 @@ join lateral (
     -- this predicate is always true and behaves like the previous
     -- "unconditionally take the latest".
     and (c.deprecated_at is null or capability_version.created_at <= c.deprecated_at)
-    -- Unpublished knowledge can keep its bound version in another workspace,
-    -- but private revisions must not reach that workspace through latest.
-    and (c.type <> 'knowledge' or c.visibility = 'public'
+    -- Unpublished resources retain their bound version in other workspaces;
+    -- later private revisions must not reach those consumers through latest.
+    and (c.visibility = 'public'
       or c.workspace_id = a.workspace_id or capability_version.id = cv.id)
   order by created_at desc, version desc
   limit 1
