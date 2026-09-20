@@ -1,3 +1,4 @@
+import type { CoreAgentConfig, CoreEnvironment } from "./core-api"
 /**
  * Server-side type contracts for Parsar admin API.
  * Source of truth: docs/openapi/openapi.yaml + server/internal/store/store.go.
@@ -205,33 +206,21 @@ export interface AgentInlineNewSecret {
 }
 
 export interface CreateAgentRequest {
-  name: string
-  /** Optional explicit stable identifier; omit to let the server allocate a random system slug (`agent-<12hex>`). */
-  slug?: string
-  description?: string
-  connector_type: string
-  default_model_id?: string
-  system_prompt?: string
-  capabilities: string[]
-  initial_capabilities?: InitialAgentCapabilityRequest[]
-  visibility?: "workspace" | "tenant" | "public"
-  runtime?: AgentRuntime
-  config?: Record<string, unknown>
-  /** New shared secrets to create + bind atomically during agent creation. */
-  inline_new_secrets?: AgentInlineNewSecret[]
+ name: string
+ slug?: string
+ description?: string
+ connector_type: "agents_api"
+ system_prompt?: string
+ visibility?: "workspace" | "tenant" | "public"
+ config: CoreAgentConfig
 }
 
 export interface UpdateAgentRequest {
-  name?: string
-  description?: string
-  connector_type?: string
-  default_model_id?: string
-  system_prompt?: string
-  capabilities?: string[]
-  runtime?: AgentRuntime | null
-  config?: Record<string, unknown>
-  /** New shared secrets to create + bind atomically during an edit. */
-  inline_new_secrets?: AgentInlineNewSecret[]
+ name?: string
+ description?: string
+ connector_type?: "agents_api"
+ system_prompt?: string
+ config?: CoreAgentConfig
 }
 
 export interface CreateAgentResponse {
@@ -759,6 +748,7 @@ export interface ListConversationsResponse {
 }
 
 export interface CreateConversationRequest {
+  environment?: CoreEnvironment
   title: string
   /** Origin channel. Defaults to `web` server-side when omitted. */
   surface?: ConversationSurface

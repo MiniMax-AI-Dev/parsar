@@ -95,19 +95,15 @@ func TestGetEnabledCapabilitiesForAgent_PinningModeLatestFields(t *testing.T) {
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
 		Name:          "Pinning Mode Test Agent (pinned)",
-		ConnectorType: "agent_daemon",
-		AgentConfig: map[string]any{
-			"daemon_mode": "sandbox",
-			"agent_kind":  "claude_code",
-		},
-		InitialCapabilities: []InitialAgentCapabilityInput{{
-			CapabilityVersionID: v1ID,
-			// PinningMode omitted -> normalizePinningMode -> "pinned".
-		}},
-		CreatedBy: ids.UserID,
+		ConnectorType: "agents_api",
+		AgentConfig:   map[string]any{"model": "test-model"},
+		CreatedBy:     ids.UserID,
 	})
 	if err != nil {
 		t.Fatalf("CreateAgent: %v", err)
+	}
+	if _, err := st.EnableAgentCapability(ctx, created.Agent.ID, v1ID, nil, PinningModePinned); err != nil {
+		t.Fatal(err)
 	}
 
 	// 4. The crux: GetEnabledCapabilitiesForAgent returns both columns
@@ -242,19 +238,15 @@ func TestGetEnabledCapabilitiesForAgent_LatestFreezesOnDeprecation(t *testing.T)
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
 		Name:          "Deprecation Freeze Agent",
-		ConnectorType: "agent_daemon",
-		AgentConfig: map[string]any{
-			"daemon_mode": "sandbox",
-			"agent_kind":  "claude_code",
-		},
-		InitialCapabilities: []InitialAgentCapabilityInput{{
-			CapabilityVersionID: v1ID,
-			PinningMode:         PinningModeLatest,
-		}},
-		CreatedBy: ids.UserID,
+		ConnectorType: "agents_api",
+		AgentConfig:   map[string]any{"model": "test-model"},
+		CreatedBy:     ids.UserID,
 	})
 	if err != nil {
 		t.Fatalf("CreateAgent: %v", err)
+	}
+	if _, err := st.EnableAgentCapability(ctx, created.Agent.ID, v1ID, nil, PinningModeLatest); err != nil {
+		t.Fatal(err)
 	}
 
 	enabled, err := st.GetEnabledCapabilitiesForAgent(ctx, created.Agent.ID)

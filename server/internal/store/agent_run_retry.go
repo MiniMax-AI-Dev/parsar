@@ -47,6 +47,9 @@ func (s *Store) RetryAgentRun(ctx context.Context, input RetryAgentRunInput) (Re
 		}
 		return result, err
 	}
+	if !validConnectorType(source.ConnectorType) {
+		return result, ErrInvalidConnectorType
+	}
 	result.ConversationID = source.ConversationID
 	if source.RetryRunID != "" {
 		result.RunID = source.RetryRunID

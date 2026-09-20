@@ -12,6 +12,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -168,201 +169,6 @@ func TestCapabilityUserCredentialsOwnScopeAndNoSecretLeak(t *testing.T) {
 	}
 }
 
-func TestCapabilityAgentWriteRBACWorkspaceAndUniqueUpdate(t *testing.T) {
-	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
-	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "member", testUserBID: "viewer"}, nil)
-	insertForeignWorkspace(t, db, foreignWorkspaceID)
-	capID, v1, v2 := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "GitHub MCP")
-	_ = capID
-	foreignCapID, foreignV1, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign MCP")
-	_ = foreignCapID
-	ownedPA := insertAgentForOwner(t, db, testUserAID, "owned-agent")
-	otherPA := insertAgentForOwner(t, db, testUserBID, "other-agent")
-
-	enabled := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
-	if enabled.Code != http.StatusOK {
-		t.Fatalf("enable own agent expected 200, got %d: %s", enabled.Code, enabled.Body.String())
-	}
-	enabledOther := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
-	if enabledOther.Code != http.StatusOK {
-		t.Fatalf("member enable another workspace agent expected 200, got %d: %s", enabledOther.Code, enabledOther.Body.String())
-	}
-	upgradedOther := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
-	if upgradedOther.Code != http.StatusOK {
-		t.Fatalf("member upgrade another workspace agent expected 200, got %d: %s", upgradedOther.Code, upgradedOther.Body.String())
-	}
-	toggledOther := serveCapabilityRoute(t, r, http.MethodPut, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/builtin-capabilities/parsar_chat_history", `{"enabled":false}`, testUserAID)
-	if toggledOther.Code != http.StatusOK {
-		t.Fatalf("member toggle another workspace agent builtin expected 200, got %d: %s", toggledOther.Code, toggledOther.Body.String())
-	}
-	removedOther := serveCapabilityRoute(t, r, http.MethodDelete, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+v2, ``, testUserAID)
-	if removedOther.Code != http.StatusNoContent {
-		t.Fatalf("member remove another workspace agent capability expected 204, got %d: %s", removedOther.Code, removedOther.Body.String())
-	}
-	viewer := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+v1+"/enable", `{}`, testUserBID)
-	if viewer.Code != http.StatusForbidden {
-		t.Fatalf("viewer enable expected 403, got %d: %s", viewer.Code, viewer.Body.String())
-	}
-	foreign := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+foreignV1+"/enable", `{}`, testUserAID)
-	if foreign.Code != http.StatusForbidden {
-		t.Fatalf("unpublished foreign capability expected 403, got %d: %s", foreign.Code, foreign.Body.String())
-	}
-	updated := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+v2+"/enable", `{}`, testUserAID)
-	if updated.Code != http.StatusOK || !strings.Contains(updated.Body.String(), v2) {
-		t.Fatalf("enable second version expected update 200, got %d: %s", updated.Code, updated.Body.String())
-	}
-	assertSingleAgentCapability(t, db, ownedPA, capID, v2)
-}
-
-func TestCapabilityEnablePersistsSelectedSharedSecret(t *testing.T) {
-	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "member"}, nil)
-	capID, versionID, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Shared Secret MCP")
-	agentID := insertAgentForOwner(t, db, testUserAID, "shared-secret-agent")
-	secretID := "00000000-0000-0000-0000-000000000099"
-	if _, err := db.Exec(context.Background(), `
-		insert into secrets(id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at)
-		values ($1, 'shared-github-test', 'Shared GitHub', 'capability_inline', 'inline', 'literal', '{}'::jsonb, 'v1', 'active', $2::jsonb, $3, now(), now())
-	`, secretID, `{"workspace_id":"`+store.DefaultDevFixtureIDs().WorkspaceID+`","credential_kind_code":"github_pat"}`, testUserAID); err != nil {
-		t.Fatalf("insert shared secret: %v", err)
-	}
-
-	res := serveCapabilityRoute(t, r, http.MethodPost,
-		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+versionID+"/enable",
-		`{"configuration":{"credential_bindings":{"github_pat":{"source":"shared","secret_id":"`+secretID+`"}}}}`, testUserAID)
-	if res.Code != http.StatusOK {
-		t.Fatalf("enable expected 200, got %d: %s", res.Code, res.Body.String())
-	}
-	assertSingleAgentCapability(t, db, agentID, capID, versionID)
-	var storedSecretID string
-	if err := db.QueryRow(context.Background(), `
-		select configuration #>> '{credential_bindings,github_pat,secret_id}'
-		from agent_capabilities where agent_id = $1
-	`, agentID).Scan(&storedSecretID); err != nil {
-		t.Fatalf("read stored binding: %v", err)
-	}
-	if storedSecretID != secretID {
-		t.Fatalf("stored secret_id=%q want %q", storedSecretID, secretID)
-	}
-}
-
-func TestCapabilityEnableRejectsOAuthSecretFromDifferentCatalogConnector(t *testing.T) {
-	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "member"}, nil)
-	capID, versionID, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Notion MCP")
-	agentID := insertAgentForOwner(t, db, testUserAID, "notion-agent")
-	secretID := "00000000-0000-0000-0000-000000000098"
-	if _, err := db.Exec(context.Background(), `
-		update capability_version
-		set source_payload = '{"source_format":"mcp_catalog","catalog_id":"notion"}'::jsonb,
-		    required_credentials = '[{"kind":"mcp_oauth","required":true}]'::jsonb
-		where id = $1
-	`, versionID); err != nil {
-		t.Fatalf("mark catalog capability: %v", err)
-	}
-	if _, err := db.Exec(context.Background(), `
-		insert into secrets(id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at)
-		values ($1, 'github-oauth-test', 'GitHub OAuth', 'capability_inline', 'github', 'oauth2', '{}'::jsonb, 'v1', 'active', $2::jsonb, $3, now(), now())
-	`, secretID, `{"workspace_id":"`+store.DefaultDevFixtureIDs().WorkspaceID+`","credential_kind_code":"mcp_oauth"}`, testUserAID); err != nil {
-		t.Fatalf("insert shared secret: %v", err)
-	}
-
-	res := serveCapabilityRoute(t, r, http.MethodPost,
-		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+versionID+"/enable",
-		`{"configuration":{"credential_bindings":{"mcp_oauth":{"source":"shared","secret_id":"`+secretID+`"}}}}`, testUserAID)
-	if res.Code != http.StatusUnprocessableEntity || !strings.Contains(res.Body.String(), "different MCP connector") {
-		t.Fatalf("enable with wrong connector secret expected 422, got %d: %s", res.Code, res.Body.String())
-	}
-	var count int
-	if err := db.QueryRow(context.Background(), `select count(*) from agent_capabilities where agent_id = $1 and capability_id = $2`, agentID, capID).Scan(&count); err != nil {
-		t.Fatalf("count agent capabilities: %v", err)
-	}
-	if count != 0 {
-		t.Fatalf("agent capability was created with a mismatched connector secret")
-	}
-}
-
-func TestCapabilityEnableRejectsUnsupportedAgentKind(t *testing.T) {
-	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "member"}, nil)
-	capID, versionID, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Pi Incompatible MCP")
-	agentID := insertAgentForOwner(t, db, testUserAID, "pi-incompatible-mcp")
-	if _, err := db.Exec(context.Background(), `update agents set config = jsonb_set(config, '{agent_kind}', '"pi"'::jsonb) where id = $1`, agentID); err != nil {
-		t.Fatalf("set pi agent kind: %v", err)
-	}
-
-	res := serveCapabilityRoute(t, r, http.MethodPost,
-		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+versionID+"/enable",
-		`{}`, testUserAID)
-	if res.Code != http.StatusUnprocessableEntity || !strings.Contains(res.Body.String(), `agent kind \"pi\" does not support mcp capabilities`) {
-		t.Fatalf("enable incompatible MCP expected 422, got %d: %s", res.Code, res.Body.String())
-	}
-	var count int
-	if err := db.QueryRow(context.Background(), `select count(*) from agent_capabilities where agent_id = $1 and capability_id = $2`, agentID, capID).Scan(&count); err != nil {
-		t.Fatalf("count agent capabilities: %v", err)
-	}
-	if count != 0 {
-		t.Fatalf("incompatible capability was enabled")
-	}
-}
-
-func TestCapabilityUpgradeValidatesNewVersionCredentials(t *testing.T) {
-	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "admin"}, nil)
-	capID, v1, v2 := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Credential Upgrade MCP")
-	if _, err := db.Exec(context.Background(), `
-		update capability_version
-		set required_credentials = case
-			when id = $1 then '[]'::jsonb
-			when id = $2 then '[{"kind":"github_pat","required":true}]'::jsonb
-			else required_credentials
-		end
-		where id in ($1, $2)
-	`, v1, v2); err != nil {
-		t.Fatalf("update capability credentials: %v", err)
-	}
-	agentID := insertAgentForOwner(t, db, testUserAID, "credential-upgrade-agent")
-	if _, err := db.Exec(context.Background(), `update agents set visibility = 'public' where id = $1`, agentID); err != nil {
-		t.Fatalf("make agent public: %v", err)
-	}
-	enabled := serveCapabilityRoute(t, r, http.MethodPost,
-		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+v1+"/enable",
-		`{}`, testUserAID)
-	if enabled.Code != http.StatusOK {
-		t.Fatalf("enable v1 expected 200, got %d: %s", enabled.Code, enabled.Body.String())
-	}
-
-	upgraded := serveCapabilityRoute(t, r, http.MethodPost,
-		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+capID+"/upgrade",
-		`{"new_version_id":"`+v2+`"}`, testUserAID)
-	if upgraded.Code != http.StatusUnprocessableEntity || !strings.Contains(upgraded.Body.String(), "public agents require a shared secret") {
-		t.Fatalf("upgrade without v2 credential expected 422, got %d: %s", upgraded.Code, upgraded.Body.String())
-	}
-	assertSingleAgentCapability(t, db, agentID, capID, v1)
-}
-
-func TestAgentVisibilityRejectsPersonalCapabilityCredential(t *testing.T) {
-	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "admin"}, nil)
-	capID, versionID, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Public Visibility MCP")
-	agentID := insertAgentForOwner(t, db, testUserAID, "public-visibility-agent")
-	enabled := serveCapabilityRoute(t, r, http.MethodPost,
-		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+versionID+"/enable",
-		`{"configuration":{"credential_bindings":{"github_pat":{"source":"personal"}}}}`, testUserAID)
-	if enabled.Code != http.StatusOK {
-		t.Fatalf("enable personal capability expected 200, got %d: %s", enabled.Code, enabled.Body.String())
-	}
-	assertSingleAgentCapability(t, db, agentID, capID, versionID)
-
-	visibility := serveCapabilityRoute(t, r, http.MethodPatch,
-		"/api/v1/agents/"+agentID+"/visibility", `{"visibility":"public"}`, testUserAID)
-	if visibility.Code != http.StatusUnprocessableEntity || !strings.Contains(visibility.Body.String(), "public agents require a shared secret") {
-		t.Fatalf("public visibility with personal capability credential expected 422, got %d: %s", visibility.Code, visibility.Body.String())
-	}
-	var storedVisibility string
-	if err := db.QueryRow(context.Background(), `select visibility from agents where id = $1`, agentID).Scan(&storedVisibility); err != nil {
-		t.Fatalf("read agent visibility: %v", err)
-	}
-	if storedVisibility != "workspace" {
-		t.Fatalf("visibility changed to %q after rejected update", storedVisibility)
-	}
-}
-
 func TestCapabilityMarketplacePublishLifecycleSecretCheckAndDeleteRollback(t *testing.T) {
 	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
 	capID, _, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Marketplace Secret")
@@ -398,7 +204,7 @@ func TestCapabilityMarketplacePublishLifecycleSecretCheckAndDeleteRollback(t *te
 	}
 }
 
-func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQueries(t *testing.T) {
+func TestCapabilityMarketplaceCrossWorkspaceReadUninstallAndReverseQueries(t *testing.T) {
 	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
 	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin", testUserAID: "admin"}, map[string]string{testUserAID: "member"})
 	insertForeignWorkspace(t, db, foreignWorkspaceID)
@@ -412,14 +218,8 @@ func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQuer
 	agentA := insertAgentForOwner(t, db, testUserAID, "market-agent-a")
 	agentB := insertAgentForOwner(t, db, testUserAID, "market-agent-b")
 
-	enabledA := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
-	if enabledA.Code != http.StatusOK {
-		t.Fatalf("enable marketplace A expected 200, got %d: %s", enabledA.Code, enabledA.Body.String())
-	}
-	enabledB := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentB+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
-	if enabledB.Code != http.StatusOK {
-		t.Fatalf("enable marketplace B expected 200, got %d: %s", enabledB.Code, enabledB.Body.String())
-	}
+	insertAgentCapability(t, db, agentA, capID, v1)
+	insertAgentCapability(t, db, agentB, capID, v1)
 	list := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities", ``, testUserAID)
 	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), `"enabled_agent_count":2`) || !strings.Contains(list.Body.String(), `"from_marketplace":true`) {
 		t.Fatalf("reverse marketplace list expected count=2, got %d: %s", list.Code, list.Body.String())
@@ -432,20 +232,8 @@ func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQuer
 		t.Fatal(err)
 	}
 	detail := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capID+"?workspace_id="+store.DefaultDevFixtureIDs().WorkspaceID, ``, testUserAID)
-	if detail.Code != http.StatusOK || !strings.Contains(detail.Body.String(), `"version":"v2"`) {
+	if detail.Code != http.StatusOK || !strings.Contains(detail.Body.String(), `"version":"v2.0.0"`) {
 		t.Fatalf("marketplace detail with nullable creator expected 200/v2, got %d: %s", detail.Code, detail.Body.String())
-	}
-	upgraded := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
-	if upgraded.Code != http.StatusOK || !strings.Contains(upgraded.Body.String(), v2) {
-		t.Fatalf("upgrade expected 200/v2, got %d: %s", upgraded.Code, upgraded.Body.String())
-	}
-	assertSingleAgentCapability(t, db, agentA, capID, v2)
-	if _, err := db.Exec(context.Background(), `update capability set deprecated_at = now() where id = $1`, capID); err != nil {
-		t.Fatal(err)
-	}
-	blocked := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentB+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
-	if blocked.Code != http.StatusForbidden {
-		t.Fatalf("upgrade deprecated expected 403, got %d: %s", blocked.Code, blocked.Body.String())
 	}
 	uninstalled := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/uninstall", `{"source_capability_id":"`+capID+`"}`, testUserAID)
 	if uninstalled.Code != http.StatusOK || !strings.Contains(uninstalled.Body.String(), `"removed_agent_count":2`) {
@@ -573,10 +361,7 @@ func TestInstallCountRejectsCrossWorkspace(t *testing.T) {
 	capID, v1, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Public MCP install-count")
 	publishForeignCapability(t, db, capID)
 	agentA := insertAgentForOwner(t, db, testUserAID, "market-agent-install-count")
-	enabled := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
-	if enabled.Code != http.StatusOK {
-		t.Fatalf("enable marketplace cap expected 200, got %d: %s", enabled.Code, enabled.Body.String())
-	}
+	insertAgentCapability(t, db, agentA, capID, v1)
 
 	// The caller (testUserAID) is admin of DefaultDevFixtureIDs().WorkspaceID
 	// but the capability is owned by foreignWorkspaceID. The install-count
@@ -842,58 +627,6 @@ func TestCapabilityListIncludeDeprecatedSurfacesAllInStoreCall(t *testing.T) {
 	}
 }
 
-// TestSyncAgentCapabilitiesPreservesDeprecatedBindings is the
-// regression test for the silent-delete bug:
-//
-//   - agent A binds capability C
-//   - admin deprecates C
-//   - user opens A in the edit dialog and clicks Save without changing
-//     anything; the form re-submits capabilities=[C]
-//   - syncAgentCapabilities must NOT delete the (A,C) binding just
-//     because ListCapabilities now hides C from the default catalog
-//
-// Without the IncludeDeprecated=true wiring in syncAgentCapabilities,
-// the binding gets dropped silently on save and the runtime stops
-// finding C — the user sees no error, just a capability that "vanished".
-func TestSyncAgentCapabilitiesPreservesDeprecatedBindings(t *testing.T) {
-	_, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
-	wid := store.DefaultDevFixtureIDs().WorkspaceID
-	uid := store.DefaultDevFixtureIDs().UserID
-
-	// Seed capability + a version + an agent + bind the capability.
-	capID, v1, _ := insertCapabilityVersions(t, db, wid, "Sync Preserve MCP")
-	agentID := insertAgentForSyncTest(t, db, wid, uid, "sync-preserve-target")
-	insertAgentCapability(t, db, agentID, capID, v1)
-
-	// Admin deprecates the capability AFTER it's already bound.
-	if _, err := db.Exec(context.Background(), `update capability set deprecated_at = now() where id = $1`, capID); err != nil {
-		t.Fatalf("set deprecated_at: %v", err)
-	}
-
-	// Simulate the edit-dialog Save: user re-submits the same capability
-	// name list (which still contains the now-deprecated cap).
-	s := store.New(db)
-	if err := syncAgentCapabilities(context.Background(), s, wid, agentID, []string{"Sync Preserve MCP"}); err != nil {
-		t.Fatalf("sync: %v", err)
-	}
-
-	// Binding must still exist.
-	bindings, err := s.ListAgentCapabilities(context.Background(), agentID)
-	if err != nil {
-		t.Fatalf("list bindings: %v", err)
-	}
-	found := false
-	for _, b := range bindings {
-		if b.CapabilityID == capID {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("deprecated capability binding was silently dropped (agentID=%s capID=%s); bindings=%+v", agentID, capID, bindings)
-	}
-}
-
 func containsCapabilityByID(caps []store.CapabilityRead, id string) bool {
 	for _, c := range caps {
 		if c.ID == id {
@@ -928,54 +661,15 @@ func insertAgentCapability(t *testing.T, db *pgxpool.Pool, agentID, capabilityID
 	}
 }
 
-// TestSyncAgentCapabilitiesBindsMarketplaceByName covers the edit-dialog
-// path where the user checks a marketplace capability that isn't installed
-// in their workspace yet. The agent payload only carries names — so
-// syncAgentCapabilities has to resolve the name against the marketplace
-// pool, not just ListCapabilities of the local workspace. Without this
-// the checkbox would appear to succeed in the UI but silently no-op
-// on save.
-func TestSyncAgentCapabilitiesBindsMarketplaceByName(t *testing.T) {
-	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
-	_, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
-	insertForeignWorkspace(t, db, foreignWorkspaceID)
-	capID, v1, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Marketplace MCP")
-	publishForeignCapability(t, db, capID)
-
-	wid := store.DefaultDevFixtureIDs().WorkspaceID
-	uid := store.DefaultDevFixtureIDs().UserID
-	agentID := insertAgentForSyncTest(t, db, wid, uid, "sync-marketplace-target")
-
-	s := store.New(db)
-	if err := syncAgentCapabilities(context.Background(), s, wid, agentID, []string{"Foreign Marketplace MCP"}); err != nil {
-		t.Fatalf("sync: %v", err)
-	}
-
-	bindings, err := s.ListAgentCapabilities(context.Background(), agentID)
-	if err != nil {
-		t.Fatalf("list bindings: %v", err)
-	}
-	var matched store.AgentCapabilityRead
-	for _, b := range bindings {
-		if b.CapabilityID == capID {
-			matched = b
-			break
-		}
-	}
-	if matched.CapabilityID == "" {
-		t.Fatalf("marketplace capability binding was dropped silently (capID=%s); bindings=%+v", capID, bindings)
-	}
-	if matched.CapabilityVersionID != v1 {
-		t.Fatalf("expected binding to source version %s, got %s", v1, matched.CapabilityVersionID)
-	}
-}
-
 // TestCapabilityDeleteFreesUniqueNameSlot reproduces the bug: a "deprecated"
 // capability's name still occupies the unique index; only a real delete
 // (writing deleted_at) lets a same-name re-import succeed.
 // Flow: create -> deprecate -> same-name import still conflicts -> delete -> same-name import succeeds.
 func TestCapabilityDeleteFreesUniqueNameSlot(t *testing.T) {
 	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
+	router := chi.NewRouter()
+	RegisterRoutesWithStore(router, store.New(db), WithBlobStore(blob.NewMemoryStore("https://api.test")))
+	r = router
 	wid := store.DefaultDevFixtureIDs().WorkspaceID
 	uid := store.DefaultDevFixtureIDs().UserID
 	capID, _, _ := insertCapabilityVersions(t, db, wid, "Reusable Name")
@@ -994,7 +688,7 @@ func TestCapabilityDeleteFreesUniqueNameSlot(t *testing.T) {
 	if previewBlocked.Code != http.StatusOK {
 		t.Fatalf("preview expected 200 (preview is just parse, no DB check), got %d: %s", previewBlocked.Code, previewBlocked.Body.String())
 	}
-	commitBody := `{"kind":"skill","name":"Reusable Name","description":"d","visibility":"workspace","type":"skill","canonical_spec":{"kind":"skill","schema_version":"1","skill":{"name":"Reusable Name","description":"A skill description that is at least twenty characters.","slug":"reusable-name","instructions":"# Body","source_format":"markdown"}}}`
+	commitBody := `{"kind":"skill","name":"Reusable Name","description":"d","visibility":"workspace","type":"skill","canonical_spec":{"kind":"skill","schema_version":1,"skill":{"name":"Reusable Name","description":"A skill description that is at least twenty characters.","slug":"reusable-name","instruction":"# Body","source_format":"markdown"}}}`
 	commitBlocked := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+wid+"/capabilities/import/commit", commitBody, uid)
 	if commitBlocked.Code != http.StatusConflict {
 		t.Fatalf("commit-while-deprecated expected 409, got %d: %s", commitBlocked.Code, commitBlocked.Body.String())

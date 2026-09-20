@@ -22,29 +22,27 @@ import {
 import { useAdminView, useAppRoute } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { agentActionPermissions, useAgentChat } from "../../lib/agent-actions"
-import { createAgentConversation } from "../../lib/api-conversations"
+import { requestStartSession } from "../../lib/core-api"
 import {
   useCreateAgent,
   useAgentDetail,
   useAgents,
   useDeleteAgent,
   useUpdateAgent,
-  useUpdateAgentProfile,
+
 } from "../../lib/api-agents"
-import { useModels } from "../../lib/api-models"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import {
   searchAgents,
   defaultModelOf,
 } from "../../lib/agent-view-model"
-import type { Agent } from "../../lib/api-types"
+import type { Agent, Model } from "../../lib/api-types"
 import { useToast } from "../../components/ui/toast"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 import { CreateAgentDialog } from "./agents/AgentDialog"
 import { AgentConfigTab } from "./agents/AgentConfigTab"
 import { AgentDetailActions } from "./agents/AgentDetailActions"
-import { MarketplaceInstallDialog } from "./agents/MarketplaceInstallDialog"
 import { AgentStatusControl } from "./agents/AgentStatusControl"
 import { AgentExposureTab } from "./agents/AgentExposureTab"
 import { AgentDynamicsTab } from "./agents/AgentDynamicsTab"
@@ -59,7 +57,6 @@ export function AgentsPage() {
   const { navigate, entityId } = useAdminView()
   const wid = useWorkspaceId()
   const [keyword, setKeyword] = useState("")
-  const [connectorFilter, setConnectorFilter] = useState("")
   const [statusFilter, setStatusFilter] = useState<AgentStatusFilter>("")
   const [createOpen, setCreateOpen] = useState(false)
   const [editAgent, setEditAgent] = useState<Agent | null>(null)
@@ -76,9 +73,7 @@ export function AgentsPage() {
   const query = useAgents(wid, canManage)
   const createMut = useCreateAgent(wid)
   const cloneMut = useCreateAgent(wid)
-  const modelsQ = useModels(wid)
   const updateMut = useUpdateAgent(wid)
-  const updateProfileMut = useUpdateAgentProfile(wid)
   const deleteMut = useDeleteAgent(wid)
   const agents = useMemo(() => {
     const list = query.data?.agents ?? []
@@ -89,10 +84,9 @@ export function AgentsPage() {
       return tb.localeCompare(ta)
     })
   }, [query.data])
-  const models = useMemo(() => modelsQ.data?.models ?? [], [modelsQ.data])
-  const searched = useMemo(() => searchAgents(agents, keyword, models, t), [agents, keyword, models, t])
+  const models = useMemo<Model[]>(() => [], [])
+  const searched = useMemo(() => searchAgents(agents, keyword), [agents, keyword])
   const { startChat: startChatWith, pendingID: chatPendingID } = useAgentChat(wid, canChat)
-  const pendingCapabilityID = new URLSearchParams(window.location.search).get("pendingCapability")
 
   const err = query.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
@@ -139,14 +133,11 @@ export function AgentsPage() {
                   onChange={(event) => setKeyword(event.target.value)}
                 />
               </div>
-              <AgentsFilters
+              {canManage && <AgentsFilters
                 agents={searched}
-                connectorFilter={connectorFilter}
                 statusFilter={canManage ? statusFilter : ""}
-                onConnectorChange={setConnectorFilter}
                 onStatusChange={setStatusFilter}
-                canManage={canManage}
-              />
+              />}
               {canManage && <Button onClick={() => setCreateOpen(true)}>
                 <Plus strokeWidth={1.5} aria-hidden="true" />
                 {t("agents.actions.create")}
@@ -186,12 +177,9 @@ export function AgentsPage() {
           <AgentsListTable
             agents={canManage && statusFilter ? agents.filter((agent) => agent.status === statusFilter) : agents}
             workspaceRole={workspaceRole}
-            models={models}
             keyword={keyword}
-            connectorFilter={connectorFilter}
             onClearFilters={() => {
               setKeyword("")
-              setConnectorFilter("")
               setStatusFilter("")
             }}
             selectedID={entityId}
@@ -207,15 +195,7 @@ export function AgentsPage() {
         )}
       </RailLayout>
 
-      {pendingCapabilityID && <MarketplaceInstallDialog
-        capabilityID={pendingCapabilityID}
-        workspaceID={wid}
-        agentID={entityId}
-        workspaceRole={workspaceRole}
-        onSelectAgent={(id) => navigate("agents", { id, tab: id ? "config" : null })}
-        onDismiss={() => navigate("agents", { pendingCapability: null })}
-        onInstalled={(id) => navigate("agents", { id, tab: "config", pendingCapability: null })}
-      />}
+
 
       <CreateAgentDialog
         open={createOpen && canManage}
@@ -234,18 +214,8 @@ export function AgentsPage() {
           createMut.mutate(body as Parameters<typeof createMut.mutate>[0], {
             onSuccess: (created) => {
               setCreateOpen(false)
-              void (async () => {
-                if (!wid) {
-                  navigate("agents", { id: created.id })
-                  return
-                }
-                try {
-                  const conversation = await createAgentConversation(wid, created, i18n.language)
-                  navigate("conversations", { id: conversation.id, focus: "compose" })
-                } catch {
-                  navigate("agents", { id: created.id })
-                }
-              })()
+              navigate("agents", { id: created.id })
+              requestStartSession(created.id)
             },
           })
         }}
@@ -259,23 +229,19 @@ export function AgentsPage() {
         workspaceRole={workspaceRole}
         models={models}
         agent={editAgent ?? undefined}
-        pending={updateMut.isPending || updateProfileMut.isPending}
-        error={updateMut.error ?? updateProfileMut.error}
+        pending={updateMut.isPending}
+        error={updateMut.error}
         onOpenChange={(v) => {
           if (!v) {
             setEditAgent(null)
             updateMut.reset()
-            updateProfileMut.reset()
           }
         }}
-        onSubmit={({ agentID, body, agentProfile }) => {
+        onSubmit={({ agentID, body }) => {
           if (!agentID) return
           void (async () => {
             try {
               await updateMut.mutateAsync({ agentID, body })
-              if (agentProfile) {
-                await updateProfileMut.mutateAsync({ agentID, body: agentProfile })
-              }
               setEditAgent(null)
             } catch {
               // React Query owns the surfaced error; keep the dialog open.
@@ -371,10 +337,9 @@ export function AgentDetailRail({ id, open, onClose, onClosed, renderStatusActio
   const toast = useToast()
 
   const query = useAgentDetail(wid, id)
-  const modelsQ = useModels(wid)
   const workspacesQ = useMyWorkspaces()
   const agent = query.data
-  const models = modelsQ.data?.models ?? []
+  const models: Model[] = []
   const currentWorkspace = workspacesQ.data?.workspaces.find((w) => w.id === wid)
   const workspaceRole = currentWorkspace?.role
 
@@ -410,7 +375,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed, renderStatusActio
     )
   }
 
-  const model = defaultModelOf(agent, models, t("agents.modelUnavailable"))
+  const model = defaultModelOf(agent)
   return (
     <DetailRail
       open={open}

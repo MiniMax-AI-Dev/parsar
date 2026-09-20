@@ -7,14 +7,13 @@ export type AdminView =
   | "scheduled"
   | "approvals"
   | "agents"
+  | "environments"
   | "capabilities"
   | "connections"
-  | "models"
   | "members"
   | "settings"
   // Their own sidebar entries; 设置 no longer holds them behind a tab strip
   | "secrets"
-  | "runtime"
   | "usage"
   | "audit"
 
@@ -27,13 +26,12 @@ const ALL_ADMIN_VIEWS: AdminView[] = [
   "scheduled",
   "approvals",
   "agents",
+  "environments",
   "capabilities",
   "connections",
-  "models",
   "members",
   "settings",
   "secrets",
-  "runtime",
   "usage",
   "audit",
 ]

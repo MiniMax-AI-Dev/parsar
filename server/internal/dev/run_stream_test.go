@@ -109,7 +109,7 @@ func TestConversationRunStreamStartAndLateReplayPersistsFinal(t *testing.T) {
 	}
 	waitForRunEventKind(t, db, runID, "run.started")
 	flushDevRouteAudit(t, ingester)
-	assertAuditEventCount(t, db, "agent_daemon.completed", 1)
+	assertAuditEventCount(t, db, "agent_run.completed", 1)
 }
 
 func TestConversationRunStreamPromptErrorPersistsFailureEvent(t *testing.T) {
@@ -123,7 +123,7 @@ func TestConversationRunStreamPromptErrorPersistsFailureEvent(t *testing.T) {
 	if _, err := s.ConfigureDevConversationExternalRef(ctx, store.ConfigureDevConversationExternalRefInput{ConversationID: ids.ConversationID, Gateway: "feishu", ExternalChatID: "oc_stream_failure"}); err != nil {
 		t.Fatal(err)
 	}
-	conn := &fakeStreamConnector{caps: connector.Capabilities{Sync: true, Streaming: true}, errReturn: errors.New("daemon not registered")}
+	conn := &fakeStreamConnector{caps: connector.Capabilities{Sync: true, Streaming: true}, errReturn: errors.New("Core is unavailable")}
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, s, WithRunStreamBroker(runstream.NewBroker(runstream.DefaultBufferSize)), WithConnectorRegistry(testConnectorRegistry(t, conn)))
 
@@ -135,7 +135,7 @@ func TestConversationRunStreamPromptErrorPersistsFailureEvent(t *testing.T) {
 	}
 	waitForRunStatus(t, db, runID, "failed")
 	failurePayload := waitForRunEventKind(t, db, runID, "run.failed")
-	if failurePayload["error"] != "daemon not registered" || failurePayload["source"] != "agent_daemon" {
+	if failurePayload["error"] != "Core is unavailable" || failurePayload["source"] != "agents_api" {
 		t.Fatalf("run.failed payload = %+v, want source + error", failurePayload)
 	}
 	// Driver-only refactor: the failure is now carried by the
@@ -179,7 +179,7 @@ func TestConversationRunStreamInBandFailureEmitsSingleRunFailed(t *testing.T) {
 				Content: "",
 				Metadata: map[string]any{
 					"error":  "runtime retired",
-					"source": "agent_daemon",
+					"source": "agents_api",
 				},
 			}},
 		},
@@ -199,7 +199,7 @@ func TestConversationRunStreamInBandFailureEmitsSingleRunFailed(t *testing.T) {
 
 	// Count run.failed events for this run. Must be exactly 1.
 	var count int
-	if err := db.QueryRow(ctx, `select count(*) from agent_run_events where run_id = $1 and kind = 'run.failed'`, runID).Scan(&count); err != nil {
+	if err := db.QueryRow(ctx, `select count(*) from agent_run_events where agent_run_id = $1 and event_kind = 'run.failed'`, runID).Scan(&count); err != nil {
 		t.Fatalf("query run.failed count: %v", err)
 	}
 	if count != 1 {
@@ -268,6 +268,7 @@ func TestConversationRunStartPersistsEventsSynchronouslyAfterRequestContextCance
 	if events < 1 {
 		t.Fatalf("expected at least one persisted event after /start returned, got %d", events)
 	}
+	waitForRunStatus(t, db, runID, "completed")
 	if conn.gotInput.ConversationInitiatorID != ids.UserID {
 		t.Fatalf("ConversationInitiatorID = %q, want %q", conn.gotInput.ConversationInitiatorID, ids.UserID)
 	}
@@ -360,7 +361,7 @@ func TestConversationRunStreamStartRejectsNonQueuedMissingAndNonMember(t *testin
 func createStreamTestRun(t *testing.T, r http.Handler, ids store.DevFixtureIDs, userID string) string {
 	t.Helper()
 	path := "/api/v1/conversations/" + ids.ConversationID + "/messages"
-	res := serveConversationMessageRequest(r, newConversationMessageRequest(http.MethodPost, path, `{"content":"please @Product Agent reply in streaming mode"}`, userID))
+	res := serveConversationMessageRequest(r, newConversationMessageRequest(http.MethodPost, path, `{"content":"please reply in streaming mode","mentioned_agent_ids":["`+ids.ProductAgentID+`"]}`, userID))
 	if res.Code != http.StatusCreated {
 		t.Fatalf("create message status = %d body=%s, want 201", res.Code, res.Body.String())
 	}
@@ -444,22 +445,11 @@ func waitForDelayedEventWrite(t *testing.T, started <-chan struct{}) {
 	}
 }
 
-// TestConversationRunStreamHangsAreBoundedByFirstEventTimeout pins
-// the reviewer round-1 hang-protection contract: when /stream
-// subscribes to a runID for which no dispatcher ever publishes
-// (e.g. /start failed silently, runID is stale, server crashed
-// between /start and /stream), the handler must NOT block until
-// client disconnect. Instead it must emit one synthesized error
-// frame and close within streamFirstEventTimeout.
-//
-// We shrink streamFirstEventTimeout to 150ms so the test stays
-// snappy. Original value (30s) is restored via t.Cleanup so other
-// tests aren't affected.
-func TestConversationRunStreamHangsAreBoundedByFirstEventTimeout(t *testing.T) {
+// Waiting for a queued Core run must not synthesize an execution failure.
+func TestConversationRunStreamWaitsWhileQueued(t *testing.T) {
 	original := streamFirstEventTimeout
-	streamFirstEventTimeout = 150 * time.Millisecond
+	streamFirstEventTimeout = 25 * time.Millisecond
 	t.Cleanup(func() { streamFirstEventTimeout = original })
-
 	db := openDevRouteTestDB(t)
 	ctx := context.Background()
 	ids := store.DefaultDevFixtureIDs()
@@ -467,48 +457,19 @@ func TestConversationRunStreamHangsAreBoundedByFirstEventTimeout(t *testing.T) {
 	if _, err := s.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	broker := runstream.NewBroker(runstream.DefaultBufferSize)
 	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, s, WithRunStreamBroker(broker))
-
-	// Create a run via the messages endpoint but DO NOT call /start.
-	// The run stays queued forever from the broker's perspective —
-	// exactly the failure mode reviewer round-1 called out.
+	RegisterRoutesWithStore(r, s, WithRunStreamBroker(runstream.NewBroker(runstream.DefaultBufferSize)))
 	runID := createStreamTestRun(t, r, ids, ids.UserID)
-
-	streamPath := "/api/v1/conversations/" + ids.ConversationID + "/runs/" + runID + "/stream"
-	start := time.Now()
-	stream := serveConversationMessageRequest(r, newConversationMessageRequest(http.MethodGet, streamPath, "", ids.UserID))
-	elapsed := time.Since(start)
-
-	if stream.Code != http.StatusOK {
-		t.Fatalf("stream status = %d body=%s, want 200 (hang protection still flushes headers)", stream.Code, stream.Body.String())
+	request := newConversationMessageRequest(http.MethodGet, "/api/v1/conversations/"+ids.ConversationID+"/runs/"+runID+"/stream", "", ids.UserID)
+	waitCtx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
+	defer cancel()
+	response := serveConversationMessageRequest(r, request.WithContext(waitCtx))
+	if response.Code != 200 || strings.Contains(response.Body.String(), "error") {
+		t.Fatalf("queued wait manufactured failure: %d %s", response.Code, response.Body.String())
 	}
-	// Must close within roughly 2× the deadline; allow generous
-	// slack for CI scheduling jitter, but anything ≥ 5s means the
-	// hang protection didn't fire.
-	if elapsed > 5*time.Second {
-		t.Fatalf("stream handler took %s to return; expected ≤ ~2×%s", elapsed, streamFirstEventTimeout)
-	}
-	events := parseSSEFrames(t, stream.Body)
-	if len(events) != 1 {
-		t.Fatalf("hang-bounded stream got %d events, want 1 synthesized error: %+v", len(events), events)
-	}
-	if events[0]["type"] != "error" {
-		t.Fatalf("synthesized event = %+v, want type=error", events[0])
-	}
-	reason, _ := events[0]["error"].(string)
-	if reason == "" {
-		t.Fatalf("synthesized event missing error reason: %+v", events[0])
-	}
-	// Verify the run is still queued — hang protection should NOT
-	// mutate run state, just bound the handler lifetime.
-	var status string
-	if err := db.QueryRow(ctx, `select status from agent_runs where id = $1`, runID).Scan(&status); err != nil {
-		t.Fatal(err)
-	}
-	if status != "queued" {
-		t.Fatalf("run status after hang protection = %s, want queued (handler must not mutate run)", status)
+	run, err := s.GetAgentRun(ctx, runID)
+	if err != nil || run.Status != "queued" {
+		t.Fatalf("queued state changed: %+v %v", run, err)
 	}
 }
 
@@ -799,5 +760,97 @@ func TestEventPersistencePayload_RunFailedTranslatesEmptyError(t *testing.T) {
 	}
 	if got, _ := payload["user_visible_message"].(string); got == "" {
 		t.Error("payload missing user_visible_message; want a non-empty fallback translation")
+	}
+}
+
+func TestRecoveredFailedDoneCannotCompleteRun(t *testing.T) {
+	db := openDevRouteTestDB(t)
+	ctx := context.Background()
+	s := store.New(db)
+	ids := store.DefaultDevFixtureIDs()
+	_, err := s.SeedDevFixture(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn := &fakeStreamConnector{caps: connector.Capabilities{Sync: true, Streaming: true}, events: []connector.PromptEvent{{Type: connector.EventDone, Recovered: true, Final: &connector.PromptOutput{Content: "partial", Metadata: map[string]any{"error": "Core execution failed"}}}}}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, s)
+	runID := createStreamTestRun(t, r, ids, ids.UserID)
+	if err := s.RecordAgentRunEvent(ctx, store.RecordAgentRunEventInput{RunID: runID, EventKind: "run.failed", Payload: map[string]any{"error": "Core execution failed"}}); err != nil {
+		t.Fatal(err)
+	}
+	dispatchConversationRun(ctx, s, &routerConfig{connectorRegistry: testConnectorRegistry(t, conn)}, runID)
+	waitForRunStatus(t, db, runID, "failed")
+	var count int
+	if err := db.QueryRow(ctx, `select count(*) from messages where metadata->>'run_id'=$1 and sender_type='agent'`, runID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatal("recovered failure created a successful assistant message")
+	}
+}
+
+func TestObservationInterruptionDoesNotFailProductRun(t *testing.T) {
+	db := openDevRouteTestDB(t)
+	ctx := context.Background()
+	s := store.New(db)
+	ids := store.DefaultDevFixtureIDs()
+	if _, err := s.SeedDevFixture(ctx); err != nil {
+		t.Fatal(err)
+	}
+	conn := &fakeStreamConnector{caps: connector.Capabilities{Sync: true, Streaming: true}, errReturn: connector.ErrObservationInterrupted}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, s)
+	runID := createStreamTestRun(t, r, ids, ids.UserID)
+	before, err := s.GetAgentRun(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatchConversationRun(ctx, s, &routerConfig{connectorRegistry: testConnectorRegistry(t, conn)}, runID)
+	after, err := s.GetAgentRun(ctx, runID)
+	if err != nil || after.Status != before.Status {
+		t.Fatalf("observation failure changed lifecycle: %s -> %s %v", before.Status, after.Status, err)
+	}
+	events, err := s.ListAgentRunEvents(ctx, runID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range events {
+		if event.EventKind == "run.failed" {
+			t.Fatal("persistence failure published as execution failure")
+		}
+	}
+}
+
+func TestDisabledUnboundMemberFailsRun(t *testing.T) {
+	db := openDevRouteTestDB(t)
+	ctx := context.Background()
+	s := store.New(db)
+	ids := store.DefaultDevFixtureIDs()
+	if _, err := s.SeedDevFixture(ctx); err != nil {
+		t.Fatal(err)
+	}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, s)
+	runID := createStreamTestRun(t, r, ids, ids.UserID)
+	if _, err := db.Exec(ctx, `update agents set status='disabled' where id=(select agent_id from agent_runs where id=$1)`, runID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetAgentRunInvocation(ctx, runID); !errors.Is(err, store.ErrInvalidAgent) {
+		t.Fatalf("expected definitive product rejection: %v", err)
+	}
+	dispatchConversationRun(ctx, s, &routerConfig{}, runID)
+	run, err := s.GetAgentRun(ctx, runID)
+	if err != nil || run.Status != "failed" {
+		t.Fatalf("invalid member left work pending: %+v %v", run, err)
+	}
+	pending, err := s.ListRecoverableCoreRuns(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range pending {
+		if item.RunID == runID {
+			t.Fatal("unbound retired member retries forever")
+		}
 	}
 }

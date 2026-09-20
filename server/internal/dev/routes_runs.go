@@ -1,91 +1,14 @@
 package dev
 
 import (
-	"encoding/json"
-	"errors"
-	"io"
-
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
 )
 
 type requeueAgentRunBody struct {
 	Reason string `json:"reason"`
-}
-
-// requeueAgentRun re-schedules a failed or stalled agent run.
-//
-//	@Summary		Re-queue an agent run
-//	@Description	Re-schedules a failed or stalled agent run. Owner/admin only.
-//	@Tags			agent-runs
-//	@ID				requeueDevAgentRun
-//	@Accept			json
-//	@Produce		json
-//	@Param			runID	path	string				true	"Agent run UUID"
-//	@Param			body	body	requeueAgentRunBody	true	"Requeue payload"
-//	@Success		200 {object} map[string]interface{} "Requeued run"
-//	@Failure		400 {object} map[string]string "Invalid body or UUID"
-//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
-//	@Failure		404 {object} map[string]string "Run not found"
-//	@Router			/api/v1/agent-runs/{runID}/requeue [post]
-func requeueAgentRun(runtimeStore RuntimeStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if runtimeStore == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed run retry is disabled"})
-			return
-		}
-		runID := strings.TrimSpace(chi.URLParam(r, "runID"))
-		if !isUUID(runID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "run_id must be a valid uuid"})
-			return
-		}
-
-		var req requeueAgentRunBody
-		if r.Body != nil {
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
-				return
-			}
-		}
-		run, err := runtimeStore.GetAgentRun(r.Context(), runID)
-		if err != nil {
-			writeReadError(w, err, "failed to get agent run")
-			return
-		}
-		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, run.WorkspaceID); err != nil {
-			if errors.Is(err, auth.ErrNotMember) {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
-				return
-			}
-			writeRBACError(w, err)
-			return
-		}
-		reason := strings.TrimSpace(req.Reason)
-		if reason == "" {
-			reason = "manual_retry"
-		}
-		result, err := runtimeStore.RequeueFailedAgentRun(r.Context(), store.RequeueAgentRunInput{RunID: runID, Source: "dev_retry", Reason: reason})
-		if err != nil {
-			switch {
-			case errors.Is(err, store.ErrUnknownAgentRun):
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			case errors.Is(err, store.ErrAgentRunNotCompletable):
-				writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-			default:
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to requeue agent run"})
-			}
-			return
-		}
-		if recorder, ok := runtimeStore.(runLifecycleEventRecorder); ok {
-			recordRunLifecycleEvent(recorder, runID, "run.requeued", map[string]any{"source": "dev_retry", "reason": reason, "previous_status": run.Status}, time.Now().UTC())
-		}
-		writeJSON(w, http.StatusOK, result)
-	}
 }
 
 // getAgentRun returns details for a single agent run.

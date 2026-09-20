@@ -1,3 +1,4 @@
+import { requestStartSession } from "../../lib/core-api"
 import { useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
@@ -35,7 +36,6 @@ import { copyText } from "../../lib/clipboard"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useAgents } from "../../lib/api-agents"
-import { agentNeedsSandbox } from "../../lib/agent-runtime"
 import {
   createConversation,
   sendUserMessage,
@@ -44,7 +44,6 @@ import {
   useConversations,
   useUpdateConversationTitle
 } from "../../lib/api-conversations"
-import { useSandboxBinding } from "../../lib/api-sandbox"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import type {
   ConversationListItem,
@@ -66,7 +65,6 @@ const FOLD_KEY = "parsar:conv:sidebarFolded"
 /** Conversation summary · actions in the fixed-width sidebar. */
 const LIST_COLUMNS = [col.title(0), col.actions(3)]
 
-import { sandboxSendGuard } from "../../lib/sandbox-send-guard"
 
 /* ============================================================== */
 /*  ConversationsPage — the list; the thread is a shared surface   */
@@ -124,15 +122,6 @@ export function ConversationsPage() {
       : savedViewState.agentId
   const selectedAgentId = currentConv?.primary_agent_id || pickedAgentId || (allAgents[0]?.id ?? "")
   const selectedAgent = allAgents.find((a) => a.id === selectedAgentId)
-  const needsSandbox = agentNeedsSandbox(selectedAgent)
-  const sandboxQ = useSandboxBinding(
-    needsSandbox ? wsId : null,
-    needsSandbox ? selectedAgentId : null,
-  )
-  const sandboxGuard = useMemo(
-    () => sandboxSendGuard(t, selectedAgent, sandboxQ.data, sandboxQ.isLoading, sandboxQ.error),
-    [t, selectedAgent, sandboxQ.data, sandboxQ.isLoading, sandboxQ.error],
-  )
 
   useEffect(() => {
     if (!wsId || !selectedAgentId) return
@@ -154,7 +143,7 @@ export function ConversationsPage() {
     const saved = readConversationViewState(wsId)
     if (saved.conversationId !== entityId) return
     forgetConversationViewConversation(wsId, entityId)
-    navigate("conversations", { id: "", focus: "compose" })
+    requestStartSession(selectedAgentId)
   }, [wsId, entityId, currentConvQ.error, navigate])
 
   // List conversations: scoped to the selected agent.
@@ -308,7 +297,6 @@ export function ConversationsPage() {
           onSendFromEmpty={handleSendFromEmpty}
           onRenameAfterFirstMessage={handleRenameConversation}
           focusComposer={focusTarget === "compose"}
-          sandboxGuard={sandboxGuard}
         />
       </div>
     </AdminLayout>

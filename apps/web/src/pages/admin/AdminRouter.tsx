@@ -9,17 +9,15 @@ import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
 import { EmptyState } from "../../components/ui/empty-state"
 import { Button } from "../../components/ui/button"
-import { ModelsPage } from "./ModelsPage"
 import { ConversationsPage } from "./ConversationsPage"
 import { RunsPage } from "./RunsPage"
+import { EnvironmentsPage } from "./core/EnvironmentsPage"
 import { AgentsPage } from "./AgentsPage"
 import { SettingsPage } from "./SettingsPage"
 import { AuditPage } from "./AuditPage"
 import { UsagePage } from "./UsagePage"
 import { CredentialsPage } from "./credentials/CredentialsPage"
 import { MembersPage } from "./MembersPage"
-import { RuntimePage } from "./RuntimePage"
-import { RuntimeDetailPage } from "./RuntimeDetailPage"
 import { ApprovalsPage } from "./ApprovalsPage"
 import { CapabilitiesPage } from "./CapabilitiesPage"
 import { ConnectionsPage } from "./ConnectionsPage"
@@ -44,16 +42,13 @@ export function AdminRouter() {
   if (v === "agents") {
     return <AgentsPage />
   }
-  if (v === "models") return <ModelsPage />
+  if (v === "environments") return <EnvironmentsPage />
   if (v === "settings") return <SettingsPage />
   if (v === "audit") return <AuditPage />
   if (v === "usage") return <UsagePage />
   if (v === "capabilities")
     return <CapabilitiesPage />
   if (v === "connections") return <ConnectionsPage />
-  if (v === "runtime") {
-    return entityId ? <RuntimeDetailPage id={entityId} /> : <RuntimePage />
-  }
   if (v === "conversations") {
     // ConversationsPage owns both list + detail (sidebar shows the agent +
     // conv list, main shows the selected conversation). Reads ?id= internally.

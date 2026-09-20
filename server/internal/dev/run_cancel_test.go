@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 func TestCancelAgentRunEndpoint(t *testing.T) {
@@ -82,46 +82,13 @@ func TestCancelAgentRunEndpointRejectsFinishedMissingAndNonMember(t *testing.T) 
 	}
 }
 
-func TestRequeueAgentRunEndpointRecordsLifecycleEventAndRequiresMember(t *testing.T) {
-	db := openDevRouteTestDB(t)
-	ctx := context.Background()
-	ids := store.DefaultDevFixtureIDs()
-	s, _ := newDevRouteAuditStore(t, db)
-	if _, err := s.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, s)
-
-	runID := createStreamTestRun(t, r, ids, ids.UserID)
-	if _, err := db.Exec(ctx, `update agent_runs set status = 'failed', failure_reason = 'first failure', finished_at = now() where id = $1`, runID); err != nil {
-		t.Fatal(err)
-	}
-	outsiderID := "00000000-0000-0000-0000-000000000102"
-	insertConversationMessageUser(t, db, ids, outsiderID, "outsider@example.com", "")
-	forbidden := serveConversationMessageRequest(r, newConversationMessageRequest(http.MethodPost, "/api/v1/agent-runs/"+runID+"/requeue", `{"reason":"manual_retry_from_test"}`, outsiderID))
-	if forbidden.Code != http.StatusForbidden {
-		t.Fatalf("outsider requeue status = %d body=%s, want 403", forbidden.Code, forbidden.Body.String())
-	}
-
-	res := serveConversationMessageRequest(r, newConversationMessageRequest(http.MethodPost, "/api/v1/agent-runs/"+runID+"/requeue", `{"reason":"manual_retry_from_test"}`, ids.UserID))
-	if res.Code != http.StatusOK {
-		t.Fatalf("requeue status = %d body=%s, want 200", res.Code, res.Body.String())
-	}
-	waitForRunStatus(t, db, runID, "queued")
-	eventPayload := waitForRunEventKind(t, db, runID, "run.requeued")
-	if eventPayload["reason"] != "manual_retry_from_test" || eventPayload["source"] != "dev_retry" {
-		t.Fatalf("run.requeued payload = %+v, want reason + source", eventPayload)
-	}
-}
-
 type abortSpyConnector struct {
 	mu      sync.Mutex
 	aborted []connector.AbortInput
 	err     error
 }
 
-func (a *abortSpyConnector) Type() string { return "agent_daemon" }
+func (a *abortSpyConnector) Type() string { return "agents_api" }
 func (a *abortSpyConnector) Capabilities() connector.Capabilities {
 	return connector.Capabilities{Sync: true, Cancellation: true}
 }
@@ -146,7 +113,7 @@ func (a *abortSpyConnector) SubmitPromptForUserChoice(context.Context, connector
 }
 func (a *abortSpyConnector) Close(context.Context, string) error { return nil }
 
-func TestCancelAgentRunEndpointAbortsOpenCodeConnector(t *testing.T) {
+func TestCancelAgentRunEndpointAbortsCoreConnector(t *testing.T) {
 	db := openDevRouteTestDB(t)
 	ctx := context.Background()
 	ids := store.DefaultDevFixtureIDs()
@@ -159,7 +126,7 @@ func TestCancelAgentRunEndpointAbortsOpenCodeConnector(t *testing.T) {
 	RegisterRoutesWithStore(r, s, WithConnectorRegistry(testConnectorRegistry(t, spy)))
 
 	runID := createStreamTestRun(t, r, ids, ids.UserID)
-	if _, err := db.Exec(ctx, `update agent_runs set status = 'running', connector_type = 'agent_daemon' where id = $1`, runID); err != nil {
+	if _, err := db.Exec(ctx, `update agent_runs set status = 'running', connector_type = 'agents_api' where id = $1`, runID); err != nil {
 		t.Fatal(err)
 	}
 	res := serveConversationMessageRequest(r, newConversationMessageRequest(http.MethodPost, "/api/v1/agent-runs/"+runID+"/cancel", `{}`, ids.UserID))
@@ -184,7 +151,7 @@ func TestCancelAgentRunConcurrentRequestsAreIdempotent(t *testing.T) {
 	RegisterRoutesWithStore(r, s, WithConnectorRegistry(testConnectorRegistry(t, spy)), WithAuditIngester(ingester))
 
 	runID := createStreamTestRun(t, r, ids, ids.UserID)
-	if _, err := db.Exec(ctx, `update agent_runs set status = 'running', connector_type = 'agent_daemon' where id = $1`, runID); err != nil {
+	if _, err := db.Exec(ctx, `update agent_runs set status = 'running', connector_type = 'agents_api' where id = $1`, runID); err != nil {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
@@ -256,7 +223,7 @@ func TestCancelAgentRunAuditRecordsAbortFailure(t *testing.T) {
 	RegisterRoutesWithStore(r, s, WithConnectorRegistry(testConnectorRegistry(t, spy)), WithAuditIngester(ingester))
 
 	runID := createStreamTestRun(t, r, ids, ids.UserID)
-	if _, err := db.Exec(ctx, `update agent_runs set status = 'running', connector_type = 'agent_daemon' where id = $1`, runID); err != nil {
+	if _, err := db.Exec(ctx, `update agent_runs set status = 'running', connector_type = 'agents_api' where id = $1`, runID); err != nil {
 		t.Fatal(err)
 	}
 	res := serveConversationMessageRequest(r, newConversationMessageRequest(http.MethodPost, "/api/v1/agent-runs/"+runID+"/cancel", `{}`, ids.UserID))
@@ -288,7 +255,7 @@ type raceCancelConnector struct {
 	streamStarted chan struct{}
 }
 
-func (c *raceCancelConnector) Type() string { return "agent_daemon" }
+func (c *raceCancelConnector) Type() string { return "agents_api" }
 func (c *raceCancelConnector) Capabilities() connector.Capabilities {
 	return connector.Capabilities{Sync: true, Streaming: true, Cancellation: true}
 }
@@ -371,7 +338,7 @@ func TestCancelAgentRunPreservesCancelledStatusOverDispatcherFailRace(t *testing
 	RegisterRoutesWithStore(r, s, WithConnectorRegistry(testConnectorRegistry(t, rc)), WithAuditIngester(ingester))
 
 	runID := createStreamTestRun(t, r, ids, ids.UserID)
-	if _, err := db.Exec(ctx, `update agent_runs set connector_type = 'agent_daemon' where id = $1`, runID); err != nil {
+	if _, err := db.Exec(ctx, `update agent_runs set connector_type = 'agents_api' where id = $1`, runID); err != nil {
 		t.Fatal(err)
 	}
 

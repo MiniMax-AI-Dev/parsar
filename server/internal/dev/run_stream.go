@@ -33,10 +33,6 @@ type inflightChecker interface {
 	HasInflightRunForConversationAgent(ctx context.Context, runID string) (bool, error)
 }
 
-// dispatchRunTimeout caps a single dispatched run. Safety net for runaway
-// opencode sessions / network hangs, not a product-level latency budget.
-const dispatchRunTimeout = 30 * time.Minute
-
 // streamFirstEventTimeout protects /stream from hanging when no producer
 // ever publishes (e.g. /start failed or runID is stale). After this window
 // with zero events, refreshes run status: terminal → synthesize an error;
@@ -65,7 +61,7 @@ func (d StreamingDispatchDeps) routerConfig() *routerConfig {
 // flip queued → running, then spawn dispatchConversationRun.
 //
 // Exported so the store-side StreamingDispatcher (wired in cmd/server)
-// can auto-start agent_daemon runs without going through HTTP. Returns
+// can auto-start Core runs without going through HTTP. Returns
 // the post-MarkAgentRunRunning status so callers can distinguish a
 // fresh start (status=running) from "already running" (ErrAgentRunNotStartable).
 func StartConversationRun(
@@ -292,7 +288,11 @@ func streamConversationAgentRun(runtimeStore RuntimeStore, cfg *routerConfig) ht
 				// Queued runs wait for siblings; running engines may
 				// take time to produce their first event. Neither is
 				// an execution failure while the stored run is active.
-				if run, err := runtimeStore.GetAgentRun(r.Context(), runID); err == nil && (run.Status == "queued" || run.Status == "running") {
+				run, err := runtimeStore.GetAgentRun(r.Context(), runID)
+				if r.Context().Err() != nil {
+					return
+				}
+				if err == nil && (run.Status == "queued" || run.Status == "running") {
 					firstEventTimer.Reset(streamFirstEventTimeout)
 					continue
 				}
@@ -330,11 +330,9 @@ func writeStreamHangError(w http.ResponseWriter, flusher http.Flusher, ctx conte
 }
 
 func dispatchConversationRun(ctx context.Context, runtimeStore RuntimeStore, cfg *routerConfig, runID string) {
-	// Per-run deadline so a runaway opencode session can't hold the
-	// dispatch goroutine indefinitely. cancel is idempotent; defer
-	// after Finish so the broker is closed before the context.
+	// Service shutdown stops observation; the durable run is recovered on restart.
 	log.Bg().Info("dispatchConversationRun: enter", "run_id", runID)
-	ctx, cancel := context.WithTimeout(ctx, dispatchRunTimeout)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	broker := runBroker(cfg)
 	streamStore, ok := runtimeStore.(runStreamStore)
@@ -343,11 +341,14 @@ func dispatchConversationRun(ctx context.Context, runtimeStore RuntimeStore, cfg
 		publishAndFailRun(ctx, runtimeStore, broker, runID, "conversation_stream", fmt.Errorf("conversation run streaming store is not wired"))
 		return
 	}
-	defer broker.Finish(runID)
 	invocation, err := streamStore.GetAgentRunInvocation(ctx, runID)
 	if err != nil {
 		log.Bg().Warn("dispatchConversationRun: GetAgentRunInvocation failed", "run_id", runID, "err", err.Error())
-		publishAndFailRun(ctx, runtimeStore, broker, runID, "conversation_stream", err)
+		// A retired member without a frozen execution is a definitive product
+		// rejection. Operational database errors leave observation recoverable.
+		if errors.Is(err, store.ErrInvalidAgent) {
+			publishAndFailRun(ctx, runtimeStore, broker, runID, "conversation_stream", err)
+		}
 		return
 	}
 	log.Bg().Info("dispatchConversationRun: loaded invocation",
@@ -380,6 +381,10 @@ func dispatchConversationRun(ctx context.Context, runtimeStore RuntimeStore, cfg
 	log.Bg().Info("dispatchConversationRun: calling target.StreamPrompt",
 		"run_id", runID, "connector_type", invocation.ConnectorType, "target_type", target.Type())
 	events, err := target.StreamPrompt(ctx, in)
+	if errors.Is(err, store.ErrCoreExecutionClaimed) || errors.Is(err, connector.ErrObservationInterrupted) {
+		return
+	}
+	defer broker.Finish(runID)
 	if err != nil {
 		log.Bg().Error("dispatchConversationRun: StreamPrompt returned error",
 			"run_id", runID, "connector_type", invocation.ConnectorType, "err", err.Error())
@@ -406,21 +411,18 @@ func dispatchConversationRun(ctx context.Context, runtimeStore RuntimeStore, cfg
 				}
 			}
 		}
-		if err := recordPromptEvent(ctx, streamStore, runID, ev); err != nil {
-			reason := fmt.Sprintf("persist agent event %s: %v", ev.Type, err)
-			log.Bg().Error("dispatchConversationRun: canonical event persistence failed", "run_id", runID, "event_type", ev.Type, "err", err)
-			abortCtx, abortCancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = target.Abort(abortCtx, connector.AbortInput{ConversationID: invocation.ConversationID, RunID: runID})
-			abortCancel()
-			broker.Publish(runID, connector.PromptEvent{Type: connector.EventError, Error: reason})
-			broker.Publish(runID, connector.PromptEvent{Type: connector.EventDone, Final: &connector.PromptOutput{Metadata: map[string]any{"source": source, "error": reason}}})
-			failRunRowOnly(ctx, runtimeStore, runID, source, reason)
+		persistErr := recordPromptEvent(ctx, streamStore, runID, ev)
+		if ev.Persisted != nil {
+			ev.Persisted <- persistErr
+		}
+		if persistErr != nil {
+			log.Bg().Error("Core event persistence interrupted", "run_id", runID, "event_type", ev.Type)
 			return
 		}
 		broker.Publish(runID, ev)
 		if ev.Type == connector.EventDone {
 			final = ev.Final
-			if ev.Final == nil || strings.TrimSpace(ev.Final.Content) == "" {
+			if ev.Final == nil || stringFromMap(ev.Final.Metadata, "error") != "" {
 				sawFinalFailure = true
 			}
 		}
@@ -428,8 +430,17 @@ func dispatchConversationRun(ctx context.Context, runtimeStore RuntimeStore, cfg
 			streamErr = ev.Error
 		}
 	}
+	if ctx.Err() != nil || (final == nil && streamErr == "") {
+		return
+	}
 	log.Bg().Info("dispatchConversationRun: event channel drained",
 		"run_id", runID, "stream_err", streamErr, "has_final", final != nil)
+	if sawFinalFailure && streamErr == "" {
+		streamErr = "Core execution failed"
+		if final != nil && stringFromMap(final.Metadata, "error") != "" {
+			streamErr = stringFromMap(final.Metadata, "error")
+		}
+	}
 	if streamErr != "" {
 		// In-band failure: connector emitted EventError or empty Done.
 		// recordPromptEvent already wrote session.error and/or
@@ -468,6 +479,9 @@ func userConversationInitiatorID(invocation store.AgentRunInvocation) string {
 }
 
 func recordPromptEvent(ctx context.Context, streamStore runLifecycleEventRecorder, runID string, ev connector.PromptEvent) error {
+	if ev.Recovered {
+		return nil
+	}
 	kind, payload, ok := eventPersistencePayload(ev)
 	if !ok {
 		return nil
@@ -503,15 +517,15 @@ func eventPersistencePayload(ev connector.PromptEvent) (string, map[string]any, 
 			}
 			return kind, map[string]any{
 				"request_id":    ev.Permission.ID,
-				"device_id":    ev.Permission.DeviceID,
-				"action":       ev.Permission.Tool,
-				"resource":     ev.Permission.Title,
-				"detail":       ev.Permission.Detail,
-				"payload":      ev.Permission.Payload,
+				"device_id":     ev.Permission.DeviceID,
+				"action":        ev.Permission.Tool,
+				"resource":      ev.Permission.Title,
+				"detail":        ev.Permission.Detail,
+				"payload":       ev.Permission.Payload,
 				"hook_decision": ev.HookDecision.Result,
-				"hook_reason":  ev.HookDecision.Reason,
-				"hook_plugin":  ev.HookDecision.Plugin,
-				"sequence":     ev.Sequence,
+				"hook_reason":   ev.HookDecision.Reason,
+				"hook_plugin":   ev.HookDecision.Plugin,
+				"sequence":      ev.Sequence,
 			}, true
 		}
 		return "permission.asked", map[string]any{"request_id": ev.Permission.ID, "device_id": ev.Permission.DeviceID, "action": ev.Permission.Tool, "resource": ev.Permission.Title, "detail": ev.Permission.Detail, "payload": ev.Permission.Payload, "sequence": ev.Sequence}, true
@@ -569,7 +583,7 @@ func eventPersistencePayload(ev connector.PromptEvent) (string, map[string]any, 
 	case connector.EventError:
 		return "session.error", map[string]any{"error": ev.Error, "sequence": ev.Sequence}, true
 	case connector.EventDone:
-		if ev.Final != nil && strings.TrimSpace(ev.Final.Content) != "" {
+		if ev.Final != nil && stringFromMap(ev.Final.Metadata, "error") == "" && (strings.TrimSpace(ev.Final.Content) != "" || stringFromMap(ev.Final.Metadata, "core_status") == "completed") {
 			return "run.completed", map[string]any{"sequence": ev.Sequence}, true
 		}
 		errText := "empty final output"
@@ -620,7 +634,7 @@ func persistFinal(_ context.Context, runtimeStore RuntimeStore, streamStore runS
 	if err != nil {
 		log.Bg().Warn("persist streamed agent final failed", "run_id", runID, "error", err)
 		// failRunWithVisibleMessage records run.failed internally.
-		failRunWithVisibleMessage(terminalCtx, runtimeStore, runID, source, err.Error())
+		// Leave the run recoverable when final-message persistence fails.
 	}
 }
 

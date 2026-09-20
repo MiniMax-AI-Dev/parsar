@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 func TestConversationUserMessageRouteWithRealStore(t *testing.T) {
@@ -27,7 +27,7 @@ func TestConversationUserMessageRouteWithRealStore(t *testing.T) {
 	RegisterRoutesWithStore(r, s)
 
 	sendPath := "/api/v1/conversations/" + ids.ConversationID + "/messages"
-	res := serveDevRoute(t, r, http.MethodPost, sendPath, `{"content":"please help me out @Product Agent"}`)
+	res := serveDevRoute(t, r, http.MethodPost, sendPath, `{"content":"please help me out","mentioned_agent_ids":["`+ids.ProductAgentID+`"]}`)
 	if res.Code != http.StatusCreated || !strings.Contains(res.Body.String(), `"dispatched_agent_count":1`) || !strings.Contains(res.Body.String(), `"agent_run_id"`) {
 		t.Fatalf("admin send expected 201 with one run, got %d: %s", res.Code, res.Body.String())
 	}
@@ -84,112 +84,37 @@ func TestConversationUserMessageRouteMentionOverride(t *testing.T) {
 	}
 }
 
-// TestConversationUserMessageRouteAgentDaemonReturns201 exercises the
-// full chi route so the connector_type dispatch gate, agent CRUD
-// acceptance, and handler stay wired together.
-//
-// agent_daemon agents require a device_id at create time; the test
-// seeds a runtimes row + passes AgentConfig to CreateAgent,
-// then asserts the chosen device_id round-trips to agents.config —
-// the connector reads this JSON key on first prompt to lazy-bind the
-// conversation.
-func TestConversationUserMessageRouteAgentDaemonReturns201(t *testing.T) {
+// Core-backed Agents enqueue through the same authorized product route.
+func TestConversationUserMessageRouteCoreReturns201(t *testing.T) {
 	db := openDevRouteTestDB(t)
 	ctx := context.Background()
-	ids := store.DefaultDevFixtureIDs()
 	s, _ := newDevRouteAuditStore(t, db)
+	ids := store.DefaultDevFixtureIDs()
 	if _, err := s.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-
-	// Seed an agent_daemon runtime in the dev fixture workspace. This
-	// has to exist BEFORE CreateAgent because the new store-side
-	// validation does a GetRuntime(deviceID) + type/workspace check.
-	deviceID := seedAgentDaemonRuntimeDevRoute(t, db, ids.WorkspaceID, "daemon-route-probe-runtime")
-
-	// CreateAgent(agent_daemon) with a real device → post-fix this must
-	// succeed and the persisted agents.config must omit runtime so
-	// dispatch.go:108 takes the no-op branch (we re-verify below).
-	created, err := s.CreateAgent(ctx, store.CreateAgentInput{
-		WorkspaceID:   ids.WorkspaceID,
-		Name:          "Daemon Route Probe",
-		Slug:          "daemon-route-probe",
-		ConnectorType: "agent_daemon",
-		AgentConfig: map[string]any{
-			"device_id":   deviceID,
-			"daemon_mode": "local",
-			"agent_kind":  "claude_code",
-		},
-		CreatedBy: ids.UserID,
-	})
-	if err != nil {
-		t.Fatalf("CreateAgent(agent_daemon, device_id=%q): %v", deviceID, err)
-	}
-
-	// New persistence pin: device_id must land on agents.config
-	// so connector.streamPrompt's configuredDeviceBinding path can
-	// pick it up on first prompt. If this regresses, the dispatch
-	// pipeline still queues runs but the daemon never gets called.
-	var storedDeviceID string
-	if err := db.QueryRow(ctx, `select config->>'device_id' from agents where id = $1::uuid`, created.Agent.ID).Scan(&storedDeviceID); err != nil {
-		t.Fatal(err)
-	}
-	if storedDeviceID != deviceID {
-		t.Fatalf("agents.config->>'device_id' = %q, want %q", storedDeviceID, deviceID)
-	}
-
-	conv, err := s.CreateWorkspaceConversation(ctx, store.CreateWorkspaceConversationInput{
-		WorkspaceID:    ids.WorkspaceID,
-		Title:          "daemon route",
-		PrimaryAgentID: created.Agent.ID,
-	})
+	created, err := s.CreateAgent(ctx, store.CreateAgentInput{WorkspaceID: ids.WorkspaceID, Name: "Core route", ConnectorType: "agents_api", AgentConfig: map[string]any{"model": "test-model"}, CreatedBy: ids.UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	conv, err := s.CreateWorkspaceConversation(ctx, store.CreateWorkspaceConversationInput{WorkspaceID: ids.WorkspaceID, PrimaryAgentID: created.Agent.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, s)
-	path := "/api/v1/conversations/" + conv.ID + "/messages"
-	res := serveDevRoute(t, r, http.MethodPost, path, `{"content":"hi daemon"}`)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("daemon-primary POST expected 201, got %d: %s", res.Code, res.Body.String())
+	res := serveDevRoute(t, r, http.MethodPost, "/api/v1/conversations/"+conv.ID+"/messages", `{"content":"hello Core"}`)
+	if res.Code != http.StatusCreated || !strings.Contains(res.Body.String(), `"dispatched_agent_count":1`) {
+		t.Fatalf("Core enqueue: %d %s", res.Code, res.Body.String())
 	}
-	if !strings.Contains(res.Body.String(), `"dispatched_agent_count":1`) || strings.Contains(res.Body.String(), `"agent_run_id":null`) {
-		t.Fatalf("daemon-primary POST should return a non-null agent_run_id with dispatched_agent_count=1, got %s", res.Body.String())
-	}
-
-	// The created run must NOT be bound through the retired local runtime path — that
-	// binding was written by the old local runtime dispatch path
-	// and what produced the original 500 when applied to agent_daemon.
-	var boundRuntimeID *string
-	if err := db.QueryRow(ctx, `select runtime_id::text from agent_runs where conversation_id = $1::uuid limit 1`, conv.ID).Scan(&boundRuntimeID); err != nil {
+	var kind string
+	var runtimeID *string
+	if err := db.QueryRow(ctx, `select connector_type,runtime_id::text from agent_runs where conversation_id=$1`, conv.ID).Scan(&kind, &runtimeID); err != nil {
 		t.Fatal(err)
 	}
-	if boundRuntimeID != nil {
-		t.Fatalf("agent_daemon run must not get a retired local runtime binding, got runtime_id=%q", *boundRuntimeID)
+	if kind != "agents_api" || runtimeID != nil {
+		t.Fatalf("unexpected execution binding: %s %v", kind, runtimeID)
 	}
-}
-
-// seedAgentDaemonRuntimeDevRoute mirrors the helper in store_test.go
-// but lives here so the dev package's integration tests don't have to
-// reach into another package's test types. Inserts a minimal
-// liveness='offline' runtimes row of type='agent_daemon' and returns
-// its id. Pairing-token columns left null on purpose — the new
-// CreateAgent validation only checks (id, type, workspace_id), not
-// pairing state.
-func seedAgentDaemonRuntimeDevRoute(t *testing.T, db *pgxpool.Pool, workspaceID, name string) string {
-	t.Helper()
-	now := time.Now().UTC()
-	var id string
-	if err := db.QueryRow(context.Background(),
-		`insert into runtimes(id, workspace_id, type, name, liveness, provider, version, hostname, config, created_at, updated_at)
-		 values (gen_random_uuid(), $1::uuid, 'agent_daemon', $2, 'offline', 'agent_daemon', '', '', '{}'::jsonb, $3, $3)
-		 returning id::text`,
-		workspaceID, name, now,
-	).Scan(&id); err != nil {
-		t.Fatalf("seed agent_daemon runtime: %v", err)
-	}
-	return id
 }
 
 func insertConversationMessageUser(t *testing.T, db interface {

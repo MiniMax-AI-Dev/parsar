@@ -1,15 +1,11 @@
 package dev
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/credentialbinding"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 // agentVisibilityPublic is the agents.visibility value that opens the
@@ -17,99 +13,6 @@ import (
 // Such callers cannot have personal credentials, so any required
 // credential must resolve via a shared workspace secret.
 const agentVisibilityPublic = "public"
-
-// materialiseInlineSecrets creates a CreateSecret row for every entry in
-// the request's inline_new_secrets array and writes the freshly minted
-// secret_id into req.Config under credential_bindings[Kind] (or
-// model_credential_binding when IsModel). Returns the mutated config and
-// true on success; nil + false when any secret create fails or when the
-// inputs are malformed.
-//
-// The mutation is in-place on a clone of cfg — the caller is responsible
-// for assigning the returned map back. cfg may be nil; the function
-// allocates as needed.
-func materialiseInlineSecrets(
-	ctx context.Context,
-	rs RuntimeStore,
-	cfg map[string]any,
-	inputs []createAgentInlineSecretBody,
-	actorID string,
-	workspaceID string,
-) (map[string]any, bool) {
-	if len(inputs) == 0 {
-		return cfg, true
-	}
-	if rs == nil {
-		return nil, false
-	}
-	masterKey := os.Getenv("PARSAR_MASTER_KEY")
-	if masterKey == "" {
-		return nil, false
-	}
-	secretService, err := secrets.New(masterKey)
-	if err != nil {
-		return nil, false
-	}
-	out := cloneAnyMap(cfg)
-	for _, ins := range inputs {
-		kind := strings.TrimSpace(ins.Kind)
-		plaintext := strings.TrimSpace(ins.Plaintext)
-		if kind == "" || plaintext == "" {
-			return nil, false
-		}
-		displayName := strings.TrimSpace(ins.DisplayName)
-		if displayName == "" {
-			displayName = kind
-		}
-		payload := map[string]any{"value": plaintext}
-		encrypted, err := secretService.Encrypt(payload)
-		if err != nil {
-			return nil, false
-		}
-		secret, err := rs.CreateSecret(ctx, store.CreateSecretInput{
-			ManagementWorkspaceID: workspaceID,
-			Name:                  displayName,
-			Kind:                  "capability_inline",
-			Provider:              "inline",
-			AuthType:              "literal",
-			Payload:               payload,
-			Masked:                maskSecretValue(plaintext),
-			CreatedBy:             actorID,
-			CredentialKindCode:    kind,
-		}, encrypted)
-		if err != nil {
-			return nil, false
-		}
-		assignSecretIDToBinding(out, kind, secret.ID, ins.IsModel)
-	}
-	return out, true
-}
-
-// assignSecretIDToBinding writes secret_id into cfg.credential_bindings[kind]
-// (or cfg.model_credential_binding when isModel=true), creating nested maps
-// as needed. Existing entries are overwritten — the secret the user just
-// pasted is the source of truth at create time.
-func assignSecretIDToBinding(cfg map[string]any, kind, secretID string, isModel bool) {
-	if cfg == nil {
-		return
-	}
-	if isModel {
-		cfg["model_credential_binding"] = map[string]any{
-			"source":    "shared",
-			"secret_id": secretID,
-		}
-		return
-	}
-	bindings, ok := cfg["credential_bindings"].(map[string]any)
-	if !ok {
-		bindings = map[string]any{}
-		cfg["credential_bindings"] = bindings
-	}
-	bindings[kind] = map[string]any{
-		"source":    "shared",
-		"secret_id": secretID,
-	}
-}
 
 // validateAgentVisibilityBindings enforces the rule that public agents
 // cannot rely on per-user credentials: every credential binding (and the
@@ -148,14 +51,6 @@ func validateAgentVisibilityBindings(visibility string, cfg map[string]any) erro
 		}
 	}
 	return nil
-}
-
-func cloneAnyMap(in map[string]any) map[string]any {
-	out := map[string]any{}
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
 }
 
 // maskSecretValue returns a UI-safe masked preview of plaintext:

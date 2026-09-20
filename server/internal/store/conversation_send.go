@@ -128,6 +128,11 @@ func (s *Store) SendUserMessageToConversation(ctx context.Context, input SendUse
 			}
 		}
 	}
+	for _, agent := range mentionedAgents {
+		if !validConnectorType(agent.connectorType) {
+			return result, ErrInvalidConnectorType
+		}
+	}
 	metadataMap := map[string]any{"source": source}
 	metadata, err := json.Marshal(metadataMap)
 	if err != nil {

@@ -3,7 +3,6 @@ package dev
 import (
 	"context"
 
-	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -11,7 +10,6 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/httprunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/interaction"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
@@ -26,13 +24,9 @@ type RuntimeStore interface {
 	CreateInboundIMMessage(ctx context.Context, input store.CreateInboundIMMessageInput) (store.CreateInboundIMMessageResult, error)
 	CompleteAgentRun(ctx context.Context, input store.CompleteAgentRunInput) (store.CompleteAgentRunResult, error)
 	FailAgentRun(ctx context.Context, input store.FailAgentRunInput) error
-	GetHTTPAgentRunInvocation(ctx context.Context, runID string) (store.AgentRunInvocation, error)
-	ClaimNextQueuedHTTPAgentRun(ctx context.Context) (store.ClaimHTTPAgentRunResult, error)
 	GetSecretPayload(ctx context.Context, workspaceID string, secretID string) (store.SecretPayload, error)
 	RequeueFailedAgentRun(ctx context.Context, input store.RequeueAgentRunInput) (store.RequeueAgentRunResult, error)
 	ConfigureDevConversationExternalRef(ctx context.Context, input store.ConfigureDevConversationExternalRefInput) (store.ConfigureDevConversationExternalRefResult, error)
-	ConfigureDevAgentConnector(ctx context.Context, input store.ConfigureDevAgentConnectorInput) (store.ConfigureDevAgentConnectorResult, error)
-	ConfigureAgentProfile(ctx context.Context, input store.ConfigureAgentProfileInput) (store.ConfigureDevAgentConnectorResult, error)
 	DisableAgent(ctx context.Context, agentID, actorID string) (store.AgentStatusRead, error)
 	EnableAgent(ctx context.Context, agentID, actorID string) (store.AgentStatusRead, error)
 	GetAgentDetail(ctx context.Context, agentID string) (store.AgentStatusRead, error)
@@ -226,7 +220,7 @@ type interactionResolver interface {
 }
 
 type routerConfig struct {
-	openCodeConnector    connector.AgentConnector
+	coreAccess           coreResolver
 	connectorRegistry    *connector.Registry
 	interactionService   interactionResolver
 	authMiddleware       *auth.Middleware
@@ -235,24 +229,11 @@ type routerConfig struct {
 	githubConnectionDeps *GitHubConnectionDeps
 	feishuWebhook        feishuWebhookConfig
 	feishuRegistration   feishuRegistrationConfig
-	// sandboxAdmin: store + daemonMgr. Either being nil makes the
-	// corresponding handlers 503.
-	sandboxAdmin sandboxAdminDeps
-	// runtimeStatus: empty deps (zero-value Mode) makes the runtime
-	// status handler 503 — a missing wiring means the operator should
-	// be told the banner can't render, not silently see "local
-	// always available".
-	runtimeStatus RuntimeStatusDeps
 	// auditIngester is used by handlers that emit audit events
 	// directly. Nil falls through silently (audit is best-effort).
 	auditIngester AuditIngester
 	runBroker     *runstream.Broker
-	// agentDaemonSandbox: lazy-create provider for sandbox-mode
-	// agents. When wired, createAgent fires background Acquire
-	// so the sandbox is ready before the first prompt. Nil → handler
-	// degrades to lazy-create.
-	agentDaemonSandbox AgentDaemonSandboxManager
-	// dispatchCtx is the parent context handed to opencode run
+	// dispatchCtx is the parent context handed to Core run
 	// dispatchers started by /start. cmd/server passes the server root
 	// ctx so background goroutines exit cleanly on shutdown. Defaults
 	// to context.Background() when unwired (fine for unit tests).
@@ -313,14 +294,6 @@ func WithInteractionService(service interactionResolver) RouterOption {
 	}
 }
 
-// WithOpenCodeConnector wires the OpenCode connector for the legacy
-// /dev/connectors/opencode/stream smoke endpoint.
-func WithOpenCodeConnector(c connector.AgentConnector) RouterOption {
-	return func(cfg *routerConfig) {
-		cfg.openCodeConnector = c
-	}
-}
-
 // WithAuthMiddleware injects the session middleware. When supplied
 // only OAuth / seed bootstrap endpoints stay Optional; stateful /dev
 // handlers are wrapped with Require so real cookie auth is the
@@ -375,10 +348,7 @@ func WithFeishuAppRegistration(client FeishuAppRegistrationClient, openAPIBaseUR
 	}
 }
 
-// WithSandboxLifecycle wires the admin sandbox lifecycle endpoints
-// (GET /sandbox status, POST /sandbox/kill, POST /sandbox/rebuild).
-// Both deps are required for kill / rebuild; status alone needs only
-// the store. Either nil makes the corresponding endpoint return 503.
+// WithRunStreamBroker attaches product SSE subscriptions.
 func WithRunStreamBroker(b *runstream.Broker) RouterOption {
 	return func(cfg *routerConfig) {
 		cfg.runBroker = b
@@ -395,78 +365,11 @@ func WithDispatchContext(ctx context.Context) RouterOption {
 	}
 }
 
-// WithSandboxLifecycle wires the admin sandbox lifecycle endpoints.
-// bindingStore backs all DB reads/writes; daemonMgr provides Release
-// and Acquire for kill/rebuild. Either being nil makes the handlers
-// degrade (store nil = 503; daemonMgr nil = DB-only mark, no E2B kill).
-func WithSandboxLifecycle(bindingStore SandboxBindingStore, daemonMgr AgentDaemonSandboxManager) RouterOption {
-	return func(cfg *routerConfig) {
-		cfg.sandboxAdmin = sandboxAdminDeps{store: bindingStore, daemonMgr: daemonMgr}
-	}
-}
-
-// WithRuntimeStatus wires the GET /workspaces/{wid}/runtime/status
-// handler. Tests / demos that don't need the banner leave this unset
-// and the route 503s.
-func WithRuntimeStatus(deps RuntimeStatusDeps) RouterOption {
-	return func(cfg *routerConfig) {
-		cfg.runtimeStatus = deps
-	}
-}
-
 // WithAuditIngester wires the audit ingester for dev handlers that
 // emit audit events directly (without going through *store.Store).
 func WithAuditIngester(ingester AuditIngester) RouterOption {
 	return func(cfg *routerConfig) {
 		cfg.auditIngester = ingester
-	}
-}
-
-// WithSkillInstallRunner lets tests drive /skills/install without executing
-// npx. Production leaves this unset and uses the real skills CLI via npx.
-func WithSkillInstallRunner(runner skillInstallCommandRunner) RouterOption {
-	return func(cfg *routerConfig) {
-		cfg.skillInstallRunner = runner
-	}
-}
-
-func WithSkillInstallHTTPClient(client skillInstallHTTPDoer) RouterOption {
-	return func(cfg *routerConfig) {
-		cfg.skillInstallHTTPClient = client
-	}
-}
-
-// AgentDaemonSandboxAcquirer is the subset of
-// connagentdaemon.SandboxProvider the dev router needs for eager
-// sandbox acquisition on agent creation and the manual /acquire
-// endpoint. Narrow interface avoids importing the full connector
-// package.
-type AgentDaemonSandboxAcquirer interface {
-	Acquire(ctx context.Context, in connector.PromptInput) (deviceID string, err error)
-}
-
-// AgentDaemonSandboxManager extends AgentDaemonSandboxAcquirer with
-// status and lifecycle methods. *E2BSandboxProvider and
-// NoopSandboxProvider both satisfy this interface.
-type AgentDaemonSandboxManager interface {
-	AgentDaemonSandboxAcquirer
-	SandboxStatus(ctx context.Context, agentID string) (connector.SandboxInfo, bool, error)
-	Release(ctx context.Context, agentID string) error
-	Renew(ctx context.Context, agentID string) (expiresAt time.Time, found bool, err error)
-	// SandboxRuntimeInfo queries e2b directly for a sandbox's live
-	// expiry, bypassing the in-memory cache. The admin status handler
-	// uses this so a GET /sandbox that lands on a pod which did NOT
-	// cold-start the sandbox can still surface expires_at.
-	SandboxRuntimeInfo(ctx context.Context, sandboxID string) (expiresAt time.Time, err error)
-}
-
-// WithAgentDaemonSandbox wires the agent_daemon sandbox provider so
-// that createAgent can fire eager Acquire and the manual /acquire
-// endpoint works. nil is safe — createAgent falls back to lazy-create
-// and /acquire returns 503.
-func WithAgentDaemonSandbox(provider AgentDaemonSandboxManager) RouterOption {
-	return func(cfg *routerConfig) {
-		cfg.agentDaemonSandbox = provider
 	}
 }
 
@@ -487,11 +390,18 @@ func WithInvite(sessions auth.SessionStore, cookieSecure bool, publicURL string)
 	}
 }
 
-// runnerDeps is kept so the dev HTTP-agent endpoints retain their call
-// shape. Step 5 makes httprunner HTTP-only, so no connector deps are
-// passed from the router.
-func (cfg *routerConfig) runnerDeps() *httprunner.Deps {
-	return nil
+// WithSkillInstallRunner lets tests drive /skills/install without executing
+// npx. Production leaves this unset and uses the real skills CLI via npx.
+func WithSkillInstallRunner(runner skillInstallCommandRunner) RouterOption {
+	return func(cfg *routerConfig) {
+		cfg.skillInstallRunner = runner
+	}
+}
+
+func WithSkillInstallHTTPClient(client skillInstallHTTPDoer) RouterOption {
+	return func(cfg *routerConfig) {
+		cfg.skillInstallHTTPClient = client
+	}
 }
 
 func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...RouterOption) {
@@ -502,7 +412,6 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 	if cfg.runBroker == nil {
 		cfg.runBroker = runstream.NewBroker(runstream.DefaultBufferSize)
 	}
-	deps := cfg.runnerDeps()
 
 	require := func(r chi.Router) {}
 	if cfg.authMiddleware != nil {
@@ -534,17 +443,13 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			// Outbound delivery transport for the devgateway worker.
 			r.Get("/gateway/outbound", listGatewayOutbound(runtimeStore))
 			r.Post("/gateway/outbound/{messageID}/delivered", markGatewayOutboundDelivered(runtimeStore))
-			r.Post("/http-agent/runs/{runID}/invoke", invokeHTTPAgentRun(runtimeStore, http.DefaultClient, deps))
-			r.Post("/http-agent/runner/run-once", runHTTPAgentOnce(runtimeStore, http.DefaultClient, deps))
 			// E2B-compatible sandbox smoke. Triggered from the admin
 			// Runners page; takes a one-off API key, lifts a sandbox,
 			// runs `command`, returns the result. Handler redacts the
 			// supplied key from any error path before responding.
-			r.Post("/sandboxes/e2b/smoke", smokeE2BSandbox)
 			// SSE streaming surface so the Web UI can drive a prompt
 			// and watch deltas land in real time. No agent_run
 			// lifecycle — caller manages via existing dev endpoints.
-			r.Post("/connectors/opencode/stream", streamConnectorPrompt(cfg))
 		})
 	})
 
@@ -588,10 +493,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 				r.Get("/connections/github/start", githubConnectionStartHandler(runtimeStore, *cfg.githubConnectionDeps))
 				r.Get("/connections/github/callback", githubConnectionCallbackHandler(runtimeStore, *cfg.githubConnectionDeps))
 			}
-			r.Post("/agent-runs/{runID}/requeue", requeueAgentRun(runtimeStore))
 			r.Post("/agent-runs/{runID}/retry", retryAgentRun(runtimeStore))
-			r.Post("/agents/{agentID}/connector", configureAgentConnector(runtimeStore))
-			r.Post("/agents/{agentID}/profile", configureAgentProfile(runtimeStore))
 			r.Post("/agents/{agentID}/disable", disableAgent(runtimeStore))
 			r.Post("/agents/{agentID}/enable", enableAgent(runtimeStore))
 			r.Get("/agents/{agentID}/scheduled-tasks", listScheduledTasks(runtimeStore))
@@ -604,8 +506,6 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Get("/scheduled-tasks/{taskID}/runs", listScheduledTaskRuns(runtimeStore))
 			// Runtime binding: user picks which Runtime this agent
 			// runs on. Replaces the legacy auto-sandbox path.
-			r.Get("/workspaces/{workspaceID}/agents/{agentID}/runtime", getAgentRuntimeBinding(runtimeStore))
-			r.Put("/workspaces/{workspaceID}/agents/{agentID}/runtime", setAgentRuntimeBinding(runtimeStore))
 			r.Patch("/agents/{agentID}", updateAgent(runtimeStore))
 			r.Patch("/agents/{agentID}/visibility", updateAgentVisibility(runtimeStore))
 			r.Get("/agents/{agentID}/connector/feishu/diagnostics", getAgentFeishuConnectorDiagnostics(runtimeStore))
@@ -628,20 +528,12 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			// Reads require any active workspace member;
 			// kill/rebuild (destructive — interrupts an in-flight run)
 			// require owner/admin.
-			r.Get("/workspaces/{workspaceID}/agents/{agentID}/sandbox", gateWorkspaceMember(runtimeStore, getSandboxStatus(cfg.sandboxAdmin, cfg.agentDaemonSandbox)))
-			r.Post("/workspaces/{workspaceID}/agents/{agentID}/sandbox/kill", gateWorkspaceOwnerOrAdmin(runtimeStore, killSandbox(cfg.sandboxAdmin, runtimeStore, cfg.agentDaemonSandbox)))
-			r.Post("/workspaces/{workspaceID}/agents/{agentID}/sandbox/rebuild", gateWorkspaceOwnerOrAdmin(runtimeStore, rebuildSandbox(cfg.sandboxAdmin, runtimeStore, cfg.agentDaemonSandbox)))
-			r.Post("/workspaces/{workspaceID}/agents/{agentID}/sandbox/renew", gateWorkspaceOwnerOrAdmin(runtimeStore, renewSandbox(cfg.sandboxAdmin, cfg.agentDaemonSandbox)))
-			r.Post("/workspaces/{workspaceID}/agents/{agentID}/sandbox/acquire", gateWorkspaceOwnerOrAdmin(runtimeStore, acquireSandbox(cfg.sandboxAdmin, runtimeStore, cfg.agentDaemonSandbox)))
-			r.Post("/workspaces/{workspaceID}/agents/{agentID}/sandbox/test-connection", gateWorkspaceOwnerOrAdmin(runtimeStore, sandboxConnectivityTest(cfg.sandboxAdmin, cfg.auditIngester)))
 			// Workspace-scoped overview: every active sandbox binding,
 			// newest-active first. Backs the admin Sandboxes page.
 			// 503 in local mode.
-			r.Get("/workspaces/{workspaceID}/sandboxes", gateWorkspaceMember(runtimeStore, listSandboxes(cfg.sandboxAdmin)))
 			// Runtime banner status. Tells the operator which runner
 			// mode this server is wired for and (for sandbox mode)
 			// whether the provider is reachable.
-			r.Get("/workspaces/{workspaceID}/runtime/status", gateWorkspaceMember(runtimeStore, runtimeStatus(cfg.runtimeStatus)))
 			r.Get("/capabilities/marketplace", listMarketplaceCapabilities(runtimeStore))
 			r.Get("/capabilities/marketplace/{capabilityID}", getMarketplaceCapabilityDetail(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/capabilities", listWorkspaceCapabilities(runtimeStore))
@@ -679,22 +571,12 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Get("/workspaces/{workspaceID}/capabilities/{capabilityID}/versions", listWorkspaceCapabilityVersions(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/capabilities/{capabilityID}/versions", createWorkspaceCapabilityVersion(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/capabilities/{capabilityID}/versions/import/commit", commitCapabilityVersionImport(runtimeStore, cfg.blobStore))
+			registerCoreEnvironmentRoutes(r, runtimeStore, cfg)
 			r.Post("/agent-runs/{runID}/cancel", cancelAgentRun(runtimeStore, cfg))
 			r.Post("/conversations/{conversationID}/cancel-all", cancelConversationRuns(runtimeStore, cfg))
-			r.Put("/workspaces/{workspaceID}/runtime/credential", gateWorkspaceOwnerOrAdmin(runtimeStore, putRuntimeCredential(runtimeStore)))
-			r.Delete("/workspaces/{workspaceID}/runtime/credential", gateWorkspaceOwnerOrAdmin(runtimeStore, deleteRuntimeCredential(runtimeStore)))
 			r.Post("/workspaces/{workspaceID}/secrets", createSecret(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/secrets", listSecrets(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/secrets/{secretID}/disable", disableSecret(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/models", createModel(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/models/detect-endpoints", detectProviderModelEndpoints(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/models/import", importProviderModels(runtimeStore))
-			r.Get("/workspaces/{workspaceID}/models", listModels(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/models/{modelID}/disable", disableModel(runtimeStore))
-			r.Delete("/workspaces/{workspaceID}/models/{modelID}", deleteModel(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/models/bulk-delete", bulkDeleteModels(runtimeStore))
-			r.Patch("/workspaces/{workspaceID}/models/{modelID}", updateModel(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/models/{modelID}/test", testModelConnectivity(runtimeStore))
 			r.Post("/conversations/{conversationID}/external-ref", configureConversationExternalRef(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/agents", listWorkspaceEnabledAgents(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/agents/{agentID}", getWorkspaceAgent(runtimeStore))
@@ -730,7 +612,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Get("/workspaces/{workspaceID}/settings", getWorkspaceSettings(runtimeStore))
 			r.Patch("/workspaces/{workspaceID}/settings", patchWorkspaceSettings(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/auth/providers", listWorkspaceAuthProviders(runtimeStore, cfg.authProviders))
-			r.Post("/workspaces/{workspaceID}/agents", createAgent(runtimeStore, cfg.agentDaemonSandbox))
+			r.Post("/workspaces/{workspaceID}/agents", createAgent(runtimeStore))
 			r.Post("/workspaces", createWorkspace(runtimeStore))
 			r.Patch("/workspaces/{workspaceID}", updateWorkspace(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/archive", archiveWorkspace(runtimeStore))
@@ -748,10 +630,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Delete("/me/credentials/{credentialID}", deleteMyCredential(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/usage", listWorkspaceUsageLogs(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/agents/{agentID}/capabilities", listAgentCapabilities(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}/enable", enableAgentCapability(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityID}/upgrade", upgradeAgentCapability(runtimeStore))
 			r.Delete("/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}", deleteAgentCapability(runtimeStore))
-			r.Put("/workspaces/{workspaceID}/agents/{agentID}/builtin-capabilities/{key}", setBuiltinCapability(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/conversations", listWorkspaceConversations(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/conversations", createWorkspaceConversation(runtimeStore))
 			r.Get("/conversations/{conversationID}", getConversation(runtimeStore))

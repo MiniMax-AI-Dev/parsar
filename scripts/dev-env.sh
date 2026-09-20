@@ -48,7 +48,7 @@ export PARSAR_ADDR="${PARSAR_ADDR:-127.0.0.1:$PARSAR_DEV_SERVER_PORT}"
 export PARSAR_PUBLIC_URL="${PARSAR_PUBLIC_URL:-http://127.0.0.1:$PARSAR_DEV_SERVER_PORT}"
 export PARSAR_MASTER_KEY="${PARSAR_MASTER_KEY:-parsar-dev-master-key-2026}"
 export PARSAR_FEISHU_MOCK="${PARSAR_FEISHU_MOCK:-true}"
-export PARSAR_AGENT_DAEMON_OWNER_URL="${PARSAR_AGENT_DAEMON_OWNER_URL:-$PARSAR_PUBLIC_URL}"
+# Set PARSAR_CORE_WORKSPACES_FILE to independent, workspace-scoped Core bindings.
 
 # Builds the dev DATABASE_URL from the parts above. Optional args let a
 # caller override host ($1) and port ($2) without touching the creds —

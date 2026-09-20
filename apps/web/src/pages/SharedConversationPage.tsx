@@ -8,12 +8,9 @@ import { EmptyState } from "../components/ui/empty-state"
 import { InitialTile } from "../components/ui/ledger"
 import { Skeleton } from "../components/ui/skeleton"
 import { ThemeMenu } from "../components/layout/ThemeMenu"
-import { agentNeedsSandbox } from "../lib/agent-runtime"
 import { useAgents } from "../lib/api-agents"
 import { useConversation } from "../lib/api-conversations"
-import { useSandboxBinding } from "../lib/api-sandbox"
 import { useMyWorkspaces } from "../lib/api-workspaces"
-import { sandboxSendGuard } from "../lib/sandbox-send-guard"
 
 /**
  * A conversation on its own, at `/c/<id>`.
@@ -43,13 +40,6 @@ export function SharedConversationPage({ conversationId }: { conversationId: str
   const workspace = workspacesQ.data?.workspaces.find((w) => w.id === conv?.workspace_id)
   // Allowlist rather than "not viewer", so a role added later cannot fail open.
   const canWrite = workspace?.role === "owner" || workspace?.role === "admin" || workspace?.role === "member"
-  // A sandbox agent with no live binding cannot serve a prompt; without this
-  // the composer would take a send that fails with no explanation.
-  const sandboxQ = useSandboxBinding(
-    conv?.workspace_id ?? null,
-    agentNeedsSandbox(agent) ? (agent?.id ?? null) : null,
-  )
-  const sandboxGuard = sandboxSendGuard(t, agent, sandboxQ.data, sandboxQ.isLoading, sandboxQ.error)
 
   if (convQ.isLoading || workspacesQ.isLoading || agentsQ.isLoading) {
     return (
@@ -99,7 +89,6 @@ export function SharedConversationPage({ conversationId }: { conversationId: str
         onExpand={() => {}}
         onSendFromEmpty={async () => false}
         onRenameAfterFirstMessage={async () => {}}
-        sandboxGuard={sandboxGuard}
       />
     </SharedShell>
   )

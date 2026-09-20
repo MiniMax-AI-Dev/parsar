@@ -1,6 +1,7 @@
 package dev
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -15,10 +16,8 @@ func TestAgentCapabilitiesExposeVersionMode(t *testing.T) {
 	agentID := insertAgentForOwner(t, db, testUserAID, "version-mode-agent")
 	base := "/api/v1/workspaces/" + workspaceID + "/agents/" + agentID + "/capabilities"
 	for _, mode := range []string{"latest", "pinned"} {
-		enabled := serveCapabilityRoute(t, r, http.MethodPost, base+"/"+v1+"/enable",
-			`{"pinning_mode":"`+mode+`"}`, testUserAID)
-		if enabled.Code != http.StatusOK {
-			t.Fatalf("enable %s: %d %s", mode, enabled.Code, enabled.Body.String())
+		if _, err := store.New(db).EnableAgentCapability(context.Background(), agentID, v1, nil, mode); err != nil {
+			t.Fatal(err)
 		}
 		response := serveCapabilityRoute(t, r, http.MethodGet, base, "", testUserAID)
 		var body struct {

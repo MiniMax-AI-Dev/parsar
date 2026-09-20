@@ -118,7 +118,6 @@ services:
       # Leave empty for the default first-owner setup and email/password
       # login. Fill these in only when enabling Feishu SSO or Feishu IM
       # event delivery.
-      PARSAR_DAEMON_REPO: ${PARSAR_DAEMON_REPO}
       PARSAR_FEISHU_MOCK: ${PARSAR_FEISHU_MOCK}
       PARSAR_FEISHU_APP_ID: ${PARSAR_FEISHU_APP_ID}
       PARSAR_FEISHU_APP_SECRET: ${PARSAR_FEISHU_APP_SECRET}
@@ -131,24 +130,7 @@ services:
       PARSAR_FEISHU_AUTHORIZE_BASE: ${PARSAR_FEISHU_AUTHORIZE_BASE}
       PARSAR_FEISHU_API_BASE: ${PARSAR_FEISHU_API_BASE}
 
-      # ---------- Agent Daemon sandbox ----------
-      # AGENT_DAEMON_OWNER_URL tells in-sandbox parsar-daemon how to reach
-      # this server. In K8s it can be derived from the downward-API
-      # POD_IP; under docker compose we default to the service name on
-      # the internal compose network.
-      PARSAR_AGENT_DAEMON_OWNER_URL: ${PARSAR_AGENT_DAEMON_OWNER_URL:-http://parsar-server:8080}
-      # When set, OpenCode runs dispatched through the Agent Daemon
-      # connector can be backed by a platform-managed sandbox instead
-      # of a paired parsar-daemon device. Leave blank to stick to
-      # local-daemon runtimes.
-      AGENT_DAEMON_SANDBOX_TEMPLATE: ${AGENT_DAEMON_SANDBOX_TEMPLATE:-}
-      AGENT_DAEMON_SANDBOX_TEMPLATE_XL: ${AGENT_DAEMON_SANDBOX_TEMPLATE_XL:-}
-      AGENT_DAEMON_SANDBOX_TTL: ${AGENT_DAEMON_SANDBOX_TTL:-}
-      AGENT_DAEMON_SANDBOX_AUTO_RENEW: ${AGENT_DAEMON_SANDBOX_AUTO_RENEW:-true}
-      PARSAR_E2B_API_KEY: ${PARSAR_E2B_API_KEY:-}
-      PARSAR_E2B_API_BASE_URL: ${PARSAR_E2B_API_BASE_URL:-}
-      PARSAR_E2B_SANDBOX_HOST: ${PARSAR_E2B_SANDBOX_HOST:-}
-      PARSAR_E2B_CA_CERT: ${PARSAR_E2B_CA_CERT:-}
+      PARSAR_CORE_WORKSPACES_FILE: /run/secrets/core/workspaces.json
 
       # ---------- Audit / OTLP fan-out (optional) ----------
       PARSAR_AUDIT_OTLP_ENABLED: ${PARSAR_AUDIT_OTLP_ENABLED}
@@ -170,6 +152,7 @@ services:
       PARSAR_OSS_ENDPOINT: ${PARSAR_OSS_ENDPOINT}
 
     volumes:
+      - ${PARSAR_CORE_CONFIG_DIR:?Set the absolute Core configuration directory}:/run/secrets/core:ro
       # Optional config file. Comment out if you inject everything
       # via env. The host path is up to ops — put it under a directory
       # the deploy user owns, NEVER inside the repo. Strict-required

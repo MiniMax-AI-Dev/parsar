@@ -7,7 +7,6 @@ import type {
   CapabilityType,
   CapabilityVersion,
   GetCapabilityResponse,
-  EnableAgentCapabilityRequest,
   ListCapabilitiesResponse,
   ListCapabilityVersionsResponse,
   ListAgentCapabilitiesResponse,
@@ -213,41 +212,6 @@ function noWorkspaceError(): ApiError {
   return new ApiError({ status: 0, code: "no_workspace", message: "no workspace selected" })
 }
 
-async function enableAgentCapability(
-  workspaceID: string,
-  agentID: string,
-  capabilityVersionID: string,
-  body: EnableAgentCapabilityRequest,
-) {
-  return apiRequest(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/capabilities/${encodeURIComponent(capabilityVersionID)}/enable`,
-    { method: "POST", body },
-  )
-}
-
-async function deleteAgentCapability(
-  workspaceID: string,
-  agentID: string,
-  capabilityVersionID: string,
-) {
-  return apiRequest<void>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/capabilities/${encodeURIComponent(capabilityVersionID)}`,
-    { method: "DELETE" },
-  )
-}
-
-async function setBuiltinCapabilityEnabled(
-  workspaceID: string,
-  agentID: string,
-  key: string,
-  enabled: boolean,
-) {
-  return apiRequest(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/builtin-capabilities/${encodeURIComponent(key)}`,
-    { method: "PUT", body: { enabled } },
-  )
-}
-
 export function useCapabilitiesQuery(workspaceID: string | null, name = "", type = "", page?: number, pageSize?: number) {
   return useQuery({
     queryKey: KEY_CAPABILITIES(workspaceID ?? "_none", name.trim(), type.trim(), page, pageSize),
@@ -319,26 +283,6 @@ export function useUpdateCapability(workspaceID: string | null) {
   })
 }
 
-export function useEnableAgentCapabilityMutation(
-  workspaceID: string | null,
-  agentID: string | null,
-) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ capabilityVersionID, configuration, pinningMode }: { capabilityVersionID: string; configuration?: Record<string, unknown>; pinningMode?: "latest" | "pinned" }) => {
-      if (!workspaceID || !agentID) throw new Error("workspace and agent are required")
-      return enableAgentCapability(workspaceID, agentID, capabilityVersionID, { configuration, pinning_mode: pinningMode })
-    },
-    retry: noUnreachableRetry,
-    onSuccess: () => {
-      if (workspaceID && agentID) {
-        qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(workspaceID, agentID) })
-        qc.invalidateQueries({ queryKey: ["plugins", "bundles", workspaceID] })
-      }
-    },
-  })
-}
-
 export function aggregateRequiredCredentials(
   selectedNames: string[],
   allCapabilities: Capability[],
@@ -367,43 +311,4 @@ export function aggregateRequiredCredentialsByID(
     }
   }
   return result
-}
-
-export function useDeleteAgentCapabilityMutation(
-  workspaceID: string | null,
-  agentID: string | null,
-) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (capabilityVersionID: string) => {
-      if (!workspaceID || !agentID) throw new Error("workspace and agent are required")
-      return deleteAgentCapability(workspaceID, agentID, capabilityVersionID)
-    },
-    retry: noUnreachableRetry,
-    onSuccess: () => {
-      if (workspaceID && agentID) {
-        qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(workspaceID, agentID) })
-        qc.invalidateQueries({ queryKey: ["plugins", "bundles", workspaceID] })
-      }
-    },
-  })
-}
-
-export function useToggleBuiltinCapabilityMutation(
-  workspaceID: string | null,
-  agentID: string | null,
-) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) => {
-      if (!workspaceID || !agentID) throw new Error("workspace and agent are required")
-      return setBuiltinCapabilityEnabled(workspaceID, agentID, key, enabled)
-    },
-    retry: noUnreachableRetry,
-    onSuccess: () => {
-      if (workspaceID && agentID) {
-        qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(workspaceID, agentID) })
-      }
-    },
-  })
 }

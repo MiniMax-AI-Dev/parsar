@@ -27,11 +27,13 @@ func TestMarketplaceUninstallListsAffectedAgentsAndPreservesSource(t *testing.T)
 	}
 	versionID := versions[0].ID
 	sourceAgent, err := st.CreateAgent(ctx, CreateAgentInput{
-		WorkspaceID: source.Workspace.ID, Name: "Source agent", ConnectorType: "agent_daemon", CreatedBy: ids.UserID,
-		AgentConfig:         map[string]any{"agent_kind": "claude_code", "daemon_mode": "sandbox"},
-		InitialCapabilities: []InitialAgentCapabilityInput{{CapabilityVersionID: versionID, PinningMode: PinningModePinned}},
+		WorkspaceID: source.Workspace.ID, Name: "Source agent", ConnectorType: "agents_api", CreatedBy: ids.UserID,
+		AgentConfig: map[string]any{"model": "test-model"},
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.EnableAgentCapability(ctx, sourceAgent.Agent.ID, versionID, nil, PinningModePinned); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{ids.ProductAgentID, ids.BackendAgentID} {

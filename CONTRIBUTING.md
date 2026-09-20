@@ -101,12 +101,9 @@ that issue instead of expanding the PR. Continue with independent issues.
   at runtime.
 - **Web**: Vite + React SPA, eventually served directly by the Go server.
 - **API**: OpenAPI-first.
-- **Connector MVP**: Agent Daemon Connector (`connector_type=agent_daemon`,
-  adapter determined by `project_agents.config.agent_kind` — `opencode`,
-  `claude_code`, …) plus the HTTP Agent Connector.
-- Agent Daemon runs are dispatched to the `parsar-daemon` runtime bound to
-  the agent (`project_agents.runtime_id`); the daemon's internal adapter
-  picks which CLI actually executes.
+- **Execution client**: the product registers only `connector_type=agents_api`
+  and uses `packages/agents-client/v1` with the official OpenAI Go SDK.
+  Core owns daemon connections, engine selection and environments.
 
 ## Architecture boundaries
 
@@ -121,8 +118,7 @@ and example application; its feature backlog must not dictate the execution
 service's public protocol or internal model. Agents API must build, deploy and run
 without the Parsar product service, frontend or database. An optional Compose
 deployment may install both services with one PostgreSQL instance, but separate
-databases, credentials and migrations. The existing product keeps its execution
-path until an explicit client cutover.
+databases, credentials and migrations. The product uses Core exclusively; it has no native daemon or HTTP Agent fallback.
 
 #### Design and compatibility requirements
 
@@ -2534,41 +2530,22 @@ or filesystem isolation. Automatic installation remains separate.
 
 ### Install and image freshness
 
-- The root `docker-compose.yml` must be directly runnable with
-  `docker compose up -d`. Do not require `install.sh` to pre-generate `.env`
-  values for mandatory services to boot. If a service needs a local-only
-  shared secret, the compose file must provide a clearly documented dev-only
-  default and allow production/Dokploy installs to override it with a stable
-  random value.
-- The one-command installer is both install and upgrade path. Default GHCR
-  images must be pulled before `docker compose up` so `:latest` does not
-  silently reuse a stale local image after `main` changes.
-- After pulling, the installer prepares its server data mount for the image's
-  actual UID/GID and verifies writability before starting services. Only the
-  preparation container runs as root; the server retains its configured user.
-- Default Compose keeps Claude Code configuration and native session files in
-  `/root/.parsar/claude-code`, on the runtime's existing persistent home volume.
-  The first installer upgrade stops the old runtime, backs up its legacy
-  `~/.claude/` and `~/.claude.json` under the install directory, and migrates
-  them before container replacement. Conflicting history aborts the upgrade.
-  Do not remove the old container or its volumes before this migration.
-  Direct Compose/Dokploy users must run `./install.sh migrate-runtime-history`
-  followed by their existing Compose global options (such as `-p`, `-f`, and
-  `--env-file`) once before upgrading. This migration-only command does not
-  rewrite `.env`, change data mounts/secrets, pull images, or start services.
-  Then use the original Compose upgrade command. Wait for active runs to finish
-  before upgrading; the runtime is stopped during migration.
-  Backups contain private session/configuration data; retain them securely until
-  resume is verified. Already-deleted native histories cannot be reconstructed.
-- `install.sh` may still write stable random overrides such as
-  `PARSAR_MASTER_KEY` and `PARSAR_SHARED_RUNTIME_TOKEN` for safer local
-  installs, but raw Compose/Dokploy deployments must not depend on those
-  installer-only side effects.
-- Keep `install.sh` a thin Compose wrapper. Its CLI is limited to installation
-  location, web bind/port, image overrides, and validation. Uncommon deployment
-  settings belong in the Compose environment rather than new installer flags.
-  The one-time history migration subcommand passes existing Compose global
-  options through unchanged so raw deployments retain their configuration.
+- Configure product-to-Core access with `PARSAR_CORE_WORKSPACES_FILE`: each
+  workspace maps to a distinct Core project and caller key file. See
+  [product deployment](docs/deploy/product-core.md) for the complete configuration.
+  Provider credentials belong in the independent Core service. An unconfigured
+  product can start; Core operations return an explicit unavailable error.
+- Root Compose deploys the product and its database. It mounts
+  `PARSAR_CORE_CONFIG_DIR` read-only for workspace bindings and caller key files.
+  The installer creates an empty binding list without overwriting existing
+  configuration. The product does not start a runtime container.
+- The installer pulls the server image, prepares the data directory for the
+  image's actual UID/GID, verifies writability, then starts the product. Only the
+  preparation container runs as root. It generates stable database/master keys.
+- The installer is a thin Compose wrapper. Its options cover the installation
+  directory, web bind/port, server image and validation. Native runtime history
+  migration and sandbox image options have been removed; no legacy deployment
+  compatibility or data backfill is provided by this cutover.
 - Services exposed through a deployment platform may gain an ingress network,
   but they must remain explicitly attached to the Compose `default` network
   when they depend on internal service DNS names such as `postgres`.
@@ -2586,7 +2563,7 @@ or filesystem isolation. Automatic installation remains separate.
   `PARSAR_IMAGE_PULL_POLICY=always` for Parsar-owned images. Local image
   testing must opt out explicitly with `PARSAR_IMAGE_PULL_POLICY=never`.
 - Local development images stay opt-in through installer overrides such as
-  `--image parsar:local` / `--sandbox-image parsar-sandbox:local`; do not make
+  `--image parsar:local`; do not make
   local tags the default path for end users.
 - The production server image must provide Node.js 22.20 or newer, `npx`, and
   `git` for server-side Skills.sh installs. Keep the runtime image compatible
@@ -2621,113 +2598,98 @@ or filesystem isolation. Automatic installation remains separate.
   four platforms. Companion installation does not grant API authorization;
   task-scoped uploads keep the current run requester and workspace checks.
 
-### Runtime and execution concepts
+### Product Core execution
 
-- The daemon resolves loopback Postgres capability-download URLs through its
-  paired server address before calling an adapter. Preserve the signed query
-  and resource path; external storage URLs and browser upload URLs are unchanged.
-- `connector_type` chooses the protocol Parsar uses to run an agent
-  (`agent_daemon`, `http_agent`, ...). It does not say where the process
-  runs.
-- `runtime_id` chooses the concrete paired runtime/device/sandbox that will
-  receive a run. It is a routing handle, not agent configuration.
-- `agent_kind` chooses the daemon-side engine (`claude_code`, `codex`,
-  `pi`, `opencode`, `mcode`). It is interpreted only by `parsar-daemon`.
-- Placement labels such as local device, cloud sandbox, and external agent
-  are UI/product concepts. Do not branch business logic on display copy.
-  Derive placement from typed runtime/provider/config fields in one shared
-  helper per layer.
-
-### Server versus daemon ownership
-
-- Agent exposure through MCP lives in `server/internal/api/agentmcp` and uses
-  the standard conversation dispatcher. Personal MCP credentials are stored
-  only as hashes, scoped to one user and Agent, expire after 30 days, and are
-  checked against current membership and resource state on every request.
-  They never authenticate Web sessions or runtime/device APIs. Replacing or
-  revoking a credential affects only that user's connection to that Agent.
-- MCP calls persist their `mcp` source and real requesting user. The MCP
-  endpoint can start a task for its bound Agent and read only that user's runs
-  for that Agent; it does not bypass existing approvals or expose runtime
-  configuration, raw events, or other users' results. Long runs are retrieved
-  with bounded polling; their durable state stays in Parsar, not the MCP session.
-
-- Agent capability reads retain the stored binding version and expose its
-  pinning mode. Displayed current versions match the daemon's resolver:
-  Skill, Plugin, Bundle, and Knowledge can follow latest metadata (including
-  deprecation cutoffs); MCP and System Prompt currently use the stored binding
-  version. Config offers automatic-follow choices only for supported types and
-  retains per-binding configuration when changing version policy.
-
-- Cross-workspace installed capabilities remain visible and removable after
-  unpublishing. Their installation metadata reports source visibility and only
-  bound versions while private; marketplace discovery and new installs still
-  require a published source.
-- Conversation user-message limits count Unicode code points after trimming
-  surrounding whitespace, not UTF-8 bytes. Keep route and store validation aligned.
-- Agent capability upgrades accept private capabilities from the Agent's own
-  workspace; cross-workspace upgrades still require a public, available source.
-- The server owns auth, workspaces, agent records, runtime bindings, run
-  records, audit/usage persistence, and upstream engine session ids.
-- Soft-deleting an Agent preserves workspace-authorized conversation and run
-  history, including its identity. History reads expose deletion state; they
-  must not allow new messages or retries to execute the deleted Agent.
-- Successful explicit Agent capability enable, upgrade, removal, and built-in
-  toggle requests emit Agent-targeted audit events with the authenticated actor
-  and capability identifiers. Never include configuration or credential values.
-- Explicit Agent enable/disable requests pass the requesting user to the store
-  for audit attribution. Keep the target Agent separate from the actor, and
-  preserve the previous and next status in the event payload.
-- `parsar-daemon` owns CLI discovery, process spawning, CLI-specific env,
-  cwd selection inside its host/container, permission prompts, and translating
-  CLI streams into Parsar daemon protocol frames.
-- `internal/agentdaemon/proto` is the only shared wire contract between the
-  server and daemon. The daemon must not import `server/internal/...`, and the
-  server must not import daemon-internal adapter packages.
-- The conversation SSE first-event timer observes run state; it is not an
-  execution deadline. Keep waiting while the stored run is queued or running.
-  Dispatch retains ownership of execution timeouts and terminal state.
-- Any state needed to recover a conversation after a server restart, daemon
-  reconnect, or child-process exit must be stored durably by the server.
-  In-memory maps may cache waiters or sockets only; they must not be the
-  source of truth for conversation/session continuity.
-- Work directory validation is a cross-boundary security rule: user input is
-  accepted only as an absolute path or `~/...`; daemon-side fallbacks must stay
-  under `~/.parsar/`.
-
-### External HTTP Agents
-
-- `connector_type=http` runs use the standard conversation dispatcher and its
-  30-minute execution deadline. The HTTP connector performs one JSON POST and
-  emits one final reply; the dispatcher alone persists completion and usage.
-  Default development startup uses this same dispatcher. The legacy standalone
-  HTTP worker is not supported alongside the server; it bypasses credential
-  resolution, serial dispatch, and request cancellation ownership.
-- Store `config.http.endpoint` and optional `config.http.secret_id`. Accept the
-  historical flat keys on input, but never forward endpoint or credential
-  configuration in the request body. Only `agent_config.system_prompt` is sent.
-- Bearer secrets use `kind=provider=http_agent`, `auth_type=bearer`, and a
-  `{"token": "..."}` encrypted payload. Check active status and management
-  workspace on both configuration and every invocation. Global model secrets
-  are not HTTP Agent credentials. Reject URL userinfo and all redirects.
-- The service owns models, tools, permissions, and conversation history, keyed
-  by `conversation_id`. Parsar capability/runtime bindings are not injected.
-  Text requests carry the existing `httprunner.AgentRequest` identity fields;
-  responses contain nonempty `content` and optional `store.UsageInput` `usage`.
-  Responses are limited to 4 MiB. Do not infer unreported usage or prices.
-- Stop cancels the outbound request on the executing server instance; this
-  initial connector targets single-instance deployments. Cross-instance HTTP
-  request cancellation is not supported. Stop does not guarantee termination of work
-  inside a remote service; services should honor HTTP request cancellation and
-  deduplicate work by `run_id`. Retrying creates a new run.
-
-### Agent editing
-
-- The Agent edit form updates profile, model, and execution settings only.
-  Manage existing capability bindings, versions, and capability credentials
-  through the Config capability controls. Creation can choose initial bindings.
-  Profile edits must omit capability reconciliation and capability credential
-  snapshots.
+- Product Agent configuration uses the complete pinned inline Agent contract:
+  model, instructions (mapped once from the product `system_prompt` field), tools,
+  service_tier, reasoning, text and multi_agent. Do not narrow this schema to the
+  current Core MVP. Reject old engine/device/provider settings; Core validates
+  its current execution support. Business display/visibility stay in Parsar.
+  A supplied product `config` replaces the execution configuration; omitted config
+  preserves it. The separately supplied SP remains independent of that replacement.
+  Inline Session configuration is the current integration, not a claim that product
+  Agents are Core saved-Agent resources. See the [object mapping](docs/deploy/product-core.md#object-and-operation-mapping).
+- Use workspace-specific Core clients with distinct project credentials. Never
+  infer isolation from metadata, or fall back to a global key for an unknown
+  workspace. Core verifies the configured project header. Keep the workspace's
+  project stable across restarts; rotate only its credential. Configuration and
+  deployment details live in [the product integration guide](docs/deploy/product-core.md).
+- Core owns environment templates. Product routes authorize the workspace then
+  forward official SDK operations to that workspace's Core project. Do not cache
+  confidential template inputs in product tables or logs. The API forwards the
+  full upstream schema; the UI identifies unimplemented initialization fields and
+  does not present them as currently usable. Product Session metadata contains only safe environment
+  selectors; initialization belongs to templates. Preserve Parsar’s sidebar and
+  page-owned actions; do not duplicate navigation with upstream dashboard tabs.
+  Docker/E2B are Core hosted providers, while official
+  self_hosted requires its own executor connection. Missing key-management or
+  connection workflows must show unavailable, not call private dashboard APIs.
+- Persist one Core session binding per product conversation/Agent and one Core
+  turn binding per product run. Freeze session requests, input and the preceding
+  turn cursor before submission. Use stable product binding/run IDs as Core
+  idempotency keys. A user retry creates a new product run; restarting an observer
+  reuses the existing run and never creates another input event.
+  Distinguish definitive admission rejection from uncertain delivery: Core's
+  terminal environment-unavailable/expired/cancelled 409 codes fail and settle the
+  product input. Other uncertain receipts retain recovery and the lane fence.
+- Observe durable Turns and Items through the public SDK. Product SSE is a
+  projection of these reads, not Core event-stream replay. Persist projected
+  text/thinking/tool events before acknowledging them; restore their projection
+  from product events after an interruption. Join function-call output items by
+  `call_id`; a completed call alone is not its result. Preserve incomplete tools
+  as unsuccessful in both live and persisted trace presentation. Recovered terminal outcomes retain
+  their failure state even when the terminal event was already recorded. Persist
+  measured usage idempotently before settling completed, failed or cancelled Core
+  work; assistant-message creation is not a prerequisite for accounting. Neither service queries the other's database.
+- Serialize each conversation/Agent lane with a PostgreSQL advisory transaction
+  lock on a dedicated connection, independent of the product query pool. Check
+  the connection while observing and cancel observation when the lease is lost.
+  Each product process observes at most eight runs concurrently. Account for
+  these additional connections when sizing PostgreSQL.
+- Cancellation records durable product intent. Only the lane's current observer
+  sends the session-wide Core cancel event and waits for the old turn to settle
+  before admitting its successor. A delayed HTTP cancel handler must never
+  directly cancel whichever Core turn happens to be current.
+- Recovery scans queued/running runs and unsettled terminal runs at startup and
+  periodically. Service shutdown stops observation without converting a running
+  Core turn into a failed product run. Product database interruptions at invocation, Session/input binding,
+  admission receipt, projection, usage or settlement boundaries are observation
+  failures, not Agent failures. Leave them recoverable; never cancel accepted Core
+  work because local persistence was temporarily unavailable. A deterministic
+  invalid-member result before a Core binding exists fails product work instead
+  of retrying forever. Frozen executions remain observable and cancellable
+  after Agent
+  retirement; retirement prevents new admission, not settlement of existing work.
+  Deleting a conversation atomically cancels queued/running work. Internal Core
+  cleanup reads retain access to submitted execution and its projection, including
+  failed/completed product runs still awaiting Core settlement, while
+  public conversation/run/event reads keep excluding deleted history.
+  Auth, workspace membership, conversation ownership, IM, MCP
+  access to Agents, scheduling, auditing and billing remain product concerns.
+- The product currently supports text input, assistant text, reasoning summaries,
+  tool observations, raw token usage and cancellation. Capability bindings,
+  attachments, interactive approvals, application function results, local-device and sandbox
+  administration are unavailable in this product client. Show this limitation in
+  the Agent configuration page; reject unsupported input rather than silently
+  ignoring it. A Core turn waiting for an unsupported interaction is cancelled
+  and reported as unsupported.
+- The product no longer exposes HTTP Agent invocation/worker/configuration,
+  native streaming, model-provider administration, runtime pairing/credentials,
+  sandbox lifecycle or in-place run requeue APIs. Reject retained legacy Agent
+  connector types at web/IM/retry/scheduling admission instead of leaving queued work.
+  Parsar retains its independent database, capability assets and versions, Skills
+  import/upload, MCP configuration/OAuth, permissions and business orchestration.
+  These are product asset operations, not runtime installation. Browser plugin
+  extensions also remain product UI behavior. Runtime capability activation and
+  loading must use Core; unsupported execution binding mutations are not exposed.
+  Asset import or OAuth success must never imply readiness for Agent execution.
+  Landed migrations and retained business history are not rewritten or deleted.
+- Soft-deleting an Agent preserves authorized conversation/run history and its
+  identity. Deleted Agents must not accept new messages or retries. Explicit
+  enable/disable and visibility changes retain actor-attributed audit records.
+- `parsar-daemon` and `internal/agentdaemon` are execution-service infrastructure;
+  their independent build and Core contracts remain in scope for their own tests.
+  Do not reintroduce direct product-to-daemon execution.
 
 ### Agent CLI adapter contract
 
@@ -3060,64 +3022,12 @@ or filesystem isolation. Automatic installation remains separate.
   `request_id` through the canonical interaction's `device_id`; IM slots are
   only a legacy fallback.
 
-### Sandbox and local runtime lifecycle
+### Execution environments
 
-- The default local install path provides one ready-to-use sandbox runtime.
-  Do not require the Parsar server container to create sibling Docker
-  containers through `/var/run/docker.sock` for normal first-run operation.
-- Local Docker lifecycle, cloud sandbox lifecycle, and user-paired devices are
-  different providers behind the same daemon protocol. Keep provider-specific
-  create/renew/kill logic in `server/internal/sandbox/...` or a narrowly named
-  runtime provider; do not spread Docker/E2B calls through handlers,
-  connectors, or frontend components.
-- Dynamic local sandbox scaling is not a product guarantee. If it is added,
-  it must be owned by an explicit local supervisor/runtime provider with a
-  reviewed Docker socket boundary, not by ad hoc server-side `docker run`
-  calls.
-- Eager acquisition must be best-effort. Failure to prewarm a sandbox should
-  surface as runtime health/provisioning state, not crash unrelated startup
-  paths.
-- Cloud sandbox maintenance runs once at server startup and every five minutes.
-  Automatic renewal requires a TTL longer than that interval; interrupted
-  renewals remain retryable, while a provider rejection disables the policy.
-- A `spawning` sandbox binding holds that agent's only reservation slot
-  (`uk_sandboxes_active_per_agent` is partial on `killed_at is null`), and the
-  loser path waits on `spawning` indefinitely. Any code that reserves a slot
-  must therefore guarantee a terminal transition, and an acquire that finds a
-  reservation older than the cold-start bound must be able to reclaim it —
-  otherwise one crashed cold start wedges the agent permanently.
-
-### Sandbox images
-
-- `infra/sandbox/Dockerfile` (local Docker + generic) and
-  `infra/sandbox/e2b.Dockerfile` (e2b.app) must keep their shared runtime
-  payload, CLI versions, and hooks aligned; provider-specific bootstrap and
-  build mechanics may differ.
-  Agent CLI installs live only in `infra/sandbox/scripts/install-agents.sh`,
-  which both images run; do not inline per-CLI `npm install -g` / download
-  steps in either Dockerfile. That script owns the version pins and the Node
-  force-relink that keeps a base image's bundled Node from shadowing ours.
-- The image must ship the hook scripts at the absolute paths
-  `server/internal/connector/agentdaemon/sandbox_seed.go` seeds into
-  `settings.json` (`/opt/parsar/hooks/claude/...`). The hooks fail open, so a
-  missing script degrades spec/memory injection silently instead of erroring —
-  changing one side means changing the other.
-- e2b's template builder is not BuildKit. It rejects multi-stage builds (hence
-  the prebuilt binaries in `infra/sandbox/.build/`, staged by
-  `make e2b-template`), it does not persist `/tmp` between layers, and it
-  lowers `ARG FOO="bar"` keeping the quotes as literal characters — so version
-  ARGs in `e2b.Dockerfile` must stay unquoted.
-- Build templates with `make e2b-template`. It writes only into
-  `infra/sandbox/.build/` (gitignored), never the repo root.
-
-### Testing cloud isolation locally
-
-- The daemon runs inside the cloud sandbox and dials back to
-  `PARSAR_PUBLIC_URL`, so a loopback URL cannot work: the sandbox resolves
-  `127.0.0.1` to itself and pairing times out. Expose the dev server through a
-  tunnel and set `PARSAR_PUBLIC_URL` to that hostname.
-- `AGENT_DAEMON_SANDBOX_TEMPLATE` + `PARSAR_E2B_API_KEY` are the two required
-  values; see `.env.example` for the full set and their defaults.
+Execution environment acquisition, lifecycle, native session state and sandbox
+images are owned by Core. See [Environment ownership and placement](#environment-ownership-and-placement)
+and the independent execution artifact contracts above. Product deployment must
+not mount the Docker socket or provision runtimes on an Agent's behalf.
 
 ### API, DB, and generated surfaces
 
@@ -3360,19 +3270,12 @@ width exceeds the available panel width. Its minimum height remains 64px;
 wrapped rows grow naturally. Keep this behavior in the shared header, with
 `actionClassName` reserved for page-specific action arrangements.
 
-The Agent form checks workspace runtime status before creating or switching to
-cloud execution. Unknown or unavailable status blocks advancing and submitting;
-ordinary edits to an existing cloud Agent and local execution stay independent.
-Cloud setup opens Runtime's Instances tab separately so form input is retained.
-Missing-model setup follows the same pattern: open Models separately and refresh
-the catalog from the still-open Agent form. Keep its draft in the mounted form;
-do not serialize it into prerequisite URLs or add a second draft lifecycle.
-
-New and cloned Agent forms default invocation scope to workspace, matching the
-server default. Scope choices explain the existing Feishu gate without implying
-anonymous Web/API access. Public creation clears personal model credential choices
-and requires a shared binding for credential-reference models; existing Agents
-and their edit forms keep their stored scope.
+Agent forms edit the model, instructions and pinned upstream Agent configuration.
+Environment templates belong to Core; Session creation chooses a template or
+an explicit environment type. Preserve drafts when an upstream operation fails
+and show unavailable features without inventing a successful local substitute.
+New and cloned Agents default invocation scope to workspace. Scope choices
+explain the Feishu gate without implying anonymous Web/API access.
 
 Use `EmptyState` with `size="compact"` for detail tabs, subsections, and
 compact result panels. Keep their alignment and spacing in that shared

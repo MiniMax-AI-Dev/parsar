@@ -35,7 +35,6 @@ import type {
   CreateSecretRequest,
   Secret,
 } from "../../../lib/api-types"
-import { useNavigateAdmin } from "../../../lib/admin-router"
 import { useRelativeTime } from "../../../lib/relative-time"
 import { StatusIcon } from "../../../components/ui/status-icon"
 
@@ -60,7 +59,6 @@ function kindLabel(kind: string) {
 export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: OrgSecretsTabProps) {
   const { t } = useTranslation("admin")
   const fmtAgo = useRelativeTime()
-  const navigate = useNavigateAdmin()
   const secretsQ = useSecrets(workspaceID)
   const disableMut = useDisableSecret(workspaceID)
   const createMut = useCreateSecret(workspaceID)
@@ -80,8 +78,6 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
       [s.name, s.slug, s.provider, s.kind, kindLabel(s.kind)].join(" ").toLowerCase().includes(needle),
     )
   }, [secretsQ.data?.secrets, query])
-  const modelKeys = useMemo(() => secrets.filter((s) => s.kind === "model_provider"), [secrets])
-  const runtimeKeys = useMemo(() => secrets.filter((s) => s.kind === "runtime" || s.provider === "e2b"), [secrets])
   const otherKeys = useMemo(() => secrets.filter((s) => s.kind !== "model_provider" && s.kind !== "runtime" && s.provider !== "e2b"), [secrets])
   const errorObj = secretsQ.error as ApiError | undefined
 
@@ -127,25 +123,7 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
           <span />
         </LedgerHeader>
 
-        {/* Model API Keys — read-only. Rotation lives on the Models page. */}
-        <SecretGroup
-          workspaceID={workspaceID}
-          label={t("secrets.sections.modelKeys")}
-          items={modelKeys}
-          empty={t("secrets.empty.modelKeys")}
-          fmtAgo={fmtAgo}
-          readOnlyLabel={t("credentialsPage.org.openModels")}
-          onOpenModels={() => navigate("models")}
-          onDisable={setConfirmTarget}
-        />
-        <SecretGroup
-          workspaceID={workspaceID}
-          label={t("secrets.sections.runtimeKeys")}
-          items={runtimeKeys}
-          empty={t("secrets.empty.runtimeKeys")}
-          fmtAgo={fmtAgo}
-          onDisable={setConfirmTarget}
-        />
+        <p className="px-4 py-3 text-sm text-fg-muted">{t("agents.core.modelHint")}</p>
         {otherKeys.length > 0 && (
           <SecretGroup
             workspaceID={workspaceID}

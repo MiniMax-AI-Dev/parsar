@@ -203,8 +203,12 @@ func (s *Store) CreateScheduledTask(ctx context.Context, in CreateScheduledTaskI
 		return zero, err
 	}
 	// Validate the agent exists before anchoring a task to it.
-	if _, err := s.GetAgent(ctx, in.AgentID); err != nil {
+	agent, err := s.GetAgent(ctx, in.AgentID)
+	if err != nil {
 		return zero, err
+	}
+	if !validConnectorType(agent.ConnectorType) {
+		return zero, ErrInvalidConnectorType
 	}
 	now := time.Now().UTC()
 
@@ -420,6 +424,10 @@ func (s *Store) dispatchScheduledRunTx(ctx context.Context, q *sqlc.Queries, tas
 			return "", "", nil, ErrUnknownAgent
 		}
 		return "", "", nil, err
+	}
+
+	if !validConnectorType(rt.ConnectorType) {
+		return "", "", nil, ErrInvalidConnectorType
 	}
 
 	// Fresh conversation per dispatch: primary_agent_id surfaces it in the

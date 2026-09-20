@@ -191,16 +191,6 @@ export function CapabilitiesPage() {
     () => Array.from(new Set((directoryQ.data?.items ?? []).flatMap((item) => item.categories))).sort((a, b) => a.localeCompare(b)),
     [directoryQ.data?.items],
   )
-  const goToAgentsForCapability = (capability: MarketplaceCapability) => {
-    const url = new URL(window.location.href)
-    url.searchParams.set("admin", "agents")
-    url.searchParams.delete("id")
-    url.searchParams.delete("tab")
-    url.searchParams.delete("item")
-    url.searchParams.set("pendingCapability", capability.id)
-    window.history.pushState({}, "", url.toString())
-    window.dispatchEvent(new Event("admin:navigate"))
-  }
   const ownCapabilities = useMemo(() => capsQ.data?.capabilities ?? [], [capsQ.data?.capabilities])
   // In paginated mode the server returns the page-sliced marketplace installs
   // alongside the page-sliced own capabilities, so we use those instead of
@@ -407,7 +397,7 @@ export function CapabilitiesPage() {
       canImport={canImportDirectory}
       canManage={isAdmin}
       onSelectItem={(item) => navigate("capabilities", { tab: item?.startsWith("mcp:") ? "connectors" : pageTab === "workspace" ? "marketplace" : pageTab, item })}
-      onInstall={goToAgentsForCapability}
+
       onDelete={setDeleteTarget}
       onViewCapability={(capabilityID) => {
         setQuery("")
@@ -421,6 +411,7 @@ export function CapabilitiesPage() {
   return (
     <AdminLayout activeMenu="capabilities" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
+        <p className="border-b border-line px-6 py-3 text-sm text-fg-muted">{t("core.assetManagementHint")}</p>
         <PageHeader
           className="static mx-0 mb-0"
           title={pageTitle}

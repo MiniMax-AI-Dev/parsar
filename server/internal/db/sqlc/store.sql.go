@@ -932,41 +932,6 @@ func (q *Queries) ClaimExpiredAgentInteraction(ctx context.Context, arg ClaimExp
 	return i, err
 }
 
-const claimNextQueuedHTTPAgentRun = `-- name: ClaimNextQueuedHTTPAgentRun :one
-with picked as (
-  select r.id
-  from agent_runs r
-  join conversations c on c.id = r.conversation_id
-  join agents a on a.id = r.agent_id
-  where r.connector_type = 'http'
-    and r.status = 'queued'
-    and r.workspace_id = c.workspace_id
-    and r.workspace_id = a.workspace_id
-    and c.status = 'active'
-    and c.deleted_at is null
-    and a.status = 'active'
-    and a.deleted_at is null
-  order by r.created_at asc, r.id asc
-  for update skip locked
-  limit 1
-)
-update agent_runs r
-set status = 'running',
-    started_at = coalesce(r.started_at, $1),
-    updated_at = $1,
-    metadata = r.metadata || jsonb_build_object('claimed_by', 'http_runner_once')
-from picked
-where r.id = picked.id
-returning r.id::text
-`
-
-func (q *Queries) ClaimNextQueuedHTTPAgentRun(ctx context.Context, now pgtype.Timestamptz) (string, error) {
-	row := q.db.QueryRow(ctx, claimNextQueuedHTTPAgentRun, now)
-	var r_id string
-	err := row.Scan(&r_id)
-	return r_id, err
-}
-
 const claimPendingQueuedFeishuRuns = `-- name: ClaimPendingQueuedFeishuRuns :many
 with picked as (
   select r.id
@@ -1247,97 +1212,6 @@ func (q *Queries) CompleteAgentRun(ctx context.Context, arg CompleteAgentRunPara
 		arg.ID,
 	)
 	return err
-}
-
-const configureAgentProfile = `-- name: ConfigureAgentProfile :one
-update agents a
-set config = $1::jsonb,
-    updated_at = $2
-where a.id = $3::uuid
-  and a.status = 'active'
-  and a.deleted_at is null
-returning
-  a.id::text as agent_id,
-  a.name,
-  a.slug,
-  a.connector_type,
-  a.config as agent_config
-`
-
-type ConfigureAgentProfileParams struct {
-	AgentConfig []byte             `json:"agent_config"`
-	Now         pgtype.Timestamptz `json:"now"`
-	AgentID     pgtype.UUID        `json:"agent_id"`
-}
-
-type ConfigureAgentProfileRow struct {
-	AgentID       string `json:"agent_id"`
-	Name          string `json:"name"`
-	Slug          string `json:"slug"`
-	ConnectorType string `json:"connector_type"`
-	AgentConfig   []byte `json:"agent_config"`
-}
-
-func (q *Queries) ConfigureAgentProfile(ctx context.Context, arg ConfigureAgentProfileParams) (ConfigureAgentProfileRow, error) {
-	row := q.db.QueryRow(ctx, configureAgentProfile, arg.AgentConfig, arg.Now, arg.AgentID)
-	var i ConfigureAgentProfileRow
-	err := row.Scan(
-		&i.AgentID,
-		&i.Name,
-		&i.Slug,
-		&i.ConnectorType,
-		&i.AgentConfig,
-	)
-	return i, err
-}
-
-const configureDevAgentConnector = `-- name: ConfigureDevAgentConnector :one
-update agents a
-set connector_type = $1,
-    config = $2::jsonb,
-    updated_at = $3
-where a.id = $4::uuid
-  and a.status = 'active'
-  and a.deleted_at is null
-returning
-  a.id::text as agent_id,
-  a.name,
-  a.slug,
-  a.connector_type,
-  a.config as agent_config
-`
-
-type ConfigureDevAgentConnectorParams struct {
-	ConnectorType string             `json:"connector_type"`
-	AgentConfig   []byte             `json:"agent_config"`
-	Now           pgtype.Timestamptz `json:"now"`
-	AgentID       pgtype.UUID        `json:"agent_id"`
-}
-
-type ConfigureDevAgentConnectorRow struct {
-	AgentID       string `json:"agent_id"`
-	Name          string `json:"name"`
-	Slug          string `json:"slug"`
-	ConnectorType string `json:"connector_type"`
-	AgentConfig   []byte `json:"agent_config"`
-}
-
-func (q *Queries) ConfigureDevAgentConnector(ctx context.Context, arg ConfigureDevAgentConnectorParams) (ConfigureDevAgentConnectorRow, error) {
-	row := q.db.QueryRow(ctx, configureDevAgentConnector,
-		arg.ConnectorType,
-		arg.AgentConfig,
-		arg.Now,
-		arg.AgentID,
-	)
-	var i ConfigureDevAgentConnectorRow
-	err := row.Scan(
-		&i.AgentID,
-		&i.Name,
-		&i.Slug,
-		&i.ConnectorType,
-		&i.AgentConfig,
-	)
-	return i, err
 }
 
 const configureDevConversationExternalRef = `-- name: ConfigureDevConversationExternalRef :one
@@ -2020,7 +1894,7 @@ func (q *Queries) CreateChildAgentRun(ctx context.Context, arg CreateChildAgentR
 
 const createDevAgent = `-- name: CreateDevAgent :execrows
 insert into agents(id, workspace_id, name, slug, description, connector_type, status, config, created_by, created_at, updated_at)
-values ($1::uuid, $2::uuid, $3, $4, $5, 'agent_daemon', 'active', $6::jsonb, $7::uuid, $8, $8)
+values ($1::uuid, $2::uuid, $3, $4, $5, 'agents_api', 'active', $6::jsonb, $7::uuid, $8, $8)
 on conflict (id) do update
   set status = 'active', updated_at = $8
   where agents.status <> 'active'
@@ -2890,10 +2764,9 @@ insert into usage_logs(
   id, workspace_id, agent_run_id,
   provider, model, input_tokens, output_tokens, cost_usd, raw, created_at
 )
-values (
-  $1::uuid, $2::uuid, $3::uuid,
+select $1::uuid, $2::uuid, $3::uuid,
   $4, $5, $6, $7, $8, $9::jsonb, $10
-)
+where not exists (select 1 from usage_logs where agent_run_id = $3::uuid)
 `
 
 type CreateUsageLogParams struct {
@@ -4690,30 +4563,23 @@ select
   r.status,
   coalesce(m.content, ''::text)::text as trigger_message_content,
   coalesce(m.metadata, '{}'::jsonb)::jsonb as trigger_message_metadata,
-  a.config::jsonb as agent_config,
-  -- v6 (2026-06-15): explicit runtime binding on the agent. NULL
-  -- means the user hasn't picked one yet; dispatch surfaces a setup hint
-  -- in that case rather than auto-creating a sandbox runtime.
-  -- v7 (2026-06-15): also empty when the bound runtime has been
-  -- soft-deleted — the LEFT JOIN below filters those out so a stale
-  -- runtime_id pointing at a dead runtime degrades to the same
-  -- "unbound Runtime" message instead of routing dispatch to a dead device.
-  coalesce(rt.id::text, ''::text)::text as runtime_id
+  coalesce(cs.request->'agent', a.config)::jsonb as agent_config
 from agent_runs r
 join conversations c on c.id = r.conversation_id
 join agents a on a.id = r.agent_id
 join workspaces w on w.id = r.workspace_id
 left join messages m on m.id = r.trigger_message_id
-left join runtimes rt on rt.id = a.runtime_id and rt.deleted_at is null
+left join product_core_runs cr on cr.run_id = r.id
+left join product_core_sessions cs on cs.id = cr.session_binding_id
 where r.id = $1::uuid
   and r.workspace_id = c.workspace_id
   and r.workspace_id = a.workspace_id
   and w.id = r.workspace_id
   and (m.id is null or (m.workspace_id = r.workspace_id and m.conversation_id = r.conversation_id and m.deleted_at is null))
-  and c.status = 'active'
-  and c.deleted_at is null
-  and a.status = 'active'
-  and a.deleted_at is null
+  and ((c.status = 'active' and c.deleted_at is null) or
+       (r.connector_type = 'agents_api' and cr.run_id is not null and r.status in ('cancelled', 'failed', 'completed')))
+  and ((a.status = 'active' and a.deleted_at is null) or
+       (r.connector_type = 'agents_api' and exists (select 1 from product_core_runs cr where cr.run_id = r.id)))
   and w.deleted_at is null
 `
 
@@ -4731,7 +4597,6 @@ type GetAgentRunInvocationRow struct {
 	TriggerMessageContent  string `json:"trigger_message_content"`
 	TriggerMessageMetadata []byte `json:"trigger_message_metadata"`
 	AgentConfig            []byte `json:"agent_config"`
-	RuntimeID              string `json:"runtime_id"`
 }
 
 func (q *Queries) GetAgentRunInvocation(ctx context.Context, id pgtype.UUID) (GetAgentRunInvocationRow, error) {
@@ -4751,7 +4616,6 @@ func (q *Queries) GetAgentRunInvocation(ctx context.Context, id pgtype.UUID) (Ge
 		&i.TriggerMessageContent,
 		&i.TriggerMessageMetadata,
 		&i.AgentConfig,
-		&i.RuntimeID,
 	)
 	return i, err
 }
@@ -5065,8 +4929,8 @@ where r.id = $1::uuid
   and r.workspace_id = a.workspace_id
   and c.status = 'active'
   and c.deleted_at is null
-  and a.status = 'active'
-  and a.deleted_at is null
+  and ((a.status = 'active' and a.deleted_at is null) or
+       (r.connector_type = 'agents_api' and exists (select 1 from product_core_runs cr where cr.run_id = r.id)))
 for update of r
 `
 
@@ -11555,11 +11419,17 @@ func (q *Queries) SoftDeleteCapability(ctx context.Context, arg SoftDeleteCapabi
 }
 
 const softDeleteConversation = `-- name: SoftDeleteConversation :execrows
-update conversations
-set deleted_at = $1,
-    updated_at = $1
-where id = $2::uuid
-  and deleted_at is null
+with deleted as (
+  update conversations set deleted_at = $1, updated_at = $1
+  where id = $2::uuid and deleted_at is null
+  returning id
+), cancelled as (
+  update agent_runs set status = 'cancelled', finished_at = $1, updated_at = $1,
+    failure_reason = 'conversation_deleted',
+    metadata = metadata || '{"cancel_reason":"conversation_deleted"}'::jsonb
+  where conversation_id in (select id from deleted) and status in ('queued', 'running')
+)
+select id from deleted
 `
 
 type SoftDeleteConversationParams struct {

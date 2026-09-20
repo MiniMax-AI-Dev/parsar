@@ -9,7 +9,6 @@ Install or upgrade Parsar with Docker Compose.
 
 Usage:
   ./install.sh [options]
-  ./install.sh migrate-runtime-history [Docker Compose global options]
   curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
 
 Options:
@@ -17,14 +16,13 @@ Options:
   --port PORT          Web UI port. Default: 18080
   --bind ADDRESS       Web UI bind address. Default: 127.0.0.1
   --image IMAGE        Override the server image.
-  --sandbox-image IMAGE
-                       Override the sandbox image.
   --compose-file PATH  Use an existing Compose file.
   --dry-run            Prepare and validate without starting containers.
   --help               Show this help.
 
 Advanced Compose settings can be added directly to ~/.parsar/.env.
-The migration-only command preserves existing Compose configuration and services.
+Configure workspace Core bindings in <home>/core/workspaces.json after setup.
+Core owns execution environments and model-provider credentials.
 USAGE
 }
 
@@ -122,62 +120,10 @@ prepare_data_directory() {
     || die "server data directory is not writable by its configured user"
 }
 
-migrate_runtime_history() {
-  local container config_dir runtime_image backup source
-  container="$(compose ps -aq parsar-runtime)"
-  [ -n "$container" ] || return 0
-  [[ "$container" != *$'\n'* ]] || die "expected one default runtime container"
-  config_dir="$(docker_run inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container" \
-    | sed -n 's/^CLAUDE_CONFIG_DIR=//p')"
-  [ "$config_dir" != /root/.parsar/claude-code ] || return 0
-  [ -z "$config_dir" ] || die "custom CLAUDE_CONFIG_DIR requires a manual history migration"
-  runtime_image="$(docker_run inspect --format '{{.Image}}' "$container")"
-  backup="$(mktemp -d "$1/runtime-history.XXXXXX")"
-  mkdir "$backup/state"
-  log "Stopping the runtime for history migration; backup: $backup"
-  docker_run stop "$container" >/dev/null
-
-  for source in /root/.claude/. /root/.claude.json; do
-    if ! docker_run cp "$container:$source" "$backup/state/" 2>"$backup/copy-error.log"; then
-      # An unused runtime may not have created either path yet.
-      grep -Fq "Could not find the file $source in container" "$backup/copy-error.log" \
-        || die "history backup failed; old runtime retained. See $backup/copy-error.log"
-    fi
-  done
-
-  # Reuse the old runtime's mounted home; never overwrite a different history.
-  docker_run run --rm --volumes-from "$container" \
-    -v "$backup/state:/parsar-history-backup:ro" --entrypoint /bin/sh "$runtime_image" -ec '
-      target=/root/.parsar/claude-code
-      if [ -e "$target" ]; then
-        diff -qr --no-dereference /parsar-history-backup "$target"
-      else
-        stage=$(mktemp -d /root/.parsar/claude-code-migration.XXXXXX)
-        trap '\''rm -rf "$stage"'\'' EXIT
-        cp -a /parsar-history-backup/. "$stage/"
-        mv "$stage" "$target"
-      fi
-    ' || die "history migration failed; old runtime and backup retained at $backup"
-}
-
-if [ "${1:-}" = migrate-runtime-history ]; then
-  shift
-  compose_args=("$@")
-  compose() { docker_run compose "${compose_args[@]}" "$@"; }
-  umask 077
-  history_backup_root="$(expand_path "${PARSAR_HOME:-$HOME/.parsar}")"
-  mkdir -p "$history_backup_root"
-  detect_docker
-  migrate_runtime_history "$history_backup_root"
-  log "History migration complete; resume with your existing Compose up command"
-  exit 0
-fi
-
 home="${PARSAR_HOME:-$HOME/.parsar}"
 port="${PARSAR_LOCAL_PORT:-18080}"
 bind="${PARSAR_BIND_ADDR:-127.0.0.1}"
 server_image="${PARSAR_SERVER_IMAGE:-}"
-sandbox_image="${PARSAR_SANDBOX_IMAGE:-}"
 compose_source="${PARSAR_COMPOSE_FILE:-}"
 dry_run=false
 
@@ -187,7 +133,6 @@ while [ "$#" -gt 0 ]; do
     --port) port="${2:?missing value for --port}"; shift 2 ;;
     --bind) bind="${2:?missing value for --bind}"; shift 2 ;;
     --image) server_image="${2:?missing value for --image}"; shift 2 ;;
-    --sandbox-image) sandbox_image="${2:?missing value for --sandbox-image}"; shift 2 ;;
     --compose-file) compose_source="${2:?missing value for --compose-file}"; shift 2 ;;
     --dry-run) dry_run=true; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -218,10 +163,17 @@ set_env PARSAR_BIND_ADDR "$bind"
 set_env PARSAR_PG_DATA_DIR "$home/postgres"
 set_env PARSAR_DATA_DIR "$home/data"
 [ -z "$server_image" ] || set_env PARSAR_SERVER_IMAGE "$server_image"
-[ -z "$sandbox_image" ] || set_env PARSAR_SANDBOX_IMAGE "$sandbox_image"
 ensure_env PARSAR_PG_PASSWORD "$(random_hex 24)"
 ensure_env PARSAR_MASTER_KEY "$(random_hex 32)"
-ensure_env PARSAR_SHARED_RUNTIME_TOKEN "$(random_hex 32)"
+core_config_dir="${PARSAR_CORE_CONFIG_DIR:-$home/core}"
+core_config_dir="$(expand_path "$core_config_dir")"
+mkdir -p "$core_config_dir"
+if [ ! -f "$core_config_dir/workspaces.json" ]; then
+  printf '[]\n' > "$core_config_dir/workspaces.json"
+  chmod 755 "$core_config_dir"
+  chmod 644 "$core_config_dir/workspaces.json"
+fi
+set_env PARSAR_CORE_CONFIG_DIR "$core_config_dir"
 
 detect_docker
 log "Using $compose_file"
@@ -234,11 +186,9 @@ if [ "$dry_run" = true ]; then
 fi
 
 log "Pulling images"
-compose pull parsar-server parsar-runtime
+compose pull parsar-server
 log "Preparing server data directory"
 prepare_data_directory
-log "Preserving runtime history"
-migrate_runtime_history "$home"
 log "Starting Parsar"
 compose up -d --remove-orphans
 

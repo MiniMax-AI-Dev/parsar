@@ -3,7 +3,7 @@ import { Loader2, MessageSquare, Pencil, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "../../../components/ui/button"
-import { useDeleteAgent, useUpdateAgent, useUpdateAgentProfile } from "../../../lib/api-agents"
+import { useDeleteAgent, useUpdateAgent } from "../../../lib/api-agents"
 import { agentActionPermissions, useAgentChat } from "../../../lib/agent-actions"
 import type { Agent, Model, UserWorkspace } from "../../../lib/api-types"
 import { useAdminView } from "../../../lib/admin-router"
@@ -36,7 +36,6 @@ export function AgentDetailActions({
   const { startChat, pendingID } = useAgentChat(workspaceID, canChat)
   const chatPending = pendingID !== null
   const updateMut = useUpdateAgent(workspaceID)
-  const updateProfileMut = useUpdateAgentProfile(workspaceID)
   const deleteMut = useDeleteAgent(workspaceID)
 
   if (!canChat) {
@@ -86,21 +85,19 @@ export function AgentDetailActions({
         workspaceRole={workspaceRole}
         models={models}
         agent={agent}
-        pending={updateMut.isPending || updateProfileMut.isPending}
-        error={updateMut.error ?? updateProfileMut.error}
+        pending={updateMut.isPending}
+        error={updateMut.error}
         onOpenChange={(open) => {
           setEditOpen(open)
           if (!open) {
             updateMut.reset()
-            updateProfileMut.reset()
           }
         }}
-        onSubmit={({ agentID, body, agentProfile }) => {
+        onSubmit={({ agentID, body }) => {
           if (!agentID) return
           void (async () => {
             try {
               await updateMut.mutateAsync({ agentID, body })
-              if (agentProfile) await updateProfileMut.mutateAsync({ agentID, body: agentProfile })
               setEditOpen(false)
               onToast(t("agents.detail.config.saved"))
             } catch {

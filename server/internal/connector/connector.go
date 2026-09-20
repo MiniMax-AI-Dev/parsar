@@ -9,6 +9,9 @@ import (
 	"sync"
 )
 
+// ErrObservationInterrupted leaves durable work available for recovery; it is not an execution failure.
+var ErrObservationInterrupted = errors.New("connector: observation persistence interrupted")
+
 // ErrNotSupported is returned by a connector method when the operation
 // is not advertised in Capabilities(). Callers must check Capabilities()
 // before invoking optional methods; ErrNotSupported is the safety-net.

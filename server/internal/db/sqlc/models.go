@@ -566,6 +566,28 @@ type Model struct {
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
+type ProductCoreRun struct {
+	RunID            pgtype.UUID        `json:"run_id"`
+	SessionBindingID pgtype.UUID        `json:"session_binding_id"`
+	Input            []byte             `json:"input"`
+	PreviousTurnID   pgtype.Text        `json:"previous_turn_id"`
+	CoreTurnID       string             `json:"core_turn_id"`
+	Submitted        bool               `json:"submitted"`
+	Attempted        bool               `json:"attempted"`
+	Settled          bool               `json:"settled"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type ProductCoreSession struct {
+	ID             pgtype.UUID        `json:"id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	ConversationID pgtype.UUID        `json:"conversation_id"`
+	AgentID        pgtype.UUID        `json:"agent_id"`
+	Request        []byte             `json:"request"`
+	CoreSessionID  string             `json:"core_session_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
 // Agent runtime registry
 type Runtime struct {
 	// Runtime primary key, generated on the server side

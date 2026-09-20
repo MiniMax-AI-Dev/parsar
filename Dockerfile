@@ -11,7 +11,7 @@
 #
 # The image carries NO real secrets and NO internal addresses.
 # Operators inject DATABASE_URL / PARSAR_MASTER_KEY / Feishu OIDC /
-# E2B credentials / etc. at runtime via environment variables or a
+# Core workspace credential paths / etc. at runtime via environment variables or a
 # YAML config file mounted at $PARSAR_CONFIG_FILE.
 #
 # Build:        make docker-build
@@ -80,6 +80,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY internal ./internal
 COPY catalog ./catalog
+COPY packages/agents-client ./packages/agents-client
 COPY server ./server
 
 # Build all three binaries in one RUN so the layer represents one
@@ -129,8 +130,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 #   - ca-certificates + tini ship pre-built.
 #   - Server-side Skills.sh installs require npx and git.
 #   - Operators can `docker exec -it ... bash` to debug.
-#   - The opencode local runner may shell out (rg, basic core utils);
-#     keeping a real userland avoids surprises.
 ###############################################################################
 FROM --platform=$TARGETPLATFORM ${RUNTIME_BASE} AS runtime
 
@@ -209,10 +208,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
   CMD wget -qO- --tries=1 --timeout=3 http://127.0.0.1:8080/healthz >/dev/null || exit 1
 
-# tini reaps zombie subprocesses spawned by the opencode local runner
-# (or any future fork-exec path). Without it the server PID-1 would
-# leak zombies on every prompt that shells out and an SRE poking the
-# image weeks later would find a process table full of `<defunct>`
-# entries with no obvious culprit.
+# tini reaps subprocesses used by product asset import tools.
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/usr/local/bin/parsar-server"]

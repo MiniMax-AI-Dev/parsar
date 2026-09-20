@@ -156,7 +156,7 @@ returning id::text as workspace_id;
 
 -- name: CreateDevAgent :execrows
 insert into agents(id, workspace_id, name, slug, description, connector_type, status, config, created_by, created_at, updated_at)
-values (@id::uuid, @workspace_id::uuid, @name, @slug, @description, 'agent_daemon', 'active', @config::jsonb, @created_by::uuid, @now, @now)
+values (@id::uuid, @workspace_id::uuid, @name, @slug, @description, 'agents_api', 'active', @config::jsonb, @created_by::uuid, @now, @now)
 on conflict (id) do update
   set status = 'active', updated_at = @now
   where agents.status <> 'active';
@@ -431,35 +431,6 @@ where ai.provider = @provider::text
   and u.status = 'active'
 limit 1;
 
--- name: ConfigureDevAgentConnector :one
-update agents a
-set connector_type = @connector_type,
-    config = @agent_config::jsonb,
-    updated_at = @now
-where a.id = @agent_id::uuid
-  and a.status = 'active'
-  and a.deleted_at is null
-returning
-  a.id::text as agent_id,
-  a.name,
-  a.slug,
-  a.connector_type,
-  a.config as agent_config;
-
--- name: ConfigureAgentProfile :one
-update agents a
-set config = @agent_config::jsonb,
-    updated_at = @now
-where a.id = @agent_id::uuid
-  and a.status = 'active'
-  and a.deleted_at is null
-returning
-  a.id::text as agent_id,
-  a.name,
-  a.slug,
-  a.connector_type,
-  a.config as agent_config;
-
 -- name: GetAgentWorkspace :one
 select a.workspace_id::text as workspace_id
 from agents a
@@ -603,11 +574,17 @@ where id = @id::uuid
 -- name: SoftDeleteConversation :execrows
 -- status stays 'active' (constraint is active|archived only); deleted_at
 -- is the single source of truth — every read path filters it.
-update conversations
-set deleted_at = @now,
-    updated_at = @now
-where id = @id::uuid
-  and deleted_at is null;
+with deleted as (
+  update conversations set deleted_at = @now, updated_at = @now
+  where id = @id::uuid and deleted_at is null
+  returning id
+), cancelled as (
+  update agent_runs set status = 'cancelled', finished_at = @now, updated_at = @now,
+    failure_reason = 'conversation_deleted',
+    metadata = metadata || '{"cancel_reason":"conversation_deleted"}'::jsonb
+  where conversation_id in (select id from deleted) and status in ('queued', 'running')
+)
+select id from deleted;
 
 -- name: GetActiveConversationByTitle :one
 select id::text, workspace_id::text
@@ -673,10 +650,9 @@ insert into usage_logs(
   id, workspace_id, agent_run_id,
   provider, model, input_tokens, output_tokens, cost_usd, raw, created_at
 )
-values (
-  @id::uuid, @workspace_id::uuid, @agent_run_id::uuid,
+select @id::uuid, @workspace_id::uuid, @agent_run_id::uuid,
   @provider, @model, @input_tokens, @output_tokens, @cost_usd, @raw::jsonb, @now
-);
+where not exists (select 1 from usage_logs where agent_run_id = @agent_run_id::uuid);
 
 -- name: GetCompletableAgentRunForUpdate :one
 select
@@ -694,8 +670,8 @@ where r.id = @id::uuid
   and r.workspace_id = a.workspace_id
   and c.status = 'active'
   and c.deleted_at is null
-  and a.status = 'active'
-  and a.deleted_at is null
+  and ((a.status = 'active' and a.deleted_at is null) or
+       (r.connector_type = 'agents_api' and exists (select 1 from product_core_runs cr where cr.run_id = r.id)))
 for update of r;
 
 -- name: GetAgentRunInvocation :one
@@ -714,58 +690,24 @@ select
   r.status,
   coalesce(m.content, ''::text)::text as trigger_message_content,
   coalesce(m.metadata, '{}'::jsonb)::jsonb as trigger_message_metadata,
-  a.config::jsonb as agent_config,
-  -- v6 (2026-06-15): explicit runtime binding on the agent. NULL
-  -- means the user hasn't picked one yet; dispatch surfaces a setup hint
-  -- in that case rather than auto-creating a sandbox runtime.
-  -- v7 (2026-06-15): also empty when the bound runtime has been
-  -- soft-deleted — the LEFT JOIN below filters those out so a stale
-  -- runtime_id pointing at a dead runtime degrades to the same
-  -- "unbound Runtime" message instead of routing dispatch to a dead device.
-  coalesce(rt.id::text, ''::text)::text as runtime_id
+  coalesce(cs.request->'agent', a.config)::jsonb as agent_config
 from agent_runs r
 join conversations c on c.id = r.conversation_id
 join agents a on a.id = r.agent_id
 join workspaces w on w.id = r.workspace_id
 left join messages m on m.id = r.trigger_message_id
-left join runtimes rt on rt.id = a.runtime_id and rt.deleted_at is null
+left join product_core_runs cr on cr.run_id = r.id
+left join product_core_sessions cs on cs.id = cr.session_binding_id
 where r.id = @id::uuid
   and r.workspace_id = c.workspace_id
   and r.workspace_id = a.workspace_id
   and w.id = r.workspace_id
   and (m.id is null or (m.workspace_id = r.workspace_id and m.conversation_id = r.conversation_id and m.deleted_at is null))
-  and c.status = 'active'
-  and c.deleted_at is null
-  and a.status = 'active'
-  and a.deleted_at is null
+  and ((c.status = 'active' and c.deleted_at is null) or
+       (r.connector_type = 'agents_api' and cr.run_id is not null and r.status in ('cancelled', 'failed', 'completed')))
+  and ((a.status = 'active' and a.deleted_at is null) or
+       (r.connector_type = 'agents_api' and exists (select 1 from product_core_runs cr where cr.run_id = r.id)))
   and w.deleted_at is null;
-
--- name: ClaimNextQueuedHTTPAgentRun :one
-with picked as (
-  select r.id
-  from agent_runs r
-  join conversations c on c.id = r.conversation_id
-  join agents a on a.id = r.agent_id
-  where r.connector_type = 'http'
-    and r.status = 'queued'
-    and r.workspace_id = c.workspace_id
-    and r.workspace_id = a.workspace_id
-    and c.status = 'active'
-    and c.deleted_at is null
-    and a.status = 'active'
-    and a.deleted_at is null
-  order by r.created_at asc, r.id asc
-  for update skip locked
-  limit 1
-)
-update agent_runs r
-set status = 'running',
-    started_at = coalesce(r.started_at, @now),
-    updated_at = @now,
-    metadata = r.metadata || jsonb_build_object('claimed_by', 'http_runner_once')
-from picked
-where r.id = picked.id
-returning r.id::text;
 
 -- name: AgentRunExists :one
 select exists(select 1 from agent_runs where id = @id::uuid);

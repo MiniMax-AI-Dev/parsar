@@ -1,41 +1,9 @@
-// Package connector defines the AgentConnector abstraction: a single Go
-// interface plus a Capabilities declaration that Parsar Server uses to
-// hand an agent_run off to any backing agent system (OpenCode local,
-// HTTP Agent, ACP, A2A, Webhook).
-//
-// There is ONE AgentConnector interface; protocol differences are
-// declared via Capabilities() and unsupported operations return
-// ErrNotSupported. Protocol-specific translation (Parsar ModelRuntime
-// -> opencode.json / HTTP request payload / ACP server args) lives in
-// sub-packages under runtime/<adapter>.
-//
-// The connector owns its own session/run state. agent_runs rows
-// reference the connector_type but never hold connector-internal
-// identifiers as first-class columns; they live in agent_runs.metadata
-// when the connector wants to remember them.
+// Package connector defines the product execution port implemented by the Core client.
 package connector
 
 import (
-	"time"
-
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
-
-// SandboxInfo is the per-agent sandbox snapshot returned by
-// SandboxStatus. Shared between the agent_daemon provider (producer)
-// and the dev admin handlers (consumer) so neither package imports the
-// other.
-type SandboxInfo struct {
-	DeviceID    string
-	SandboxID   string
-	WorkspaceID string
-	CreatedAt   time.Time
-	LastUsedAt  time.Time
-	// ExpiresAt is the e2b-side TTL. Zero means the provider couldn't
-	// reach e2b to fetch live state; the admin handler renders it as
-	// "—" rather than failing the whole status response.
-	ExpiresAt time.Time
-}
 
 // PromptInput is the per-prompt request handed to a connector. The same
 // shape feeds both Prompt (sync) and StreamPrompt (async). The connector
@@ -124,7 +92,9 @@ const (
 
 // PromptEvent is the streaming counterpart of PromptOutput.
 type PromptEvent struct {
-	Type PromptEventType
+	Persisted chan error `json:"-"`
+	Recovered bool       `json:"-"`
+	Type      PromptEventType
 
 	// Sequence is the in-stream ordinal of this event. Monotonically
 	// incremented and populated ONLY for EventDelta and EventDone — both
@@ -196,7 +166,7 @@ type PermissionRequest struct {
 // PermissionDecision is the human verdict for a PermissionRequest,
 // submitted via AgentConnector.SubmitPermission.
 type PermissionDecision struct {
-	RequestID  string
+	RequestID string
 	// DeliveryID is the caller's stable idempotency base. The agent-daemon
 	// connector adds a unique suffix for each wire attempt before awaiting ack.
 	DeliveryID string
@@ -298,7 +268,7 @@ type PromptForUserChoiceQuestionAnswer struct {
 //   - Cancelled=true marks a non-answer (timeout, /cancel) so the
 //     daemon can emit a "stop, don't retry" tool_result.
 type PromptForUserChoiceDecision struct {
-	RequestID       string
+	RequestID string
 	// DeliveryID follows PermissionDecision's stable-base semantics.
 	DeliveryID      string
 	DeviceID        string

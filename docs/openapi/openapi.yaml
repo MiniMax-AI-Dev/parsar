@@ -1,26 +1,5 @@
 basePath: /
 definitions:
-  agentdaemon.remoteStreamPromptRequest:
-    properties:
-      generation:
-        type: integer
-      input:
-        $ref: '#/definitions/connector.PromptInput'
-    type: object
-  agentdaemon.remoteSubmitPermissionRequest:
-    properties:
-      decision:
-        $ref: '#/definitions/connector.PermissionDecision'
-      generation:
-        type: integer
-    type: object
-  agentdaemon.remoteSubmitPromptForUserChoiceRequest:
-    properties:
-      decision:
-        $ref: '#/definitions/connector.PromptForUserChoiceDecision'
-      generation:
-        type: integer
-    type: object
   agentmcp.tokenResponse:
     properties:
       credential:
@@ -113,101 +92,6 @@ definitions:
       public_url:
         type: string
     type: object
-  connector.PermissionDecision:
-    properties:
-      approved:
-        type: boolean
-      by:
-        description: user id
-        type: string
-      deliveryID:
-        description: |-
-          DeliveryID is the caller's stable idempotency base. The agent-daemon
-          connector adds a unique suffix for each wire attempt before awaiting ack.
-        type: string
-      deviceID:
-        type: string
-      note:
-        type: string
-      requestID:
-        type: string
-    type: object
-  connector.PromptForUserChoiceDecision:
-    properties:
-      answers:
-        items:
-          type: string
-        type: array
-      by:
-        type: string
-      cancelled:
-        type: boolean
-      deliveryID:
-        description: DeliveryID follows PermissionDecision's stable-base semantics.
-        type: string
-      deviceID:
-        type: string
-      questionAnswers:
-        items:
-          $ref: '#/definitions/connector.PromptForUserChoiceQuestionAnswer'
-        type: array
-      reason:
-        type: string
-      requestID:
-        type: string
-    type: object
-  connector.PromptForUserChoiceQuestionAnswer:
-    properties:
-      answer:
-        type: string
-      answers:
-        items:
-          type: string
-        type: array
-      header:
-        type: string
-      questionID:
-        type: string
-    type: object
-  connector.PromptInput:
-    properties:
-      agentConfig:
-        additionalProperties: {}
-        description: AgentConfig is the agent config (agents.config jsonb).
-        type: object
-      agentID:
-        type: string
-      agentName:
-        type: string
-      agentSlug:
-        type: string
-      conversationID:
-        type: string
-      conversationInitiatorID:
-        type: string
-      runID:
-        description: |-
-          RunID is the Parsar agent_run row id; the connector uses it
-          to scope any per-run scratch state.
-        type: string
-      triggerAttachments:
-        description: |-
-          TriggerAttachments carries non-text payloads (today: images
-          downloaded from a Feishu inbound message) that arrived alongside
-          TriggerMessageContent. Connectors that don't understand multimodal
-          input may safely ignore the field.
-        items:
-          $ref: '#/definitions/store.MessageAttachment'
-        type: array
-      triggerMessageContent:
-        description: |-
-          TriggerMessageContent is the user-facing message that drives this
-          prompt. The connector decides how to fold it into its own prompt
-          schema.
-        type: string
-      workspaceID:
-        type: string
-    type: object
   dev.AuthProvider:
     properties:
       callback_url:
@@ -260,57 +144,11 @@ definitions:
       role:
         type: string
     type: object
-  dev.agentCapabilityBody:
-    properties:
-      configuration:
-        additionalProperties: {}
-        type: object
-      pinning_mode:
-        description: |-
-          PinningMode is "latest" or "pinned". Empty falls back to the
-          store-side default (pinned), but the create/edit dialogs always
-          send a value so the server doesn't have to guess.
-        type: string
-    type: object
   dev.authProvidersResponse:
     properties:
       providers:
         items:
           $ref: '#/definitions/dev.publicAuthProvider'
-        type: array
-    type: object
-  dev.builtinCapabilityBody:
-    properties:
-      enabled:
-        type: boolean
-    type: object
-  dev.bulkDeleteModelFailure:
-    properties:
-      error:
-        type: string
-      model_id:
-        type: string
-      references:
-        items:
-          $ref: '#/definitions/store.ModelReference'
-        type: array
-    type: object
-  dev.bulkDeleteModelsBody:
-    properties:
-      model_ids:
-        items:
-          type: string
-        type: array
-    type: object
-  dev.bulkDeleteModelsResponse:
-    properties:
-      deleted:
-        items:
-          type: string
-        type: array
-      failed:
-        items:
-          $ref: '#/definitions/dev.bulkDeleteModelFailure'
         type: array
     type: object
   dev.cancelAgentRunBody:
@@ -324,35 +162,6 @@ definitions:
     type: object
   dev.commitCapabilityImportBody:
     type: object
-  dev.configureAgentConnectorBody:
-    properties:
-      connector_type:
-        type: string
-      endpoint:
-        type: string
-      model:
-        type: string
-      model_id:
-        type: string
-      secret_id:
-        type: string
-      system_prompt:
-        type: string
-      workdir:
-        type: string
-    type: object
-  dev.configureAgentProfileBody:
-    properties:
-      config:
-        additionalProperties: {}
-        type: object
-      model_id:
-        type: string
-      system_prompt:
-        type: string
-      workdir:
-        type: string
-    type: object
   dev.configureConversationExternalRefBody:
     properties:
       external_chat_id:
@@ -364,61 +173,20 @@ definitions:
     type: object
   dev.createAgentBody:
     properties:
-      capabilities:
-        items:
-          type: string
-        type: array
       config:
         additionalProperties: {}
         type: object
       connector_type:
         type: string
-      default_model_id:
-        type: string
       description:
         type: string
-      initial_capabilities:
-        items:
-          $ref: '#/definitions/dev.createAgentCapabilityBody'
-        type: array
-      inline_new_secrets:
-        items:
-          $ref: '#/definitions/dev.createAgentInlineSecretBody'
-        type: array
       name:
-        type: string
-      runtime:
         type: string
       slug:
         type: string
       system_prompt:
         type: string
       visibility:
-        type: string
-    type: object
-  dev.createAgentCapabilityBody:
-    properties:
-      capability_version_id:
-        type: string
-      configuration:
-        additionalProperties: {}
-        type: object
-      pinning_mode:
-        description: |-
-          PinningMode is "latest" or "pinned". Empty falls back to store's
-          default (pinned); create-agent dialog sends "latest" for new
-          bindings unless the user picks a specific version.
-        type: string
-    type: object
-  dev.createAgentInlineSecretBody:
-    properties:
-      display_name:
-        type: string
-      is_model:
-        type: boolean
-      kind:
-        type: string
-      plaintext:
         type: string
     type: object
   dev.createConversationUserMessageBody:
@@ -466,34 +234,6 @@ definitions:
       role:
         type: string
     type: object
-  dev.createModelBody:
-    properties:
-      adapter:
-        type: string
-      base_url:
-        type: string
-      capabilities:
-        additionalProperties: {}
-        type: object
-      config:
-        additionalProperties: {}
-        type: object
-      credential_kind_code:
-        type: string
-      credential_mode:
-        type: string
-      limits:
-        additionalProperties: {}
-        type: object
-      model_key:
-        type: string
-      name:
-        type: string
-      provider_type:
-        type: string
-      secret_id:
-        type: string
-    type: object
   dev.createSecretBody:
     properties:
       auth_type:
@@ -506,6 +246,22 @@ definitions:
         additionalProperties: {}
         type: object
       provider:
+        type: string
+    type: object
+  dev.createWorkspaceConversationBody:
+    properties:
+      agent_id:
+        type: string
+      environment:
+        $ref: '#/definitions/store.CoreEnvironmentSelection'
+      form:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      surface:
+        type: string
+      title:
         type: string
     type: object
   dev.createWorkspaceRequest:
@@ -524,40 +280,6 @@ definitions:
         type: string
       plaintext_value:
         type: string
-    type: object
-  dev.detectProviderModelEndpointsBody:
-    properties:
-      api_key:
-        type: string
-      base_url:
-        type: string
-      config:
-        additionalProperties: {}
-        type: object
-      credential_kind_code:
-        type: string
-      model_key:
-        type: string
-      secret_id:
-        type: string
-    type: object
-  dev.detectProviderModelEndpointsResponse:
-    properties:
-      supported_endpoint_types:
-        items:
-          type: string
-        type: array
-    type: object
-  dev.discoveredProviderModel:
-    properties:
-      exists:
-        type: boolean
-      id:
-        type: string
-      supported_endpoint_types:
-        items:
-          type: string
-        type: array
     type: object
   dev.gatewayActor:
     properties:
@@ -616,75 +338,6 @@ definitions:
       text:
         type: string
     type: object
-  dev.httpAgentInvokeBody:
-    properties:
-      endpoint:
-        type: string
-      headers:
-        additionalProperties:
-          type: string
-        type: object
-    type: object
-  dev.importProviderModelFailure:
-    properties:
-      error:
-        type: string
-      model_key:
-        type: string
-    type: object
-  dev.importProviderModelsBody:
-    properties:
-      adapter:
-        type: string
-      api_key:
-        type: string
-      base_url:
-        type: string
-      capabilities:
-        additionalProperties: {}
-        type: object
-      config:
-        additionalProperties: {}
-        type: object
-      credential_kind_code:
-        type: string
-      credential_mode:
-        type: string
-      dry_run:
-        type: boolean
-      limits:
-        additionalProperties: {}
-        type: object
-      model_ids:
-        items:
-          type: string
-        type: array
-      provider_type:
-        type: string
-      secret_id:
-        type: string
-      skip_existing:
-        type: boolean
-    type: object
-  dev.importProviderModelsResponse:
-    properties:
-      created:
-        items:
-          $ref: '#/definitions/store.ModelRead'
-        type: array
-      failed:
-        items:
-          $ref: '#/definitions/dev.importProviderModelFailure'
-        type: array
-      models:
-        items:
-          $ref: '#/definitions/dev.discoveredProviderModel'
-        type: array
-      skipped:
-        items:
-          type: string
-        type: array
-    type: object
   dev.installPluginBody:
     type: object
   dev.installSkillRequest:
@@ -710,13 +363,6 @@ definitions:
       items:
         items:
           $ref: '#/definitions/store.CredentialKindRead'
-        type: array
-    type: object
-  dev.listSandboxesResponse:
-    properties:
-      sandboxes:
-        items:
-          $ref: '#/definitions/dev.sandboxStatusResponse'
         type: array
     type: object
   dev.markGatewayOutboundDeliveredBody:
@@ -866,127 +512,6 @@ definitions:
       interaction:
         $ref: '#/definitions/store.AgentInteractionRead'
     type: object
-  dev.runtimeCredentialBody:
-    properties:
-      api_key:
-        type: string
-    type: object
-  dev.runtimeCredentialResponse:
-    properties:
-      credential_masked:
-        type: string
-      has_credential:
-        type: boolean
-      updated_at:
-        type: string
-    type: object
-  dev.runtimeStatusResponse:
-    properties:
-      available:
-        description: |-
-          Available reports whether the sandbox provider is reachable.
-          Only meaningful after credential registration in oss/selfhost;
-          in managed profile no workspace credential is expected.
-        type: boolean
-      configured_by:
-        description: |-
-          ConfiguredBy is "ops" when PARSAR_OPENCODE_RUNNER was set at
-          server boot. Informational only — admin UI badge.
-        type: string
-      credential_masked:
-        description: |-
-          CredentialMasked is the redacted form (e.g. "e2b_•••••...xyz")
-          for surfacing in the UI without exposing the secret.
-        type: string
-      has_credential:
-        description: |-
-          HasCredential is true when the workspace has a registered E2B
-          credential. Without this, sandbox-mode agents will be blocked
-          at first prompt.
-        type: boolean
-      profile:
-        description: |-
-          Profile is the runtime deployment profile. "managed" means the
-          deployment operator provides cloud sandbox credentials and
-          workspaces don't need to register an E2B key.
-        type: string
-      sandbox_agent_count:
-        description: |-
-          SandboxAgentCount is the number of agents in this workspace
-          whose declared runtime is 'sandbox'.
-        type: integer
-      sandbox_image:
-        description: |-
-          SandboxImage is the operator-configured container image used for
-          docker-backed sandbox agents. Empty for non-docker providers.
-        type: string
-    type: object
-  dev.sandboxConnectivityCheck:
-    properties:
-      duration_ms:
-        type: integer
-      error:
-        $ref: '#/definitions/dev.sandboxConnectivityCheckError'
-      name:
-        type: string
-      pass:
-        type: boolean
-    type: object
-  dev.sandboxConnectivityCheckError:
-    properties:
-      category:
-        type: string
-      detail:
-        type: string
-    type: object
-  dev.sandboxConnectivityResponse:
-    properties:
-      checks:
-        items:
-          $ref: '#/definitions/dev.sandboxConnectivityCheck'
-        type: array
-      duration_ms:
-        type: integer
-      overall:
-        type: string
-      sandbox_id:
-        type: string
-      started_at:
-        type: string
-    type: object
-  dev.sandboxStatusResponse:
-    properties:
-      agent_id:
-        type: string
-      binding_id:
-        type: string
-      created_at:
-        type: string
-      expires_at:
-        description: |-
-          ExpiresAt is fetched live from the e2b control plane. Nil when the
-          sandbox is still spawning or the provider lookup failed.
-        type: string
-      killed_at:
-        type: string
-      last_active_at:
-        type: string
-      metadata:
-        additionalProperties: {}
-        type: object
-      name:
-        type: string
-      sandbox_id:
-        type: string
-      status:
-        type: string
-      status_kind:
-        type: string
-      template_id:
-        type: string
-      workspace_id:
-        type: string
-    type: object
   dev.scheduledTaskCreateBody:
     properties:
       cron_expr:
@@ -1022,30 +547,16 @@ definitions:
     type: object
   dev.updateAgentBody:
     properties:
-      capabilities:
-        items:
-          type: string
-        type: array
       config:
         additionalProperties: {}
         type: object
       connector_type:
         type: string
-      default_model_id:
-        type: string
       description:
         type: string
-      inline_new_secrets:
-        items:
-          $ref: '#/definitions/dev.createAgentInlineSecretBody'
-        type: array
       name:
         type: string
-      slug:
-        type: string
       system_prompt:
-        type: string
-      workspace_id:
         type: string
     type: object
   dev.updateAgentFeishuConnectorBody:
@@ -1070,28 +581,6 @@ definitions:
   dev.updateAgentVisibilityBody:
     properties:
       visibility:
-        type: string
-    type: object
-  dev.updateModelBody:
-    properties:
-      base_url:
-        type: string
-      capabilities:
-        additionalProperties: {}
-        type: object
-      config:
-        additionalProperties: {}
-        type: object
-      credential_kind_code:
-        type: string
-      limits:
-        additionalProperties: {}
-        type: object
-      model_key:
-        type: string
-      name:
-        type: string
-      secret_id:
         type: string
     type: object
   dev.updateWorkspaceDiscordConnectorBody:
@@ -1161,18 +650,6 @@ definitions:
       enabled:
         type: boolean
       tenant_id:
-        type: string
-    type: object
-  dev.upgradeAgentCapabilityBody:
-    properties:
-      new_version_id:
-        type: string
-      pinning_mode:
-        description: |-
-          PinningMode lets the upgrade endpoint set the mode atomically with
-          the version bump — e.g. user switches version from v1 to v3 and
-          pins it at the same time, or switches from pinned-v2 to latest.
-          Empty falls back to "pinned" (preserves prior behaviour).
         type: string
     type: object
   dev.userCredentialResponse:
@@ -1285,84 +762,6 @@ definitions:
       name:
         type: string
       user_id:
-        type: string
-    type: object
-  runtime.createPairingRequest:
-    properties:
-      name:
-        type: string
-      provider:
-        type: string
-      token_ttl_seconds:
-        type: integer
-      type:
-        type: string
-    type: object
-  runtime.createPairingResponse:
-    properties:
-      pairing_token:
-        type: string
-      runtime:
-        $ref: '#/definitions/runtime.runtimeDTO'
-    type: object
-  runtime.heartbeatResponse:
-    properties:
-      liveness:
-        type: string
-    type: object
-  runtime.pairRequest:
-    properties:
-      hostname:
-        type: string
-      pairing_token:
-        type: string
-      runner_public_key:
-        type: string
-      version:
-        type: string
-    type: object
-  runtime.pairResponse:
-    properties:
-      runner_credential:
-        type: string
-      runtime:
-        $ref: '#/definitions/runtime.runtimeDTO'
-    type: object
-  runtime.patchRequest:
-    properties:
-      name:
-        type: string
-    type: object
-  runtime.runtimeDTO:
-    properties:
-      config:
-        additionalProperties: {}
-        type: object
-      created_at:
-        type: string
-      hostname:
-        type: string
-      id:
-        type: string
-      last_heartbeat_at:
-        type: string
-      liveness:
-        type: string
-      name:
-        type: string
-      owner_user_id:
-        type: string
-      pairing_token_expires_at:
-        type: string
-      provider:
-        type: string
-      type:
-        type: string
-      updated_at:
-        type: string
-      version:
-        type: string
-      workspace_id:
         type: string
     type: object
   specmem.createFragmentRequest:
@@ -1658,6 +1057,50 @@ definitions:
       workspace_id:
         type: string
     type: object
+  store.ConversationRead:
+    properties:
+      created_at:
+        type: string
+      form:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      primary_agent_deleted:
+        type: boolean
+      primary_agent_id:
+        description: |-
+          PrimaryAgentID / PrimaryAgentName are derived fields, hydrated from
+          metadata.primary_agent_id + a JOIN against agents.
+        type: string
+      primary_agent_name:
+        type: string
+      status:
+        type: string
+      surface:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      workspace_id:
+        type: string
+    type: object
+  store.CoreEnvironmentSelection:
+    properties:
+      capability_directories:
+        items:
+          type: string
+        type: array
+      environment_template_id:
+        type: string
+      type:
+        type: string
+      workspace_directory:
+        type: string
+    type: object
   store.CredentialKindRead:
     properties:
       built_in:
@@ -1681,67 +1124,6 @@ definitions:
       value_schema:
         additionalProperties: {}
         type: object
-    type: object
-  store.MessageAttachment:
-    properties:
-      data_base64:
-        description: |-
-          DataBase64 is the standard-base64 encoded raw bytes. Callers
-          MUST NOT base64-encode again on persistence.
-        type: string
-      kind:
-        type: string
-      mime:
-        description: |-
-          MIME is the upstream-reported content type. Falls back to a
-          kind-specific default when upstream omits it.
-        type: string
-      size:
-        description: |-
-          Size is the byte count before base64 expansion. Cached so
-          observability surfaces don't have to decode.
-        type: integer
-    type: object
-  store.ModelRead:
-    properties:
-      adapter:
-        type: string
-      base_url:
-        type: string
-      config:
-        additionalProperties: {}
-        type: object
-      created_at:
-        type: string
-      created_by:
-        type: string
-      credential_kind_code:
-        type: string
-      credential_mode:
-        type: string
-      id:
-        type: string
-      model_key:
-        type: string
-      name:
-        type: string
-      provider_type:
-        type: string
-      secret_id:
-        type: string
-      slug:
-        type: string
-      status:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  store.ModelReference:
-    properties:
-      id:
-        type: string
-      name:
-        type: string
     type: object
   store.RequiredCredential:
     properties:
@@ -2099,53 +1481,6 @@ paths:
               type: string
             type: object
       summary: Cancel a single agent run
-      tags:
-      - agent-runs
-  /api/v1/agent-runs/{runID}/requeue:
-    post:
-      consumes:
-      - application/json
-      description: Re-schedules a failed or stalled agent run. Owner/admin only.
-      operationId: requeueDevAgentRun
-      parameters:
-      - description: Agent run UUID
-        in: path
-        name: runID
-        required: true
-        type: string
-      - description: Requeue payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.requeueAgentRunBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Requeued run
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid body or UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Run not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Re-queue an agent run
       tags:
       - agent-runs
   /api/v1/agent-runs/{runID}/retry:
@@ -2612,8 +1947,9 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Applies a partial update. All fields are optional; nil pointers
-        mean "leave as-is". Slug and runtime are immutable and rejected with 422.
+      description: Updates Core Agent display fields, model name and instructions.
+        Existing conversations retain their Core configuration snapshot. Unknown fields
+        are rejected.
       operationId: updateDevAgent
       parameters:
       - description: Agent UUID
@@ -2648,60 +1984,12 @@ paths:
               type: string
             type: object
         "422":
-          description: Immutable field (slug/runtime), or unknown capability
+          description: Invalid Agent configuration
           schema:
             additionalProperties:
               type: string
             type: object
       summary: Update mutable agent fields
-      tags:
-      - agents
-  /api/v1/agents/{agentID}/connector:
-    post:
-      consumes:
-      - application/json
-      description: Updates the HTTP Agent endpoint and optional workspace-owned bearer
-        secret_id. Owner/admin only. Existing profile settings are preserved.
-      operationId: configureDevAgentConnector
-      parameters:
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      - description: Connector config payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.configureAgentConnectorBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated agent
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Unknown agent
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Configure an agent's connector
       tags:
       - agents
   /api/v1/agents/{agentID}/connector/feishu:
@@ -2952,54 +2240,6 @@ paths:
               type: string
             type: object
       summary: Enable an agent
-      tags:
-      - agents
-  /api/v1/agents/{agentID}/profile:
-    post:
-      consumes:
-      - application/json
-      description: Updates the agent's public profile fields (display name, avatar,
-        description). Owner/admin only.
-      operationId: configureDevAgentProfile
-      parameters:
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      - description: Profile payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.configureAgentProfileBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated agent
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid body or UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Agent not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Configure an agent's profile
       tags:
       - agents
   /api/v1/agents/{agentID}/scheduled-tasks:
@@ -4461,97 +3701,6 @@ paths:
       summary: Serve plugin client bundle
       tags:
       - plugins
-  /api/v1/runtimes/{runtimeID}/heartbeat:
-    post:
-      description: Called by the runner daemon to refresh last_heartbeat_at and flip
-        liveness to online. Requires the bearer credential minted by POST /api/v1/runtimes/pair.
-      operationId: runnerHeartbeat
-      parameters:
-      - description: Runtime UUID
-        in: path
-        name: runtimeID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Heartbeat accepted, current liveness
-          schema:
-            $ref: '#/definitions/runtime.heartbeatResponse'
-        "400":
-          description: Missing runtime id
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Missing / invalid bearer credential
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Store error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Runtime heartbeat
-      tags:
-      - runtimes
-  /api/v1/runtimes/pair:
-    post:
-      consumes:
-      - application/json
-      description: Consumes a pairing token minted by POST /api/v1/workspaces/{workspaceID}/runtimes,
-        or the configured shared local-runtime token, and returns the runner credential
-        used to authenticate subsequent heartbeats. Open endpoint — the daemon has
-        no credential yet.
-      operationId: pairRuntime
-      parameters:
-      - description: Pairing token exchange
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/runtime.pairRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Runtime promoted and runner credential minted
-          schema:
-            $ref: '#/definitions/runtime.pairResponse'
-        "400":
-          description: Bad request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Pairing token invalid or expired
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Credential mint or persist failed
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Shared local runtime cannot pair before workspace setup
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Complete runtime pairing
-      tags:
-      - runtimes
   /api/v1/scheduled-tasks/{taskID}:
     delete:
       description: Soft-deletes the scheduled task. Idempotent; caller must be a workspace
@@ -5055,9 +4204,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates an agent under the given workspace. Owner/admin only. inline_new_secrets
-        are materialised into the shared secret vault before the agent is persisted;
-        any binding entries in config are patched with the resolved ids.
+      description: Creates a Core Agent with a model name and instructions. Execution
+        credentials and environments are owned by Core. Owner/admin only.
       operationId: createDevAgent
       parameters:
       - description: Workspace UUID
@@ -5151,71 +4299,6 @@ paths:
       summary: Get an agent in a workspace
       tags:
       - agents
-  /api/v1/workspaces/{workspaceID}/agents/{agentID}/builtin-capabilities/{key}:
-    put:
-      consumes:
-      - application/json
-      description: Toggles a runtime-injected built-in on/off for one agent. Workspace
-        owners, admins, and members may change it. The key must be a known built-in.
-        Successful requests appear in Agent audit.
-      operationId: setDevAgentBuiltinCapability
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      - description: Built-in capability key (e.g. parsar_chat_history)
-        in: path
-        name: key
-        required: true
-        type: string
-      - description: Enabled flag
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.builtinCapabilityBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: agent_id, builtin_key, enabled
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid UUID or malformed body
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is a viewer or non-member
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Unknown builtin key or agent not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Database-backed capability APIs are disabled
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Toggle a built-in capability on an agent
-      tags:
-      - capabilities
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities:
     get:
       description: Returns installed capabilities, their pinning_mode and bound/latest
@@ -5266,77 +4349,6 @@ paths:
               type: string
             type: object
       summary: List agent capabilities
-      tags:
-      - capabilities
-  /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityID}/upgrade:
-    post:
-      consumes:
-      - application/json
-      description: Swaps the agent's binding to a new version of the same capability,
-        optionally flipping the pinning mode at the same time. Workspace owner, admin,
-        or member only. Successful requests appear in Agent audit.
-      operationId: upgradeDevAgentCapability
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      - description: Capability UUID
-        in: path
-        name: capabilityID
-        required: true
-        type: string
-      - description: new_version_id and optional pinning_mode
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.upgradeAgentCapabilityBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated agent_capability row
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid UUID or malformed body
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is a viewer or non-member
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Agent, capability, or version not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "422":
-          description: Target version credential requirements are not satisfied
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Database-backed capability APIs are disabled
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Upgrade an agent's capability version
       tags:
       - capabilities
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}:
@@ -5390,80 +4402,6 @@ paths:
               type: string
             type: object
       summary: Uninstall a capability from an agent
-      tags:
-      - capabilities
-  /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}/enable:
-    post:
-      consumes:
-      - application/json
-      description: Enables (installs) a capability version on the agent. Cross-workspace
-        enable requires the source capability to be public and non-deprecated. Workspace
-        owner, admin, or member only. Successful requests appear in Agent audit. External
-        HTTP Agents manage capabilities in their own service.
-      operationId: enableDevAgentCapability
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      - description: Capability version UUID
-        in: path
-        name: capabilityVersionID
-        required: true
-        type: string
-      - description: Configuration + pinning mode
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.agentCapabilityBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Enabled agent_capability row
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid UUID or malformed body
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is a viewer/non-member, or marketplace capability is
-            unavailable
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Agent, capability, or version not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "422":
-          description: Capability is incompatible with the Agent engine or its credentials
-            are invalid
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Database-backed capability APIs are disabled
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Enable a capability on an agent
       tags:
       - capabilities
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/mcp:
@@ -5737,426 +4675,6 @@ paths:
       summary: Get agent metrics
       tags:
       - agents
-  /api/v1/workspaces/{workspaceID}/agents/{agentID}/runtime:
-    get:
-      description: Returns the runtime/device currently bound to the agent.
-      operationId: getDevAgentRuntimeBinding
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Runtime binding
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Agent not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get an agent's runtime binding
-      tags:
-      - runtimes
-    post:
-      consumes:
-      - application/json
-      description: Binds the agent to a runtime/device. Empty runtime_id clears the
-        binding. Owner/admin only.
-      operationId: setDevAgentRuntimeBinding
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      - description: Runtime binding payload
-        in: body
-        name: body
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Runtime binding
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid body or UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Agent not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Bind an agent to a runtime
-      tags:
-      - runtimes
-  /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox:
-    get:
-      description: Returns the current sandbox binding for the (workspace, agent)
-        tuple, folding in the live e2b TTL when the manager is wired. Returns 200
-        with JSON null when no active binding exists.
-      operationId: getDevAgentSandboxStatus
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Active sandbox binding, or null when unbound
-          schema:
-            $ref: '#/definitions/dev.sandboxStatusResponse'
-        "400":
-          description: workspace_id and agent_id must be UUIDs
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not a workspace member
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Sandbox lifecycle store not wired
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get an agent's sandbox status
-      tags:
-      - sandboxes
-  /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/acquire:
-    post:
-      description: Fire-and-forget provisioning of a sandbox for an agent with no
-        active binding. Returns 202 immediately; the front-end polls status to pick
-        up the new runtime_id. Owner/admin only.
-      operationId: createDevSandboxAcquire
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Agent is already bound to an active sandbox
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "202":
-          description: Provisioning started in background
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: workspace_id and agent_id must be UUIDs
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: agent_daemon sandbox provider not wired
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Acquire a sandbox for an agent
-      tags:
-      - sandboxes
-  /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/kill:
-    post:
-      description: 'Tears down the agent''s sandbox: Release evicts the in-memory
-        cache, kills the E2B instance, marks the DB row killed, then clears agents.runtime_id
-        so future dispatches spawn fresh. Owner/admin only.'
-      operationId: killDevAgentSandbox
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Sandbox killed
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: workspace_id and agent_id must be UUIDs
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: No active sandbox binding to act on
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "502":
-          description: Provider rejected sandbox release
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Sandbox lifecycle store not wired
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Kill an agent's sandbox
-      tags:
-      - sandboxes
-  /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/rebuild:
-    post:
-      description: Kills the current sandbox and re-provisions a new one in the background
-        using the agent's current config (sandbox_size, template). Returns immediately;
-        the re-Acquire runs async and persists the new runtime_id when it completes.
-        Owner/admin only.
-      operationId: rebuildDevAgentSandbox
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Sandbox killed and re-provisioning in background
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: workspace_id and agent_id must be UUIDs
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: No active sandbox binding to rebuild
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "502":
-          description: Provider rejected sandbox release
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Sandbox lifecycle store not wired
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Rebuild an agent's sandbox
-      tags:
-      - sandboxes
-  /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/renew:
-    post:
-      description: Bumps the provider TTL on the live sandbox, including bindings
-        created by a sibling pod. 502 on renew failure. Owner/admin only.
-      operationId: renewDevAgentSandbox
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Sandbox TTL extended
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: workspace_id and agent_id must be UUIDs
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: No active sandbox binding to renew
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Binding disappeared during renewal
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "502":
-          description: Renew failed at provider
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Sandbox lifecycle store or manager not wired
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Renew an agent's sandbox TTL
-      tags:
-      - sandboxes
-  /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/test-connection:
-    post:
-      description: Runs a two-step probe (daemon_paired then daemon_online) against
-        the runtime backing the agent's active sandbox binding. Emits an audit event
-        with the outcome. Owner/admin only.
-      operationId: testDevAgentSandboxConnection
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Agent UUID
-        in: path
-        name: agentID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Connectivity check result
-          schema:
-            $ref: '#/definitions/dev.sandboxConnectivityResponse'
-        "400":
-          description: workspace_id and agent_id must be UUIDs
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: No active sandbox binding
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Sandbox lifecycle store not wired
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Test an agent's sandbox connectivity
-      tags:
-      - sandboxes
   /api/v1/workspaces/{workspaceID}/archive:
     post:
       description: Marks the workspace as archived. Owner only.
@@ -7523,6 +6041,377 @@ paths:
       summary: List workspace connectors
       tags:
       - workspaces
+  /api/v1/workspaces/{workspaceID}/conversations:
+    post:
+      consumes:
+      - application/json
+      description: Environment selectors follow Agents API discriminators. Hosted
+        initialization is configured through Core templates. Execution starts with
+        the first input.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Session configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dev.createWorkspaceConversationBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/store.ConversationRead'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a Session
+      tags:
+      - conversations
+  /api/v1/workspaces/{workspaceID}/core/environments/templates:
+    get:
+      consumes:
+      - application/json
+      description: Uses the pinned Agents API template schema and workspace-scoped
+        Core credentials. Secrets and setup command bodies are never cached by the
+        product. Mutations require workspace administration.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Core pagination cursor
+        in: query
+        name: after
+        type: string
+      - description: Official environment template create or update parameters
+        in: body
+        name: body
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Core template, page, or deletion receipt
+          schema:
+            additionalProperties: true
+            type: object
+        "201":
+          description: Created Core template
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Workspace access denied
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Template not found in this workspace's Core project
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Core operation unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Manage Core environment templates
+      tags:
+      - core-environments
+    post:
+      consumes:
+      - application/json
+      description: Uses the pinned Agents API template schema and workspace-scoped
+        Core credentials. Secrets and setup command bodies are never cached by the
+        product. Mutations require workspace administration.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Core pagination cursor
+        in: query
+        name: after
+        type: string
+      - description: Official environment template create or update parameters
+        in: body
+        name: body
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Core template, page, or deletion receipt
+          schema:
+            additionalProperties: true
+            type: object
+        "201":
+          description: Created Core template
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Workspace access denied
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Template not found in this workspace's Core project
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Core operation unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Manage Core environment templates
+      tags:
+      - core-environments
+  /api/v1/workspaces/{workspaceID}/core/environments/templates/{templateID}:
+    delete:
+      consumes:
+      - application/json
+      description: Uses the pinned Agents API template schema and workspace-scoped
+        Core credentials. Secrets and setup command bodies are never cached by the
+        product. Mutations require workspace administration.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Core template ID
+        in: path
+        name: templateID
+        type: string
+      - description: Core pagination cursor
+        in: query
+        name: after
+        type: string
+      - description: Official environment template create or update parameters
+        in: body
+        name: body
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Core template, page, or deletion receipt
+          schema:
+            additionalProperties: true
+            type: object
+        "201":
+          description: Created Core template
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Workspace access denied
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Template not found in this workspace's Core project
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Core operation unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Manage Core environment templates
+      tags:
+      - core-environments
+    get:
+      consumes:
+      - application/json
+      description: Uses the pinned Agents API template schema and workspace-scoped
+        Core credentials. Secrets and setup command bodies are never cached by the
+        product. Mutations require workspace administration.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Core template ID
+        in: path
+        name: templateID
+        type: string
+      - description: Core pagination cursor
+        in: query
+        name: after
+        type: string
+      - description: Official environment template create or update parameters
+        in: body
+        name: body
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Core template, page, or deletion receipt
+          schema:
+            additionalProperties: true
+            type: object
+        "201":
+          description: Created Core template
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Workspace access denied
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Template not found in this workspace's Core project
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Core operation unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Manage Core environment templates
+      tags:
+      - core-environments
+    post:
+      consumes:
+      - application/json
+      description: Uses the pinned Agents API template schema and workspace-scoped
+        Core credentials. Secrets and setup command bodies are never cached by the
+        product. Mutations require workspace administration.
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Core template ID
+        in: path
+        name: templateID
+        type: string
+      - description: Core pagination cursor
+        in: query
+        name: after
+        type: string
+      - description: Official environment template create or update parameters
+        in: body
+        name: body
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Core template, page, or deletion receipt
+          schema:
+            additionalProperties: true
+            type: object
+        "201":
+          description: Created Core template
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Workspace access denied
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Template not found in this workspace's Core project
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Core operation unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Manage Core environment templates
+      tags:
+      - core-environments
   /api/v1/workspaces/{workspaceID}/credential-kinds:
     get:
       description: Returns every active credential_kinds row. Caller must be a workspace
@@ -8128,863 +7017,6 @@ paths:
       summary: Update a workspace member's role
       tags:
       - workspace-members
-  /api/v1/workspaces/{workspaceID}/models:
-    get:
-      description: Returns model rows for the workspace. Caller must be a workspace
-        member.
-      operationId: listDevModels
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Model list
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not a workspace member
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: List workspace models
-      tags:
-      - models
-    post:
-      consumes:
-      - application/json
-      description: Creates a new model row bound to a provider and credential. Owner/admin
-        only.
-      operationId: createDevModel
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Model create payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.createModelBody'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created model
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid body or UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Create a model in a workspace
-      tags:
-      - models
-  /api/v1/workspaces/{workspaceID}/models/{modelID}:
-    delete:
-      description: Hard-deletes a model. Owner/admin only. Models referenced by active
-        agents are rejected.
-      operationId: deleteDevModel
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Model UUID
-        in: path
-        name: modelID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: Deleted model
-        "400":
-          description: Invalid UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Model not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Model is still referenced
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Delete a model
-      tags:
-      - models
-    patch:
-      consumes:
-      - application/json
-      description: Partially updates a model's mutable fields. Owner/admin only.
-      operationId: updateDevModel
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Model UUID
-        in: path
-        name: modelID
-        required: true
-        type: string
-      - description: Model update payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.updateModelBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated model
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid body or UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Model not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Update a model
-      tags:
-      - models
-  /api/v1/workspaces/{workspaceID}/models/{modelID}/disable:
-    post:
-      description: Marks the model as disabled. Owner/admin only. Disabled models
-        are hidden from selectors.
-      operationId: disableDevModel
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Model UUID
-        in: path
-        name: modelID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Disabled model
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Model not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Disable a model
-      tags:
-      - models
-  /api/v1/workspaces/{workspaceID}/models/{modelID}/test:
-    post:
-      description: Runs a live probe against the model's configured provider and credentials.
-        Owner/admin only.
-      operationId: testDevModelConnectivity
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Model UUID
-        in: path
-        name: modelID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Probe result
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Model not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Test a model's connectivity
-      tags:
-      - models
-  /api/v1/workspaces/{workspaceID}/models/bulk-delete:
-    post:
-      consumes:
-      - application/json
-      description: Hard-deletes selected models. Owner/admin only. Referenced models
-        are skipped and returned in failed.
-      operationId: bulkDeleteDevModels
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Model ids
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.bulkDeleteModelsBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Bulk delete result
-          schema:
-            $ref: '#/definitions/dev.bulkDeleteModelsResponse'
-        "400":
-          description: Invalid body or UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Bulk delete models
-      tags:
-      - models
-  /api/v1/workspaces/{workspaceID}/models/detect-endpoints:
-    post:
-      consumes:
-      - application/json
-      description: Probes common OpenAI/Anthropic endpoint families for a base URL
-        and model key. Owner/admin only.
-      operationId: detectDevModelEndpoints
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Endpoint detection payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.detectProviderModelEndpointsBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Detected endpoint families
-          schema:
-            $ref: '#/definitions/dev.detectProviderModelEndpointsResponse'
-        "400":
-          description: Invalid body, UUID, or credentials
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Detect supported model endpoint types
-      tags:
-      - models
-  /api/v1/workspaces/{workspaceID}/models/import:
-    post:
-      consumes:
-      - application/json
-      description: Fetches model ids from base_url + /v1/models and batch-creates
-        model rows using the existing model catalog schema. Owner/admin only.
-      operationId: importDevProviderModels
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Model import payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.importProviderModelsBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Import preview or result
-          schema:
-            $ref: '#/definitions/dev.importProviderModelsResponse'
-        "400":
-          description: Invalid body, UUID, provider response, or credentials
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Import models from provider /models
-      tags:
-      - models
-  /api/v1/workspaces/{workspaceID}/runtime/credential:
-    delete:
-      description: Soft-deletes the active runtime credential row and clears the workspaces.config
-        pointer. Idempotent; the underlying secret row is retained as an audit trail.
-        Owner/admin only.
-      operationId: deleteDevWorkspaceRuntimeCredential
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Credential cleared
-          schema:
-            $ref: '#/definitions/dev.runtimeCredentialResponse'
-        "400":
-          description: workspace_id must be a valid uuid
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Workspace not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Database-backed runtime credential is disabled
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Clear the workspace runtime credential
-      tags:
-      - runtimes
-    put:
-      consumes:
-      - application/json
-      description: Atomic upsert of the workspace's sandbox (E2B) runtime credential.
-        Soft-deletes any prior row, encrypts the api_key with PARSAR_MASTER_KEY, then
-        flips workspaces.config.runtime_credential_secret_id. Owner/admin only.
-      operationId: putDevWorkspaceRuntimeCredential
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Credential payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.runtimeCredentialBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Credential registered
-          schema:
-            $ref: '#/definitions/dev.runtimeCredentialResponse'
-        "400":
-          description: workspace_id invalid, body invalid, or api_key empty
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Workspace not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Failed to encrypt or persist credential
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Database or PARSAR_MASTER_KEY not configured
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Register or replace the workspace runtime credential
-      tags:
-      - runtimes
-  /api/v1/workspaces/{workspaceID}/runtime/status:
-    get:
-      description: Backs the RuntimeStatusBanner. Reports whether the workspace has
-        a runtime credential registered, whether the sandbox provider is reachable,
-        how many agents are configured for sandbox runtime, and the deployment profile
-        (oss/selfhost/managed).
-      operationId: getDevWorkspaceRuntimeStatus
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Runtime status snapshot
-          schema:
-            $ref: '#/definitions/dev.runtimeStatusResponse'
-        "403":
-          description: Caller is not a workspace member
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Workspace not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Runtime settings unavailable
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Runtime status not wired
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get workspace runtime status
-      tags:
-      - runtimes
-  /api/v1/workspaces/{workspaceID}/runtimes:
-    get:
-      description: Returns runtimes registered in the workspace. Any workspace role
-        may read. Supports filtering by type / placement / liveness / agent_kind and
-        paging via limit.
-      operationId: listWorkspaceRuntimes
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Filter by runtime type
-        enum:
-        - agent_daemon
-        - sandbox
-        - external
-        in: query
-        name: type
-        type: string
-      - description: Filter by placement
-        enum:
-        - local_device
-        - cloud_sandbox
-        - external_agent
-        in: query
-        name: placement
-        type: string
-      - description: Filter by liveness
-        enum:
-        - pending_pairing
-        - offline
-        - online
-        - error
-        in: query
-        name: liveness
-        type: string
-      - description: Filter by supported agent kind (e.g. claude_code)
-        in: query
-        name: agent_kind
-        type: string
-      - description: Page size (default 100, max 500)
-        in: query
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: '{ runtimes: [Runtime] }'
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad filter
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Session required
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Not a workspace member
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: List workspace runtimes
-      tags:
-      - runtimes
-    post:
-      consumes:
-      - application/json
-      description: Owner/admin only. Registers a new agent-daemon runtime for the
-        workspace and returns a short-lived pairing token. The daemon calls POST /api/v1/runtimes/pair
-        with this token to complete pairing.
-      operationId: createWorkspaceRuntimePairing
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Pairing request
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/runtime.createPairingRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Runtime created and pairing token issued
-          schema:
-            $ref: '#/definitions/runtime.createPairingResponse'
-        "400":
-          description: Bad request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Session required
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Owner or admin required
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Runtime name already taken
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Create runtime pairing
-      tags:
-      - runtimes
-  /api/v1/workspaces/{workspaceID}/runtimes/{runtimeID}:
-    delete:
-      description: Owner/admin only. Soft-deletes the runtime; heartbeat and admin
-        lookups will no longer see the row.
-      operationId: deleteWorkspaceRuntime
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Runtime UUID
-        in: path
-        name: runtimeID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: Deleted
-        "401":
-          description: Session required
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Owner or admin required
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Runtime not found in workspace
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Delete workspace runtime
-      tags:
-      - runtimes
-    get:
-      description: Returns a single runtime by id, scoped to the workspace. Any workspace
-        role may read.
-      operationId: getWorkspaceRuntime
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Runtime UUID
-        in: path
-        name: runtimeID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Runtime
-          schema:
-            $ref: '#/definitions/runtime.runtimeDTO'
-        "401":
-          description: Session required
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Not a workspace member
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Runtime not found in workspace
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get workspace runtime
-      tags:
-      - runtimes
-    patch:
-      consumes:
-      - application/json
-      description: 'Owner/admin only. Updates mutable fields on a runtime (currently:
-        name).'
-      operationId: patchWorkspaceRuntime
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Runtime UUID
-        in: path
-        name: runtimeID
-        required: true
-        type: string
-      - description: Fields to update
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/runtime.patchRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated runtime
-          schema:
-            $ref: '#/definitions/runtime.runtimeDTO'
-        "400":
-          description: Bad request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Session required
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Owner or admin required
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Runtime not found in workspace
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Runtime name already taken
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Patch workspace runtime
-      tags:
-      - runtimes
-  /api/v1/workspaces/{workspaceID}/sandboxes:
-    get:
-      description: Returns every active sandbox binding for the workspace, newest-first.
-        Powers the admin Sandboxes page. 503 in local mode when sandbox lifecycle
-        store is not wired.
-      operationId: listDevWorkspaceSandboxes
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Max bindings to return
-        in: query
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Active sandbox bindings
-          schema:
-            $ref: '#/definitions/dev.listSandboxesResponse'
-        "400":
-          description: workspace_id must be a UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not a workspace member
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Sandbox lifecycle store not wired
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: List active sandboxes in a workspace
-      tags:
-      - sandboxes
   /api/v1/workspaces/{workspaceID}/scheduled-tasks:
     get:
       description: Paginated list of every scheduled task in the workspace across
@@ -9792,54 +7824,6 @@ paths:
       summary: Dev-only email + code login
       tags:
       - dev
-  /dev/connectors/opencode/stream:
-    post:
-      consumes:
-      - application/json
-      description: Dev-only Server-Sent Events endpoint that forwards the OpenCode
-        connector's StreamPrompt output. Does NOT manage agent_run state — callers
-        drive lifecycle via the regular dev endpoints.
-      operationId: streamDevConnectorPrompt
-      parameters:
-      - description: Prompt input (workspace_id, conversation_id, run_id, agent_config
-          required)
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/connector.PromptInput'
-      produces:
-      - application/x-json-stream
-      responses:
-        "200":
-          description: SSE stream opened
-        "400":
-          description: Body decode or validation error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: ResponseWriter does not support flushing or connector failure
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "501":
-          description: Connector does not support streaming
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: OpenCode AgentConnector is not registered
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Stream a raw connector prompt (dev SSE)
-      tags:
-      - gateway
   /dev/gateway/inbound:
     post:
       consumes:
@@ -9929,229 +7913,6 @@ paths:
       summary: Mark an outbound gateway message delivered
       tags:
       - gateway
-  /dev/http-agent/runner/run-once:
-    post:
-      consumes:
-      - application/json
-      description: Executes a single HTTP-agent invocation synchronously and returns
-        the result. Development helper.
-      operationId: runDevHTTPAgentOnce
-      parameters:
-      - description: Run payload
-        in: body
-        name: body
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Run result
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid body
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Run an HTTP agent once
-      tags:
-      - dev
-  /dev/http-agent/runs/{runID}/invoke:
-    post:
-      consumes:
-      - application/json
-      description: Executes the HTTP-agent invocation associated with the given run
-        row. Development helper.
-      operationId: invokeDevHTTPAgentRun
-      parameters:
-      - description: Run UUID
-        in: path
-        name: runID
-        required: true
-        type: string
-      - description: Invocation payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dev.httpAgentInvokeBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Run result
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid body or UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Run not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Invoke an HTTP agent run
-      tags:
-      - dev
-  /internal/agent-daemon/stream-prompt:
-    post:
-      consumes:
-      - application/json
-      description: Forwarded StreamPrompt entry point on the owner pod. Token-gated
-        by the cluster-shared PARSAR_MASTER_KEY bearer.
-      operationId: streamPromptInternal
-      parameters:
-      - description: Bearer <cluster shared token>
-        in: header
-        name: Authorization
-        required: true
-        type: string
-      - description: generation + PromptInput
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/agentdaemon.remoteStreamPromptRequest'
-      produces:
-      - text/plain
-      responses:
-        "200":
-          description: NDJSON stream of PromptEvent (application/x-ndjson)
-          schema:
-            type: string
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Unauthorized
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: stale owner
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Owner-pod stream-prompt (internal)
-      tags:
-      - internal
-  /internal/agent-daemon/submit-permission:
-    post:
-      consumes:
-      - application/json
-      description: Forwarded SubmitPermission entry point on the owner pod. Token-gated
-        by the cluster-shared bearer.
-      operationId: submitPermissionInternal
-      parameters:
-      - description: Bearer <cluster shared token>
-        in: header
-        name: Authorization
-        required: true
-        type: string
-      - description: generation + PermissionDecision
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/agentdaemon.remoteSubmitPermissionRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: '{\"ok\":true}'
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Unauthorized
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: stale owner
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Owner-pod submit-permission (internal)
-      tags:
-      - internal
-  /internal/agent-daemon/submit-prompt-for-user-choice:
-    post:
-      consumes:
-      - application/json
-      description: Forwarded SubmitPromptForUserChoice entry point on the owner pod.
-        Token-gated by the cluster-shared bearer.
-      operationId: submitPromptForUserChoiceInternal
-      parameters:
-      - description: Bearer <cluster shared token>
-        in: header
-        name: Authorization
-        required: true
-        type: string
-      - description: generation + PromptForUserChoiceDecision
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/agentdaemon.remoteSubmitPromptForUserChoiceRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: '{\"ok\":true}'
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Unauthorized
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: stale owner
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Owner-pod submit-prompt-for-user-choice (internal)
-      tags:
-      - internal
   /internal/im/history:
     get:
       description: Returns a bounded, live page of IM messages for the given conversation.
