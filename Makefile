@@ -18,7 +18,7 @@ endif
 PARSAR_IMAGE     ?= parsar
 PARSAR_IMAGE_TAG ?= dev
 
-.PHONY: help setup node-deps dev dev-db check check-setup check-sqlc check-go check-store check-web check-cli check-hygiene test test-fast test-go test-web typecheck-web lint-web-design lint-web test-cli typecheck reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi e2b-template e2b-template-binaries
+.PHONY: help setup node-deps dev dev-db check check-setup check-sqlc check-go check-store check-web check-cli check-hygiene test test-fast test-go test-web typecheck-web lint-web-design lint-web test-cli typecheck reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway dev-all smoke e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi e2b-template e2b-template-binaries
 
 help:
 	@printf '%s\n' \
@@ -211,12 +211,6 @@ cli:
 devgateway:
 	cd server && go run ./cmd/devgateway --help
 
-http-runner-once:
-	cd server && go run ./cmd/httprunner --once
-
-http-runner-loop:
-	cd server && go run ./cmd/httprunner --interval $${PARSAR_HTTP_RUNNER_INTERVAL:-2s} --max-runs $${PARSAR_HTTP_RUNNER_MAX_RUNS:-100}
-
 dev-all:
 	./scripts/dev-all.sh
 
@@ -225,9 +219,6 @@ dev-all:
 # deployed server — no dev seed data or fake IM mocks required.
 smoke:
 	./scripts/smoke.sh
-
-e2e-http-agent:
-	./scripts/e2e-http-agent.sh
 
 e2e-feishu-gateway:
 	./scripts/e2e-feishu-gateway.sh

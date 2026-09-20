@@ -1,3 +1,4 @@
+import { SessionLauncher } from "./SessionLauncher"
 import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
@@ -10,7 +11,6 @@ import {
   Bot,
   Wrench,
   Database,
-  Cpu,
   Plug,
   Users,
   Settings,
@@ -128,9 +128,8 @@ const menuGroups: MenuGroup[] = [
     // and the platforms it can be let out on.
     groupKey: "buildGroup",
     items: [
-      { id: "models", itemKey: "models", icon: Database },
+      { id: "environments", itemKey: "environments", icon: Database },
       { id: "capabilities", itemKey: "capabilities", icon: Wrench },
-      { id: "runtime", itemKey: "runtime", icon: Cpu },
       { id: "connections", itemKey: "connections", icon: Plug },
       { id: "secrets", itemKey: "secrets", icon: KeyRound },
     ],
@@ -215,6 +214,7 @@ export function AdminLayout({
         className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
         tabIndex={-1}
       >
+        {["agents", "environments", "conversations"].includes(activeMenu) && <SessionLauncher />}
         <PageTransition viewKey={level === "detail" ? `${activeMenu}:${entityId ?? ""}` : activeMenu} level={level}>
           {fullBleed ? (
             children

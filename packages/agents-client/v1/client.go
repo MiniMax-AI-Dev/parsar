@@ -47,3 +47,12 @@ func New(cfg Config) (openai.BetaAgentSessionService, error) {
 		option.WithMaxRetries(0),
 	), nil
 }
+
+// NewAgents exposes the complete pinned Agents API using the same isolated transport.
+func NewAgents(cfg Config) (openai.BetaAgentService, error) {
+	sessions, err := New(cfg)
+	if err != nil {
+		return openai.BetaAgentService{}, err
+	}
+	return openai.NewBetaAgentService(sessions.Options...), nil
+}

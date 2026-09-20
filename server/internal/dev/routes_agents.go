@@ -9,189 +9,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
-
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
 )
-
-type configureAgentConnectorBody struct {
-	ConnectorType string `json:"connector_type"`
-	Endpoint      string `json:"endpoint"`
-	SecretID      string `json:"secret_id"`
-	Model         string `json:"model"`
-	ModelID       string `json:"model_id"`
-	Workdir       string `json:"workdir"`
-	SystemPrompt  string `json:"system_prompt"`
-}
-
-type configureAgentProfileBody struct {
-	ModelID      string         `json:"model_id"`
-	Workdir      string         `json:"workdir"`
-	SystemPrompt string         `json:"system_prompt"`
-	Config       map[string]any `json:"config"`
-}
-
-// configureAgentConnector wires an agent to a channel connector.
-//
-//	@Summary		Configure an agent's connector
-//	@Description	Updates the HTTP Agent endpoint and optional workspace-owned bearer secret_id. Owner/admin only. Existing profile settings are preserved.
-//	@Tags			agents
-//	@ID				configureDevAgentConnector
-//	@Accept			json
-//	@Produce		json
-//	@Param			agentID	path	string							true	"Agent UUID"
-//	@Param			body	body	configureAgentConnectorBody		true	"Connector config payload"
-//	@Success		200 {object} map[string]interface{} "Updated agent"
-//	@Failure		400 {object} map[string]string "Invalid request"
-//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
-//	@Failure		404 {object} map[string]string "Unknown agent"
-//	@Router			/api/v1/agents/{agentID}/connector [post]
-func configureAgentConnector(runtimeStore RuntimeStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if runtimeStore == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed connector config is disabled"})
-			return
-		}
-		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
-		if !isUUID(agentID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
-			return
-		}
-		workspaceID, ok := workspaceIDForAgent(w, r.Context(), runtimeStore, agentID)
-		if !ok {
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
-			return
-		}
-
-		var req configureAgentConnectorBody
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
-			return
-		}
-		if strings.TrimSpace(req.ConnectorType) == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "connector_type is required"})
-			return
-		}
-		if req.ConnectorType == "http" && !isSafeHTTPAgentEndpoint(req.Endpoint) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "http connector endpoint must be an http(s) URL"})
-			return
-		}
-
-		result, err := runtimeStore.ConfigureDevAgentConnector(r.Context(), store.ConfigureDevAgentConnectorInput{
-			AgentID:       agentID,
-			ConnectorType: req.ConnectorType,
-			Endpoint:      req.Endpoint,
-			SecretID:      req.SecretID,
-			Model:         req.Model,
-			ModelID:       req.ModelID,
-			Workdir:       req.Workdir,
-			SystemPrompt:  req.SystemPrompt,
-		})
-		if err != nil {
-			switch {
-			case errors.Is(err, store.ErrInvalidConnectorType), errors.Is(err, store.ErrInvalidInput):
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			case errors.Is(err, store.ErrUnknownAgent):
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			default:
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to configure agent connector"})
-			}
-			return
-		}
-		writeJSON(w, http.StatusOK, result)
-	}
-}
-
-// configureAgentProfile updates the agent's public profile.
-//
-//	@Summary		Configure an agent's profile
-//	@Description	Updates the agent's public profile fields (display name, avatar, description). Owner/admin only.
-//	@Tags			agents
-//	@ID				configureDevAgentProfile
-//	@Accept			json
-//	@Produce		json
-//	@Param			agentID	path	string						true	"Agent UUID"
-//	@Param			body	body	configureAgentProfileBody	true	"Profile payload"
-//	@Success		200 {object} map[string]interface{} "Updated agent"
-//	@Failure		400 {object} map[string]string "Invalid body or UUID"
-//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
-//	@Failure		404 {object} map[string]string "Agent not found"
-//	@Router			/api/v1/agents/{agentID}/profile [post]
-func configureAgentProfile(runtimeStore RuntimeStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if runtimeStore == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed agent profile config is disabled"})
-			return
-		}
-		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
-		if !isUUID(agentID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
-			return
-		}
-		workspaceID, ok := workspaceIDForAgent(w, r.Context(), runtimeStore, agentID)
-		if !ok {
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
-			return
-		}
-		var req configureAgentProfileBody
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
-			return
-		}
-		result, err := runtimeStore.ConfigureAgentProfile(r.Context(), store.ConfigureAgentProfileInput{AgentID: agentID, ModelID: req.ModelID, Workdir: req.Workdir, SystemPrompt: req.SystemPrompt, Config: req.Config})
-		if err != nil {
-			switch {
-			case errors.Is(err, store.ErrInvalidInput):
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			case errors.Is(err, store.ErrUnknownAgent):
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			case errors.Is(err, store.ErrUnknownModel):
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			case errors.Is(err, store.ErrModelDisabled):
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			default:
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to configure agent profile"})
-			}
-			return
-		}
-
-		// Local-device binding: mirror createAgent so editing a
-		// local-mode agent's bound device keeps the agent's runtime_id in
-		// sync. Without this the admin list keeps reading "Runtime not bound".
-		if result.AgentConfig != nil {
-			if mode, _ := result.AgentConfig["daemon_mode"].(string); mode == "local" {
-				if deviceID, _ := result.AgentConfig["device_id"].(string); strings.TrimSpace(deviceID) != "" {
-					detail, detailErr := runtimeStore.GetAgentDetail(r.Context(), agentID)
-					if detailErr != nil {
-						log.Bg().Warn("configureAgentProfile: workspace lookup failed for runtime_id sync",
-							"agent_id", agentID, "err", detailErr)
-					} else if _, bindErr := runtimeStore.SetAgentRuntime(r.Context(), store.SetAgentRuntimeInput{
-						WorkspaceID: detail.WorkspaceID,
-						AgentID:     agentID,
-						RuntimeID:   deviceID,
-					}); bindErr != nil {
-						log.Bg().Warn("configureAgentProfile: persist local device runtime_id failed",
-							"agent_id", agentID,
-							"device_id", deviceID,
-							"err", bindErr)
-					}
-				}
-			}
-		}
-
-		writeJSON(w, http.StatusOK, result)
-	}
-}
 
 // disableAgent disables an active agent.
 //
@@ -227,59 +48,28 @@ func enableAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 	return agentStatusHandler(runtimeStore, "enable")
 }
 
-type createAgentCapabilityBody struct {
-	CapabilityVersionID string         `json:"capability_version_id"`
-	Configuration       map[string]any `json:"configuration"`
-	// PinningMode is "latest" or "pinned". Empty falls back to store's
-	// default (pinned); create-agent dialog sends "latest" for new
-	// bindings unless the user picks a specific version.
-	PinningMode string `json:"pinning_mode,omitempty"`
-}
-
-// createAgentInlineSecretBody describes one new shared secret the user
-// asked to materialise during agent creation. The handler creates the
-// secret via store.CreateSecret, then patches its id into
-// req.Config.credential_bindings[Kind] (or model_credential_binding when
-// IsModel=true) before delegating to runtimeStore.CreateAgent.
-type createAgentInlineSecretBody struct {
-	Kind        string `json:"kind"`
-	IsModel     bool   `json:"is_model"`
-	DisplayName string `json:"display_name"`
-	Plaintext   string `json:"plaintext"`
-}
-
 type createAgentBody struct {
-	Name                string                        `json:"name"`
-	Description         string                        `json:"description"`
-	ConnectorType       string                        `json:"connector_type"`
-	SystemPrompt        string                        `json:"system_prompt"`
-	DefaultModelID      string                        `json:"default_model_id"`
-	Capabilities        []string                      `json:"capabilities"`
-	InitialCapabilities []createAgentCapabilityBody   `json:"initial_capabilities"`
-	Visibility          string                        `json:"visibility"`
-	Runtime             string                        `json:"runtime"`
-	Config              map[string]any                `json:"config"`
-	InlineNewSecrets    []createAgentInlineSecretBody `json:"inline_new_secrets"`
-	Slug                string                        `json:"slug"`
+	Name          string         `json:"name"`
+	Description   string         `json:"description"`
+	ConnectorType string         `json:"connector_type"`
+	SystemPrompt  string         `json:"system_prompt"`
+	Config        map[string]any `json:"config"`
+	Visibility    string         `json:"visibility"`
+	Slug          string         `json:"slug"`
 }
 
 type updateAgentBody struct {
-	Name             *string                       `json:"name"`
-	Description      *string                       `json:"description"`
-	ConnectorType    *string                       `json:"connector_type"`
-	SystemPrompt     *string                       `json:"system_prompt"`
-	DefaultModelID   *string                       `json:"default_model_id"`
-	Capabilities     []string                      `json:"capabilities"`
-	Config           map[string]any                `json:"config"`
-	InlineNewSecrets []createAgentInlineSecretBody `json:"inline_new_secrets"`
-	Slug             *string                       `json:"slug"`
-	WorkspaceID      *string                       `json:"workspace_id"`
+	Name          *string        `json:"name"`
+	Description   *string        `json:"description"`
+	ConnectorType *string        `json:"connector_type"`
+	SystemPrompt  *string        `json:"system_prompt"`
+	Config        map[string]any `json:"config"`
 }
 
 // createAgent creates a new agent in a workspace. Owner/admin only.
 //
 //	@Summary		Create an agent in a workspace
-//	@Description	Creates an agent under the given workspace. Owner/admin only. inline_new_secrets are materialised into the shared secret vault before the agent is persisted; any binding entries in config are patched with the resolved ids.
+//	@Description	Creates a Core Agent with a model name and instructions. Execution credentials and environments are owned by Core. Owner/admin only.
 //	@Tags			agents
 //	@ID				createDevAgent
 //	@Accept			json
@@ -291,7 +81,7 @@ type updateAgentBody struct {
 //	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
 //	@Failure		422 {object} map[string]string "Immutable field or unknown capability"
 //	@Router			/api/v1/workspaces/{workspaceID}/agents [post]
-func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandboxAcquirer) http.HandlerFunc {
+func createAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
 		if runtimeStore == nil || !isUUID(workspaceID) {
@@ -303,165 +93,36 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 			return
 		}
 		var req createAgentBody
-		hasCaps, err := decodeJSONWithField(r, &req, "capabilities")
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid Core Agent payload"})
 			return
 		}
-		if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.ConnectorType) == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and connector_type are required"})
+		if req.ConnectorType == "" {
+			req.ConnectorType = "agents_api"
+		}
+		if req.ConnectorType != "agents_api" {
+			writeStoreAgentError(w, store.ErrInvalidConnectorType)
 			return
 		}
-		if strings.TrimSpace(req.Runtime) != "" {
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "runtime is no longer accepted; use config.daemon_mode, config.device_id, and config.agent_kind for agent_daemon agents"})
+		if err := store.ValidateCoreAgentConfig(req.Config, true); err != nil {
+			writeStoreAgentError(w, err)
 			return
 		}
-
-		// Materialise any inline_new_secrets the user pasted in step 3.
-		// Each one becomes a capability_inline secret in the org-global
-		// catalog; its id is then patched into the corresponding
-		// credential_bindings entry (or model_credential_binding when
-		// IsModel=true) inside req.Config so CreateAgent persists a
-		// fully-resolved binding map. Failure here is fatal — the agent
-		// is not created, the secrets that did succeed are left as
-		// orphans (we explicitly chose not to clean them up).
-		if cfg, ok := materialiseInlineSecrets(r.Context(), runtimeStore, req.Config, req.InlineNewSecrets, actorIDFromRequest(r), workspaceID); ok {
-			req.Config = cfg
-		} else if len(req.InlineNewSecrets) > 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to materialise inline_new_secrets"})
-			return
-		}
-
-		// Enforce visibility ⇄ binding consistency. Public agents may
-		// not depend on any personal credential (no platform user_id
-		// for lark guests); tenant agents are allowed but warned in UI.
-		// 422 (not 400) so the FE can distinguish "semantically wrong"
-		// from "malformed body" — same convention as updateAgent.
-		if err := validateAgentVisibilityBindings(req.Visibility, req.Config); err != nil {
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
-			return
-		}
-		initialCapabilities := make([]store.InitialAgentCapabilityInput, 0, len(req.InitialCapabilities))
-		for _, requested := range req.InitialCapabilities {
-			versionID := strings.TrimSpace(requested.CapabilityVersionID)
-			if !isUUID(versionID) {
-				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "capability_version_id must be a valid uuid"})
-				return
-			}
-			version, err := runtimeStore.GetCapabilityVersion(r.Context(), versionID)
-			if err != nil {
-				writeCapabilityError(w, err, "failed to get capability version")
-				return
-			}
-			capabilityRecord, err := runtimeStore.GetCapability(r.Context(), version.CapabilityID)
-			if err != nil {
-				writeCapabilityError(w, err, "failed to get capability")
-				return
-			}
-			if capabilityRecord.WorkspaceID != workspaceID &&
-				(capabilityRecord.Visibility != "public" || capabilityRecord.DeprecatedAt != nil || capabilityRecord.Status != "active") {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "marketplace capability is unavailable"})
-				return
-			}
-			if err := validateCapabilityCredentialBindings(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{
-				WorkspaceID:     workspaceID,
-				AgentVisibility: req.Visibility,
-				AgentConfig:     req.Config,
-				Version:         version,
-				Configuration:   requested.Configuration,
-			}); err != nil {
-				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
-				return
-			}
-			initialCapabilities = append(initialCapabilities, store.InitialAgentCapabilityInput{CapabilityVersionID: versionID, Configuration: requested.Configuration, PinningMode: requested.PinningMode})
-		}
-		result, err := runtimeStore.CreateAgent(r.Context(), store.CreateAgentInput{WorkspaceID: workspaceID, Name: req.Name, Description: req.Description, ConnectorType: req.ConnectorType, SystemPrompt: req.SystemPrompt, DefaultModelID: req.DefaultModelID, Capabilities: req.Capabilities, CapabilitiesSet: hasCaps, InitialCapabilities: initialCapabilities, Runtime: "", AgentConfig: req.Config, Visibility: req.Visibility, Slug: req.Slug, CreatedBy: actorIDFromRequest(r)})
+		result, err := runtimeStore.CreateAgent(r.Context(), store.CreateAgentInput{WorkspaceID: workspaceID, Name: req.Name, Description: req.Description, ConnectorType: req.ConnectorType, SystemPrompt: req.SystemPrompt, AgentConfig: req.Config, Visibility: req.Visibility, Slug: req.Slug, CreatedBy: actorIDFromRequest(r)})
 		if err != nil {
 			writeStoreAgentError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusCreated, result)
-
-		// Sync capability checkboxes → agent_capabilities table so the
-		// runtime's GetEnabledCapabilitiesForAgent sees them.
-		if hasCaps && len(req.Capabilities) > 0 {
-			if err := syncAgentCapabilities(r.Context(), runtimeStore, result.Agent.WorkspaceID, result.Agent.ID, req.Capabilities); err != nil {
-				log.Bg().Warn("createAgent: capability sync failed", "agent_id", result.Agent.ID, "err", err)
-			}
-		}
-
-		// Local-device binding: when the user picked a paired daemon
-		// in the create form, the device_id sits in agents.config but
-		// agents.runtime_id stays NULL. Mirror device_id → runtime_id so
-		// the FK join lights up. device_id IS a runtime.id.
-		if result.Agent.Config != nil {
-			if mode, _ := result.Agent.Config["daemon_mode"].(string); mode == "local" {
-				if deviceID, _ := result.Agent.Config["device_id"].(string); strings.TrimSpace(deviceID) != "" {
-					if _, bindErr := runtimeStore.SetAgentRuntime(r.Context(), store.SetAgentRuntimeInput{
-						WorkspaceID: workspaceID,
-						AgentID:     result.Agent.ID,
-						RuntimeID:   deviceID,
-					}); bindErr != nil {
-						// Non-fatal: row is created, the user can
-						// re-save from the edit dialog to retry.
-						log.Bg().Warn("createAgent: persist local device runtime_id failed",
-							"agent_id", result.Agent.ID,
-							"device_id", deviceID,
-							"err", bindErr)
-					}
-				}
-			}
-		}
-
-		// Eager sandbox provisioning: kick off Acquire so the sandbox
-		// is ready before the user sends their first message. On
-		// success, persist deviceID to agents.runtime_id —
-		// without this write the connector's "user must bind a
-		// runtime first" guard would reject the very first prompt.
-		// Failure is non-fatal: the row is saved and SandboxPanel
-		// (or a follow-up Rebuild) gives the admin a recovery surface.
-		if agentDaemonSandbox != nil && result.Agent.Config != nil {
-			if mode, _ := result.Agent.Config["daemon_mode"].(string); mode == "sandbox" {
-				paID := result.Agent.ID
-				go func() {
-					ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-					defer cancel()
-					deviceID, err := agentDaemonSandbox.Acquire(ctx, connector.PromptInput{
-						AgentID:     paID,
-						WorkspaceID: workspaceID,
-						AgentConfig: result.Agent.Config,
-					})
-					if err != nil {
-						log.Bg().Warn("eager sandbox acquire failed",
-							"agent_id", paID, "err", err)
-						return
-					}
-					if _, bindErr := runtimeStore.SetAgentRuntime(ctx, store.SetAgentRuntimeInput{
-						WorkspaceID: workspaceID,
-						AgentID:     paID,
-						RuntimeID:   deviceID,
-					}); bindErr != nil {
-						// Sandbox is alive but runtime_id write failed.
-						// Dispatch shows "Runtime not bound" until a retry
-						// succeeds or admin Rebuild rewrites.
-						log.Bg().Error("eager sandbox acquired but runtime_id persist failed",
-							"agent_id", paID,
-							"device_id", deviceID,
-							"err", bindErr)
-						return
-					}
-					log.Bg().Info("eager sandbox acquired and runtime bound",
-						"agent_id", paID, "device_id", deviceID)
-				}()
-			}
-		}
 	}
 }
 
 // updateAgent applies a partial update to an existing agent.
 //
 //	@Summary		Update mutable agent fields
-//	@Description	Applies a partial update. All fields are optional; nil pointers mean "leave as-is". Slug and runtime are immutable and rejected with 422.
+//	@Description	Updates Core Agent display fields, model name and instructions. Existing conversations retain their Core configuration snapshot. Unknown fields are rejected.
 //	@Tags			agents
 //	@ID				updateDevAgent
 //	@Accept			json
@@ -471,7 +132,7 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 //	@Success		200 {object} map[string]interface{} "Updated agent"
 //	@Failure		400 {object} map[string]string "Malformed request body or invalid UUID"
 //	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
-//	@Failure		422 {object} map[string]string "Immutable field (slug/runtime), or unknown capability"
+//	@Failure		422 {object} map[string]string "Invalid Agent configuration"
 //	@Router			/api/v1/agents/{agentID} [patch]
 func updateAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -490,212 +151,27 @@ func updateAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		var req updateAgentBody
-		fields, err := decodeJSONWithFields(r, &req)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid Core Agent payload"})
 			return
 		}
-		hasCaps := fields["capabilities"]
-		if fields["runtime"] {
-			// runtime is immutable post-create — recreate the agent to
-			// change runtime (it determines whether the agent runs in
-			// cloud sandbox or on local subprocess and is tied to
-			// every previous conversation's execution environment).
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "runtime is immutable post-create; recreate the agent to change runtime"})
+		if req.ConnectorType != nil && *req.ConnectorType != "agents_api" {
+			writeStoreAgentError(w, store.ErrInvalidConnectorType)
 			return
 		}
-		if req.Slug != nil {
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "slug is immutable"})
+		if err := store.ValidateCoreAgentConfig(req.Config, false); err != nil {
+			writeStoreAgentError(w, err)
 			return
 		}
-		if req.WorkspaceID != nil {
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "workspace_id is immutable"})
-			return
-		}
-		// Materialise inline secrets + validate visibility ⇄ binding consistency
-		// when the FE sends new credential bindings. Without this, edits that
-		// switch the shared secret (or introduce a new one) never reach
-		// agents.agent_config and the runtime keeps resolving the old binding.
-		//
-		// Same failure trade-off as createAgent: materialiseInlineSecrets is
-		// "commit-each-as-you-go", and a downstream failure (mid-list secret
-		// create, or visibility validation below) leaves the earlier secrets
-		// dangling in the workspace. Edit makes this slightly worse because
-		// users typically retry after fixing the offending field, accruing one
-		// orphan per retry. We accept it for symmetry with create; a future
-		// pass could wrap the chain in a tx + rollback.
-		configChanged := fields["config"] || len(req.InlineNewSecrets) > 0
-		if configChanged {
-			if cfg, ok := materialiseInlineSecrets(r.Context(), runtimeStore, req.Config, req.InlineNewSecrets, actorIDFromRequest(r), agent.WorkspaceID); ok {
-				req.Config = cfg
-			} else if len(req.InlineNewSecrets) > 0 {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to materialise inline_new_secrets"})
-				return
-			}
-			if err := validateAgentVisibilityBindings(agent.Visibility, req.Config); err != nil {
-				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
-				return
-			}
-		}
-		updated, _, err := runtimeStore.UpdateAgent(r.Context(), store.UpdateAgentInput{AgentID: agentID, ActorID: actorIDFromRequest(r), Name: req.Name, Description: req.Description, ConnectorType: req.ConnectorType, SystemPrompt: req.SystemPrompt, DefaultModelID: req.DefaultModelID, Capabilities: req.Capabilities, CapabilitiesSet: hasCaps, Config: req.Config, ConfigSet: configChanged})
+		updated, _, err := runtimeStore.UpdateAgent(r.Context(), store.UpdateAgentInput{AgentID: agentID, ActorID: actorIDFromRequest(r), Name: req.Name, Description: req.Description, ConnectorType: req.ConnectorType, SystemPrompt: req.SystemPrompt, Config: req.Config, ConfigSet: req.Config != nil})
 		if err != nil {
 			writeStoreAgentError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"agent": updated})
-
-		// Sync capability checkboxes → agent_capabilities table.
-		if hasCaps {
-			if err := syncAgentCapabilities(r.Context(), runtimeStore, updated.WorkspaceID, agentID, req.Capabilities); err != nil {
-				log.Bg().Warn("updateAgent: capability sync failed", "agent_id", agentID, "err", err)
-			}
-		}
 	}
-}
-
-// syncAgentCapabilities reconciles the agent_capabilities table with
-// the capability name list from the agent edit form. Errors on
-// individual capabilities are logged and skipped.
-func syncAgentCapabilities(
-	ctx context.Context,
-	rs RuntimeStore,
-	workspaceID string,
-	agentID string,
-	capabilityNames []string,
-) error {
-	// 1. Current state on this agent.
-	existing, err := rs.ListAgentCapabilities(ctx, agentID)
-	if err != nil {
-		return fmt.Errorf("syncAgentCapabilities: list existing: %w", err)
-	}
-	existingByCapID := make(map[string]store.AgentCapabilityRead, len(existing))
-	for _, ac := range existing {
-		existingByCapID[ac.CapabilityID] = ac
-	}
-	agent, err := rs.GetAgent(ctx, agentID)
-	if err != nil {
-		return fmt.Errorf("syncAgentCapabilities: get agent: %w", err)
-	}
-
-	// 2. Resolve desired names. A name can come from this workspace's own
-	// capabilities, OR from the marketplace (a public capability published
-	// by another workspace and surfaced in the agent picker's marketplace
-	// section). Local capabilities win on name collision: a user shadowing
-	// a marketplace name with a private one should keep using their own.
-	allCaps, err := rs.ListCapabilities(ctx, workspaceID, store.ListCapabilityFilter{})
-	if err != nil {
-		return fmt.Errorf("syncAgentCapabilities: list capabilities: %w", err)
-	}
-	marketplaceCaps, err := rs.ListMarketplaceCapabilities(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("syncAgentCapabilities: list marketplace capabilities: %w", err)
-	}
-	type resolved struct {
-		capabilityID    string
-		latestVersionID string
-		fromMarketplace bool
-	}
-	capByName := make(map[string]resolved, len(allCaps)+len(marketplaceCaps))
-	for _, c := range allCaps {
-		capByName[c.Name] = resolved{capabilityID: c.ID}
-	}
-	for _, m := range marketplaceCaps {
-		if m.SelfPublished {
-			continue
-		}
-		if _, exists := capByName[m.Name]; exists {
-			continue
-		}
-		capByName[m.Name] = resolved{capabilityID: m.CapabilityID, latestVersionID: m.LatestVersionID, fromMarketplace: true}
-	}
-
-	desiredCapIDs := make(map[string]bool, len(capabilityNames))
-	for _, name := range capabilityNames {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
-		cap, ok := capByName[name]
-		if !ok {
-			log.Bg().Warn("syncAgentCapabilities: capability not found, skipping",
-				"name", name, "workspace_id", workspaceID, "agent_id", agentID)
-			continue
-		}
-		desiredCapIDs[cap.capabilityID] = true
-
-		// Already enabled — don't auto-upgrade version.
-		if _, exists := existingByCapID[cap.capabilityID]; exists {
-			continue
-		}
-
-		latestVersionID := cap.latestVersionID
-		if latestVersionID == "" {
-			// Local capability: marketplace row already carries the version,
-			// but ListCapabilities does not, so we fetch lazily here.
-			versions, err := rs.ListCapabilityVersions(ctx, cap.capabilityID)
-			if err != nil {
-				log.Bg().Warn("syncAgentCapabilities: list versions failed, skipping",
-					"capability_id", cap.capabilityID, "name", name, "err", err)
-				continue
-			}
-			if len(versions) == 0 {
-				log.Bg().Warn("syncAgentCapabilities: no versions found, skipping",
-					"capability_id", cap.capabilityID, "name", name)
-				continue
-			}
-			latestVersionID = versions[0].ID // sorted created_at desc
-		}
-
-		// Default pinning_mode depends on the source:
-		//   * Local capability: user's expectation is "check it and follow the latest". After reupload,
-		//     no need to re-edit the agent, and skill iteration in the local workshop has no
-		//     breaking-change risk (owned by the same team).
-		//   * Marketplace: the publisher's new version may carry breaking changes,
-		//     keep pinned so the UpgradeCapabilityDialog explicit-confirm path remains
-		//     valid; the user must explicitly pick latest from the picker to auto-follow.
-		mode := store.PinningModeLatest
-		if cap.fromMarketplace {
-			mode = store.PinningModePinned
-		}
-		version, err := rs.GetCapabilityVersion(ctx, latestVersionID)
-		if err != nil {
-			log.Bg().Warn("syncAgentCapabilities: get version failed, skipping",
-				"capability_id", cap.capabilityID, "name", name, "version_id", latestVersionID, "err", err)
-			continue
-		}
-		if err := validateCapabilityCredentialBindings(ctx, rs, capabilityCredentialBindingValidationInput{
-			WorkspaceID:     workspaceID,
-			AgentVisibility: agent.Visibility,
-			AgentConfig:     agent.Config,
-			Version:         version,
-		}); err != nil {
-			log.Bg().Warn("syncAgentCapabilities: credential validation failed, skipping",
-				"capability_id", cap.capabilityID, "name", name, "version_id", latestVersionID, "err", err)
-			continue
-		}
-		if _, err := rs.EnableAgentCapability(ctx, agentID, latestVersionID, nil, mode); err != nil {
-			log.Bg().Warn("syncAgentCapabilities: enable failed, skipping",
-				"capability_id", cap.capabilityID, "name", name, "version_id", latestVersionID, "err", err)
-			continue
-		}
-		log.Bg().Info("syncAgentCapabilities: enabled capability",
-			"agent_id", agentID, "capability_id", cap.capabilityID, "name", name, "version_id", latestVersionID, "from_marketplace", cap.fromMarketplace, "pinning_mode", mode)
-	}
-
-	// 3. Remove capabilities no longer in the desired list.
-	for capID, ac := range existingByCapID {
-		if desiredCapIDs[capID] {
-			continue
-		}
-		if err := rs.DeleteAgentCapability(ctx, agentID, ac.CapabilityVersionID); err != nil {
-			log.Bg().Warn("syncAgentCapabilities: delete failed, skipping",
-				"capability_id", capID, "capability_version_id", ac.CapabilityVersionID, "err", err)
-			continue
-		}
-		log.Bg().Info("syncAgentCapabilities: removed capability",
-			"agent_id", agentID, "capability_id", capID, "capability_version_id", ac.CapabilityVersionID)
-	}
-	return nil
 }
 
 // updateAgentVisibilityBody is the request body for
@@ -805,10 +281,6 @@ func deleteAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, result)
 	}
-}
-
-func isSafeHTTPAgentEndpoint(endpoint string) bool {
-	return store.ValidHTTPAgentEndpoint(endpoint)
 }
 
 // listWorkspaceEnabledAgents lists the agents visible to the caller in

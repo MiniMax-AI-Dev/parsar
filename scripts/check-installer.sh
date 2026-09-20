@@ -19,23 +19,6 @@ if [[ "$1" == compose && "$*" == *' run '* ]]; then
   # The installer closes stdin, so Compose must not request an interactive TTY.
   [[ "$*" == *' -T '* ]]
 fi
-if [[ "$*" == *' ps -aq parsar-runtime' && "${PARSAR_INSTALL_TEST_RUNTIME:-}" != "" ]]; then
-  printf 'old-runtime\n'
-elif [[ "$*" == *'range .Config.Env'* ]]; then
-  case "$PARSAR_INSTALL_TEST_RUNTIME" in
-    configured) printf 'CLAUDE_CONFIG_DIR=/root/.parsar/claude-code\n' ;;
-    custom) printf 'CLAUDE_CONFIG_DIR=/custom-history\n' ;;
-  esac
-elif [[ "$*" == *'{{.Image}}'* ]]; then
-  printf 'sha256:old-image\n'
-elif [[ "$1" == cp ]]; then
-  case "$PARSAR_INSTALL_TEST_RUNTIME" in
-    missing) printf 'Error response from daemon: Could not find the file %s in container old-runtime\n' "${2#*:}" >&2; exit 1 ;;
-    copy-failure) printf 'Docker connection failed\n' >&2; exit 1 ;;
-  esac
-elif [[ "$1" == run && "${PARSAR_INSTALL_TEST_RUNTIME:-}" == conflict ]]; then
-  exit 1
-fi
 if [[ "$*" == *'id -u'* ]]; then
   printf '12001:14001'
 elif [[ "$*" == *'chown -Rh'* && "${PARSAR_INSTALL_TEST_FAIL:-}" == ownership ]]; then
@@ -50,16 +33,20 @@ run_case() {
   local case_name="$1" failure="$2"
   shift 2
   mkdir -p "$test_root/$case_name"
+  : > "$test_root/$case_name/docker.log"
   PATH="$test_root/bin:$PATH" \
     PARSAR_INSTALL_TEST_LOG="$test_root/$case_name/docker.log" \
     PARSAR_INSTALL_TEST_FAIL="$failure" \
-    PARSAR_INSTALL_TEST_RUNTIME="${PARSAR_INSTALL_TEST_RUNTIME:-}" \
     bash "$repo_root/install.sh" --home "$test_root/$case_name/home" \
       --compose-file "$repo_root/docker-compose.yml" "$@" > "$test_root/$case_name/output.log" 2>&1
 }
 
 run_case normal ""
 normal_log="$test_root/normal/docker.log"
+[[ "$(cat "$test_root/normal/home/core/workspaces.json")" == "[]" ]]
+printf '[{"workspace_id":"preserved"}]\n' > "$test_root/normal/home/core/workspaces.json"
+run_case normal ""
+[[ "$(cat "$test_root/normal/home/core/workspaces.json")" == '[{"workspace_id":"preserved"}]' ]]
 grep -q 'chown -Rh.*12001:14001' "$normal_log"
 grep 'chown -Rh' "$normal_log" | grep -q -- '--user 0:0'
 grep 'test -w' "$normal_log" | grep -vq -- '--user'
@@ -80,44 +67,9 @@ for failure in ownership writable; do
   fi
 done
 
-for runtime in legacy missing configured; do
-  PARSAR_INSTALL_TEST_RUNTIME="$runtime" run_case "$runtime" ""
-  runtime_log="$test_root/$runtime/docker.log"
-  if [[ "$runtime" == configured ]]; then
-    ! grep -q '^stop ' "$runtime_log"
-    ! grep -q '^cp ' "$runtime_log"
-  else
-    stop_line="$(grep -n '^stop ' "$runtime_log" | cut -d: -f1)"
-    copy_line="$(grep -n '^cp ' "$runtime_log" | head -1 | cut -d: -f1)"
-    migrate_line="$(grep -n '^run --rm --volumes-from old-runtime' "$runtime_log" | cut -d: -f1)"
-    up_line="$(grep -n ' up ' "$runtime_log" | cut -d: -f1)"
-    [[ "$stop_line" -lt "$copy_line" && "$copy_line" -lt "$migrate_line" && "$migrate_line" -lt "$up_line" ]]
-  fi
-done
-
-for runtime in copy-failure conflict custom; do
-  if PARSAR_INSTALL_TEST_RUNTIME="$runtime" run_case "$runtime" ""; then
-    echo "Installer ignored runtime history $runtime" >&2
-    exit 1
-  fi
-  ! grep -q ' up ' "$test_root/$runtime/docker.log"
-done
-
-mkdir -p "$test_root/raw"
-printf 'PARSAR_PG_DATA_DIR=existing-postgres\nPARSAR_MASTER_KEY=existing-secret\n' > "$test_root/raw/original.env"
-cp "$test_root/raw/original.env" "$test_root/raw/before.env"
-PATH="$test_root/bin:$PATH" PARSAR_HOME="$test_root/raw/backups" \
-  PARSAR_INSTALL_TEST_LOG="$test_root/raw/docker.log" PARSAR_INSTALL_TEST_RUNTIME=legacy \
-  bash "$repo_root/install.sh" migrate-runtime-history -p existing-stack \
-    -f "$repo_root/docker-compose.yml" --env-file "$test_root/raw/original.env" > "$test_root/raw/output.log" 2>&1
-cmp "$test_root/raw/before.env" "$test_root/raw/original.env"
-grep -Fq "compose -p existing-stack -f $repo_root/docker-compose.yml --env-file $test_root/raw/original.env ps -aq parsar-runtime" "$test_root/raw/docker.log"
-! grep -Eq ' (pull|up|chown) ' "$test_root/raw/docker.log"
-[[ ! -e "$test_root/raw/backups/.env" && ! -e "$test_root/raw/backups/postgres" ]]
-
 run_case dry "" --dry-run
 if grep -Eq ' (run|pull|up) ' "$test_root/dry/docker.log"; then
   echo 'Dry run started a container or pulled an image' >&2
   exit 1
 fi
-echo 'Installer data preparation and runtime history checks passed.'
+echo 'Installer data preparation and Core configuration checks passed.'

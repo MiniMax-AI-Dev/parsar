@@ -18,17 +18,14 @@
 
 Parsar is a team-first platform for dispatching, managing, and auditing AI coding agents. Send tasks from the tools your team already uses — chat, web UI, API — and get results back where they started: a thread, a PR, a webhook.
 
-Supported agent runtimes:
-
-- **Claude Code**
-- **Piagent**
-- **Codex**
-- More to come — the runtime layer is pluggable.
+Agent execution goes through the independently deployed Agents API Core, whose
+qualified profiles include **Claude Code**, **Codex**, and **MiniMax Code**. Parsar
+keeps its own database for members, business assets, permissions and collaboration.
 
 ### Why Parsar
 
 - **Team-first.** Shared queues, run history, and permissions — not single-player agent loops.
-- **Pluggable runtimes.** Claude Code today, Codex tomorrow, your in-house agent next week.
+- **Independent execution.** Core owns models, runtime environments and execution; Parsar uses its public Agents API.
 - **Pluggable surfaces.** Feishu / Lark ships today; Slack, Discord, and webhooks on the roadmap.
 - **Auditable.** Every run is persisted: prompt, diff, logs, exit code.
 - **Self-hosted.** Your code, your secrets, your machine. No telemetry.
@@ -54,8 +51,10 @@ make docker-build
 ./install.sh --image parsar:dev
 ```
 
-The default Compose stack starts PostgreSQL, the Parsar web control plane,
-and a shared agent runtime together.
+The default Compose stack starts PostgreSQL and the Parsar web control plane.
+Deploy Core separately and configure a distinct Core project credential for each
+workspace using the [product integration guide](docs/deploy/product-core.md).
+Asset management works independently; Agent execution requires this connection.
 
 ## Contributing
 

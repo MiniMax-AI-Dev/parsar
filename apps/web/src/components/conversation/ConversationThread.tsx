@@ -60,7 +60,6 @@ const THREAD_STYLE = { ["--thread-max-width" as string]: "48rem" }
 
 /** title · conversation id · age (actions replace the age on hover) */
 
-import type { SandboxSendGuard } from "../../lib/sandbox-send-guard"
 
 /* ============================================================== */
 /*  The conversation thread, mounted by the console and by /c/<id> */
@@ -86,7 +85,6 @@ interface MainProps {
   onSendFromEmpty: (content: string) => Promise<boolean>
   onRenameAfterFirstMessage: (cid: string, title: string) => Promise<void>
   focusComposer?: boolean
-  sandboxGuard?: SandboxSendGuard
   /**
    * "console" draws the admin topbar above the thread; "bare" leaves it out
    * for a shell that already names what you are looking at.
@@ -198,7 +196,6 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
         onExpand={p.onExpand}
         onSendFromEmpty={p.onSendFromEmpty}
         focusComposer={p.focusComposer}
-        sandboxGuard={p.sandboxGuard}
       />
     )
   }
@@ -217,7 +214,6 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
         workspaceID={p.conv.workspace_id}
         onRenameAfterFirstMessage={p.onRenameAfterFirstMessage}
         focusComposer={p.focusComposer}
-        sandboxGuard={p.sandboxGuard}
       />
     )
   }
@@ -230,7 +226,6 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
       folded={p.folded}
       chrome={p.chrome}
       onExpand={p.onExpand}
-      sandboxGuard={p.sandboxGuard}
     />
   )
 }
@@ -258,7 +253,6 @@ function EmptyChat({
   onSendFromEmpty,
   onRenameAfterFirstMessage,
   focusComposer,
-  sandboxGuard,
   canWrite,
 }: {
   agent: Agent | undefined
@@ -272,7 +266,6 @@ function EmptyChat({
   onSendFromEmpty?: (content: string) => Promise<boolean>
   onRenameAfterFirstMessage?: (cid: string, title: string) => Promise<void>
   focusComposer?: boolean
-  sandboxGuard?: SandboxSendGuard
   canWrite: boolean
 }) {
   const { t } = useTranslation("admin")
@@ -307,7 +300,7 @@ function EmptyChat({
         <ComposerForm
           conversationId={conversationId ?? ""}
           agentName={agent?.name}
-          disabled={!canWrite || !agent || sandboxGuard?.blocked}
+          disabled={!canWrite || !agent}
           autoFocus={focusComposer}
           placeholder={
             agent
@@ -320,7 +313,6 @@ function EmptyChat({
               ? (title) => onRenameAfterFirstMessage(conversationId, title)
               : undefined
           }
-          blockReason={sandboxGuard?.blocked ? sandboxGuard.message : undefined}
         />
       </ComposerFooter>
     </div>
@@ -338,7 +330,6 @@ function ChatStream({
   folded,
   onExpand,
   chrome,
-  sandboxGuard,
 }: {
   conversationId: string
   canWrite: boolean
@@ -346,7 +337,6 @@ function ChatStream({
   folded: boolean
   onExpand: () => void
   chrome?: "console" | "bare"
-  sandboxGuard?: SandboxSendGuard
 }) {
   const { t } = useTranslation("admin")
   const fmtAgo = useRelativeTime()
@@ -718,7 +708,7 @@ function ChatStream({
             conversationId={conversationId}
             agentName={agentName}
             placeholder={agentDeleted ? t("agents.deletedLabel") : t("conversations.composer.placeholder", { agent: agentName })}
-            disabled={!canWrite || !agent || agentDeleted || sandboxGuard?.blocked}
+            disabled={!canWrite || !agent || agentDeleted}
             onAfterSend={async () => scrollToLatest()}
             onRunStarted={startRun}
             onStartError={(message: string) => setChatToast({ text: message })}
@@ -739,7 +729,7 @@ function ChatStream({
                 : undefined
             }
             cancelling={cancelRunMut.isPending}
-            blockReason={agentDeleted ? t("conversations.composer.agentDeleted") : !canWrite ? t("conversations.composer.readOnly") : sandboxGuard?.blocked ? sandboxGuard.message : undefined}
+            blockReason={agentDeleted ? t("conversations.composer.agentDeleted") : !canWrite ? t("conversations.composer.readOnly") : undefined}
           />
         )}
       </ComposerFooter>

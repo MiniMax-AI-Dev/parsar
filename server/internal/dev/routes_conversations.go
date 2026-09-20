@@ -223,11 +223,12 @@ func createConversationUserMessage(runtimeStore RuntimeStore) http.HandlerFunc {
 }
 
 type createWorkspaceConversationBody struct {
-	Title    string         `json:"title"`
-	Surface  string         `json:"surface"`
-	Form     string         `json:"form"`
-	AgentID  string         `json:"agent_id"`
-	Metadata map[string]any `json:"metadata"`
+	Environment *store.CoreEnvironmentSelection `json:"environment"`
+	Title       string                          `json:"title"`
+	Surface     string                          `json:"surface"`
+	Form        string                          `json:"form"`
+	AgentID     string                          `json:"agent_id"`
+	Metadata    map[string]any                  `json:"metadata"`
 }
 
 func listWorkspaceConversations(runtimeStore RuntimeStore) http.HandlerFunc {
@@ -259,6 +260,19 @@ func listWorkspaceConversations(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// createWorkspaceConversation creates a durable product Session with a Core environment selection.
+// @Summary Create a Session
+// @Description Environment selectors follow Agents API discriminators. Hosted initialization is configured through Core templates. Execution starts with the first input.
+// @Tags conversations
+// @Accept json
+// @Produce json
+// @Param workspaceID path string true "Workspace UUID"
+// @Param body body createWorkspaceConversationBody true "Session configuration"
+// @Success 201 {object} store.ConversationRead
+// @Failure 400 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 422 {object} map[string]string
+// @Router /api/v1/workspaces/{workspaceID}/conversations [post]
 func createWorkspaceConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -276,7 +290,9 @@ func createWorkspaceConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		var req createWorkspaceConversationBody
 		if r.Body != nil {
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			decoder := json.NewDecoder(r.Body)
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&req); err != nil && !errors.Is(err, io.EOF) {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 				return
 			}
@@ -287,6 +303,7 @@ func createWorkspaceConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 			Surface:        req.Surface,
 			Form:           req.Form,
 			PrimaryAgentID: req.AgentID,
+			Environment:    req.Environment,
 			Metadata:       req.Metadata,
 		})
 		if err != nil {

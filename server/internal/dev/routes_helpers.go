@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/coreaccess"
+	"github.com/openai/openai-go/v3"
 	"io"
 
 	"net/http"
@@ -79,6 +81,24 @@ func isUUID(value string) bool {
 }
 
 func writeReadError(w http.ResponseWriter, err error, fallback string) {
+	var upstream *openai.Error
+	if errors.As(err, &upstream) {
+		status := upstream.StatusCode
+		message := "Core rejected this configuration or does not support it yet"
+		switch status {
+		case 400, 404, 409, 422, 429, 501:
+		default:
+			status = http.StatusServiceUnavailable
+			message = "Core is temporarily unavailable; check its connection and project credentials"
+		}
+		writeJSON(w, status, map[string]string{"error": "core_operation_failed", "message": message})
+		return
+	}
+	if errors.Is(err, coreaccess.ErrNotConfigured) {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "core_not_configured", "message": err.Error()})
+		return
+	}
+
 	switch {
 	case errors.Is(err, store.ErrInvitationSignInRequired):
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invitation_sign_in_required", "message": err.Error()})
@@ -117,7 +137,7 @@ func writeStoreAgentError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, store.ErrMarketplaceCapabilityUnavailable):
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
-	case errors.Is(err, store.ErrUnknownAgent), errors.Is(err, store.ErrUnknownAgent), errors.Is(err, store.ErrUnknownWorkspace), errors.Is(err, store.ErrUnknownWorkspace):
+	case errors.Is(err, store.ErrUnknownAgent), errors.Is(err, store.ErrUnknownWorkspace):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, store.ErrInvalidConnectorType), errors.Is(err, store.ErrInvalidInput), errors.Is(err, store.ErrInvalidAgentVisibility):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})

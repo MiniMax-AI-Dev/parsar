@@ -458,6 +458,7 @@ type ConfigureDevConversationExternalRefResult struct {
 }
 
 type CreateWorkspaceConversationInput struct {
+	Environment *CoreEnvironmentSelection
 	WorkspaceID string
 	Title       string
 	// Surface ∈ {web, im, api}. Empty defaults to "web".
@@ -2025,7 +2026,7 @@ func (s *Store) GetAgentRunInvocation(ctx context.Context, runID string) (AgentR
 		Status:                row.Status,
 		TriggerMessageContent: applyTriggerMessagePrefix(triggerMetadata, row.TriggerMessageContent),
 		TriggerAttachments:    DecodeMessageAttachments(triggerMetadata),
-		AgentConfig:           mergeRuntimeIntoAgentConfig(decodeJSONMap(row.AgentConfig), row.RuntimeID),
+		AgentConfig:           decodeJSONMap(row.AgentConfig),
 	}, nil
 }
 
@@ -2055,157 +2056,6 @@ func applyTriggerMessagePrefix(metadata map[string]any, content string) string {
 // see a uniform view. When runtime_id is set it wins over any stale
 // config.device_id — the explicit FK is the source of truth. Empty
 // runtime_id leaves the map untouched.
-func mergeRuntimeIntoAgentConfig(cfg map[string]any, runtimeID string) map[string]any {
-	runtimeID = strings.TrimSpace(runtimeID)
-	if runtimeID == "" {
-		return cfg
-	}
-	if cfg == nil {
-		cfg = map[string]any{}
-	}
-	cfg["device_id"] = runtimeID
-	cfg["runtime_id"] = runtimeID
-	return cfg
-}
-
-func (s *Store) GetHTTPAgentRunInvocation(ctx context.Context, runID string) (AgentRunInvocation, error) {
-	invocation, err := s.GetAgentRunInvocation(ctx, runID)
-	if err != nil {
-		return AgentRunInvocation{}, err
-	}
-	if invocation.ConnectorType != "http" {
-		return AgentRunInvocation{}, fmt.Errorf("%w: %s has connector_type %s", ErrInvalidHTTPConnector, runID, invocation.ConnectorType)
-	}
-	return invocation, nil
-}
-
-func (s *Store) ConfigureDevAgentConnector(ctx context.Context, input ConfigureDevAgentConnectorInput) (ConfigureDevAgentConnectorResult, error) {
-	connectorType := strings.TrimSpace(input.ConnectorType)
-	if connectorType != "http" {
-		return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrInvalidConnectorType, connectorType)
-	}
-	agentID, err := uuid(input.AgentID)
-	if err != nil {
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-
-	agent, err := s.GetAgent(ctx, input.AgentID)
-	if err != nil {
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-	agentConfig := agent.Config
-	if err := foldHTTPAgentConfig(agentConfig, map[string]any{"endpoint": input.Endpoint, "secret_id": input.SecretID}); err != nil {
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-	if err := s.validateHTTPAgentSecret(ctx, agent.WorkspaceID, agentConfig); err != nil {
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-	agentConfigJSON, err := json.Marshal(agentConfig)
-	if err != nil {
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-
-	queries := sqlc.New(s.db)
-	row, err := queries.ConfigureDevAgentConnector(ctx, sqlc.ConfigureDevAgentConnectorParams{
-		AgentID:       agentID,
-		ConnectorType: connectorType,
-		AgentConfig:   agentConfigJSON,
-		Now:           timestamptz(time.Now().UTC()),
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownAgent, input.AgentID)
-		}
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-
-	return ConfigureDevAgentConnectorResult{
-		AgentID:       row.AgentID,
-		Name:          row.Name,
-		Slug:          row.Slug,
-		ConnectorType: row.ConnectorType,
-		AgentConfig:   decodeJSONMap(row.AgentConfig),
-	}, nil
-}
-
-func (s *Store) ConfigureAgentProfile(ctx context.Context, input ConfigureAgentProfileInput) (ConfigureDevAgentConnectorResult, error) {
-	agentID, err := uuid(input.AgentID)
-	if err != nil {
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-	tx, err := beginTx(ctx, s.db)
-	if err != nil {
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-	defer tx.Rollback(ctx)
-	queries := sqlc.New(tx)
-	current, err := queries.GetAgentForUpdate(ctx, agentID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownAgent, input.AgentID)
-		}
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-	// Agent edits call this endpoint after the main PATCH. Merge only fields
-	// owned by the profile request so its older snapshot cannot roll back model,
-	// capability, or credential changes already committed by UpdateAgent.
-	config, err := mergeAgentProfileOwnedConfig(decodeJSONMap(current.Config), input.Config)
-	if err != nil {
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-	if modelID := strings.TrimSpace(input.ModelID); modelID != "" {
-		modelUUID, err := uuid(modelID)
-		if err != nil {
-			return ConfigureDevAgentConnectorResult{}, err
-		}
-		status, err := queries.GetModelStatus(ctx, modelUUID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownModel, modelID)
-			}
-			return ConfigureDevAgentConnectorResult{}, err
-		}
-		if status != "active" {
-			return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: model=%s", ErrModelDisabled, status)
-		}
-		config["model_id"] = modelID
-	}
-	if workdir := strings.TrimSpace(input.Workdir); workdir != "" {
-		delete(config, "workdir")
-		delete(config, "working_directory")
-		config["work_dir"] = workdir
-	}
-	if systemPrompt := strings.TrimSpace(input.SystemPrompt); systemPrompt != "" {
-		config["system_prompt"] = systemPrompt
-	}
-	encoded, err := json.Marshal(config)
-	if err != nil {
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-	row, err := queries.ConfigureAgentProfile(ctx, sqlc.ConfigureAgentProfileParams{AgentID: agentID, AgentConfig: encoded, Now: timestamptz(time.Now().UTC())})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownAgent, input.AgentID)
-		}
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return ConfigureDevAgentConnectorResult{}, err
-	}
-	return ConfigureDevAgentConnectorResult{AgentID: row.AgentID, Name: row.Name, Slug: row.Slug, ConnectorType: row.ConnectorType, AgentConfig: decodeJSONMap(row.AgentConfig)}, nil
-}
-
-func (s *Store) ClaimNextQueuedHTTPAgentRun(ctx context.Context) (ClaimHTTPAgentRunResult, error) {
-	queries := sqlc.New(s.db)
-	runID, err := queries.ClaimNextQueuedHTTPAgentRun(ctx, timestamptz(time.Now().UTC()))
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ClaimHTTPAgentRunResult{Claimed: false}, nil
-		}
-		return ClaimHTTPAgentRunResult{}, err
-	}
-	return ClaimHTTPAgentRunResult{RunID: runID, Claimed: true}, nil
-}
 
 func (s *Store) FailAgentRun(ctx context.Context, input FailAgentRunInput) error {
 	now := time.Now().UTC()
@@ -2711,7 +2561,10 @@ func (s *Store) CreateWorkspaceConversation(ctx context.Context, input CreateWor
 	default:
 		return ConversationRead{}, fmt.Errorf("%w: invalid conversation form: %s", ErrInvalidInput, form)
 	}
-	metadata := nonNilMap(input.Metadata)
+	metadata, err := conversationCoreMetadata(input)
+	if err != nil {
+		return ConversationRead{}, err
+	}
 	// Reject callers that pre-set metadata.primary_agent_id directly,
 	// bypassing the agent validation. The pointer is server-managed; only
 	// input.PrimaryAgentID + validation may write the key.
@@ -2923,8 +2776,8 @@ func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (Create
 	if !validConnectorType(connectorType) {
 		return CreateAgentResult{}, ErrInvalidConnectorType
 	}
-	if connectorType == "http" && (len(input.InitialCapabilities) > 0 || len(input.Capabilities) > 0) {
-		return CreateAgentResult{}, fmt.Errorf("%w: external HTTP Agents manage their own capabilities", ErrInvalidInput)
+	if len(input.InitialCapabilities) > 0 || len(input.Capabilities) > 0 {
+		return CreateAgentResult{}, fmt.Errorf("%w: Core product capability bindings are not available", ErrInvalidInput)
 	}
 	slug := strings.TrimSpace(input.Slug)
 	explicitSlug := slug != ""
@@ -2959,11 +2812,6 @@ func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (Create
 	config, err := agentConfigJSON(input.SystemPrompt, input.DefaultModelID, capabilities, input.Runtime, connectorType, input.AgentConfig)
 	if err != nil {
 		return CreateAgentResult{}, err
-	}
-	if connectorType == "http" {
-		if err := s.validateHTTPAgentSecret(ctx, input.WorkspaceID, decodeJSONMap(config)); err != nil {
-			return CreateAgentResult{}, err
-		}
 	}
 	visibility := strings.TrimSpace(input.Visibility)
 	if visibility == "" {
@@ -3075,65 +2923,17 @@ func (s *Store) UpdateAgent(ctx context.Context, input UpdateAgentInput) (AgentS
 	if input.SystemPrompt != nil {
 		config["system_prompt"] = strings.TrimSpace(*input.SystemPrompt)
 	}
-	if input.DefaultModelID != nil {
-		config["default_model_id"] = strings.TrimSpace(*input.DefaultModelID)
+	if input.DefaultModelID != nil || len(input.Capabilities) != 0 {
+		return AgentSummary{}, nil, fmt.Errorf("%w: legacy execution settings are not supported by Core Agents", ErrInvalidInput)
 	}
-	if input.CapabilitiesSet {
-		caps := normalizeStringSlice(input.Capabilities)
-		config["capabilities"] = caps
-	}
-	// Cherry-pick credential bindings from input.Config. Wholesale-merging
-	// input.Config would race the dedicated setters above (e.g. a stale
-	// default_model_id in the FE scratch could clobber DefaultModelID).
-	//
-	// JSON `null` decodes to a nil interface; JSON `{}` decodes to a
-	// non-nil but empty map. Both mean "clear" from the FE perspective
-	// (user dropped the last shared pick back to personal), so delete
-	// the stored key in either shape.
 	if input.ConfigSet {
-		for _, k := range []string{"credential_bindings", "model_credential_binding"} {
-			v, ok := input.Config[k]
-			if !ok {
-				continue
-			}
-			if isEmptyBindingValue(v) {
-				delete(config, k)
-			} else {
-				config[k] = cloneBindingValue(v)
-			}
-		}
-	}
-	if connectorType == "http" {
-		if input.ConfigSet {
-			if err := foldHTTPAgentConfig(config, input.Config); err != nil {
-				return AgentSummary{}, nil, err
-			}
-		}
-		if err := s.validateHTTPAgentSecret(ctx, current.WorkspaceID, config); err != nil {
+		// Config is a replacement; omission preserves the entire previous config.
+		config = map[string]any{"system_prompt": config["system_prompt"]}
+		if err := ValidateCoreAgentConfig(input.Config, true); err != nil {
 			return AgentSummary{}, nil, err
 		}
-	}
-	// Orphan binding cleanup: when capability list is explicitly set,
-	// drop credential_bindings entries whose kind is no longer required
-	// by any remaining capability. The runtime resolver only asks for
-	// kinds the active capabilities declare, so orphans would be inert,
-	// but pruning keeps agent_config tidy and matches what the UI shows.
-	if input.CapabilitiesSet {
-		needed, err := s.requiredKindsForCapabilities(ctx, queries, current.WorkspaceID, normalizeStringSlice(input.Capabilities))
-		if err != nil {
+		if err := foldCoreAgentConfig(config, input.Config); err != nil {
 			return AgentSummary{}, nil, err
-		}
-		if bindings, ok := config["credential_bindings"].(map[string]any); ok {
-			for kind := range bindings {
-				if !needed[kind] {
-					delete(bindings, kind)
-				}
-			}
-			if len(bindings) == 0 {
-				delete(config, "credential_bindings")
-			} else {
-				config["credential_bindings"] = bindings
-			}
 		}
 	}
 	encoded, err := json.Marshal(nonNilMap(config))
@@ -6582,6 +6382,9 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 			}
 			return result, err
 		}
+		if !validConnectorType(targetAgent.connectorType) {
+			return result, ErrInvalidConnectorType
+		}
 		result.Mentions = []string{"@" + targetAgent.name}
 
 		externalChatID := strings.TrimSpace(input.ExternalChatID)
@@ -6744,6 +6547,11 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 		}
 	}
 
+	for _, agent := range mentionedAgents {
+		if !validConnectorType(agent.connectorType) {
+			return result, ErrInvalidConnectorType
+		}
+	}
 	messageMetadata := map[string]any{
 		"source":   source,
 		"mentions": input.Mentions,
@@ -7013,21 +6821,21 @@ func (s *Store) InsertDevFixture(ctx context.Context, ids DevFixtureIDs) (DevSee
 			name:        "Product Agent",
 			slug:        "product-agent",
 			description: "Product-perspective review of requirements and scope",
-			config:      `{"profile":{"skills":["prd-review","scope"]}}`,
+			config:      `{"model":"example-model"}`,
 		},
 		{
 			id:          ids.BackendAgentID,
 			name:        "Backend Agent",
 			slug:        "backend-agent",
 			description: "Backend-perspective review of architecture and data model",
-			config:      `{"profile":{"skills":["go","postgres","api"]}}`,
+			config:      `{"model":"example-model"}`,
 		},
 		{
 			id:          ids.TestAgentID,
 			name:        "TestAgent",
 			slug:        "test-agent",
 			description: "Test-perspective acceptance and counterexamples",
-			config:      `{"profile":{"skills":["e2e","regression"]}}`,
+			config:      `{"model":"example-model"}`,
 		},
 	}
 
@@ -7155,6 +6963,10 @@ func resolveChildAgentMentions(ctx context.Context, queries *sqlc.Queries, run s
 			return nil, nil, err
 		}
 
+		if !validConnectorType(agent.ConnectorType) {
+			skippedMentions = append(skippedMentions, SkippedAgentMention{Mention: mention, AgentID: agent.AgentID, Reason: "unsupported_connector"})
+			continue
+		}
 		if agent.AgentID == run.RAgentID {
 			skippedMentions = append(skippedMentions, SkippedAgentMention{Mention: mention, AgentID: agent.AgentID, Reason: "self_trigger"})
 			continue
@@ -7417,7 +7229,7 @@ func normalizeStringSlice(values []string) []string {
 
 func validConnectorType(value string) bool {
 	switch value {
-	case "http", "agent_daemon":
+	case "agents_api":
 		return true
 	default:
 		return false
@@ -7427,7 +7239,7 @@ func validConnectorType(value string) bool {
 // connectorNeedsStreamingDispatch reports whether the given connector_type uses the async
 // streaming path where the server pushes the prompt via Connector.StreamPrompt.
 func connectorNeedsStreamingDispatch(connectorType string) bool {
-	return connectorType == "agent_daemon" || connectorType == "http"
+	return connectorType == "agents_api"
 }
 
 func stringFromMap(values map[string]any, key string) string {
@@ -7448,62 +7260,18 @@ func runtimePtr(value string) *string {
 	return &trimmed
 }
 
-// agentConfigJSON builds the JSON to be written into agents.config. `bindings`
-// carries `credential_bindings` / `model_credential_binding` extracted from the
-// caller's agent config; without piping them through here the runtime's
-// ParseCredentialBindings (which reads agent_config) would always see {}.
-func agentConfigJSON(systemPrompt, defaultModelID string, capabilities []string, runtime, connectorType string, bindings map[string]any) ([]byte, error) {
-	config := map[string]any{"capabilities": normalizeStringSlice(capabilities)}
-	if trimmed := strings.TrimSpace(systemPrompt); trimmed != "" {
-		config["system_prompt"] = trimmed
+func agentConfigJSON(systemPrompt, defaultModelID string, capabilities []string, runtime, connectorType string, config map[string]any) ([]byte, error) {
+	if defaultModelID != "" || runtime != "" || len(capabilities) != 0 {
+		return nil, fmt.Errorf("%w: legacy execution settings are not supported by Core Agents", ErrInvalidInput)
 	}
-	if trimmed := strings.TrimSpace(defaultModelID); trimmed != "" {
-		config["default_model_id"] = trimmed
+	dst := map[string]any{"system_prompt": strings.TrimSpace(systemPrompt)}
+	if err := foldCoreAgentConfig(dst, config); err != nil {
+		return nil, err
 	}
-	r := strings.TrimSpace(runtime)
-	if connectorUsesServerRuntime(connectorType) {
-		if r == "" {
-			r = "sandbox"
-		}
-		if !validRuntimeMode(r) {
-			return nil, fmt.Errorf("%w: runtime must be sandbox or local", ErrInvalidInput)
-		}
-		config["runtime"] = r
-	} else if r != "" {
-		return nil, fmt.Errorf("%w: %s agents have no server-side runtime; got runtime=%q", ErrInvalidInput, connectorType, r)
+	if _, ok := dst["model"]; !ok {
+		return nil, fmt.Errorf("%w: a Core model name is required", ErrInvalidInput)
 	}
-	if v, ok := bindings["credential_bindings"]; ok && v != nil {
-		config["credential_bindings"] = v
-	}
-	if v, ok := bindings["model_credential_binding"]; ok && v != nil {
-		config["model_credential_binding"] = v
-	}
-	// Fold agent_daemon identity/runtime keys (formerly carried on the
-	// agent config) into the merged agent config.
-	if connectorType == "agent_daemon" {
-		if err := foldAgentDaemonConfig(config, bindings); err != nil {
-			return nil, err
-		}
-	}
-	if connectorType == "http" {
-		if err := foldHTTPAgentConfig(config, bindings); err != nil {
-			return nil, err
-		}
-	}
-	return json.Marshal(config)
-}
-
-func connectorUsesServerRuntime(connectorType string) bool {
-	return false
-}
-
-func validRuntimeMode(value string) bool {
-	switch strings.TrimSpace(value) {
-	case "local", "sandbox":
-		return true
-	default:
-		return false
-	}
+	return json.Marshal(dst)
 }
 
 func agentSummaryFromRow(id, workspaceID, name, slug, description, connectorType, status string, configJSON []byte, createdAt, updatedAt pgtype.Timestamptz) AgentSummary {
@@ -7514,11 +7282,6 @@ func agentSummaryFromRow(id, workspaceID, name, slug, description, connectorType
 		if s, ok := capability.(string); ok {
 			caps = append(caps, s)
 		}
-	}
-	// Strip stale config["runtime"] from historical agent_daemon rows so list/detail
-	// don't surface a misleading value. Cheaper than a destructive data migration.
-	if connectorType == "agent_daemon" {
-		delete(config, "runtime")
 	}
 	return AgentSummary{ID: id, WorkspaceID: workspaceID, Name: name, Slug: slug, Description: description, ConnectorType: connectorType, Status: status, Capabilities: normalizeStringSlice(caps), Config: config, CreatedAt: pgTime(createdAt), UpdatedAt: pgTime(updatedAt)}
 }
@@ -7543,8 +7306,8 @@ func changedAgentFields(current sqlc.GetAgentForUpdateRow, updated AgentSummary,
 	if input.CapabilitiesSet {
 		changed = append(changed, "capabilities")
 	}
-	if input.ConfigSet && updated.ConnectorType == "http" {
-		changed = append(changed, "http")
+	if input.ConfigSet {
+		changed = append(changed, "config")
 	}
 	return changed
 }

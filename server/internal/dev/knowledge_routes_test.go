@@ -37,11 +37,14 @@ func TestKnowledgeImportVersionBindingAndPermissions(t *testing.T) {
 	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), imported.Capability.ID) {
 		t.Fatalf("knowledge not listed: %s", listed.Body.String())
 	}
-	agent, err := st.CreateAgent(ctx, store.CreateAgentInput{WorkspaceID: ids.WorkspaceID, Name: "Knowledge reader", ConnectorType: "agent_daemon", CreatedBy: ids.UserID, InitialCapabilities: []store.InitialAgentCapabilityInput{{CapabilityVersionID: imported.CapabilityVersion.ID, PinningMode: store.PinningModeLatest}}})
+	agent, err := st.CreateAgent(ctx, store.CreateAgentInput{WorkspaceID: ids.WorkspaceID, Name: "Knowledge reader", ConnectorType: "agents_api", AgentConfig: map[string]any{"model": "test-model"}, CreatedBy: ids.UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := st.CreateAgent(ctx, store.CreateAgentInput{WorkspaceID: ids.WorkspaceID, Name: "No knowledge", ConnectorType: "agent_daemon", CreatedBy: ids.UserID})
+	if _, err := st.EnableAgentCapability(ctx, agent.Agent.ID, imported.CapabilityVersion.ID, nil, store.PinningModeLatest); err != nil {
+		t.Fatal(err)
+	}
+	other, err := st.CreateAgent(ctx, store.CreateAgentInput{WorkspaceID: ids.WorkspaceID, Name: "No knowledge", ConnectorType: "agents_api", AgentConfig: map[string]any{"model": "test-model"}, CreatedBy: ids.UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +82,7 @@ func TestKnowledgeUnpublishKeepsPrivateRevisionsInSourceWorkspace(t *testing.T) 
 		}
 		t.Run(name, func(t *testing.T) {
 			ids := store.DefaultDevFixtureIDs()
-			router, db := capabilityTestRouter(t, map[string]string{ids.UserID: "admin"}, nil)
+			_, db := capabilityTestRouter(t, map[string]string{ids.UserID: "admin"}, nil)
 			ctx := context.Background()
 			st := store.New(db)
 			sourceID := ids.WorkspaceID
@@ -98,10 +101,8 @@ func TestKnowledgeUnpublishKeepsPrivateRevisionsInSourceWorkspace(t *testing.T) 
 				t.Fatal(err)
 			}
 			agentID := insertAgentForOwner(t, db, ids.UserID, "knowledge-privacy-agent")
-			base := "/api/v1/workspaces/" + ids.WorkspaceID + "/agents/" + agentID + "/capabilities/"
-			enabled := serveCapabilityRoute(t, router, http.MethodPost, base+created.LatestVersionID+"/enable", `{"pinning_mode":"latest"}`, ids.UserID)
-			if enabled.Code != http.StatusOK {
-				t.Fatalf("enable: %d %s", enabled.Code, enabled.Body.String())
+			if _, err := st.EnableAgentCapability(ctx, agentID, created.LatestVersionID, nil, store.PinningModeLatest); err != nil {
+				t.Fatal(err)
 			}
 			visibility := "workspace"
 			if _, err := st.UpdateCapability(ctx, store.UpdateCapabilityInput{CapabilityID: created.ID, Visibility: &visibility}); err != nil {

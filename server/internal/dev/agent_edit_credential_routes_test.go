@@ -72,53 +72,11 @@ func (s *recordingAgentStore) CreateSecret(ctx context.Context, input store.Crea
 // forwards them to Store.UpdateAgent with ConfigSet=true. Without this the
 // edit dialog can't change the agent's shared secret — which is the bug
 // users originally reported (radio "shared" stays empty even after picking).
-func TestUpdateAgentPersistsCredentialBindings(t *testing.T) {
-	t.Setenv("PARSAR_MASTER_KEY", "test-master-key")
-	r := chi.NewRouter()
-	rec := &recordingAgentStore{}
-	RegisterRoutesWithStore(r, rec)
 
-	body := `{
-        "config": {
-            "credential_bindings": {
-                "gitlab_token": {"source": "shared", "secret_id": "00000000-0000-0000-0000-0000000000aa"}
-            }
-        },
-        "inline_new_secrets": [
-            {"kind": "gitlab_token", "display_name": "team token", "plaintext": "glpat-xxxx"}
-        ]
-    }`
-	req := withTestUser(httptest.NewRequest(http.MethodPatch, "/api/v1/agents/00000000-0000-0000-0000-000000000901", strings.NewReader(body)))
-	req.Header.Set("Content-Type", "application/json")
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-
-	requireStatus(t, res, http.StatusOK)
-	if !rec.lastUpdateInput.ConfigSet {
-		t.Fatalf("expected ConfigSet=true on UpdateAgentInput, got false")
-	}
-	bindings, ok := rec.lastUpdateInput.Config["credential_bindings"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected Config.credential_bindings map, got %#v", rec.lastUpdateInput.Config["credential_bindings"])
-	}
-	gitlab, ok := bindings["gitlab_token"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected gitlab_token binding map, got %#v", bindings["gitlab_token"])
-	}
-	if gitlab["source"] != "shared" {
-		t.Fatalf("expected source=shared, got %v", gitlab["source"])
-	}
-	// Inline secret should have been materialised once and the resulting
-	// secret_id stamped onto the binding for that kind.
-	if rec.createSecretCalls != 1 {
-		t.Fatalf("expected exactly 1 CreateSecret call, got %d", rec.createSecretCalls)
-	}
-}
-
-// TestUpdateAgentRejectsPersonalBindingOnPublicAgent guards the public-agent
+// TestUpdateAgentRejectsExecutionCredentials guards the public-agent
 // invariant: lark guests have no platform user_id, so personal credentials
 // can't resolve at dispatch. The handler must 422 before writing anything.
-func TestUpdateAgentRejectsPersonalBindingOnPublicAgent(t *testing.T) {
+func TestUpdateAgentRejectsExecutionCredentials(t *testing.T) {
 	r := chi.NewRouter()
 	rec := &recordingAgentStore{getAgentVisibility: "public"}
 	RegisterRoutesWithStore(r, rec)
@@ -129,10 +87,10 @@ func TestUpdateAgentRejectsPersonalBindingOnPublicAgent(t *testing.T) {
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 
-	if res.Code != http.StatusUnprocessableEntity {
+	if res.Code != http.StatusBadRequest {
 		t.Fatalf("expected 422 for public + personal, got %d: %s", res.Code, res.Body.String())
 	}
-	if !strings.Contains(res.Body.String(), "gitlab_token") {
+	if !strings.Contains(res.Body.String(), "Core") {
 		t.Errorf("error message should name the offending kind, got %s", res.Body.String())
 	}
 	// Nothing should have hit UpdateAgent — the input recorder stays empty.
@@ -183,53 +141,3 @@ func TestUpdateAgentWithoutConfigLeavesConfigSetFalse(t *testing.T) {
 // to personal), the handler must forward those as ConfigSet=true so
 // Store.UpdateAgent can delete the stored keys. Without this the dialog
 // silently fails to persist the clear.
-func TestUpdateAgentClearsBindingsOnEmptyPayload(t *testing.T) {
-	r := chi.NewRouter()
-	rec := &recordingAgentStore{}
-	RegisterRoutesWithStore(r, rec)
-
-	body := `{"config":{"credential_bindings":{},"model_credential_binding":null}}`
-	req := withTestUser(httptest.NewRequest(http.MethodPatch, "/api/v1/agents/00000000-0000-0000-0000-000000000901", strings.NewReader(body)))
-	req.Header.Set("Content-Type", "application/json")
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-
-	requireStatus(t, res, http.StatusOK)
-	if !rec.lastUpdateInput.ConfigSet {
-		t.Fatalf("expected ConfigSet=true on clear payload, got false")
-	}
-	cb, hasCB := rec.lastUpdateInput.Config["credential_bindings"]
-	if !hasCB {
-		t.Fatalf("credential_bindings key must be forwarded (even when empty) so the store can delete the stored value")
-	}
-	if m, ok := cb.(map[string]any); !ok || len(m) != 0 {
-		t.Fatalf("expected credential_bindings to be an empty object, got %#v", cb)
-	}
-	mb, hasMB := rec.lastUpdateInput.Config["model_credential_binding"]
-	if !hasMB {
-		t.Fatalf("model_credential_binding key must be forwarded (even when null) so the store can delete the stored value")
-	}
-	if mb != nil {
-		t.Fatalf("expected model_credential_binding to be nil, got %#v", mb)
-	}
-}
-
-func TestUpdatePublicAgentClearsNullModelBinding(t *testing.T) {
-	r := chi.NewRouter()
-	rec := &recordingAgentStore{getAgentVisibility: "public"}
-	RegisterRoutesWithStore(r, rec)
-
-	body := `{"config":{"credential_bindings":{},"model_credential_binding":null}}`
-	req := withTestUser(httptest.NewRequest(http.MethodPatch, "/api/v1/agents/00000000-0000-0000-0000-000000000901", strings.NewReader(body)))
-	req.Header.Set("Content-Type", "application/json")
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-
-	requireStatus(t, res, http.StatusOK)
-	if !rec.lastUpdateInput.ConfigSet {
-		t.Fatalf("expected ConfigSet=true on clear payload, got false")
-	}
-	if mb, ok := rec.lastUpdateInput.Config["model_credential_binding"]; !ok || mb != nil {
-		t.Fatalf("expected model_credential_binding nil clear marker, got ok=%v value=%#v", ok, mb)
-	}
-}

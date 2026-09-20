@@ -21,7 +21,6 @@ import {
   useMyCredentials,
   usePatchMyCredential,
 } from "../../../lib/api-credentials"
-import { useModels } from "../../../lib/api-models"
 import { useMyWorkspaces } from "../../../lib/api-workspaces"
 import {
   credentialKindLabel,
@@ -69,7 +68,6 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
   const capabilitiesScan = useCapabilitiesPerWorkspace(workspaces)
   // Model catalog is org-global; the endpoint still needs a workspace in
   // the URL for RBAC but the response shape is workspace-independent.
-  const modelsQ = useModels(wsId)
   const kindOptions = useCredentialKindOptions(wsId)
   const createMut = useCreateMyCredential()
   const patchMut = usePatchMyCredential()
@@ -134,7 +132,7 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
     return () => window.clearTimeout(timer)
   }, [highlightedID])
 
-  const models = useMemo(() => modelsQ.data?.models ?? [], [modelsQ.data?.models])
+  const models = useMemo(() => [], [])
   const missing = useMemo(
     () => computeMissingCredentials(workspaces, capabilitiesScan.byWorkspace, models, credentials),
     [workspaces, capabilitiesScan.byWorkspace, models, credentials],

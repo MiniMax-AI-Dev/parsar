@@ -222,23 +222,6 @@ async function setAgentStatus(
   )
 }
 
-export interface UpdateAgentProfileRequest {
-  model_id?: string
-  workdir?: string
-  system_prompt?: string
-  config?: Record<string, unknown>
-}
-
-async function updateAgentProfileRequest(
-  agentID: string,
-  body: UpdateAgentProfileRequest
-): Promise<unknown> {
-  return apiRequest<unknown>(
-    `/api/v1/agents/${encodeURIComponent(agentID)}/profile`,
-    { method: "POST", body }
-  )
-}
-
 /* --- React Query hooks -------------------------------------------------- */
 
 export function useAgents(workspaceID: string | null, includeDisabled = false) {
@@ -703,22 +686,6 @@ export function useSetAgentStatus(workspaceID: string | null) {
   })
 }
 
-export function useUpdateAgentProfile(workspaceID: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async ({
-      agentID,
-      body,
-    }: {
-      agentID: string
-      body: UpdateAgentProfileRequest
-    }) => updateAgentProfileRequest(agentID, body),
-    onSuccess: (_result, variables) => {
-      void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
-      void qc.invalidateQueries({ queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", variables.agentID) })
-    },
-  })
-}
 
 export function useDeleteAgent(workspaceID: string | null) {
   const qc = useQueryClient()

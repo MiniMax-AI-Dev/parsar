@@ -1,8 +1,7 @@
 # Run with: docker compose up -d
 # Open http://127.0.0.1:18080 and configure integrations in the web UI.
-# Production deployments should override the three dev-only secrets below.
-# Existing deployments: use install.sh migrate-runtime-history once before
-# recreating containers. See CONTRIBUTING.md#install-and-image-freshness.
+# Mount workspace-specific Core credentials; see docs/deploy/product-core.md.
+# Production deployments must override the database password and master key.
 name: parsar
 
 services:
@@ -34,41 +33,14 @@ services:
     environment:
       DATABASE_URL: postgres://parsar:${PARSAR_PG_PASSWORD:-parsar}@postgres:5432/parsar?sslmode=disable
       PARSAR_PUBLIC_URL: "${PARSAR_PUBLIC_URL:-http://127.0.0.1:${PARSAR_LOCAL_PORT:-18080}}"
-      PARSAR_AGENT_DAEMON_OWNER_URL: "http://parsar-server:8080"
       PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-0000000000000000000000000000000000000000000000000000000000000000}"
-      PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-parsar-local-runtime-token-change-me}"
-      PARSAR_AGENT_DAEMON_WS_URL: "ws://parsar-server:8080/agent-daemon/ws"
-      # Optional managed cloud sandbox. Empty template/key keeps it disabled.
-      AGENT_DAEMON_SANDBOX_TEMPLATE: "${AGENT_DAEMON_SANDBOX_TEMPLATE:-}"
-      AGENT_DAEMON_SANDBOX_TEMPLATE_XL: "${AGENT_DAEMON_SANDBOX_TEMPLATE_XL:-}"
-      AGENT_DAEMON_SANDBOX_TTL: "${AGENT_DAEMON_SANDBOX_TTL:-}"
-      AGENT_DAEMON_SANDBOX_AUTO_RENEW: "${AGENT_DAEMON_SANDBOX_AUTO_RENEW:-true}"
-      PARSAR_E2B_API_KEY: "${PARSAR_E2B_API_KEY:-}"
-      PARSAR_E2B_API_BASE_URL: "${PARSAR_E2B_API_BASE_URL:-}"
-      PARSAR_E2B_SANDBOX_HOST: "${PARSAR_E2B_SANDBOX_HOST:-}"
-      PARSAR_E2B_CA_CERT: "${PARSAR_E2B_CA_CERT:-}"
+      PARSAR_CORE_WORKSPACES_FILE: /run/secrets/core/workspaces.json
     volumes:
       - ${PARSAR_DATA_DIR:-server-data}:/var/lib/parsar
+      - ${PARSAR_CORE_CONFIG_DIR:?Set an absolute Core configuration directory}:/run/secrets/core:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null"]
-
-  parsar-runtime:
-    image: ${PARSAR_SANDBOX_IMAGE:-ghcr.io/minimax-ai-dev/parsar-sandbox:latest}
-    pull_policy: ${PARSAR_IMAGE_PULL_POLICY:-always}
-    restart: unless-stopped
-    depends_on:
-      parsar-server:
-        condition: service_healthy
-    environment:
-      PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-parsar-local-runtime-token-change-me}"
-      CLAUDE_CONFIG_DIR: /root/.parsar/claude-code
-    command: ["/opt/parsar/bin/runtime-entrypoint.sh"]
-    volumes:
-      - parsar-runtime-home:/root/.parsar
-      - parsar-runtime-workspace:/workspace
 
 volumes:
   postgres-data:
   server-data:
-  parsar-runtime-home:
-  parsar-runtime-workspace:

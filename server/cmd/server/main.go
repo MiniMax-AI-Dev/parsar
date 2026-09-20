@@ -20,12 +20,11 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
-	"net"
+	mcpdirectoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/mcpdirectory"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
 	"net/http"
 	"net/url"
 	"os"
@@ -35,27 +34,19 @@ import (
 	"syscall"
 	"time"
 
-	agentdaemongateway "github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon"
-	agentdaemonbinding "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/binding"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/api"
 	agentmcpapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/agentmcp"
 	imhistoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/imhistoryapi"
-	mcpdirectoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/mcpdirectory"
-	runtimeapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/runtime"
 	specmemapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/specmem"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
 	authgithub "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/github"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
 	authpassword "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/password"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/bootstrap"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
-	connagentdaemon "github.com/MiniMax-AI-Dev/parsar/server/internal/connector/agentdaemon"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector/httpagent"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/dev"
@@ -71,12 +62,9 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/teamsrunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inflight"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/interaction"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/otlp"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runtime/scheduler"
-	runtimesweeper "github.com/MiniMax-AI-Dev/parsar/server/internal/runtime/sweeper"
-	e2bsandbox "github.com/MiniMax-AI-Dev/parsar/server/internal/sandbox/e2b"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/specmemory"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
@@ -339,11 +327,6 @@ func main() {
 		r.Post("/api/v1/auth/logout", loginH.Logout)
 	}
 
-	// Hoist these so downstream route registration can see them; nil
-	// means agent_daemon gateway is not exposed.
-	var agentDaemonHandler *agentdaemongateway.Handler
-	var runtimeStatusProber dev.SandboxLivenessProber
-	managedSandboxProviderWired := false
 	// serverRootCtx is forward-declared so we can pass it to
 	// dev.WithDispatchContext before the dev router is built.
 	serverRootCtx, serverRootStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -404,158 +387,13 @@ func main() {
 		// cancel can dispatch via lookup rather than a hard-coded switch.
 		opts = append(opts, dev.WithConnectorRegistry(connectorReg))
 
-		// SweepOrphanedSandboxBindings is intentionally kept in the
-		// store layer for a future heartbeat-driven reaper to reuse.
-		// The startup sweep was written for the legacy Acquire flow
-		// whose envd token lived only in the previous process; under
-		// agent_daemon the sandbox outlives the server process and the
-		// daemon reconnects via persisted runner_credential.
-
-		// PublicWSURL derives from cfg.Server.PublicURL by swapping the
-		// scheme (http→ws, https→wss). Dev falls back to 127.0.0.1:18080;
-		// prod boots without public_url fail config validate.go.
-		agentDaemonBinder := agentdaemonbinding.NewPgBinder(pool, func(format string, args ...any) {
-			log.Bg().Warn("agentdaemon binder", "msg", fmt.Sprintf(format, args...))
-		})
-		agentDaemonRegistry := agentdaemongateway.NewRegistry()
-		agentDaemonAuth := agentdaemongateway.NewAuthenticator(agentdaemon.Credentials{Runtimes: dbStore})
-		publicWSURL := resolveAgentDaemonPublicWSURL(envLookup, cfg)
-		agentDaemonPodID := resolveAgentDaemonOwnerPodID(envLookup)
-		agentDaemonOwnerURL, err := resolveAgentDaemonOwnerURL(envLookup, cfg)
+		coreConnector, err := buildCoreConnector(envLookup, dbStore)
 		if err != nil {
-			log.Bg().Error("agent_daemon owner URL not resolvable; aborting startup", "error", err.Error())
+			log.Bg().Error("Core configuration is invalid", "error", err)
 			os.Exit(1)
 		}
-		agentDaemonInternalToken := resolveAgentDaemonInternalToken(envLookup, cfg.Secret.MasterKey)
-		agentDaemonHandler = agentdaemongateway.NewHandler(agentdaemongateway.HandlerConfig{
-			Authenticator: agentDaemonAuth,
-			Registry:      agentDaemonRegistry,
-			Heartbeat:     dbStore,
-			PublicWSURL:   publicWSURL,
-			OwnerStore:    dbStore,
-			OwnerPodID:    agentDaemonPodID,
-			OwnerURL:      agentDaemonOwnerURL,
-			Log: func(format string, args ...any) {
-				log.Bg().Info("agentdaemon gateway", "msg", fmt.Sprintf(format, args...))
-			},
-		})
-		agentDaemonSandbox := buildAgentDaemonSandboxProvider(envLookup, cfg, dbStore, agentDaemonRegistry, agentDaemonBinder, agentDaemonPodID)
-		agentDaemonRemote := connagentdaemon.HTTPRemoteStreamer{Token: agentDaemonInternalToken}
-		agentDaemonCfg := connagentdaemon.Config{
-			Registry:          agentDaemonRegistry,
-			Binder:            agentDaemonBinder,
-			Sandbox:           agentDaemonSandbox,
-			OwnerResolver:     dbStore,
-			OwnerPodID:        agentDaemonPodID,
-			Remote:            agentDaemonRemote,
-			RemoteSubmit:      agentDaemonRemote,
-			SubmitSlots:       dbStore,
-			ModelResolver:     dbStore,
-			ExecutionRecorder: dbStore,
-			RunStatusReader:   dbStore,
-			Capabilities:      dbStore,
-			Authoring:         dev.NewAgentAuthoringHandler(dbStore, blobStore),
-			MasterKey:         cfg.Secret.MasterKey,
-			// Auto-mounted fetch_chat_history tool: the endpoint URL the
-			// sandbox calls back into, plus the per-conversation token signer.
-			// Nil signer (empty master key) disables the injection.
-			IMHistoryEndpoint: cfg.BuildPublicURL("/internal/im/history"),
-			SkillUploadTokenSigner: func() func(string) (string, error) {
-				if skillUploadSigner == nil {
-					return nil
-				}
-				return skillUploadSigner.Token
-			}(),
-			IMHistoryTokenSigner: func() func(string) string {
-				if imHistorySigner == nil {
-					return nil
-				}
-				return imHistorySigner.Token
-			}(),
-			// Spec/memory SessionStart injection. override_system_prompt
-			// still wins; nil is a no-op.
-			SpecMemory: specmemSvc,
-			// Soft-degrade nudges: without this the Feishu outbound
-			// driver receives no notice when an MCP is soft-degraded
-			// and the credential-form recovery loop never fires.
-			SystemMessages: dbStore,
-			// Sandbox binding reader lets the connector turn the
-			// generic "Agent not bound to Runtime" hint into a precise
-			// spawning / failed / never-attempted message.
-			SandboxBindingReader: dbStore,
-			// Plugin host: when set, bundles with server_entry resolve
-			// into MCP server entries that spawn this script.
-			PluginHostPath: cfg.Server.PluginHostPath,
-			PluginsDir:     cfg.PluginsDir(),
-			Log:            log.Bg(),
-		}
-		// The daemon only needs a short-lived GET URL per capability ref.
-		// blobDownloadAdapter bridges blob.Store onto the daemon's existing
-		// OSSPresigner surface so the agentdaemon package is backend-agnostic
-		// without any churn. Guarded so a nil store stays a nil interface and
-		// the connector's `c.oss == nil` skip still fires.
-		if blobStore != nil {
-			agentDaemonCfg.OSS = blobDownloadAdapter{store: blobStore}
-		}
-		connectorReg.MustRegister(httpagent.New(dbStore, cfg.Secret.MasterKey, nil))
-		agentDaemonConn := connagentdaemon.New(agentDaemonCfg)
-		connagentdaemon.RegisterInternalRoutes(r, agentDaemonConn, agentDaemonInternalToken)
-		if regErr := connectorReg.Register(agentDaemonConn); regErr != nil {
-			log.Bg().Warn("agent_daemon connector registry registration failed; agent_daemon dispatch will 503",
-				"error", regErr,
-				"type", agentDaemonConn.Type())
-		} else {
-			log.Bg().Info("agent_daemon AgentConnector registered",
-				"type", agentDaemonConn.Type(),
-				"capabilities", agentDaemonConn.Capabilities().String(),
-				"ws_url", publicWSURL,
-			)
-		}
-
-		// Wire the agent_daemon sandbox provider into the dev router
-		// so createAgent can eager-acquire and the /sandbox/acquire
-		// endpoint works. nil provider is safe — both paths degrade
-		// to lazy-create or 503 respectively.
-		if agentDaemonSandbox != nil {
-			managedSandboxProviderWired = true
-			runtimeStatusProber = configuredSandboxProber{}
-			opts = append(opts, dev.WithAgentDaemonSandbox(agentDaemonSandbox))
-			opts = append(opts, dev.WithSandboxLifecycle(dbStore, agentDaemonSandbox))
-
-			// Run once at startup, then periodically renew due provider leases
-			// and evict idle agent_daemon sandboxes.
-			go func() {
-				runLifecycle := func() {
-					maintainCtx, maintainCancel := context.WithTimeout(context.Background(), 30*time.Second)
-					if n, maintainErr := agentDaemonSandbox.Maintain(maintainCtx); maintainErr != nil {
-						log.Bg().Warn("agent_daemon sandbox maintenance failed", "err", maintainErr)
-					} else if n > 0 {
-						log.Bg().Info("agent_daemon sandbox auto-renew", "renewed", n)
-					}
-					maintainCancel()
-
-					reapCtx, reapCancel := context.WithTimeout(context.Background(), 30*time.Second)
-					if n, reapErr := agentDaemonSandbox.Reap(reapCtx); reapErr != nil {
-						log.Bg().Warn("agent_daemon sandbox reap failed", "err", reapErr)
-					} else if n > 0 {
-						log.Bg().Info("agent_daemon sandbox reap", "evicted", n)
-					}
-					reapCancel()
-				}
-
-				runLifecycle()
-				ticker := time.NewTicker(connagentdaemon.SandboxMaintenanceInterval)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-serverRootCtx.Done():
-						return
-					case <-ticker.C:
-						runLifecycle()
-					}
-				}
-			}()
-		}
+		connectorReg.MustRegister(coreConnector)
+		opts = append(opts, dev.WithCoreAccess(coreConnector.Resolve))
 
 		// Abandoned credential-form slot sweep (1h TTL). The slot lives
 		// inside conversations.metadata.gateway_inflight rather than a
@@ -615,25 +453,10 @@ func main() {
 				}
 			},
 		})
-		log.Bg().Info("streaming dispatch hook wired")
+		go dev.RecoverCoreRuns(serverRootCtx, dbStore, dev.StreamingDispatchDeps{Broker: runStreamBroker, ConnectorRegistry: connectorReg, DispatchCtx: serverRootCtx})
+		log.Bg().Info("Core product execution wired")
 	}
 
-	// Runtime status banner: ConfiguredByOps marks "operator set
-	// PARSAR_OPENCODE_RUNNER explicitly" and is retained only for
-	// the legacy admin badge query; it no longer drives runtime
-	// selection.
-	runtimeProfile := resolveRuntimeProfile(envLookup, managedSandboxProviderWired)
-	runtimeStatusDeps := dev.RuntimeStatusDeps{
-		SettingsStore:   dbStore,
-		SandboxProber:   runtimeStatusProber,
-		Profile:         runtimeProfile,
-		ConfiguredByOps: strings.TrimSpace(envLookup("PARSAR_OPENCODE_RUNNER")) != "",
-		SandboxImage:    configuredDockerSandboxImage(envLookup),
-	}
-	log.Bg().Info("runtime status profile configured",
-		"profile", runtimeProfile,
-		"managed_sandbox_provider", managedSandboxProviderWired)
-	opts = append(opts, dev.WithRuntimeStatus(runtimeStatusDeps))
 	if blobStore != nil {
 		opts = append(opts, dev.WithBlobStore(blobStore))
 	}
@@ -730,15 +553,8 @@ func main() {
 	// history endpoint reports an empty page rather than failing.
 	imHistoryResolver := &imhistoryapi.LateResolver{}
 
-	// Runtime lifecycle API: admin tree behind session middleware,
-	// runtime credential tree open at chi with Bearer auth enforced
-	// inside the package. Wired AFTER dev.RegisterRoutesWithStore so
-	// chi's NotFound fallback still fires last.
+	// Product integrations remain behind their existing authorization boundaries.
 	if pool != nil && dbStore != nil {
-		runtimeDeps := runtimeapi.Deps{
-			Store:              dbStore,
-			SharedRuntimeToken: strings.TrimSpace(envLookup("PARSAR_SHARED_RUNTIME_TOKEN")),
-		}
 		mcpCatalog := mcpcatalog.New(mcpcatalog.Options{})
 		mcpOAuthSecrets, mcpOAuthSecretsErr := secrets.New(cfg.Secret.MasterKey)
 		if mcpOAuthSecretsErr != nil {
@@ -764,17 +580,9 @@ func main() {
 				PublicURL:            publicURL,
 				CookieSecure:         cfg.Auth.Cookie.Secure,
 			})
-			runtimeapi.RegisterAdminRoutes(r, runtimeDeps)
-		})
-		runtimeapi.RegisterRunnerRoutes(r, runtimeDeps)
-		log.Bg().Info("runtime lifecycle API mounted",
-			"admin_paths", "/api/v1/workspaces/{wid}/runtimes",
-			"runtime_paths", "/api/v1/runtimes/pair, /api/v1/runtimes/{id}/heartbeat")
 
-		// Spec/memory: admin tree behind session middleware (cookie auth);
-		// runtime tree behind RunnerCredential so the in-sandbox tg CLI's
-		// Bearer maps to a RuntimeIdentity in ctx. Both trees share the
-		// *specmemory.Service so audit events land on the same ingester.
+		})
+		// Spec/memory administration uses product session authorization.
 		specmemDeps := specmemapi.Deps{
 			Service:    specmemSvc,
 			Membership: dbStore,
@@ -784,27 +592,6 @@ func main() {
 			r.Use(authMw.Require)
 			specmemapi.RegisterAdminRoutes(r, specmemDeps)
 		})
-		r.Group(func(r chi.Router) {
-			r.Use(auth.RunnerCredential(dbStore, auth.RunnerCredentialOptions{
-				Logger: log.Bg(),
-			}))
-			specmemapi.RegisterRuntimeRoutes(r, specmemDeps)
-		})
-		log.Bg().Info("spec/memory API mounted",
-			"admin_paths", "/api/v1/workspaces/{wid}/spec/..., /api/v1/memories",
-			"runtime_paths", "/api/v1/agent-runtime/...")
-
-		// agent_daemon WS / bootstrap routes. Nil handler when connector
-		// wiring above failed; skipping the mount keeps an otherwise-
-		// healthy server from advertising an endpoint that would panic.
-		if agentDaemonHandler != nil {
-			agentdaemongateway.RegisterRoutes(r, agentDaemonHandler)
-			log.Bg().Info("agent_daemon gateway mounted",
-				"ws_path", "/agent-daemon/ws",
-				"bootstrap_path", "/agent-daemon/bootstrap",
-				"status_path", "/agent-daemon/device-status")
-		}
-
 		// Internal on-demand chat-history endpoint the auto-mounted
 		// fetch_chat_history MCP tool calls back into. Reuses imHistorySigner
 		// (built above for the connector's token minting) so both sides share
@@ -895,19 +682,6 @@ func main() {
 		}
 		otlpReceiver = rec
 		log.Bg().Info("audit otlp receiver enabled", "addr", rec.Addr())
-	}
-
-	// Runtime heartbeat sweeper: demote runtimes whose heartbeat has
-	// gone stale. Prevents Agent Daemon devices from staying online
-	// forever after a laptop sleep, process crash, or broken network.
-	if dbStore != nil {
-		if sw := buildRuntimeHeartbeatSweeper(envLookup, dbStore); sw != nil {
-			go func() {
-				if err := sw.Run(ctx); err != nil {
-					log.Bg().Error("runtime heartbeat sweeper exited with error", "error", err)
-				}
-			}()
-		}
 	}
 
 	// Scheduled task scheduler: each cron fire dispatches an independent
@@ -1043,14 +817,7 @@ func main() {
 	// Poll interval default 10s; override via
 	// PARSAR_FEISHU_OUTBOUND_POLL_SECONDS for load-shedding.
 	if dbStore != nil {
-		// Standalone binder for outbound's card-write path. Stamps the
-		// agent_daemon device id onto each inflight slot so the
-		// card-callback path (Phase 2 owner routing) can resolve the
-		// owning pod without re-walking the binding tree.
-		outboundBinder := agentdaemonbinding.NewPgBinder(pool, func(format string, args ...any) {
-			log.Bg().Warn("inflight binder", "msg", fmt.Sprintf(format, args...))
-		})
-		if worker, err := buildFeishuOutboundWorker(os.Getenv, dbStore, connectorReg, outboundBinder, cfg.Server.PublicURL); err != nil {
+		if worker, err := buildFeishuOutboundWorker(os.Getenv, dbStore, connectorReg, nil, cfg.Server.PublicURL); err != nil {
 			log.Bg().Error("feishu outbound worker init failed", "error", err)
 			os.Exit(1)
 		} else if worker != nil {
@@ -1221,69 +988,6 @@ func drainOTLPReceiver(r *otlp.Receiver) {
 	}
 }
 
-// runtimeHeartbeatSweeperStore is the tiny store surface needed by the
-// runtime liveness sweeper. Narrower than *store.Store so startup
-// config tests stay DB-free.
-type runtimeHeartbeatSweeperStore interface {
-	SweepStaleRuntimes(ctx context.Context, cutoff time.Time) (int64, error)
-}
-
-// buildRuntimeHeartbeatSweeper constructs the runtime heartbeat sweeper
-// from env. Defaults match agent_daemon: 15s heartbeat, 60s timeout.
-//
-// Env contract:
-//   - PARSAR_RUNTIME_HEARTBEAT_STALE_SECONDS (default 60; <= 0 disables)
-//   - PARSAR_RUNTIME_HEARTBEAT_SWEEP_INTERVAL_SECONDS (optional;
-//     default = stale / 4 floored at 15s)
-func buildRuntimeHeartbeatSweeper(
-	env func(string) string,
-	runtimeStore runtimeHeartbeatSweeperStore,
-) *runtimesweeper.Sweeper {
-	if runtimeStore == nil {
-		return nil
-	}
-	const defaultStaleSeconds = 60
-	staleSeconds := defaultStaleSeconds
-	if raw := strings.TrimSpace(env("PARSAR_RUNTIME_HEARTBEAT_STALE_SECONDS")); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil {
-			log.Bg().Warn("PARSAR_RUNTIME_HEARTBEAT_STALE_SECONDS invalid; runtime heartbeat sweep disabled",
-				"value", raw, "err", err.Error())
-			return nil
-		}
-		staleSeconds = n
-	}
-	if staleSeconds <= 0 {
-		log.Bg().Info("runtime heartbeat sweep disabled by PARSAR_RUNTIME_HEARTBEAT_STALE_SECONDS",
-			"value", staleSeconds)
-		return nil
-	}
-
-	intervalSeconds := 0
-	if raw := strings.TrimSpace(env("PARSAR_RUNTIME_HEARTBEAT_SWEEP_INTERVAL_SECONDS")); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n <= 0 {
-			log.Bg().Warn("PARSAR_RUNTIME_HEARTBEAT_SWEEP_INTERVAL_SECONDS invalid; falling back to derived interval",
-				"value", raw)
-		} else {
-			intervalSeconds = n
-		}
-	}
-	opts := runtimesweeper.Options{
-		StaleAfter: time.Duration(staleSeconds) * time.Second,
-	}
-	if intervalSeconds > 0 {
-		opts.Interval = time.Duration(intervalSeconds) * time.Second
-	}
-	sw, err := runtimesweeper.New(runtimeStore, opts)
-	if err != nil {
-		log.Bg().Error("runtime heartbeat sweeper construct failed", "error", err)
-		return nil
-	}
-	log.Bg().Info("runtime heartbeat sweeper configured", "sweeper", sw.String())
-	return sw
-}
-
 // buildScheduler constructs the scheduled-task scheduler from env. Disabled by
 // PARSAR_SCHEDULER_ENABLED=false; tunables (optional, defaulted in
 // scheduler.New): PARSAR_SCHEDULER_INTERVAL_SECONDS,
@@ -1324,324 +1028,6 @@ func buildScheduler(env func(string) string, st scheduler.Store) *scheduler.Sche
 	return sc
 }
 
-// buildAgentDaemonWSURL returns the wss://.../agent-daemon/ws URL the
-// daemon dials after bootstrap. Derives from cfg.Server.PublicURL by
-// swapping http→ws / https→wss; dev falls back to 127.0.0.1:18080.
-// Production boot without public_url aborts in config.validate.go.
-func buildAgentDaemonWSURL(cfg config.Config) string {
-	const path = "/agent-daemon/ws"
-	publicURL := strings.TrimSpace(cfg.Server.PublicURL)
-	publicURL = strings.TrimRight(publicURL, "/")
-	if publicURL == "" {
-		return "ws://127.0.0.1:18080" + path
-	}
-	parsed, err := url.Parse(publicURL)
-	if err != nil || parsed.Host == "" {
-		// Best-effort dev fallback so a hand-rolled public_url doesn't
-		// crash gateway wiring; Validate would catch this in prod.
-		return "ws://" + publicURL + path
-	}
-	switch strings.ToLower(parsed.Scheme) {
-	case "https":
-		parsed.Scheme = "wss"
-	default:
-		parsed.Scheme = "ws"
-	}
-	parsed.Path = strings.TrimRight(parsed.Path, "/") + path
-	return parsed.String()
-}
-
-func resolveAgentDaemonOwnerPodID(env func(string) string) string {
-	if env == nil {
-		env = os.Getenv
-	}
-	for _, key := range []string{"PARSAR_AGENT_DAEMON_POD_ID", "POD_NAME", "HOSTNAME"} {
-		if value := strings.TrimSpace(env(key)); value != "" {
-			return value
-		}
-	}
-	if hostname, err := os.Hostname(); err == nil && strings.TrimSpace(hostname) != "" {
-		return strings.TrimSpace(hostname)
-	}
-	return "parsar-pod-unknown"
-}
-
-func resolveAgentDaemonOwnerURL(env func(string) string, cfg config.Config) (string, error) {
-	if env == nil {
-		env = os.Getenv
-	}
-	if value := strings.TrimRight(strings.TrimSpace(env("PARSAR_AGENT_DAEMON_OWNER_URL")), "/"); value != "" {
-		return value, nil
-	}
-	if podIP := strings.TrimSpace(env("POD_IP")); podIP != "" {
-		return "http://" + net.JoinHostPort(podIP, resolveListenPort(cfg.Server.Addr)), nil
-	}
-	// No fallback to cfg.Server.PublicURL or 127.0.0.1: both are unsafe
-	// in multi-replica deployments. PublicURL points at the ingress,
-	// which load-balances stream-prompt forwards across replicas and
-	// trips `stale_owner` checks; 127.0.0.1 only works when the owner
-	// pod and the forwarding pod are the same process.
-	return "", fmt.Errorf("agent_daemon owner URL not resolvable: set POD_IP (downward API: status.podIP) or PARSAR_AGENT_DAEMON_OWNER_URL")
-}
-
-func resolveListenPort(addr string) string {
-	addr = strings.TrimSpace(addr)
-	if addr == "" {
-		return "8080"
-	}
-	_, port, err := net.SplitHostPort(addr)
-	if err == nil && strings.TrimSpace(port) != "" {
-		return strings.TrimSpace(port)
-	}
-	if strings.HasPrefix(addr, ":") && strings.TrimSpace(strings.TrimPrefix(addr, ":")) != "" {
-		return strings.TrimSpace(strings.TrimPrefix(addr, ":"))
-	}
-	lastColon := strings.LastIndex(addr, ":")
-	if lastColon >= 0 && lastColon < len(addr)-1 {
-		candidate := strings.TrimSpace(addr[lastColon+1:])
-		if candidate != "" && !strings.Contains(candidate, "]") {
-			return candidate
-		}
-	}
-	return "8080"
-}
-
-func resolveAgentDaemonInternalToken(env func(string) string, masterKey string) string {
-	if env == nil {
-		env = os.Getenv
-	}
-	if token := strings.TrimSpace(env("PARSAR_AGENT_DAEMON_INTERNAL_TOKEN")); token != "" {
-		return token
-	}
-	if strings.TrimSpace(masterKey) == "" {
-		return ""
-	}
-	sum := sha256.Sum256([]byte("parsar:agent-daemon-internal-routing:" + strings.TrimSpace(masterKey)))
-	return fmt.Sprintf("%x", sum[:])
-}
-
-const envRuntimeProfile = "PARSAR_RUNTIME_PROFILE"
-
-func resolveRuntimeProfile(env func(string) string, managedSandboxProvider bool) string {
-	if env == nil {
-		env = os.Getenv
-	}
-	raw := strings.ToLower(strings.TrimSpace(env(envRuntimeProfile)))
-	switch raw {
-	case "oss", "managed", "selfhost":
-		return raw
-	case "":
-		if managedSandboxProvider {
-			return "managed"
-		}
-		return "oss"
-	default:
-		log.Bg().Warn("PARSAR_RUNTIME_PROFILE invalid; falling back to runtime wiring", "value", raw)
-		if managedSandboxProvider {
-			return "managed"
-		}
-		return "oss"
-	}
-}
-
-type configuredSandboxProber struct{}
-
-func (configuredSandboxProber) Ping(ctx context.Context) error {
-	return ctx.Err()
-}
-
-// buildAgentDaemonSandboxProvider wires the lazy-create SandboxProvider
-// for the agent_daemon connector. Returns nil when sandbox mode is not
-// configured (caller falls back to NoopSandboxProvider).
-//
-// Required env vars:
-//   - AGENT_DAEMON_SANDBOX_TEMPLATE — e2b template id; empty -> disabled.
-//   - PARSAR_E2B_API_KEY          — shared with opencode; empty -> disabled.
-//
-// Optional:
-//   - PARSAR_E2B_API_BASE_URL — self-hosted e2b api base.
-func buildAgentDaemonSandboxProvider(
-	env func(string) string,
-	cfg config.Config,
-	dbStore *store.Store,
-	registry *agentdaemongateway.Registry,
-	binder agentdaemonbinding.Binder,
-	selfPodID string,
-) connagentdaemon.SandboxProvider {
-	if env == nil {
-		env = os.Getenv
-	}
-	// Local-docker backend short-circuit: when AGENT_DAEMON_SANDBOX_BACKEND
-	// is "docker" this returns a container-backed provider and we skip the
-	// e2b-specific API-key/CA/pod-IP wiring below entirely.
-	if p := buildDockerAgentDaemonSandboxProvider(env, cfg, dbStore, registry, binder, selfPodID); p != nil {
-		return p
-	}
-	template := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_TEMPLATE"))
-	if template == "" {
-		return nil
-	}
-	// Optional XL template — agents with config.sandbox_size = "xl" get
-	// routed here instead of the default. Standard (4c8g) is always the
-	// fallback; if XL is not configured an agent that requests "xl" will
-	// silently fall back to the standard template (with a warn log) so a
-	// missing XL pool degrades gracefully rather than failing acquires.
-	templateXL := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_TEMPLATE_XL"))
-	templates := map[string]string{
-		"standard": template,
-	}
-	if templateXL != "" {
-		templates["xl"] = templateXL
-	}
-	apiKey := strings.TrimSpace(env("PARSAR_E2B_API_KEY"))
-	if apiKey == "" {
-		log.Bg().Warn("agent_daemon sandbox mode disabled: AGENT_DAEMON_SANDBOX_TEMPLATE set but PARSAR_E2B_API_KEY is missing",
-			"template", template)
-		return nil
-	}
-	publicURL := strings.TrimSpace(cfg.Server.PublicURL)
-	if publicURL == "" {
-		// Dev fallback mirrors buildAgentDaemonWSURL.
-		publicURL = "http://127.0.0.1:18080"
-	}
-	apiBaseURL := strings.TrimSpace(env("PARSAR_E2B_API_BASE_URL"))
-	client := &e2bsandbox.Client{
-		APIKey:            apiKey,
-		APIBaseURL:        apiBaseURL,
-		SandboxHost:       strings.TrimSpace(env("PARSAR_E2B_SANDBOX_HOST")),
-		DefaultTemplateID: template,
-	}
-	// If the internal sandbox gateway uses a private CA, inject it into
-	// the E2B client's TLS trust pool so Go can verify the certificate.
-	if caPEM := strings.TrimSpace(env("PARSAR_E2B_CA_CERT")); caPEM != "" {
-		pool, err := x509.SystemCertPool()
-		if err != nil {
-			pool = x509.NewCertPool()
-		}
-		if !pool.AppendCertsFromPEM([]byte(caPEM)) {
-			log.Bg().Warn("PARSAR_E2B_CA_CERT: failed to parse PEM certificate; TLS may fail")
-		} else {
-			client.HTTPClient = &http.Client{
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{RootCAs: pool},
-				},
-			}
-			log.Bg().Info("agent_daemon sandbox: custom CA cert loaded for E2B client")
-		}
-	}
-	// In-cluster pod IP resolver: when running inside K8s, resolve the
-	// sandbox pod's cluster-internal IP so envd RunCommand calls bypass
-	// the external gateway and connect directly via the pod network.
-	// Prefer an explicit token (PARSAR_K8S_POD_TOKEN) pointed at the
-	// sandbox cluster's API server (PARSAR_K8S_API_SERVER); fall back
-	// to in-cluster SA when neither is set.
-	var podIPResolver *e2bsandbox.PodIPResolver
-	if tok := strings.TrimSpace(env("PARSAR_K8S_POD_TOKEN")); tok != "" {
-		apiServer := strings.TrimSpace(env("PARSAR_K8S_API_SERVER"))
-		podIPResolver = e2bsandbox.NewPodIPResolver(apiServer, tok, nil, true)
-		if podIPResolver != nil {
-			log.Bg().Info("agent_daemon sandbox: pod IP resolver using explicit token",
-				"api_server", apiServer)
-		}
-	}
-	if podIPResolver == nil {
-		if r := e2bsandbox.NewInClusterPodIPResolver(); r != nil {
-			podIPResolver = r
-			log.Bg().Info("agent_daemon sandbox: pod IP resolver using in-cluster SA token")
-		}
-	}
-	sandboxTTL := resolveAgentDaemonSandboxTTL(env)
-	sandboxAutoRenew := resolveAgentDaemonSandboxAutoRenew(env)
-	provider, err := connagentdaemon.NewE2BSandboxProvider(connagentdaemon.E2BProviderConfig{
-		Client:        client,
-		Store:         dbStore,
-		Registry:      registry,
-		Binder:        binder,
-		Bindings:      dbStore,
-		Template:      template,
-		Templates:     templates,
-		DefaultSize:   "standard",
-		ServerURL:     publicURL,
-		PodIPResolver: podIPResolver,
-		OwnerChecker:  dbStore,
-		SelfPodID:     selfPodID,
-		TTL:           sandboxTTL,
-		AutoRenew:     sandboxAutoRenew,
-		Log:           log.Bg(),
-	})
-	if err != nil {
-		log.Bg().Warn("agent_daemon sandbox provider init failed; sandbox mode disabled",
-			"error", err)
-		return nil
-	}
-	// Log the effective lifetime, not the raw override: a bare "0" here
-	// would leave an operator guessing what the sandbox TTL actually is.
-	effectiveTTL := sandboxTTL
-	if effectiveTTL <= 0 {
-		effectiveTTL = connagentdaemon.SandboxDefaultTTL
-	}
-	log.Bg().Info("agent_daemon sandbox provider wired",
-		"template", template,
-		"template_xl", templateXL,
-		"server_url", publicURL,
-		"sandbox_ttl", effectiveTTL,
-		"sandbox_ttl_overridden", sandboxTTL > 0,
-		"sandbox_auto_renew", sandboxAutoRenew)
-	return provider
-}
-
-func resolveAgentDaemonSandboxAutoRenew(env func(string) string) bool {
-	raw := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_AUTO_RENEW"))
-	if raw == "" {
-		// Default ON: the default TTL is short (an hour), so without
-		// renewal a continuously-used agent's sandbox would be reaped
-		// mid-conversation and lose its in-sandbox CLI session state.
-		// Set AGENT_DAEMON_SANDBOX_AUTO_RENEW=false to opt out.
-		return true
-	}
-	enabled, err := strconv.ParseBool(raw)
-	if err != nil {
-		log.Bg().Warn("AGENT_DAEMON_SANDBOX_AUTO_RENEW ignored: want true or false; defaulting to enabled",
-			"value", raw)
-		return true
-	}
-	return enabled
-}
-
-// resolveAgentDaemonSandboxTTL reads the optional provider-neutral duration
-// override. The legacy integer-hours setting remains supported so existing
-// deployments do not change behaviour during an upgrade. The backing sandbox
-// provider is authoritative about any maximum lifetime it accepts.
-func resolveAgentDaemonSandboxTTL(env func(string) string) time.Duration {
-	if raw := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_TTL")); raw != "" {
-		ttl, err := time.ParseDuration(raw)
-		normalizedTTL, ok := connagentdaemon.NormalizeSandboxTTL(ttl)
-		if err != nil || !ok {
-			log.Bg().Warn("AGENT_DAEMON_SANDBOX_TTL ignored: want a duration of at least one second such as 30m, 1h, or 24h",
-				"value", raw)
-			return 0
-		}
-		return normalizedTTL
-	}
-
-	raw := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_TTL_HOURS"))
-	if raw == "" {
-		return 0
-	}
-	hours, err := strconv.Atoi(raw)
-	if err != nil || hours <= 0 || hours > (1<<31-1)/3600 {
-		log.Bg().Warn("AGENT_DAEMON_SANDBOX_TTL_HOURS ignored: want a positive integer number of hours",
-			"value", raw)
-		return 0
-	}
-	log.Bg().Warn("AGENT_DAEMON_SANDBOX_TTL_HOURS is deprecated; use AGENT_DAEMON_SANDBOX_TTL instead",
-		"value", raw)
-	return time.Duration(hours) * time.Hour
-}
-
-// openPool opens the shared pgxpool used by both the audit ingester and
-// the store. Returns nil when databaseURL is empty so dev environments
-// without a database can still bring up the health endpoint.
 func openPool(databaseURL string) *pgxpool.Pool {
 	if strings.TrimSpace(databaseURL) == "" {
 		log.Bg().Warn("DATABASE_URL is not set; database-backed dev endpoints are disabled")

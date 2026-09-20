@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
@@ -319,37 +317,6 @@ func TestWorkspaceChatManagersFollowStoredConnectorConfiguration(t *testing.T) {
 	})
 }
 
-func TestResolveRuntimeProfile(t *testing.T) {
-	cases := []struct {
-		name    string
-		env     map[string]string
-		managed bool
-		want    string
-	}{
-		{name: "default oss", env: map[string]string{}, want: "oss"},
-		{name: "managed provider auto", env: map[string]string{}, managed: true, want: "managed"},
-		{name: "explicit managed", env: map[string]string{envRuntimeProfile: "managed"}, want: "managed"},
-		{name: "explicit oss overrides provider", env: map[string]string{envRuntimeProfile: "oss"}, managed: true, want: "oss"},
-		{name: "explicit selfhost", env: map[string]string{envRuntimeProfile: "SELFHOST"}, managed: true, want: "selfhost"},
-		{name: "invalid falls back to provider", env: map[string]string{envRuntimeProfile: "internal"}, managed: true, want: "managed"},
-		{name: "invalid without provider falls back oss", env: map[string]string{envRuntimeProfile: "internal"}, want: "oss"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := resolveRuntimeProfile(envMap(tc.env), tc.managed); got != tc.want {
-				t.Fatalf("resolveRuntimeProfile() = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestConfiguredSandboxProber(t *testing.T) {
-	if err := (configuredSandboxProber{}).Ping(context.Background()); err != nil {
-		t.Fatalf("healthy configured prober returned error: %v", err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := (configuredSandboxProber{}).Ping(ctx); !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancelled prober error = %v, want context.Canceled", err)
-	}
+func envMap(values map[string]string) func(string) string {
+	return func(key string) string { return values[key] }
 }

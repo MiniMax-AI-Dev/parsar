@@ -52,10 +52,10 @@ func TestRetryAgentRunDispatchesNewAttemptAndPreservesHistory(t *testing.T) {
 			if _, err := s.CompleteAgentRun(ctx, store.CompleteAgentRunInput{RunID: oldID, Content: "previous output"}); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := db.Exec(ctx, `update agent_runs set status=$2, failure_reason='original failure' where id=$1`, oldID, status); err != nil {
+			if err := s.RecordAgentRunEvent(ctx, store.RecordAgentRunEventInput{RunID: oldID, EventKind: "run.failed", Payload: map[string]any{"error": "original failure"}}); err != nil {
 				t.Fatal(err)
 			}
-			if err := s.RecordAgentRunEvent(ctx, store.RecordAgentRunEventInput{RunID: oldID, EventKind: "run.failed", Payload: map[string]any{"error": "original failure"}}); err != nil {
+			if _, err := db.Exec(ctx, `update agent_runs set status=$2, failure_reason='original failure' where id=$1`, oldID, status); err != nil {
 				t.Fatal(err)
 			}
 			broker.Publish(oldID, connector.PromptEvent{Type: connector.EventError, Error: "original failure"})
@@ -111,7 +111,10 @@ func TestRetryAgentRunDispatchesNewAttemptAndPreservesHistory(t *testing.T) {
                 from agent_runs old join agent_runs fresh on fresh.id=$2 where old.id=$1`, oldID, result.RunID, status, memberID).Scan(&preserved, &sameTrigger); err != nil || !preserved || !sameTrigger {
 				t.Fatalf("history/trigger/requester: %v %v %v", preserved, sameTrigger, err)
 			}
-			waitForRunEventKind(t, db, oldID, "run.failed")
+			var preservedFailure bool
+			if err := db.QueryRow(ctx, `select exists(select 1 from agent_run_events where agent_run_id=$1 and event_kind='run.failed')`, oldID).Scan(&preservedFailure); err != nil || !preservedFailure {
+				t.Fatalf("previous failure history lost: %v", err)
+			}
 			waitForRunEventKind(t, db, result.RunID, "run.completed")
 			foundDone := false
 			for event := range broker.Subscribe(ctx, result.RunID) {
@@ -158,9 +161,8 @@ func TestRetryAgentRunGuardsAndConcurrentRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	legacy := serveConversationMessageRequest(r, newConversationMessageRequest(http.MethodPost, "/api/v1/agent-runs/"+oldID+"/requeue", `{}`, ids.UserID))
-	var legacyResult store.RequeueAgentRunResult
-	if err := json.Unmarshal(legacy.Body.Bytes(), &legacyResult); err != nil || legacy.Code != http.StatusOK || legacyResult.RunID != oldID {
-		t.Fatalf("legacy requeue changed: %d %s", legacy.Code, legacy.Body.String())
+	if legacy.Code != http.StatusNotFound {
+		t.Fatalf("retired requeue endpoint: %d", legacy.Code)
 	}
 	if _, err := db.Exec(ctx, `update agent_runs set status='failed' where id=$1`, oldID); err != nil {
 		t.Fatal(err)
@@ -199,20 +201,5 @@ func TestRetryAgentRunGuardsAndConcurrentRequests(t *testing.T) {
 		if next := <-results; first == "" || next != first {
 			t.Fatalf("duplicate replacement: %s %s", first, next)
 		}
-	}
-	if _, err := db.Exec(ctx, `update agents set connector_type='http' where id=$1`, ids.ProductAgentID); err != nil {
-		t.Fatal(err)
-	}
-	httpSourceID := createRetryTestRun(t, s, ids)
-	if _, err := db.Exec(ctx, `update agent_runs set status='failed' where id=$1`, httpSourceID); err != nil {
-		t.Fatal(err)
-	}
-	httpRetry, err := s.RetryAgentRun(ctx, store.RetryAgentRunInput{RunID: httpSourceID, UserID: ids.UserID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	claimed, err := s.ClaimNextQueuedHTTPAgentRun(ctx)
-	if err != nil || !claimed.Claimed || claimed.RunID != httpRetry.RunID {
-		t.Fatalf("HTTP retry not claimable: %+v %v", claimed, err)
 	}
 }

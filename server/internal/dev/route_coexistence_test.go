@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
+	"github.com/go-chi/chi/v5"
 )
 
 // TestAPIV1RouteCoexistence is the regression guard for the /dev →

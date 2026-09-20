@@ -303,102 +303,6 @@ func TestClearWorkspaceRuntimeCredentialSecretFreesUniqueIndex(t *testing.T) {
 	}
 }
 
-func TestCreateAgentAcceptsCapabilitiesWithoutWorkspaceAllowlist(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	ids := DefaultDevFixtureIDs()
-	st := New(db)
-
-	if _, err := st.InsertDevFixture(ctx, ids); err != nil {
-		t.Fatal(err)
-	}
-	created, err := st.CreateAgent(ctx, CreateAgentInput{
-		WorkspaceID:   ids.WorkspaceID,
-		Name:          "Capability Test Agent",
-		ConnectorType: "agent_daemon",
-		AgentConfig: map[string]any{
-			"daemon_mode": "sandbox",
-			"agent_kind":  "opencode",
-		},
-		Capabilities:    []string{"foo"},
-		CapabilitiesSet: true,
-		CreatedBy:       ids.UserID,
-	})
-	if err != nil {
-		t.Fatalf("CreateAgent: %v", err)
-	}
-	if got := created.Agent.Capabilities; len(got) != 1 || got[0] != "foo" {
-		t.Fatalf("created capabilities = %#v, want [foo]", got)
-	}
-}
-
-func TestCreateAgentBindsInitialCapabilityVersions(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	ids := DefaultDevFixtureIDs()
-	st := New(db)
-
-	mustSeedDevFixture(t, ctx, st)
-	capability, err := st.CreateCapability(ctx, CreateCapabilityInput{
-		WorkspaceID: ids.WorkspaceID,
-		CreatorID:   ids.UserID,
-		Type:        "skill",
-		Name:        "Repo Skill",
-		Description: "Loads a repository skill.",
-		InitialVersion: &CreateCapabilityVersionInput{
-			Version:   "1.0.0",
-			CreatorID: ids.UserID,
-			Content:   map[string]any{"kind": "skill"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("CreateCapability: %v", err)
-	}
-	versions, err := st.ListCapabilityVersions(ctx, capability.ID)
-	if err != nil {
-		t.Fatalf("ListCapabilityVersions: %v", err)
-	}
-	if len(versions) != 1 {
-		t.Fatalf("versions = %d, want 1", len(versions))
-	}
-
-	created, err := st.CreateAgent(ctx, CreateAgentInput{
-		WorkspaceID:   ids.WorkspaceID,
-		Name:          "Versioned Skill Agent",
-		ConnectorType: "agent_daemon",
-		AgentConfig: map[string]any{
-			"daemon_mode": "sandbox",
-			"agent_kind":  "opencode",
-		},
-		InitialCapabilities: []InitialAgentCapabilityInput{{
-			CapabilityVersionID: versions[0].ID,
-			Configuration:       map[string]any{"mode": "create"},
-		}},
-		CreatedBy: ids.UserID,
-	})
-	if err != nil {
-		t.Fatalf("CreateAgent: %v", err)
-	}
-	if len(created.InitialCapabilities) != 1 {
-		t.Fatalf("initial capabilities = %#v, want 1 binding", created.InitialCapabilities)
-	}
-	binding := created.InitialCapabilities[0]
-	if binding.AgentID != created.Agent.ID || binding.CapabilityID != capability.ID || binding.CapabilityVersionID != versions[0].ID {
-		t.Fatalf("binding mismatch: %#v", binding)
-	}
-	if binding.Configuration["mode"] != "create" {
-		t.Fatalf("binding configuration = %#v", binding.Configuration)
-	}
-
-	listed, err := st.ListAgentCapabilities(ctx, created.Agent.ID)
-	if err != nil {
-		t.Fatalf("ListAgentCapabilities: %v", err)
-	}
-	if len(listed) != 1 || listed[0].CapabilityVersionID != versions[0].ID {
-		t.Fatalf("persisted capabilities = %#v", listed)
-	}
-}
-
 func TestCreateAgentAutoAllocatesUniqueSlug(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
@@ -409,12 +313,9 @@ func TestCreateAgentAutoAllocatesUniqueSlug(t *testing.T) {
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
 		Name:          "Backend Agent",
-		ConnectorType: "agent_daemon",
-		AgentConfig: map[string]any{
-			"daemon_mode": "sandbox",
-			"agent_kind":  "opencode",
-		},
-		CreatedBy: ids.UserID,
+		ConnectorType: "agents_api",
+		AgentConfig:   map[string]any{"model": "test-model"},
+		CreatedBy:     ids.UserID,
 	})
 	if err != nil {
 		t.Fatalf("CreateAgent auto slug: %v", err)
@@ -430,12 +331,9 @@ func TestCreateAgentAutoAllocatesUniqueSlug(t *testing.T) {
 		WorkspaceID:   ids.WorkspaceID,
 		Name:          "Explicit Backend Agent",
 		Slug:          "backend-agent",
-		ConnectorType: "agent_daemon",
-		AgentConfig: map[string]any{
-			"daemon_mode": "sandbox",
-			"agent_kind":  "opencode",
-		},
-		CreatedBy: ids.UserID,
+		ConnectorType: "agents_api",
+		AgentConfig:   map[string]any{"model": "test-model"},
+		CreatedBy:     ids.UserID,
 	})
 	if !errors.Is(err, ErrDuplicateAgentSlug) {
 		t.Fatalf("explicit duplicate slug error = %v, want ErrDuplicateAgentSlug", err)
@@ -857,7 +755,7 @@ func TestListWorkspaceEnabledAgentsReturnsSeededAgents(t *testing.T) {
 		t.Fatalf("expected 3 agents, got %d: %+v", len(agents), agents)
 	}
 	for _, agent := range agents {
-		if agent.Status != "active" || agent.ConnectorType != "agent_daemon" {
+		if agent.Status != "active" || agent.ConnectorType != "agents_api" {
 			t.Fatalf("expected active agent_daemon agent, got %+v", agent)
 		}
 	}
@@ -866,161 +764,12 @@ func TestListWorkspaceEnabledAgentsReturnsSeededAgents(t *testing.T) {
 // TestDaemonExecutionConfigIsAgentScoped pins that daemon execution
 // placement is agent scoped; the merged agents.config carries daemon keys
 // (daemon_mode, agent_kind) but never a top-level runtime value.
-func TestDaemonExecutionConfigIsAgentScoped(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
-	ids := mustSeedDevFixture(t, ctx, store)
-
-	created, err := store.CreateAgent(ctx, CreateAgentInput{
-		WorkspaceID:   ids.WorkspaceID,
-		Name:          "DaemonConfigProbe",
-		Description:   "Step 5 daemon config check",
-		ConnectorType: "agent_daemon",
-		SystemPrompt:  "probe",
-		Slug:          "daemon-config-probe",
-		AgentConfig: map[string]any{
-			"daemon_mode": "sandbox",
-			"agent_kind":  "opencode",
-			"runtime":     "local",
-			"ignored":     "not-persisted",
-		},
-		CreatedBy: ids.UserID,
-	})
-	if err != nil {
-		t.Fatalf("CreateAgent: %v", err)
-	}
-
-	if _, ok := created.Agent.Config["runtime"]; ok {
-		t.Fatalf("agents.config must not contain runtime for agent_daemon, got %#v", created.Agent.Config)
-	}
-	if got := created.Agent.Config["daemon_mode"]; got != "sandbox" {
-		t.Fatalf("agents.config daemon_mode = %#v, want sandbox", got)
-	}
-	if got := created.Agent.Config["agent_kind"]; got != "opencode" {
-		t.Fatalf("agents.config agent_kind = %#v, want opencode", got)
-	}
-	if _, ok := created.Agent.Config["runtime"]; ok {
-		t.Fatalf("agents.config must not persist stale runtime key: %#v", created.Agent.Config)
-	}
-	if _, ok := created.Agent.Config["ignored"]; ok {
-		t.Fatalf("agents.config must not persist unknown daemon key: %#v", created.Agent.Config)
-	}
-
-	var rawAgentConfig string
-	if err := db.QueryRow(ctx, `select config::text from agents where id = $1::uuid`, created.Agent.ID).Scan(&rawAgentConfig); err != nil {
-		t.Fatalf("read agents.config: %v", err)
-	}
-	if strings.Contains(rawAgentConfig, `"runtime"`) {
-		t.Fatalf("agents.config must not contain top-level runtime key, got %s", rawAgentConfig)
-	}
-
-	enabled, err := store.ListWorkspaceEnabledAgents(ctx, ids.WorkspaceID)
-	if err != nil {
-		t.Fatalf("ListWorkspaceEnabledAgents: %v", err)
-	}
-	var sawCreated bool
-	for _, row := range enabled {
-		if row.AgentID != created.Agent.ID {
-			continue
-		}
-		sawCreated = true
-		if row.Runtime != nil {
-			t.Fatalf("agent_daemon list row must not expose top-level runtime, got %q", *row.Runtime)
-		}
-		if got := row.Config["daemon_mode"]; got != "sandbox" {
-			t.Fatalf("list row daemon_mode = %#v, want sandbox", got)
-		}
-		if got := row.Config["agent_kind"]; got != "opencode" {
-			t.Fatalf("list row agent_kind = %#v, want opencode", got)
-		}
-	}
-	if !sawCreated {
-		t.Fatalf("ListWorkspaceEnabledAgents did not include created Agent %s", created.Agent.ID)
-	}
-}
-
-func TestConfigureDevAgentConnectorRejectsInvalidInputs(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
-	ids := mustSeedDevFixture(t, ctx, store)
-
-	_, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{AgentID: ids.BackendAgentID, ConnectorType: "bogus"})
-	if !errors.Is(err, ErrInvalidConnectorType) {
-		t.Fatalf("expected ErrInvalidConnectorType, got %v", err)
-	}
-
-	_, err = store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{AgentID: ids.BackendAgentID, ConnectorType: "opencode_local"})
-	if !errors.Is(err, ErrInvalidConnectorType) {
-		t.Fatalf("expected ErrInvalidConnectorType for retired opencode_local, got %v", err)
-	}
-
-	_, err = store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{AgentID: "00000000-0000-0000-0000-000000099999", ConnectorType: "http"})
-	if !errors.Is(err, ErrUnknownAgent) {
-		t.Fatalf("expected ErrUnknownAgent, got %v", err)
-	}
-}
-
-func TestClaimNextQueuedHTTPAgentRun(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
-	ids := mustSeedDevFixture(t, ctx, store)
-	if _, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{
-		AgentID:       ids.BackendAgentID,
-		ConnectorType: "http",
-		Endpoint:      "http://127.0.0.1:19090/agent",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
-		ConversationTitle: "Demo Group",
-		SenderEmail:       "admin@example.com",
-		Text:              "@backend-agent check the API",
-		Mentions:          []string{"@backend-agent"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	claim, err := store.ClaimNextQueuedHTTPAgentRun(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !claim.Claimed || claim.RunID != created.RunIDs[0] {
-		t.Fatalf("expected to claim created http run, got %+v", claim)
-	}
-
-	var status, claimedBy string
-	if err := db.QueryRow(ctx, `select status, metadata->>'claimed_by' from agent_runs where id = $1`, claim.RunID).Scan(&status, &claimedBy); err != nil {
-		t.Fatal(err)
-	}
-	if status != "running" || claimedBy != "http_runner_once" {
-		t.Fatalf("expected running claimed run, got status=%s claimed_by=%s", status, claimedBy)
-	}
-
-	secondClaim, err := store.ClaimNextQueuedHTTPAgentRun(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if secondClaim.Claimed {
-		t.Fatalf("expected no second queued http run, got %+v", secondClaim)
-	}
-}
 
 func TestFailAgentRunWritesFailedStatusAndAudit(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store, auditIng := newAuditAwareStore(t, db)
 	ids := mustSeedDevFixture(t, ctx, store)
-	if _, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{
-		AgentID:       ids.BackendAgentID,
-		ConnectorType: "http",
-		Endpoint:      "http://127.0.0.1:19090/agent",
-	}); err != nil {
-		t.Fatal(err)
-	}
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
@@ -1030,105 +779,34 @@ func TestFailAgentRunWritesFailedStatusAndAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	claim, err := store.ClaimNextQueuedHTTPAgentRun(ctx)
+	_, err = store.MarkAgentRunRunning(ctx, created.RunIDs[0], created.ConversationID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if claim.RunID != created.RunIDs[0] {
-		t.Fatalf("expected claimed run %s, got %+v", created.RunIDs[0], claim)
-	}
 
-	if err := store.FailAgentRun(ctx, FailAgentRunInput{RunID: claim.RunID, Source: "http_agent", Reason: "non-2xx"}); err != nil {
+	if err := store.FailAgentRun(ctx, FailAgentRunInput{RunID: created.RunIDs[0], Source: "agents_api", Reason: "non-2xx"}); err != nil {
 		t.Fatal(err)
 	}
 	var status, failedBy, reason, userFacing string
 	var finishedAt pgtype.Timestamptz
-	if err := db.QueryRow(ctx, `select status, metadata->>'failed_by', metadata->>'failure_reason', coalesce(metadata->>'user_facing_reason', ''), finished_at from agent_runs where id = $1`, claim.RunID).Scan(&status, &failedBy, &reason, &userFacing, &finishedAt); err != nil {
+	if err := db.QueryRow(ctx, `select status, metadata->>'failed_by', metadata->>'failure_reason', coalesce(metadata->>'user_facing_reason', ''), finished_at from agent_runs where id = $1`, created.RunIDs[0]).Scan(&status, &failedBy, &reason, &userFacing, &finishedAt); err != nil {
 		t.Fatal(err)
 	}
-	if status != "failed" || failedBy != "http_agent" || reason != "non-2xx" || !finishedAt.Valid {
-		t.Fatalf("expected failed http run, got status=%s failed_by=%s reason=%s finished=%v", status, failedBy, reason, finishedAt.Valid)
+	if status != "failed" || failedBy != "agents_api" || reason != "non-2xx" || !finishedAt.Valid {
+		t.Fatalf("expected failed Core run, got status=%s failed_by=%s reason=%s finished=%v", status, failedBy, reason, finishedAt.Valid)
 	}
 	if userFacing == "" {
 		t.Fatalf("expected user_facing_reason populated, got empty")
 	}
 	flushAudit(t, auditIng)
-	assertAuditEvent(t, db, ids.WorkspaceID, "http_agent.failed", "agent_run", claim.RunID)
+	assertAuditEvent(t, db, ids.WorkspaceID, "agents_api.failed", "agent_run", created.RunIDs[0])
 
-	detail, err := store.GetAgentRun(ctx, claim.RunID)
+	detail, err := store.GetAgentRun(ctx, created.RunIDs[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 	if detail.UserFacingReason != userFacing {
 		t.Fatalf("expected detail.UserFacingReason=%q, got %q", userFacing, detail.UserFacingReason)
-	}
-}
-
-func TestRequeueFailedAgentRun(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store, auditIng := newAuditAwareStore(t, db)
-	ids := mustSeedDevFixture(t, ctx, store)
-	if _, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{
-		AgentID:       ids.BackendAgentID,
-		ConnectorType: "http",
-		Endpoint:      "http://127.0.0.1:19090/agent",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	_, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
-		ConversationTitle: "Demo Group",
-		SenderEmail:       "admin@example.com",
-		Text:              "@backend-agent check the API",
-		Mentions:          []string{"@backend-agent"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	claim, err := store.ClaimNextQueuedHTTPAgentRun(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.FailAgentRun(ctx, FailAgentRunInput{RunID: claim.RunID, Source: "http_agent", Reason: "agent down"}); err != nil {
-		t.Fatal(err)
-	}
-
-	requeued, err := store.RequeueFailedAgentRun(ctx, RequeueAgentRunInput{RunID: claim.RunID, Source: "dev_retry", Reason: "agent recovered"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if requeued.RunID != claim.RunID || requeued.Status != "queued" {
-		t.Fatalf("expected queued requeue result, got %+v", requeued)
-	}
-	var status, requeuedBy, reason string
-	var startedAt, finishedAt pgtype.Timestamptz
-	if err := db.QueryRow(ctx, `select status, metadata->>'requeued_by', metadata->>'requeue_reason', started_at, finished_at from agent_runs where id = $1`, claim.RunID).Scan(&status, &requeuedBy, &reason, &startedAt, &finishedAt); err != nil {
-		t.Fatal(err)
-	}
-	if status != "queued" || requeuedBy != "dev_retry" || reason != "agent recovered" || startedAt.Valid || finishedAt.Valid {
-		t.Fatalf("expected clean queued requeue, got status=%s by=%s reason=%s started=%v finished=%v", status, requeuedBy, reason, startedAt.Valid, finishedAt.Valid)
-	}
-	flushAudit(t, auditIng)
-	assertAuditEvent(t, db, ids.WorkspaceID, "agent_run.requeued", "agent_run", claim.RunID)
-}
-
-func TestRequeueFailedAgentRunRejectsNonFailedRun(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
-	mustSeedDevFixture(t, ctx, store)
-	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
-		ConversationTitle: "Demo Group",
-		SenderEmail:       "admin@example.com",
-		Text:              "@backend-agent check the API",
-		Mentions:          []string{"@backend-agent"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = store.RequeueFailedAgentRun(ctx, RequeueAgentRunInput{RunID: created.RunIDs[0]})
-	if !errors.Is(err, ErrAgentRunNotCompletable) {
-		t.Fatalf("expected ErrAgentRunNotCompletable, got %v", err)
 	}
 }
 
@@ -1649,7 +1327,7 @@ func TestGetAgentRunDetailShowsCompletedOutputMessage(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := mustSeedDevFixture(t, ctx, store)
+	mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -1665,46 +1343,6 @@ func TestGetAgentRunDetailShowsCompletedOutputMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runtimeID := newID()
-	managedModelID := "00000000-0000-0000-0000-00000000d0d1"
-	agentConfig := fmt.Sprintf(
-		`{"daemon_mode":"local","agent_kind":"opencode","device_id":"%s","work_dir":"/Users/test/work/parsar","model_id":"%s"}`,
-		runtimeID,
-		managedModelID,
-	)
-	// Truncate to microseconds because PostgreSQL `timestamptz` stores
-	// 6 fractional-second digits (no nanoseconds). A raw time.Now() carries
-	// nanoseconds that get rounded on insert, so the post-read .Equal(now)
-	// assertion below would fail on runs where the dropped sub-microsecond
-	// bits would have rounded differently.
-	now := time.Now().UTC().Truncate(time.Microsecond)
-	if _, err := db.Exec(ctx,
-		`insert into runtimes(id, workspace_id, type, name, liveness, provider, version, hostname, config, last_heartbeat_at, created_at, updated_at)
-		 values ($1::uuid, $2::uuid, 'agent_daemon', 'Mac Mini Runner', 'online', 'agent_daemon', '1.2.3', 'test.local', '{"supported_agent_kinds":["claude_code","opencode"],"daemon_capabilities":{"streaming":true,"permissions":true,"usage":true,"resume":false,"artifacts":false}}'::jsonb, $3, $3, $3)`,
-		runtimeID, ids.WorkspaceID, now,
-	); err != nil {
-		t.Fatalf("seed run detail runtime: %v", err)
-	}
-	if _, err := db.Exec(ctx,
-		`update agents set config = $2::jsonb where id = $1::uuid`,
-		completed.AgentID, agentConfig,
-	); err != nil {
-		t.Fatalf("seed agent runtime config: %v", err)
-	}
-	if _, err := db.Exec(ctx,
-		`insert into connector_session_bindings(conversation_id, connector_type, binding_key, upstream_session_id, metadata, created_at, last_active_at)
-		 values ($1, 'agent_daemon', $2, $3, '{"agent_kind":"claude_code","work_dir":"/binding/workdir","sandbox_id":"sbx-known"}'::jsonb, $4, $4)`,
-		completed.ConversationID, completed.AgentID, runtimeID, now,
-	); err != nil {
-		t.Fatalf("seed connector binding metadata: %v", err)
-	}
-	if _, err := db.Exec(ctx,
-		`update agent_runs set runtime_id = $1::uuid, working_directory = $2 where id = $3::uuid`,
-		runtimeID, "/Users/test/work/parsar", completed.RunID,
-	); err != nil {
-		t.Fatalf("bind runtime to run: %v", err)
-	}
-
 	detail, err := store.GetAgentRun(ctx, completed.RunID)
 	if err != nil {
 		t.Fatal(err)
@@ -1718,35 +1356,8 @@ func TestGetAgentRunDetailShowsCompletedOutputMessage(t *testing.T) {
 	if detail.Usage[0].AgentRunID != completed.RunID || detail.Usage[0].Provider != "" {
 		t.Fatalf("expected run detail usage row with empty provider for completed run, got %+v", detail.Usage)
 	}
-	if detail.Runtime == nil {
-		t.Fatalf("expected runtime snapshot on run detail, got %+v", detail)
-	}
-	if detail.Runtime.ID != runtimeID || detail.Runtime.Name != "Mac Mini Runner" || detail.Runtime.Type != "agent_daemon" {
-		t.Fatalf("unexpected runtime identity: %+v", detail.Runtime)
-	}
-	if detail.Runtime.Provider != "agent_daemon" || detail.Runtime.Liveness != "online" {
-		t.Fatalf("unexpected runtime status: %+v", detail.Runtime)
-	}
-	if detail.Runtime.WorkingDirectory != "/Users/test/work/parsar" || detail.Runtime.Hostname != "test.local" || detail.Runtime.Version != "1.2.3" {
-		t.Fatalf("unexpected runtime metadata: %+v", detail.Runtime)
-	}
-	if detail.Runtime.ConnectorType != "agent_daemon" || detail.Runtime.AgentKind != "opencode" || detail.Runtime.RuntimeMode != "local" {
-		t.Fatalf("unexpected runtime execution axes: %+v", detail.Runtime)
-	}
-	if detail.Runtime.ExecutionPlace != "local_device" || detail.Runtime.GovernanceMode != "external_byo" {
-		t.Fatalf("unexpected derived runtime governance axes: %+v", detail.Runtime)
-	}
-	if detail.Runtime.Capabilities["streaming"] != true || detail.Runtime.Capabilities["permissions"] != true || detail.Runtime.Capabilities["usage"] != true || detail.Runtime.Capabilities["resume"] != false {
-		t.Fatalf("unexpected fallback runtime capabilities: %+v", detail.Runtime.Capabilities)
-	}
-	if detail.Runtime.CapturedAt != nil {
-		t.Fatalf("fallback runtime read should not have captured_at, got %+v", detail.Runtime)
-	}
-	if detail.Runtime.DeviceID != runtimeID || detail.Runtime.SandboxID != "sbx-known" || detail.Runtime.ManagedModelID != managedModelID {
-		t.Fatalf("unexpected runtime execution identifiers: %+v", detail.Runtime)
-	}
-	if detail.Runtime.LastHeartbeatAt == nil || !detail.Runtime.LastHeartbeatAt.Equal(now) {
-		t.Fatalf("unexpected runtime heartbeat: %+v", detail.Runtime)
+	if detail.Runtime != nil {
+		t.Fatalf("Core run exposes legacy runtime metadata: %+v", detail.Runtime)
 	}
 }
 
@@ -2175,178 +1786,6 @@ func assertAuditMetadataOmitsSensitiveText(t *testing.T, db *pgxpool.Pool, works
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestConfigureAgentProfileChecksModelStatus(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
-	ids := mustSeedDevFixture(t, ctx, store)
-
-	model, err := store.CreateModel(ctx, CreateModelInput{
-		Name:               "Profile Validity Model",
-		ProviderType:       "openai",
-		Adapter:            "@ai-sdk/openai",
-		BaseURL:            "https://example.test/v1",
-		ModelKey:           "profile-validity-1",
-		CredentialMode:     "credential_ref",
-		CredentialKindCode: "openai_api_key",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Active model should succeed.
-	if _, err := store.ConfigureAgentProfile(ctx, ConfigureAgentProfileInput{
-		AgentID: ids.BackendAgentID,
-		ModelID: model.ID,
-	}); err != nil {
-		t.Fatalf("expected active model to be accepted, got %v", err)
-	}
-
-	if _, err := store.ConfigureAgentProfile(ctx, ConfigureAgentProfileInput{
-		AgentID: ids.BackendAgentID,
-		ModelID: "00000000-0000-0000-0000-000000099999",
-	}); !errors.Is(err, ErrUnknownModel) {
-		t.Fatalf("expected ErrUnknownModel for missing model, got %v", err)
-	}
-
-	if _, err := store.DisableModel(ctx, ids.WorkspaceID, model.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.ConfigureAgentProfile(ctx, ConfigureAgentProfileInput{
-		AgentID: ids.BackendAgentID,
-		ModelID: model.ID,
-	}); !errors.Is(err, ErrModelDisabled) {
-		t.Fatalf("expected ErrModelDisabled for disabled model, got %v", err)
-	}
-}
-
-func TestConfigureAgentProfilePreservesAgentPatchFields(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
-	ids := mustSeedDevFixture(t, ctx, store)
-
-	model, err := store.CreateModel(ctx, CreateModelInput{
-		Name:               "Profile Merge Model",
-		ProviderType:       "openai",
-		Adapter:            "@ai-sdk/openai",
-		BaseURL:            "https://example.test/v1",
-		ModelKey:           "profile-merge-1",
-		CredentialMode:     "credential_ref",
-		CredentialKindCode: "openai_api_key",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	capability, err := store.CreateCapability(ctx, CreateCapabilityInput{
-		WorkspaceID: ids.WorkspaceID,
-		Type:        "skill",
-		Name:        "Profile Merge Capability",
-		CreatorID:   ids.UserID,
-		InitialVersion: &CreateCapabilityVersionInput{
-			Version:             "1.0.0",
-			Content:             map[string]any{"kind": "skill"},
-			RequiredCredentials: []RequiredCredential{{Kind: "github_pat", Required: true}},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(ctx, `
-		update agents
-		set config = '{
-			"default_model_id":"old-model",
-			"model_id":"old-model",
-			"capabilities":["Old Capability"],
-			"credential_bindings":{"github_pat":{"source":"shared","secret_id":"00000000-0000-0000-0000-000000000101"}},
-			"model_credential_binding":{"source":"shared","secret_id":"00000000-0000-0000-0000-000000000102"},
-			"profile":{"model_id":"old-model","capabilities":["Old Capability"]},
-			"agent_kind":"claude_code",
-			"daemon_mode":"sandbox",
-			"sandbox_size":"xl",
-			"workdir":"/old/workdir",
-			"working_directory":"/older/workdir"
-		}'::jsonb
-		where id = $1::uuid
-	`, ids.BackendAgentID); err != nil {
-		t.Fatal(err)
-	}
-
-	modelID := model.ID
-	if _, _, err := store.UpdateAgent(ctx, UpdateAgentInput{
-		AgentID:         ids.BackendAgentID,
-		ActorID:         ids.UserID,
-		DefaultModelID:  &modelID,
-		Capabilities:    []string{capability.Name},
-		CapabilitiesSet: true,
-		ConfigSet:       true,
-		Config: map[string]any{
-			"credential_bindings": map[string]any{
-				"github_pat": map[string]any{"source": "shared", "secret_id": "00000000-0000-0000-0000-000000000201"},
-			},
-			"model_credential_binding": map[string]any{"source": "shared", "secret_id": "00000000-0000-0000-0000-000000000202"},
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := store.ConfigureAgentProfile(ctx, ConfigureAgentProfileInput{
-		AgentID:      ids.BackendAgentID,
-		ModelID:      model.ID,
-		SystemPrompt: "updated prompt",
-		Config: map[string]any{
-			"default_model_id": "stale-model",
-			"capabilities":     []any{"Stale Capability"},
-			"credential_bindings": map[string]any{
-				"github_pat": map[string]any{"source": "shared", "secret_id": "00000000-0000-0000-0000-000000000301"},
-			},
-			"model_credential_binding": map[string]any{"source": "shared", "secret_id": "00000000-0000-0000-0000-000000000302"},
-			"profile": map[string]any{
-				"model_id":     model.ID,
-				"capabilities": []any{capability.Name},
-				"skills":       []any{capability.Name},
-			},
-			"agent_kind":   "codex",
-			"mode":         "plan",
-			"daemon_mode":  "local",
-			"sandbox_size": "standard",
-			"device_id":    "00000000-0000-0000-0000-000000000401",
-			"work_dir":     nil,
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	config := result.AgentConfig
-	if config["default_model_id"] != model.ID || config["model_id"] != model.ID {
-		t.Fatalf("model fields were not preserved: %#v", config)
-	}
-	capabilities, _ := config["capabilities"].([]any)
-	if len(capabilities) != 1 || capabilities[0] != capability.Name {
-		t.Fatalf("capabilities were overwritten: %#v", config["capabilities"])
-	}
-	bindings, _ := config["credential_bindings"].(map[string]any)
-	githubBinding, _ := bindings["github_pat"].(map[string]any)
-	if githubBinding["secret_id"] != "00000000-0000-0000-0000-000000000201" {
-		t.Fatalf("credential bindings were overwritten: %#v", config["credential_bindings"])
-	}
-	modelBinding, _ := config["model_credential_binding"].(map[string]any)
-	if modelBinding["secret_id"] != "00000000-0000-0000-0000-000000000202" {
-		t.Fatalf("model credential binding was overwritten: %#v", config["model_credential_binding"])
-	}
-	if config["agent_kind"] != "codex" || config["mode"] != "plan" || config["daemon_mode"] != "local" || config["device_id"] != "00000000-0000-0000-0000-000000000401" {
-		t.Fatalf("profile-owned daemon fields were not updated: %#v", config)
-	}
-	if config["system_prompt"] != "updated prompt" {
-		t.Fatalf("system prompt was not updated: %#v", config["system_prompt"])
-	}
-	for _, key := range []string{"sandbox_size", "work_dir", "workdir", "working_directory"} {
-		if _, ok := config[key]; ok {
-			t.Fatalf("expected %s to be cleared: %#v", key, config)
-		}
 	}
 }
 
@@ -3653,7 +3092,7 @@ func (r *recordingStreamingDispatcher) Snapshot() []StreamingDispatchInput {
 // TestSendUserMessageAgentDaemonAgentAutoStartsStreaming: prompts
 // addressed to an agent_daemon agent create an agent_run row, return
 // the run_id to the caller, and enqueue the async streaming dispatcher.
-func TestSendUserMessageAgentDaemonAgentAutoStartsStreaming(t *testing.T) {
+func TestSendUserMessageCoreAgentAutoStartsStreaming(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
@@ -3663,15 +3102,16 @@ func TestSendUserMessageAgentDaemonAgentAutoStartsStreaming(t *testing.T) {
 		WorkspaceID:   ids.WorkspaceID,
 		Name:          "Daemon Test Agent",
 		Slug:          "daemon-test-agent",
-		ConnectorType: "agent_daemon",
+		ConnectorType: "agents_api",
+		AgentConfig:   map[string]any{"model": "test-model"},
 		CreatedBy:     ids.UserID,
 	})
 	if err != nil {
-		t.Fatalf("CreateAgent(agent_daemon): %v", err)
+		t.Fatalf("CreateAgent(agents_api): %v", err)
 	}
-	// agentConfigJSON must NOT write config.runtime for agent_daemon.
+	// agentConfigJSON must NOT write config.runtime for agents_api.
 	if _, ok := created.Agent.Config["runtime"]; ok {
-		t.Fatalf("agent_daemon agents must not persist config.runtime, got %#v", created.Agent.Config)
+		t.Fatalf("agents_api agents must not persist config.runtime, got %#v", created.Agent.Config)
 	}
 
 	conv, err := st.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
@@ -3694,14 +3134,14 @@ func TestSendUserMessageAgentDaemonAgentAutoStartsStreaming(t *testing.T) {
 		t.Fatalf("SendUserMessageToConversation: %v", err)
 	}
 	if len(sent.RunIDs) != 1 {
-		t.Fatalf("agent_daemon agent should still get 1 queued run, got %d (ids=%v)", len(sent.RunIDs), sent.RunIDs)
+		t.Fatalf("agents_api agent should still get 1 queued run, got %d (ids=%v)", len(sent.RunIDs), sent.RunIDs)
 	}
 	// Without the server-side auto-start hook the run sits at queued
 	// forever and the daemon never sees the prompt.
 	if got := streamRec.Snapshot(); len(got) != 1 {
-		t.Fatalf("agent_daemon must hit streaming dispatcher exactly once, got %d calls: %#v", len(got), got)
-	} else if got[0].RunID != sent.RunIDs[0] || got[0].ConversationID != conv.ID || got[0].ConnectorType != "agent_daemon" {
-		t.Fatalf("streaming dispatcher input mismatch: got %#v, want RunID=%s ConversationID=%s ConnectorType=agent_daemon",
+		t.Fatalf("agents_api must hit streaming dispatcher exactly once, got %d calls: %#v", len(got), got)
+	} else if got[0].RunID != sent.RunIDs[0] || got[0].ConversationID != conv.ID || got[0].ConnectorType != "agents_api" {
+		t.Fatalf("streaming dispatcher input mismatch: got %#v, want RunID=%s ConversationID=%s ConnectorType=agents_api",
 			got[0], sent.RunIDs[0], conv.ID)
 	}
 }
@@ -3710,113 +3150,11 @@ func TestSendUserMessageAgentDaemonAgentAutoStartsStreaming(t *testing.T) {
 // server-side runtime; passing a non-empty runtime returns
 // ErrInvalidInput, and the no-runtime success path persists a
 // config without the "runtime" key.
-func TestCreateAgentDaemonRejectsRuntimeValue(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	st := New(db)
-	ids := mustSeedDevFixture(t, ctx, st)
-
-	for _, badRuntime := range []string{"local", "sandbox"} {
-		_, err := st.CreateAgent(ctx, CreateAgentInput{
-			WorkspaceID:   ids.WorkspaceID,
-			Name:          "daemon-bad-runtime-" + badRuntime,
-			Slug:          "daemon-bad-runtime-" + badRuntime,
-			ConnectorType: "agent_daemon",
-			Runtime:       badRuntime,
-			CreatedBy:     ids.UserID,
-		})
-		if !errors.Is(err, ErrInvalidInput) {
-			t.Fatalf("CreateAgent(agent_daemon, runtime=%q) = %v, want ErrInvalidInput", badRuntime, err)
-		}
-	}
-	for index, badMode := range []any{"autopilot", true} {
-		_, err := st.CreateAgent(ctx, CreateAgentInput{
-			WorkspaceID:   ids.WorkspaceID,
-			Name:          fmt.Sprintf("daemon-bad-codex-mode-%d", index),
-			Slug:          fmt.Sprintf("daemon-bad-codex-mode-%d", index),
-			ConnectorType: "agent_daemon",
-			AgentConfig: map[string]any{
-				"agent_kind": "codex",
-				"mode":       badMode,
-			},
-			CreatedBy: ids.UserID,
-		})
-		if !errors.Is(err, ErrInvalidInput) {
-			t.Fatalf("CreateAgent(agent_daemon, Codex mode=%#v) = %v, want ErrInvalidInput", badMode, err)
-		}
-	}
-
-	created, err := st.CreateAgent(ctx, CreateAgentInput{
-		WorkspaceID:   ids.WorkspaceID,
-		Name:          "daemon-ok",
-		Slug:          "daemon-ok",
-		ConnectorType: "agent_daemon",
-		AgentConfig: map[string]any{
-			"device_id":   "00000000-0000-0000-0000-00000000d001",
-			"daemon_mode": "local",
-			"agent_kind":  "codex",
-			"mode":        "plan",
-			"ignored":     "not-persisted",
-		},
-		CreatedBy: ids.UserID,
-	})
-	if err != nil {
-		t.Fatalf("CreateAgent(agent_daemon, runtime=\"\"): %v", err)
-	}
-	if _, ok := created.Agent.Config["runtime"]; ok {
-		t.Fatalf("agent_daemon config must omit runtime key, got %#v", created.Agent.Config)
-	}
-	if got := created.Agent.Config["device_id"]; got != "00000000-0000-0000-0000-00000000d001" {
-		t.Fatalf("agent.config device_id mismatch: got %#v", got)
-	}
-	if got := created.Agent.Config["daemon_mode"]; got != "local" {
-		t.Fatalf("agent.config daemon_mode mismatch: got %#v", got)
-	}
-	if got := created.Agent.Config["mode"]; got != "plan" {
-		t.Fatalf("agent.config Codex mode mismatch: got %#v", got)
-	}
-	if _, ok := created.Agent.Config["ignored"]; ok {
-		t.Fatalf("agent.config must not persist unknown daemon key: %#v", created.Agent.Config)
-	}
-
-	// Persisted JSON is the ground truth — read back to make sure
-	// agentConfigJSON did not silently default to "sandbox".
-	var rawConfig string
-	if err := db.QueryRow(ctx, `select config::text from agents where id = $1::uuid`, created.Agent.ID).Scan(&rawConfig); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(rawConfig, `"runtime"`) {
-		t.Fatalf("agents.config must not contain runtime for agent_daemon, got %s", rawConfig)
-	}
-	var rawPAConfig string
-	if err := db.QueryRow(ctx, `select config::text from agents where id = $1::uuid`, created.Agent.ID).Scan(&rawPAConfig); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(rawPAConfig, `"device_id": "00000000-0000-0000-0000-00000000d001"`) || !strings.Contains(rawPAConfig, `"mode": "plan"`) || strings.Contains(rawPAConfig, `"ignored"`) {
-		t.Fatalf("agents.config did not persist only daemon keys, got %s", rawPAConfig)
-	}
-}
 
 // TestAgentSummaryFromRowIgnoresLegacyRuntime: historical agent_daemon
 // rows may still have config["runtime"] persisted; the list/detail
 // surface strips it on read because the daemon owns runtime selection.
 // (Chosen over a destructive data migration.)
-func TestAgentSummaryFromRowIgnoresLegacyRuntime(t *testing.T) {
-	cfg := []byte(`{"runtime":"sandbox","capabilities":["foo"]}`)
-	summary := agentSummaryFromRow("aid", "wsid", "n", "s", "d", "agent_daemon", "active", cfg, pgtype.Timestamptz{}, pgtype.Timestamptz{})
-	if _, ok := summary.Config["runtime"]; ok {
-		t.Fatalf("agent_daemon row must strip legacy config.runtime, got %#v", summary.Config)
-	}
-	if caps, _ := summary.Config["capabilities"].([]any); len(caps) != 1 {
-		t.Fatalf("capabilities must survive the strip, got %#v", summary.Config["capabilities"])
-	}
-
-	// HTTP keeps the runtime field; only agent_daemon strips it.
-	httpAgent := agentSummaryFromRow("aid2", "wsid", "n", "s", "d", "http", "active", cfg, pgtype.Timestamptz{}, pgtype.Timestamptz{})
-	if got, _ := httpAgent.Config["runtime"].(string); got != "sandbox" {
-		t.Fatalf("http row must preserve config.runtime, got %#v", httpAgent.Config)
-	}
-}
 
 // TestCreateInboundIMMessageInitiatorUserIDShortCircuitsLookup covers
 // the ADR-004 credential-form re-enqueue path: when the caller already

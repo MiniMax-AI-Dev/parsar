@@ -824,11 +824,11 @@
         "description": "Try another search term."
       },
       "install": {
-        "action": "Install",
-        "installing": "Installing...",
-        "installed": "Installed",
+        "action": "Import to library",
+        "installing": "Importing…",
+        "installed": "Imported",
         "success": "{{name}} was imported as a workspace Skill Capability.",
-        "failed": "The Skill could not be installed.",
+        "failed": "Could not import this Skill.",
         "failureDescription": "Installation of \"{{name}}\" failed. Retry, or share the technical details with your administrator if it keeps failing.",
         "details": "Technical details",
         "copy": "Copy details",
@@ -1145,7 +1145,7 @@
       "more": "More actions"
     },
     "search": {
-      "placeholder": "Search name, description, slug, engine, or model…"
+      "placeholder": "Search name, description, slug, or model…"
     },
     "table": {
       "agent": "Agent",
@@ -1813,6 +1813,22 @@
       "back": "Back",
       "saving": "Saving…",
       "invalidEndpoint": "Enter an HTTP(S) URL without username, password, or fragment."
+    },
+    "core": {
+      "create": "Create Agent",
+      "edit": "Edit Agent",
+      "description": "Run this Agent through the connected Core service.",
+      "name": "Name",
+      "summary": "Description",
+      "model": "Model",
+      "modelHint": "Enter a model configured by your Core operator, for example MiniMax-M3.",
+      "newConversation": "Model and instruction changes apply to new conversations. Existing conversations keep their execution configuration.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "configuration": "Configuration",
+      "execution": "Execution service",
+      "unavailable": "Execution uses Core exclusively. Advanced settings follow Agents API; support depends on the connected Core. Legacy capability binding and runtime administration are unavailable.",
+      "saveFailed": "Could not save Agent"
     }
   },
   "connectors": {
@@ -2819,5 +2835,92 @@
       "title": "You cannot open this conversation",
       "description": "It belongs to a workspace you are not in, or it has been deleted. Check with whoever shared the link."
     }
+  },
+  "core": {
+    "navigation": "Agent workspace",
+    "agents": "Agents",
+    "agent": "Agent",
+    "environments": "Environments",
+    "sessions": "Sessions",
+    "docs": "Docs",
+    "startSession": "Start conversation",
+    "sessionHint": "Choose an Agent and its environment. The first message starts execution.",
+    "sessionTitle": "Conversation name",
+    "environment": "Environment",
+    "template": "Environment template",
+    "defaultEnvironment": "Default hosted environment",
+    "workspaceDirectory": "Working directory",
+    "selfHostedPending": "Self-hosted connection setup is not yet available in this product. E2B is currently a hosted Core provider; it does not automatically supply this connection.",
+    "failed": "Operation failed",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "loading": "Loading…",
+    "loadMore": "Load more",
+    "retry": "Retry",
+    "templateHint": "Reusable packages and settings for each new environment. Existing sessions retain their configuration.",
+    "createTemplate": "Create environment template",
+    "editTemplate": "Edit environment template",
+    "name": "Name",
+    "network": "Network access",
+    "allowedDomains": "Allowed domains (one per line)",
+    "packages": "Packages (optional)",
+    "onePerLine": "One package per line",
+    "secretEditHint": "Saved environment values and setup commands are confidential and not returned. Leave these sections empty to keep them; adding entries replaces the respective saved section.",
+    "setupCommands": "Setup commands (optional)",
+    "command": "Command {{number}}",
+    "remove": "Remove",
+    "addCommand": "Add command",
+    "variables": "Environment variables (optional)",
+    "variableKey": "Variable {{number}} name",
+    "variableValue": "Variable {{number}} value",
+    "addVariable": "Add variable",
+    "invalidVariables": "Variable names must be nonempty and unique.",
+    "advanced": "Advanced configuration (JSON)",
+    "templateAdvancedHint": "Optional official fields: files, plugins, skills, capability_directories.",
+    "agentAdvancedHint": "Optional official fields: tools, service_tier, reasoning, text, multi_agent. Core validates support when starting a session.",
+    "supportHint": "Some fields are not implemented by the connected Core yet. Unsupported settings return an error and are not silently ignored.",
+    "searchTemplates": "Search templates",
+    "templates": "Environment templates",
+    "keys": "Environment keys",
+    "keysUnavailable": "Environment keys connect self-hosted executors. Key management is not available through the pinned public API; this product cannot create or revoke these keys yet.",
+    "selectWorkspace": "Select a workspace first.",
+    "noResults": "No matching templates",
+    "noTemplates": "No environment templates yet",
+    "templateID": "Template ID",
+    "created": "Created",
+    "actions": "Actions",
+    "unnamed": "Unnamed template",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteTemplate": "Delete environment template",
+    "deleteTemplateHint": "Delete {{name}}? Existing sessions keep their configuration. New sessions can no longer use this template.",
+    "environmentTypes": {
+      "openai_hosted": "Hosted",
+      "self_hosted": "Self-hosted",
+      "none": "No environment"
+    },
+    "environmentHints": {
+      "openai_hosted": "Core prepares the environment using its configured Docker or E2B provider.",
+      "self_hosted": "Connect an executor running on your own compute.",
+      "none": "Use model and external tools without a filesystem sandbox."
+    },
+    "networkModes": {
+      "enabled": "Enabled",
+      "restricted": "Restricted",
+      "disabled": "Disabled"
+    },
+    "packageTypes": {
+      "python": "Python",
+      "npm": "npm",
+      "system": "System"
+    },
+    "uncertainCreate": "The create result is uncertain. Close this dialog and refresh the template list before creating again.",
+    "awaitingCore": "Waiting for Core support",
+    "skillsTitle": "Skills",
+    "skillsPending": "Import, edit and version Skill assets in the capability library. Loading them for an Agent requires Core environment initialization support, which is not connected yet. Saving an asset does not activate it for execution.",
+    "memberEnvironment": "Choose an environment when starting a new conversation. Each conversation uses its own Core session and environment; an Agent does not own a permanent container or share a workspace across conversations.",
+    "templateSupport": "Name and enabled/disabled network access are connected. Packages, setup commands, environment variables, restricted network rules and capability installation are waiting for Core support.",
+    "assetManagementHint": "Manage Parsar capability assets and MCP configuration here. Importing or authorizing an asset does not enable Agent execution. Runtime loading belongs to Core and is not connected yet."
   }
 }

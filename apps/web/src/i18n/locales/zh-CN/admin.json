@@ -824,11 +824,11 @@
         "description": "请更换搜索词。"
       },
       "install": {
-        "action": "安装",
-        "installing": "安装中...",
-        "installed": "已安装",
+        "action": "导入能力库",
+        "installing": "导入中…",
+        "installed": "已导入",
         "success": "已将 {{name}} 导入为工作区 Skill Capability。",
-        "failed": "无法安装该 Skill。",
+        "failed": "无法导入该 Skill。",
         "failureDescription": "「{{name}}」未能完成安装。可以重试；如果仍然失败，请将技术详情交给管理员排查。",
         "details": "技术详情",
         "copy": "复制详情",
@@ -1145,7 +1145,7 @@
       "more": "更多操作"
     },
     "search": {
-      "placeholder": "搜索名称、描述、Slug、引擎或模型…"
+      "placeholder": "搜索名称、描述、标识或模型…"
     },
     "table": {
       "agent": "Agent",
@@ -1813,6 +1813,22 @@
       "back": "返回",
       "saving": "保存中…",
       "invalidEndpoint": "请输入 HTTP(S) 地址，不包含用户名、密码或片段（#）。"
+    },
+    "core": {
+      "create": "创建 Agent",
+      "edit": "编辑 Agent",
+      "description": "通过已连接的 Core 服务运行这个 Agent。",
+      "name": "名称",
+      "summary": "描述",
+      "model": "模型",
+      "modelHint": "填写 Core 管理员已配置的模型名称，例如 MiniMax-M3。",
+      "newConversation": "模型与指令的修改对新会话生效；已有会话保留创建时的执行配置。",
+      "cancel": "取消",
+      "save": "保存",
+      "configuration": "配置",
+      "execution": "执行服务",
+      "unavailable": "执行统一使用 Core。高级配置遵循 Agents API，支持情况取决于连接的 Core；旧能力绑定和 Runtime 管理入口已移除。",
+      "saveFailed": "无法保存 Agent"
     }
   },
   "connectors": {
@@ -2819,5 +2835,92 @@
       "title": "你无权访问这个对话",
       "description": "这条对话属于你尚未加入的工作区，或者已经被删除。找分享给你的人确认一下。"
     }
+  },
+  "core": {
+    "navigation": "Agent 工作台",
+    "agents": "Agents",
+    "agent": "Agent",
+    "environments": "环境",
+    "sessions": "会话",
+    "docs": "文档",
+    "startSession": "发起对话",
+    "sessionHint": "选择 Agent 和执行环境，发送首条消息后开始执行。",
+    "sessionTitle": "对话名称",
+    "environment": "执行环境",
+    "template": "环境模板",
+    "defaultEnvironment": "默认托管环境",
+    "workspaceDirectory": "工作目录",
+    "selfHostedPending": "产品暂未接入自托管连接设置。现有 E2B 是 Core 的托管资源供应方，不会自动建立此连接。",
+    "failed": "操作失败",
+    "cancel": "取消",
+    "save": "保存",
+    "saving": "正在保存…",
+    "loading": "正在加载…",
+    "loadMore": "加载更多",
+    "retry": "重试",
+    "templateHint": "为新环境复用软件包和配置；已有会话保留创建时的配置。",
+    "createTemplate": "创建环境模板",
+    "editTemplate": "编辑环境模板",
+    "name": "名称",
+    "network": "网络访问",
+    "allowedDomains": "允许的域名（每行一个）",
+    "packages": "软件包（可选）",
+    "onePerLine": "每行一个软件包",
+    "secretEditHint": "已保存的环境变量值和初始化命令不会回显。留空保留原配置；填写后替换对应部分。",
+    "setupCommands": "初始化命令（可选）",
+    "command": "命令 {{number}}",
+    "remove": "移除",
+    "addCommand": "添加命令",
+    "variables": "环境变量（可选）",
+    "variableKey": "变量 {{number}} 名称",
+    "variableValue": "变量 {{number}} 值",
+    "addVariable": "添加变量",
+    "invalidVariables": "变量名不能为空或重复。",
+    "advanced": "高级配置（JSON）",
+    "templateAdvancedHint": "可填写协议字段：files、plugins、skills、capability_directories。",
+    "agentAdvancedHint": "可填写协议字段：tools、service_tier、reasoning、text、multi_agent。启动会话时由 Core 校验支持情况。",
+    "supportHint": "当前连接的 Core 尚未实现部分字段；不支持的配置会返回错误，不会被静默忽略。",
+    "searchTemplates": "搜索环境模板",
+    "templates": "环境模板",
+    "keys": "环境密钥",
+    "keysUnavailable": "环境密钥用于连接自托管执行器。锁定版本的公开协议没有密钥管理接口，产品暂不能创建或撤销这些密钥。",
+    "selectWorkspace": "请先选择工作区。",
+    "noResults": "没有匹配的模板",
+    "noTemplates": "还没有环境模板",
+    "templateID": "模板 ID",
+    "created": "创建时间",
+    "actions": "操作",
+    "unnamed": "未命名模板",
+    "edit": "编辑",
+    "delete": "删除",
+    "deleteTemplate": "删除环境模板",
+    "deleteTemplateHint": "删除 {{name}}？已有会话保留原配置，新会话将无法再使用此模板。",
+    "environmentTypes": {
+      "openai_hosted": "托管环境",
+      "self_hosted": "自托管环境",
+      "none": "无执行环境"
+    },
+    "environmentHints": {
+      "openai_hosted": "Core 使用已配置的 Docker 或 E2B 准备环境。",
+      "self_hosted": "连接运行在自有计算资源上的执行器。",
+      "none": "使用模型及外部工具，不分配文件系统沙箱。"
+    },
+    "networkModes": {
+      "enabled": "开放",
+      "restricted": "限制域名",
+      "disabled": "禁用"
+    },
+    "packageTypes": {
+      "python": "Python",
+      "npm": "npm",
+      "system": "系统软件包"
+    },
+    "uncertainCreate": "创建结果暂不确定。请关闭弹窗并刷新模板列表，确认后再创建。",
+    "awaitingCore": "等待 Core 实现",
+    "skillsTitle": "Skills",
+    "skillsPending": "Skills 资产可在能力库中导入、编辑和管理版本。将它们加载给 Agent 运行，需要 Core 的环境初始化支持，目前等待实现。保存资产不表示已在 Agent 中启用。",
+    "memberEnvironment": "发起新对话时选择运行环境。每段对话有独立的 Core 会话和环境；Agent 不永久占用容器，也不默认跨对话共享工作目录。",
+    "templateSupport": "名称和启用／禁用网络已接通。软件包、初始化命令、环境变量、域名限制及能力安装等待 Core 实现。",
+    "assetManagementHint": "这里管理 Parsar 的能力资产和 MCP 配置。导入或授权成功不代表已可供 Agent 运行；运行时加载由 Core 承载，目前尚未接通。"
   }
 }

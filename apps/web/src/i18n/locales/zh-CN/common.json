@@ -177,7 +177,7 @@
     "teamGroup": "团队",
     "items": {
       "approvals": "收件箱",
-      "conversations": "对话",
+      "conversations": "会话",
       "runs": "运行",
       "scheduled": "定时任务",
       "agents": "Agent",
@@ -189,7 +189,8 @@
       "runtime": "执行层",
       "secrets": "凭据",
       "usage": "用量",
-      "audit": "审计"
+      "audit": "审计",
+      "environments": "环境"
     },
     "p1Hint": "P1",
     "activityGroup": "运行中",

@@ -41,7 +41,6 @@ interface MarketplaceTabProps {
   canImport: boolean
   canManage: boolean
   onSelectItem: (id: string | null) => void
-  onInstall: (capability: MarketplaceCapability) => void
   onDelete: (capability: MarketplaceCapability) => void
   onViewCapability: (capabilityID: string) => void
 }
@@ -73,7 +72,7 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
 /** name (+type, +state, +description) · source · version · workspaces added · credentials · actions */
 const MARKET_COLUMNS = [col.title(280), col.meta(120), col.id(96, 0.5), col.num(112), col.meta(150), col.actions(2)]
 
-function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, canManage, onSelectItem, onInstall, onDelete, onViewCapability }: MarketplaceTabProps) {
+function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, canManage, onSelectItem, onDelete, onViewCapability }: MarketplaceTabProps) {
   const { t, i18n } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
   const marketplaceQ = useMarketplaceList(workspaceID)
@@ -104,7 +103,6 @@ function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, can
       open={!!itemID}
       onClosed={() => setRailID(null)}
       onClose={() => onSelectItem(null)}
-      onInstall={() => railItem && onInstall(railItem)}
       onDelete={() => railItem && onDelete(railItem)}
       onViewCapability={() => railItem && onViewCapability(railItem.id)}
     />
@@ -172,7 +170,6 @@ function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, can
             canManage={canManage}
             selected={item.id === itemID}
             onOpen={() => onSelectItem(item.id === itemID ? null : item.id)}
-            onInstall={() => onInstall(item)}
             onDelete={() => onDelete(item)}
             onViewCapability={() => onViewCapability(item.id)}
           />
@@ -193,13 +190,12 @@ function rowKeyHandler(onOpen: () => void) {
   }
 }
 
-function MarketplaceRow({ capability, language, canManage, selected, onOpen, onInstall, onDelete, onViewCapability }: {
+function MarketplaceRow({ capability, language, canManage, selected, onOpen, onDelete, onViewCapability }: {
   capability: MarketplaceCapability
   language: string
   canManage: boolean
   selected: boolean
   onOpen: () => void
-  onInstall: () => void
   onDelete: () => void
   onViewCapability: () => void
 }) {
@@ -240,7 +236,8 @@ function MarketplaceRow({ capability, language, canManage, selected, onOpen, onI
             <ActionIconButton
               icon={Download}
               label={t("capabilities.marketplace.card.install")}
-              onClick={onInstall}
+              disabled
+              title={t("agents.core.unavailable")}
             />
           )}
         </RowActions>
@@ -254,14 +251,13 @@ function MarketplaceRow({ capability, language, canManage, selected, onOpen, onI
  * header, the one thing you can do with it in the footer; the content preview
  * is why this one is worth expanding.
  */
-function MarketplaceItemDetail({ capability, language, canManage, open, onClosed, onClose, onInstall, onDelete, onViewCapability }: {
+function MarketplaceItemDetail({ capability, language, canManage, open, onClosed, onClose, onDelete, onViewCapability }: {
   capability: MarketplaceCapability | null
   language: string
   canManage: boolean
   open: boolean
   onClosed: () => void
   onClose: () => void
-  onInstall: () => void
   onDelete: () => void
   onViewCapability: () => void
 }) {
@@ -304,7 +300,7 @@ function MarketplaceItemDetail({ capability, language, canManage, open, onClosed
               </Button>
             </>
           ) : (
-            <Button onClick={onInstall}>{t("capabilities.marketplace.card.install")}</Button>
+            <Button disabled title={t("agents.core.unavailable")}>{t("capabilities.marketplace.card.install")}</Button>
           )
         ) : undefined
       }

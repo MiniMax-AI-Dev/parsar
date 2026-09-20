@@ -177,7 +177,7 @@
     "teamGroup": "Team",
     "items": {
       "approvals": "Inbox",
-      "conversations": "Conversations",
+      "conversations": "Sessions",
       "runs": "Runs",
       "scheduled": "Scheduled Tasks",
       "agents": "Agents",
@@ -189,7 +189,8 @@
       "runtime": "Runtime",
       "secrets": "Credentials",
       "usage": "Usage",
-      "audit": "Audit"
+      "audit": "Audit",
+      "environments": "Environments"
     },
     "p1Hint": "P1",
     "activityGroup": "Activity",

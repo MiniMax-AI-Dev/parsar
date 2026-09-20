@@ -7,29 +7,22 @@ import { Button } from "../../../components/ui/button"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { InitialTile, Ledger, LedgerHeader, LedgerRow, col } from "../../../components/ui/ledger"
 import {
-  agentConnectorKey,
-  agentConnectorLabel,
   searchAgents,
-  agentEngineLabel,
-  agentEngineOf,
   defaultModelOf,
 } from "../../../lib/agent-view-model"
 import { agentActionPermissions } from "../../../lib/agent-actions"
-import type { Agent, Model, UserWorkspace } from "../../../lib/api-types"
+import type { Agent, UserWorkspace } from "../../../lib/api-types"
 import { cn } from "../../../lib/utils"
 import { AgentRowActions } from "./AgentRowActions"
-import { AgentRuntimeCell } from "./AgentRuntimeCell"
 import { AgentStatusIcon } from "./AgentStatusBadge"
 
-/** status icon · agent (+ description) · engine · runtime · connector · model · last enabled · actions */
-export const AGENTS_LEDGER_COLUMNS = [col.icon(), col.title(0), col.meta(0), col.text(0, 1), col.meta(0), col.id(0, 0.8), col.age(0), col.actions(2)]
+/** Status, identity, model, last enabled and actions. */
+export const AGENTS_LEDGER_COLUMNS = [col.icon(), col.title(0), col.id(0, 0.8), col.age(0), col.actions(2)]
 
 export function AgentsListTable({
   agents,
   workspaceRole,
-  models,
   keyword,
-  connectorFilter,
   onClearFilters,
   selectedID,
   chatPendingID,
@@ -43,9 +36,7 @@ export function AgentsListTable({
 }: {
   agents: Agent[]
   workspaceRole?: UserWorkspace["role"]
-  models: Model[]
   keyword: string
-  connectorFilter: string
   onClearFilters: () => void
   selectedID: string | null
   chatPendingID: string | null
@@ -60,10 +51,7 @@ export function AgentsListTable({
   const { t } = useTranslation("admin")
   const { canManage, canChat } = agentActionPermissions(workspaceRole)
   const columns = [...AGENTS_LEDGER_COLUMNS.slice(0, -1), ...(canChat ? [col.actions(canManage ? 2 : 1)] : [])]
-  const unavailable = t("agents.modelUnavailable")
-  const filtered = searchAgents(agents, keyword, models, t).filter(
-    (agent) => !connectorFilter || agentConnectorKey(agent.connector_type) === connectorFilter,
-  )
+  const filtered = searchAgents(agents, keyword)
 
   if (filtered.length === 0) {
     return (
@@ -85,20 +73,14 @@ export function AgentsListTable({
       <LedgerHeader className="@max-3xl/agent-list:hidden">
         <span />
         <span>{t("agents.table.agent")}</span>
-        <span>{t("agents.table.engine")}</span>
-        <span>{t("agents.table.runtime")}</span>
-        <span>{t("agents.table.connector")}</span>
         <span>{t("agents.table.model")}</span>
         <span className="text-right">{t("agents.table.updated")}</span>
         {canChat && <span />}
       </LedgerHeader>
       <ul className="m-0 list-none p-0">
         {filtered.map((agent) => {
-          const model = defaultModelOf(agent, models, unavailable)
+          const model = defaultModelOf(agent)
           const fields = [
-            { label: t("agents.table.engine"), value: t(agentEngineLabel(agentEngineOf(agent))) },
-            { label: t("agents.table.runtime"), value: <AgentRuntimeCell agent={agent} /> },
-            { label: t("agents.table.connector"), value: agentConnectorLabel(agent.connector_type), className: "text-xs text-fg-muted" },
             { label: t("agents.table.model"), value: <span className={cn("font-mono text-xs", model === "—" && "text-fg-muted")}>{model}</span> },
             { label: t("agents.table.updated"), value: agent.enabled_at ? formatRelativeTime(agent.enabled_at) : "—", className: "text-xs text-fg-muted" },
           ]
