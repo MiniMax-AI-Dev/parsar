@@ -4,11 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"time"
 )
 
 const toolEnvironmentHookSource = "/etc/codex/runtime-hooks"
 const toolEnvironmentHookCommand = "/usr/bin/python3 -I -S /etc/codex/tool-env.py"
+
+func prepareSystemToolAnchor() error {
+	const anchor = "/tmp/parsar-tool-root"
+	if err := os.Mkdir(anchor, 0500); err != nil && !errors.Is(err, os.ErrExist) {
+		return errors.New("codex: system tool temporary anchor unavailable")
+	}
+	actual, err := filepath.EvalSymlinks(anchor)
+	entries, readErr := os.ReadDir(anchor)
+	if err != nil || actual != anchor || readErr != nil || len(entries) != 0 {
+		return errors.New("codex: system tool temporary anchor is not an empty canonical directory")
+	}
+	return nil
+}
 
 func verifyToolEnvironmentHook(ctx context.Context, rpc *JSONRPCClient, cwd string) error {
 	operation, cancel := context.WithTimeout(ctx, 10*time.Second)

@@ -26,7 +26,7 @@ import (
 const (
 	// cliVersionTimeout caps CLI `--version` preflights so a hung agent
 	// binary can't keep `parsar-daemon connect` blocked at startup.
-	cliVersionTimeout = 5 * time.Second
+	cliVersionTimeout = 15 * time.Second
 
 	bootstrapTimeout = 10 * time.Second
 

@@ -20,13 +20,13 @@ func TestEnvironmentSetupEncryptedSnapshotAndIsolation(t *testing.T) {
 	}
 	s := NewWithCredentialCipher(pool, cipher)
 	tenant, foreign := uuid.NewString(), uuid.NewString()
-	setup := EnvironmentSetup{Env: map[string]string{"SECRET": "template-env-canary"}, Commands: []SetupCommand{{Command: "printf template-command-canary > result"}}, Packages: v1.EnvironmentPackages{NPM: []string{"is-number@7.0.0"}}}
+	setup := EnvironmentSetup{Env: map[string]string{"SECRET": "template-env-canary"}, Commands: []SetupCommand{{Command: "printf template-command-canary > result"}}, Packages: v1.EnvironmentPackages{NPM: []string{"is-number@7.0.0"}, System: []string{"jq", "libpq-dev"}}}
 	template, err := s.CreateEnvironmentTemplate(t.Context(), tenant, EnvironmentTemplateInput{Initialization: setup, SetEnv: true, SetSetup: true, SetPackages: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	public, err := New(pool).GetEnvironmentTemplate(t.Context(), tenant, template.ID)
-	if err != nil || len(public.Packages.NPM) != 1 || !public.Initialization.Empty() {
+	if err != nil || len(public.Packages.NPM) != 1 || !reflect.DeepEqual(public.Packages.System, setup.Packages.System) || !public.Initialization.Empty() {
 		t.Fatal("public metadata requires plaintext or key", err)
 	}
 	resolved, _, err := s.ResolveEnvironmentTemplate(t.Context(), tenant, template.ID)

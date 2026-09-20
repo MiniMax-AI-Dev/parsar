@@ -216,7 +216,10 @@ complete pinned protocol target.
 The current hosted architecture is V1: Core runs independently; each Environment
 sandbox contains its daemon, selected native harness, local tools and workspace.
 Execution and Files use the same authorized workspace through the existing
-Core/Runtime contract. Native tool calls stay local. Process placement and native
+Core/Runtime contract. Native tool calls stay local.
+CLI discovery uses a bounded 15-second version probe per installed harness;
+missing binaries fail immediately. A version result is availability, not Environment
+readiness, and does not change initialization or connection ownership. Process placement and native
 transport remain adapter responsibilities, without a second model/tool loop.
 The former separated Runtime/harness and workspace executor topology is a distant
 future V2 option, to revisit only after V1 is stable and concrete needs justify it.
@@ -288,12 +291,28 @@ Completed environments never reinstall initial files on reconnect or native reco
 Provider RunCommand carries bounded stdin, not confidential argv. Only fixed trusted
 initializers may run with Runtime authority. User setup and package install hooks
 run in the common packaged sandbox, without daemon credentials or native history.
-Files, inline Skills and npm/Python packages precede ordered setup commands. Initialization has
+Files and inline Skills precede system, npm/Python packages and ordered setup commands. Initialization has
 provisioning network access; requested network restrictions apply to native tools
 after setup. Confidential env and setup snapshots are encrypted independently of
 ordinary metadata. Adapters apply tool env only after isolation, never to the
 credential-bearing daemon/native harness launcher.
 Reuse the packaged atomic file writer and anchored parent creation across all profiles.
+
+System packages use one Runtime-owned tool root, separate from trusted daemon and
+harness executables. Build its immutable seed from the base image before adding
+Runtime/harness code or secrets; include the matching package database and base
+tool symlink targets. The shared installer extracts independent inodes and runs
+apt/dpkg inside an unprivileged namespace. Package scripts cannot access Runtime
+credentials, native history or outer processes. Later setup and native tools enter
+the installed root read-only, retaining the authorized workspace and adapter-owned
+scratch. `/workspace` and `/environment/workspace` refer to the same authorized
+workspace inside that root, preserving native working directories. Native adapters
+own entry and existing process cancellation; Core never
+selects an engine or Provider for package initialization. No live filesystem
+snapshot, second lifecycle owner or package-manager framework is introduced.
+Core preserves the system-package requirement in the common execution binding;
+a missing installation receipt fails preparation instead of falling back to base
+tools. This requirement does not add execution prerequisites to Files reads.
 
 Inline Skill ZIPs use the same confidential initialization snapshot and installer.
 Core validates portable manifests and bounded regular-file archives, returns only
@@ -307,7 +326,7 @@ unqualified. Skills API references, generic Plugins and capability-directory
 imports remain separate work; an adapter-owned Claude plugin envelope does not
 implement public Plugins.
 
-Name, enabled/disabled network, initial files, inline Skills and env/setup/npm/Python are
+Name, enabled/disabled network, initial files, inline Skills and env/setup/system/npm/Python are
 implemented independently of remaining installation fields. Reject unsupported
 inputs rather than persisting them for silent
 omission; expand inline and template initialization together in separately qualified

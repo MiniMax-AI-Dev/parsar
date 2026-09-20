@@ -63,7 +63,7 @@ def verify_environment_templates(client, foreign, http):
         canary = 'template-private-' + uuid.uuid4().hex
         for body in [{'env': {'PATH': canary}}, {'setup_commands': [{'command': canary, 'cwd': 'relative'}]},
                      {'files': [{'type': 'inline', 'path': '/workspace/a', 'data': canary}]},
-                     {'packages': {'system': [canary]}}, {'skills': [{'type': 'inline', 'data': canary}]},
+                     {'packages': {'system': ['-' + canary]}}, {'skills': [{'type': 'inline', 'data': canary}]},
                      {'plugins': [{'type': 'inline', 'data': canary}]},
                      {'capability_directories': ['/workspace']},
                      {'network': {'access': 'restricted', 'allowed_domains': ['example.com']}},

@@ -21,16 +21,19 @@ if (!tool || !request.input || typeof request.input !== 'object' || Array.isArra
     !isRuntimeToolInputValid(tools, request.tool, request.input))
   throw new Error('invalid tool request');
 if (process.argv[3] === '--tool-environment') {
+  const systemShell = process.argv.includes('--system-packages') && request.tool === 'bash';
   const env = JSON.parse(readFileSync('/environment/initialization/tool-env.json', 'utf8'));
   for (const [name, value] of Object.entries(env)) {
     if (typeof value !== 'string') throw new Error('invalid initialized tool environment');
-    process.env[name] = value;
+    if (!systemShell) process.env[name] = value;
   }
   // The native Bash boundary strips native identity variables even in mode:off.
   // Reapply user values in the already isolated shell without changing tools.
   if (request.tool === 'bash') {
     const quote = (text: string) => "'" + text.replaceAll("'", "'\\''") + "'";
-    request.input.command = '. /environment/initialization/tool-env.sh && eval -- ' + quote(request.input.command);
+    request.input.command = systemShell
+      ? '/usr/bin/python3 -I -S /usr/local/bin/agents-api-tool-root ' + quote(request.input.command)
+      : '. /environment/initialization/tool-env.sh && eval -- ' + quote(request.input.command);
   }
 }
 const context = { sessionId: 'worker', turnId: 'call', allowBashAutoPromotion: false,

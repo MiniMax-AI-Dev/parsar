@@ -136,3 +136,9 @@ proof directory. `psql_command` must access that same database and accept `-At -
 do not put passwords in its arguments. Set the engine, history root and model
 options for each qualified native profile. Failures retain redacted evidence;
 direct provider cleanup is reported as failed Core cleanup, not acceptance.
+
+For initialized-environment regression, enable `verify_environment_templates`,
+`verify_initial_files` and `verify_environment_setup` in the private test config.
+Add `verify_system_packages` to exercise real apt packages, compilation/linking,
+package/setup composition, native tool visibility and the finalized seed's hash
+and ownership. This reuses the same public execution and recovery checks.

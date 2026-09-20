@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import shlex
 import subprocess
 import sys
@@ -149,6 +150,11 @@ def configure(env):
 def sandbox(network, cwd):
     if network not in ('enabled', 'disabled') or not isinstance(cwd, str) or not cwd.startswith('/') or '\x00' in cwd:
         raise ValueError('invalid execution configuration')
+    if (CONFIG / 'system-root.json').exists():
+        tools = runpy.run_path('/usr/local/bin/agents-api-tool-root')
+        if not tools['installed']():
+            raise ValueError('system tools unavailable')
+        return tools['initialization_sandbox'](cwd, network)
     # One packaging contract for every Provider/harness. No native state, daemon
     # credential, staging payload or parent process is visible in this mount map.
     args = ['/usr/bin/bwrap', '--unshare-user', '--unshare-pid', '--unshare-ipc', '--unshare-uts',
@@ -175,6 +181,9 @@ def run(request):
         return
     if action == 'skill':
         install_skill(request)
+        return
+    if action == 'system':
+        runpy.run_path('/usr/local/bin/agents-api-tool-root')['install'](request['packages'])
         return
     args = sandbox(request['network'], request.get('cwd', '/workspace'))
     if action == 'setup':

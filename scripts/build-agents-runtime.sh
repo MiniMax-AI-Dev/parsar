@@ -38,6 +38,7 @@ cp "$repo_root/services/agents-api/deploy/codex/tool-env.py" "$context/tool-env.
 cp "$repo_root/services/agents-api/deploy/codex/requirements.toml" "$context/requirements.toml"
 cp "$repo_root/services/agents-api/deploy/codex/Dockerfile" "$context/Dockerfile"
 cp "$repo_root/services/agents-api/deploy/runtime/initialize.py" "$context/runtime-initialize.py"
+cp "$repo_root/services/agents-api/deploy/runtime/build-system-seed.py" "$repo_root/services/agents-api/deploy/runtime/tool-root.py" "$context/"
 # Preserve the previous bundle if compilation or validation failed.
 mkdir -p "$output_dir"
 cp -R "$context/." "$output_dir/"

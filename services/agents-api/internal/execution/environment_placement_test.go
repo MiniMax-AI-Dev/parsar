@@ -39,6 +39,27 @@ func TestLocalEnvironmentRequiresQualifiedProfileAndExactAuthority(t *testing.T)
 	}
 }
 
+func TestSystemPackagesRemainRequiredInExecutionBinding(t *testing.T) {
+	session := store.Session{ID: "session", TenantID: "tenant"}
+	environment := store.Environment{ID: "environment", SessionID: session.ID, TenantID: session.TenantID,
+		Configuration: []byte(`{"type":"openai_hosted","initialization":true,"packages":{"system":["jq"]}}`)}
+	var req proto.PromptRequestPayload
+	_, err := (&Dispatcher{}).configurePreparedEnvironment(t.Context(), session, environment,
+		store.ExecutionDevice{EnvironmentID: environment.ID}, &req)
+	if err != nil || req.LocalEnvironment == nil || !req.LocalEnvironment.ToolEnvironment || !req.LocalEnvironment.SystemPackages {
+		t.Fatal("system initialization requirement was lost", err)
+	}
+	environment.Configuration = []byte(`{"type":"openai_hosted","packages":{"system":["jq"]}}`)
+	if !LocalWorkspaceConfiguration(environment.Configuration) {
+		t.Fatal("public admission requires a private execution receipt")
+	}
+	req = proto.PromptRequestPayload{}
+	if _, err := (&Dispatcher{}).configurePreparedEnvironment(t.Context(), session, environment,
+		store.ExecutionDevice{EnvironmentID: environment.ID}, &req); err == nil || req.LocalEnvironment != nil {
+		t.Fatal("execution without the required initialization was admitted")
+	}
+}
+
 func TestLocalNetworkDefaultsAndSupportedPolicies(t *testing.T) {
 	for _, configuration := range []string{`{"type":"openai_hosted"}`, `{"type":"openai_hosted","network":null}`, `{"type":"openai_hosted","network":{"access":"enabled","allowed_domains":[]}}`} {
 		got, err := parseEnvironmentPlacement([]byte(configuration))

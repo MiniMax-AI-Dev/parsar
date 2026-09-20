@@ -16,6 +16,7 @@ type environmentPlacement struct {
 	Skills                []agentskill.Metadata `json:"skills,omitempty"`
 	Type                  string                `json:"type"`
 	ToolEnvironment       bool                  `json:"initialization,omitempty"`
+	SystemPackages        bool                  `json:"-"`
 	NetworkAccess         string                `json:"-"`
 	WorkspaceDirectory    string                `json:"workspace_directory"`
 	CapabilityDirectories []string              `json:"capability_directories"`
@@ -55,6 +56,7 @@ func parseEnvironmentPlacement(configuration json.RawMessage) (environmentPlacem
 		decoder := json.NewDecoder(bytes.NewReader(configuration))
 		decoder.DisallowUnknownFields()
 		if decoder.Decode(&local) == nil && len(local.CapabilityDirectories) == 0 {
+			placement.SystemPackages = local.Packages != nil && len(local.Packages.System) > 0
 			placement.NetworkAccess = "enabled"
 			if local.Network != nil {
 				if len(local.Network.AllowedDomains) != 0 || (local.Network.Access != "enabled" && local.Network.Access != "disabled") {
@@ -84,7 +86,10 @@ func (d *Dispatcher) configurePreparedEnvironment(ctx context.Context, session s
 		return nil, store.ErrInvalidInput
 	}
 	if placement.Type == "openai_hosted" {
-		req.LocalEnvironment = &proto.LocalEnvironment{ID: environment.ID, ToolEnvironment: placement.ToolEnvironment, Skills: placement.Skills}
+		if placement.SystemPackages && !placement.ToolEnvironment {
+			return nil, store.ErrInvalidInput
+		}
+		req.LocalEnvironment = &proto.LocalEnvironment{ID: environment.ID, ToolEnvironment: placement.ToolEnvironment, SystemPackages: placement.SystemPackages, Skills: placement.Skills}
 		// Keep the previously qualified explicit-disabled internal peer path intact.
 		// New bound-policy peers validate the exact policy during preparation.
 		boundPolicy := placement.NetworkAccess != "disabled"

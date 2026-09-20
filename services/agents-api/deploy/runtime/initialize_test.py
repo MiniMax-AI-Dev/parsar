@@ -33,7 +33,11 @@ def main():
     Path('/environment/private/credential').write_text(CANARY)
     Path('/environment/staging/request').write_text(CANARY)
     os.environ['DAEMON_PRIVATE_CANARY'] = CANARY
-    invoke('configure', env={'INITIALIZATION_VALUE': CANARY, 'WITH_QUOTES': "'\n$(false)"})
+    env = {'INITIALIZATION_VALUE': CANARY, 'WITH_QUOTES': "'\n$(false)"}
+    if os.environ.get('PARSAR_TEST_PACKAGE_PROXY'):
+        env.update(http_proxy=os.environ['PARSAR_TEST_PACKAGE_PROXY'],
+                   https_proxy=os.environ['PARSAR_TEST_PACKAGE_PROXY'])
+    invoke('configure', env=env)
     skill = [{'path': 'SKILL.md', 'data': base64.b64encode(b'---\nname: proof\ndescription: A proof.\n---\nRead check.sh.').decode()},
              {'path': 'scripts/check.sh', 'data': base64.b64encode(b'#!/bin/sh\nprintf skill-proof').decode(), 'executable': True},
              {'path': 'data.bin', 'data': base64.b64encode(bytes(range(256))).decode()}]
@@ -45,6 +49,21 @@ def main():
     assert Path('/environment/private/credential').read_text() == CANARY
     invoke('setup', command='/environment/initialization/capabilities/skills/proof/scripts/check.sh > /workspace/skill-result')
     assert Path('/environment/workspace/skill-result').read_text() == 'skill-proof'
+    if '--system' in sys.argv:
+        invoke('system', packages=['jq', 'build-essential', 'libpq-dev'])
+        invoke('system', succeeds=False, packages=['jq'])
+        invoke('setup', command='''set -eu
+test ! -e /usr/local/bin/parsar-daemon
+test ! -e /usr/local/bin/agents-api-tool-root
+test ! -e /opt/agents-runtime/system-root.tar.gz
+printf '{"value":42}' | jq -e '.value == 42'
+printf '#include <libpq-fe.h>\nint main(void){return PQlibVersion() > 0 ? 0 : 1;}\n' > /workspace/link.c
+cc -I/usr/include/postgresql /workspace/link.c -lpq -o /workspace/link
+/workspace/link
+! touch /usr/bin/changed
+! touch /environment/packages/system/usr/bin/changed
+node -e 'if (1 + 1 !== 2) process.exit(1)'
+''')
 
     # Re-entry must not replace confidential configuration after any effects.
     invoke('configure', succeeds=False, env={'INITIALIZATION_VALUE': 'changed'})
@@ -69,6 +88,16 @@ assert len(socket.if_nameindex()) == 1
     invoke('setup', network='disabled', command='/usr/bin/python3 /workspace/check.py')
     # Shell cwd is explicit and ordered effects survive between invocations.
     Path('/environment/workspace/sub').mkdir()
+    if '--system' in sys.argv:
+        for cwd in ['/environment/workspace', '/environment/workspace/sub']:
+            result = subprocess.run(
+                ['/usr/bin/bwrap', '--bind', '/', '/',
+                 '--bind', '/environment/workspace', '/workspace', '--',
+                 '/usr/bin/python3', '-I', '/usr/local/bin/agents-api-tool-root',
+                 "pwd; printf '{\"value\":42}' | jq -r .value"],
+                cwd=cwd, capture_output=True, text=True, timeout=15)
+            assert result.returncode == 0, result.stderr
+            assert result.stdout == cwd + '\n42\n', result.stdout
     invoke('setup', cwd='/workspace/sub', command='test -f ../first && pwd > second')
     assert Path('/environment/workspace/sub/second').read_text() == '/workspace/sub\n'
     invoke('setup', succeeds=False, command='echo secret; echo secret >&2; exit 7')
@@ -82,7 +111,8 @@ assert len(socket.if_nameindex()) == 1
         invoke('npm', packages=['is-number@7.0.0'])
         invoke('python', packages=['packaging==26.0'])
         invoke('setup', cwd='/workspace/sub', command="node -e \"if (!require('/environment/packages/npm/lib/node_modules/is-number')(42)) process.exit(1)\" && python3 -c 'import packaging; assert packaging.__version__ == \"26.0\"'")
-    print(json.dumps({'initialization': 'passed', 'real_packages': '--packages' in sys.argv}))
+    print(json.dumps({'initialization': 'passed', 'real_packages': '--packages' in sys.argv,
+                      'system_packages': '--system' in sys.argv}))
 
 
 if __name__ == '__main__':
