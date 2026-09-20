@@ -241,6 +241,8 @@ definitions:
           type: string
         type: array
         x-nullable: true
+      environment_template_id:
+        type: string
       network:
         allOf:
         - $ref: '#/definitions/v1.EnvironmentNetworkInput'
@@ -396,6 +398,127 @@ definitions:
     - npm
     - python
     - system
+    type: object
+  v1.EnvironmentTemplate:
+    properties:
+      capability_directories:
+        items:
+          type: string
+        type: array
+      created_at:
+        type: integer
+      files:
+        items:
+          type: object
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+        x-nullable: true
+      network:
+        $ref: '#/definitions/v1.EnvironmentNetwork'
+      object:
+        enum:
+        - agent.environment.template
+        type: string
+      packages:
+        $ref: '#/definitions/v1.EnvironmentPackages'
+      plugins:
+        items:
+          type: object
+        type: array
+      skills:
+        items:
+          type: object
+        type: array
+      updated_at:
+        type: integer
+    required:
+    - capability_directories
+    - created_at
+    - files
+    - id
+    - network
+    - object
+    - packages
+    - plugins
+    - skills
+    - updated_at
+    type: object
+  v1.EnvironmentTemplateDeleted:
+    properties:
+      deleted:
+        type: boolean
+      id:
+        type: string
+      object:
+        enum:
+        - agent.environment.template.deleted
+        type: string
+    required:
+    - deleted
+    - id
+    - object
+    type: object
+  v1.EnvironmentTemplateList:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/v1.EnvironmentTemplate'
+        type: array
+      first_id:
+        type: string
+        x-nullable: true
+      has_more:
+        type: boolean
+      last_id:
+        type: string
+        x-nullable: true
+      object:
+        enum:
+        - list
+        type: string
+    required:
+    - data
+    - has_more
+    - object
+    type: object
+  v1.EnvironmentTemplateRequest:
+    properties:
+      capability_directories:
+        items:
+          type: string
+        type: array
+      env:
+        additionalProperties:
+          type: string
+        type: object
+      files:
+        items:
+          type: object
+        type: array
+      name:
+        type: string
+        x-nullable: true
+      network:
+        allOf:
+        - $ref: '#/definitions/v1.EnvironmentNetworkInput'
+        x-nullable: true
+      packages:
+        $ref: '#/definitions/v1.EnvironmentPackages'
+      plugins:
+        items:
+          type: object
+        type: array
+      setup_commands:
+        items:
+          type: object
+        type: array
+      skills:
+        items:
+          type: object
+        type: array
     type: object
   v1.ErrorResponse:
     properties:
@@ -1823,6 +1946,254 @@ paths:
       summary: Create an Environment file from inline bytes or a source file
       tags:
       - Environments
+  /agents/environments/templates:
+    get:
+      description: Lists tenant-owned safe template metadata in creation order with
+        ID tie-breaking. Defaults to limit 20 and descending order; limit must be
+        1–100. Foreign and missing cursors reject identically. Concurrent-page and
+        exact hosted error behavior remain unverified.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Previous Template ID
+        in: query
+        name: after
+        type: string
+      - default: 20
+        description: Page size
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: desc
+        description: Creation order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.EnvironmentTemplateList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List Environment Templates
+      tags:
+      - Environment Templates
+    post:
+      consumes:
+      - application/json
+      description: Saves tenant-owned basic hosted configuration. Supports nullable
+        name, enabled/disabled network and empty installation defaults. Omitted/null
+        network defaults to enabled. Populated confidential inputs, installations
+        and restricted network are rejected before persistence without echoing input.
+        No compute is allocated. Exact hosted error/retry semantics remain unverified.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Reusable configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v1.EnvironmentTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.EnvironmentTemplate'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create an Environment Template
+      tags:
+      - Environment Templates
+  /agents/environments/templates/{environment_template_id}:
+    delete:
+      description: Deletes the tenant-owned reusable configuration without changing
+        or deleting existing Sessions and their frozen configuration.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Template ID
+        in: path
+        name: environment_template_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.EnvironmentTemplateDeleted'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete an Environment Template
+      tags:
+      - Environment Templates
+    get:
+      description: Returns safe tenant-owned configuration metadata without allocating
+        compute. Missing and foreign resources return the same not-found response.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Template ID
+        in: path
+        name: environment_template_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.EnvironmentTemplate'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve an Environment Template
+      tags:
+      - Environment Templates
+    post:
+      consumes:
+      - application/json
+      description: Supplied fields replace atomically; omitted fields remain unchanged.
+        Null name clears and null network resets to the pinned enabled default. Existing
+        Session snapshots and creation retries remain unchanged. Populated installations
+        are unsupported. Exact hosted no-op timestamp behavior remains unverified.
+      parameters:
+      - description: agents=v1
+        in: header
+        name: OpenAI-Beta
+        required: true
+        type: string
+      - description: Template ID
+        in: path
+        name: environment_template_id
+        required: true
+        type: string
+      - description: Configuration replacements
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v1.EnvironmentTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.EnvironmentTemplate'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update an Environment Template
+      tags:
+      - Environment Templates
   /agents/sessions:
     get:
       description: Cursor and results are scoped to the authenticated execution tenant.
@@ -1941,7 +2312,11 @@ paths:
         tools; HTTP MCP remains unsupported. Idle Sessions provision automatically;
         initial provisioning has no caller connection action. Network defaults to
         enabled; disabled is also supported, while restricted domains and populated
-        startup installations are rejected.
+        startup installations are rejected. Tenant-owned environment_template_id references
+        inherit omitted network and allow only narrowing overrides. Referenced network:null
+        is explicitly unsupported pending semantic verification. Core freezes effective
+        configuration; template updates/deletion do not alter Session snapshots or
+        same-intent creation retries.
       parameters:
       - description: agents=v1
         in: header

@@ -23,8 +23,10 @@ type decodedSessionRequest struct {
 
 type sessionRequest struct {
 	v1.CreateSessionRequest
-	Input       json.RawMessage
-	agentFields map[string]json.RawMessage
+	Input               json.RawMessage
+	templateID          string
+	templateEnvironment json.RawMessage
+	agentFields         map[string]json.RawMessage
 }
 
 func (request decodedSessionRequest) validated() (sessionRequest, error) {
@@ -41,7 +43,7 @@ func (request decodedSessionRequest) validated() (sessionRequest, error) {
 		input.VaultIDs = append(input.VaultIDs, *id)
 	}
 	var err error
-	input.Environment, err = decodeSessionEnvironment(request.Environment)
+	input.Environment, input.templateID, input.templateEnvironment, err = decodeTemplateEnvironment(request.Environment)
 	if err != nil {
 		return input, err
 	}
