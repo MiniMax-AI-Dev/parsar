@@ -1,9 +1,9 @@
 # Product Core integration acceptance — 2026-09-20
 
-Status: **not fully accepted**. Product checks and live workflows have passed, but
-`make check` has unresolved host/platform failures outside this change, and the
-last narrow fix still needs the required fresh independent re-review. Do not mark
-the task complete or merge based on this report alone.
+Status: **ready for PR review**. Product checks and live workflows passed, and
+the full `make check` completed with exit code 0 on `zju_a100_2`. Independent
+re-review using an existing reviewer, explicitly authorized by the user, found
+no blocking code issue. The PR remains unmerged; the limitations below are retained.
 
 Scope: baseline `d8ed9d42`, branch `codex/product-core-integration`. Parsar retains
 its database, members, capability assets, Skills/MCP management, authorization and
@@ -46,7 +46,54 @@ full `server/internal/dev` database suite passed. Independent Core/client tests,
 installer tests, web checks and harness checks passed. Harness native binary
 acceptance has one prerequisite-dependent skip; it is not counted as a pass.
 
-## Unresolved required-check failures
+## Required checks
+
+### Linux verification follow-up
+
+The product image initially failed CI because its build context omitted
+`packages/agents-client`. Commit `3007d02e` includes that dependency. A complete
+local BuildKit image build passed, and GitHub Actions run `35497601221` passed
+the product image build on that commit.
+
+Linux CI on commit `3007d02e` passed Go, Store, Web and CLI gates
+(`35497601234`), and Core persistence, official-client HTTP compatibility and
+standalone container checks (`35497601235`). These results
+resolve those host-specific questions but do not replace the full `make check`.
+
+An isolated source snapshot of `3007d02e` passed the full `make check` on
+`zju_a100_2`, under
+`~/.parsar/tests/product-core-20260920/`, with Go 1.25.13, Node 22.22.0,
+pnpm 10.30.3 and Rust 1.95.0. Its Compose project, build outputs and dependency
+caches are task-specific. The source snapshot remained clean after generation
+and checks. Initial attempts could not fetch dependencies because the
+server's direct DNS path was unavailable. The existing `zju_a100_2_tunnel`
+reverse SOCKS proxy on `127.0.0.1:17891` provides dependency access; no server-wide
+network setting was changed.
+
+The final test environment uses `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` set to
+`socks5h://127.0.0.1:17891`, with localhost excluded. `PARSAR_HOME` is unset because
+existing Pi tests set their own temporary home; build outputs are configured
+separately. Missing pinned Rust components were installed, and OpenSSL development
+files were extracted into the task directory for static test builds. No repository
+test or unrelated source was changed to accommodate this host.
+
+The final command was `make check`, without excluded targets or continuation flags.
+It ended with `Parsar harness checks passed.` and exit code 0. Go/sqlc, PostgreSQL
+migrations/Store, Web, CLI/Claude SDK export, hygiene, installer, standalone Core
+build/client tests, Rust tests/Clippy and harness checks all passed. The MiniMax
+packaged-native-tools prerequisite test remains explicitly skipped (four passed,
+one skipped); this is not a claim of native binary acceptance.
+
+Remote evidence: `~/.parsar/tests/product-core-20260920/make-check.log` and
+`make-check.exit`; local copies: `~/.parsar/product-core-check-zju.log` and
+`~/.parsar/product-core-check-zju.exit`. The test wrapper and its environment are
+retained in that remote directory as `check.sh`. The disposable PostgreSQL
+container was stopped after verification.
+
+The successful log's SHA-256 is
+`0c4e0c118abef579472d269bc3ddd3ea8f1b9ddcbb2c4e3e3c1d540ca03e6802`.
+
+### Original macOS results
 
 On macOS arm64, with Go 1.25.13 and `GOTOOLCHAIN=local`:
 
@@ -78,9 +125,9 @@ These failures remain:
    ```
 
 The affected native adapters and executor have no diff from the comparison
-baseline. They were not altered to force a green check. Re-run required checks on
-a qualified host before acceptance. Live Core acceptance does not substitute for
-the missing required-check results.
+baseline. They were not altered to force a green check. The full Linux gate above
+supersedes this host blocker for task acceptance; these macOS failures remain
+recorded and are not claimed to be fixed.
 
 Sanitized command output is summarized here. Detailed local logs and disposable
 live evidence remain under `~/.parsar/product-core-*.log` and
@@ -91,16 +138,22 @@ live evidence remain under `~/.parsar/product-core-*.log` and
 Fresh independent reviewers inspected the complete tracked/untracked diff against
 `d8ed9d42`, with only requirements, acceptance criteria, scope, repository location
 and baseline supplied. Evidence-based findings were fixed and relevant checks rerun.
-The latest completed review identified a disabled member leaving an unbound run
+An earlier review identified a disabled member leaving an unbound run
 pending. The fix now distinguishes deterministic `ErrInvalidAgent` from operational
 database interruption, and `TestDisabledUnboundMemberFailsRun` passes alongside the
 observation-interruption and recovered-failure tests.
 
-A fresh review of that final fix was requested, but the collaboration tool returned
-`agent thread limit reached`. Therefore **the final diff has not completed the
-required fresh independent re-review**. Do not treat earlier reviews as approval of
-this last change. Re-review the entire PR from an independent context before acceptance.
+A fresh review was requested, but the collaboration tool returned
+`agent thread limit reached`. The user then explicitly authorized reusing an
+existing subagent. That reviewer rechecked the complete current diff, including
+uncommitted documentation, and found no evidence-based blocking code issues.
+Server, connector, workspace credential isolation and official-client tests passed,
+as did database-backed Store and dev tests for configuration, recovery, deletion,
+retired members, failed runs and rejection of legacy execution. `git diff --check`
+passed. This is an independent re-review by an existing reviewer, not a fresh-context
+blind review. The reviewer did not repeat the live model/browser workflows or
+independently confirm the remote full gate's final result.
 
-The final required-check invocation was `make -k check` with Go 1.25.13; it retains
-the documented platform blockers. Full output is in the local
-`~/.parsar/product-core-check-pr.log`. No blocked check or missing review is waived.
+The original macOS output remains in `~/.parsar/product-core-check-pr.log`.
+The successful final Linux gate is recorded separately above; no failed or skipped
+test is relabeled as passed.
