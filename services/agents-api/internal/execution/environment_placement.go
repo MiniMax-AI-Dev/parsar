@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 
+	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
 )
 
 type environmentPlacement struct {
 	Type                  string   `json:"type"`
+	ToolEnvironment       bool     `json:"initialization,omitempty"`
 	NetworkAccess         string   `json:"-"`
 	WorkspaceDirectory    string   `json:"workspace_directory"`
 	CapabilityDirectories []string `json:"capability_directories"`
@@ -38,6 +40,8 @@ func parseEnvironmentPlacement(configuration json.RawMessage) (environmentPlacem
 		// Qualified local execution currently supports enabled/disabled network only.
 		var local struct {
 			Files                 []store.InitialFileMetadata `json:"files"`
+			Packages              *v1.EnvironmentPackages     `json:"packages,omitempty"`
+			Initialization        bool                        `json:"initialization,omitempty"`
 			Type                  string                      `json:"type"`
 			CapabilityDirectories []string                    `json:"capability_directories"`
 			Network               *struct {
@@ -77,7 +81,7 @@ func (d *Dispatcher) configurePreparedEnvironment(ctx context.Context, session s
 		return nil, store.ErrInvalidInput
 	}
 	if placement.Type == "openai_hosted" {
-		req.LocalEnvironment = &proto.LocalEnvironment{ID: environment.ID}
+		req.LocalEnvironment = &proto.LocalEnvironment{ID: environment.ID, ToolEnvironment: placement.ToolEnvironment}
 		// Keep the previously qualified explicit-disabled internal peer path intact.
 		// New bound-policy peers validate the exact policy during preparation.
 		boundPolicy := placement.NetworkAccess != "disabled"

@@ -34,8 +34,10 @@ trap 'rm -rf "$context"' EXIT
 cp "$helpers_dir/agents-api-codex-directory" "$helpers_dir/agents-api-codex-write" "$helpers_dir/agents-api-workspace-export" "$context/"
 cp "$native_dir/bin/codex" "$context/codex"
 cp -R "$native_dir/codex-resources" "$context/codex-resources"
+cp "$repo_root/services/agents-api/deploy/codex/tool-env.py" "$context/tool-env.py"
 cp "$repo_root/services/agents-api/deploy/codex/requirements.toml" "$context/requirements.toml"
 cp "$repo_root/services/agents-api/deploy/codex/Dockerfile" "$context/Dockerfile"
+cp "$repo_root/services/agents-api/deploy/runtime/initialize.py" "$context/runtime-initialize.py"
 # Preserve the previous bundle if compilation or validation failed.
 mkdir -p "$output_dir"
 cp -R "$context/." "$output_dir/"

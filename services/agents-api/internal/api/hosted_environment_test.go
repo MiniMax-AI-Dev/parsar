@@ -31,7 +31,7 @@ func TestHostedEnvironmentDefaultsAndExplicitGaps(t *testing.T) {
 	for _, field := range []string{
 		`"network":{}`, `"network":{"access":null}`, `"network":{"access":"restricted"}`,
 		`"network":{"access":"disabled","allowed_domains":["example.com"]}`, `"network":{"access":"enabled","unknown":true}`,
-		`"env":{"SECRET":"value"}`, `"files":[{}]`, `"packages":{"npm":["package"]}`,
+		`"env":{"SECRET":null}`, `"files":[{}]`, `"packages":{"system":["package"]}`,
 		`"packages":{"unknown":[]}`, `"plugins":[{}]`, `"skills":[{}]`, `"setup_commands":["echo test"]`,
 		`"capability_directories":["/workspace"]`, `"template_id":"template"`, `"workspace_directory":"/workspace"`,
 		`"files":{}`, `"env":[]`, `"packages":[]`, `"network":[]`, `"unknown":null`,

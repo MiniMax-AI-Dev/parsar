@@ -240,8 +240,8 @@ only completion snapshots. Pinned native 0.153.4 may also omit early process
 output from both notifications and its final aggregate; this remains an upstream
 execution gap. Recover missed output with Items queries, not SSE replay.
 
-Non-text message input, Subagents and installations beyond hosted initial files
-remain unsupported. Saving optional Agent configuration does not make
+Non-text message input, Subagents and installations beyond hosted initial files,
+env, ordered setup and npm/Python packages remain unsupported. Saving optional Agent configuration does not make
 it executable. Unsupported requests fail explicitly. `/healthz` reports liveness only.
 
 ## Managed hosted execution
@@ -253,8 +253,10 @@ then follow the [Docker setup](deploy/codex/README.md#standalone-operator-config
 or [E2B template/provider setup](deploy/e2b/README.md).
 Core remains independently deployed with its own database. Public idle and initial
 text Sessions share the existing preparation, execution, Files and recovery paths.
-Networking defaults to enabled; disabled is also supported. Restricted domains,
-other populated startup installations remain gaps. Initial inline/file_id files and [public Environment Templates](../../contracts/agents-api/environment-templates.md)
+Networking defaults to enabled; disabled is also supported after setup completes.
+Restricted domains, system packages and remaining unsupported startup installations
+remain gaps. Initial inline/file_id files, confidential env, npm/Python packages,
+ordered setup and [public Environment Templates](../../contracts/agents-api/environment-templates.md)
 resolve to the same immutable hosted configuration, independently of provider templates. Additional harnesses
 require separate integration and qualification.
 Connected describes the authenticated Runtime connection, not native readiness.

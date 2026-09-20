@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
+	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/credentialcrypto"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/sandbox"
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/store"
@@ -31,6 +33,16 @@ func (p *initializingProvider) RunCommand(_ context.Context, _ sandbox.Reference
 	if p.fail {
 		return sandbox.CommandResult{}, sandbox.ErrCommandUnconfirmed
 	}
+	if c.Args[len(c.Args)-1] == "/usr/local/bin/agents-api-runtime-initialize" {
+		var operation struct {
+			Version int    `json:"version"`
+			Action  string `json:"action"`
+		}
+		if json.Unmarshal(c.Stdin, &operation) != nil || operation.Version != 1 || operation.Action == "" {
+			return sandbox.CommandResult{}, sandbox.ErrInvalid
+		}
+		return sandbox.CommandResult{Stdout: `{"version":1,"outcome":"completed"}`}, nil
+	}
 	size, err := strconv.Atoi(c.Args[len(c.Args)-1])
 	if err != nil || len(c.Stdin) != size+32 {
 		return sandbox.CommandResult{}, sandbox.ErrInvalid
@@ -43,8 +55,11 @@ func (p *initializingProvider) RunCommand(_ context.Context, _ sandbox.Reference
 }
 
 func TestManagedInitialFilesGateFairnessCompletionAndRestart(t *testing.T) {
-	for _, mode := range []string{"complete", "restart", "uncertain"} {
+	for _, mode := range []string{"complete", "restart", "uncertain", "setup-complete", "setup-restart", "setup-uncertain"} {
 		t.Run(mode, func(t *testing.T) {
+			setupOnly := strings.HasPrefix(mode, "setup-")
+			mode = strings.TrimPrefix(mode, "setup-")
+			expectedSteps := 2
 			_, pool := store.NewTestStore(t)
 			cipher, err := credentialcrypto.New(bytes.Repeat([]byte{9}, 32))
 			if err != nil {
@@ -53,6 +68,11 @@ func TestManagedInitialFilesGateFairnessCompletionAndRestart(t *testing.T) {
 			s := store.NewWithCredentialCipher(pool, cipher)
 			tenant := uuid.NewString()
 			input := store.CreateSessionInput{Creator: store.FixtureCreator(), Engine: "codex", IdempotencyKey: uuid.NewString(), Configuration: json.RawMessage(`{"environment":{"type":"openai_hosted"}}`), InitialFiles: []store.InitialFile{{Type: "inline", Path: "/workspace/a", Data: []byte("first")}, {Type: "inline", Path: "/workspace/b", Data: []byte("second")}}}
+			if setupOnly {
+				input.InitialFiles = nil
+				input.Initialization = store.EnvironmentSetup{Env: map[string]string{"VALUE": "private"}, Packages: v1.EnvironmentPackages{NPM: []string{"is-number@7.0.0"}}, Commands: []store.SetupCommand{{Command: "touch first"}, {Command: "test -f first"}}}
+				expectedSteps = 4
+			}
 			session, err := s.CreateSession(t.Context(), tenant, input)
 			if err != nil {
 				t.Fatal(err)
@@ -99,13 +119,13 @@ func TestManagedInitialFilesGateFairnessCompletionAndRestart(t *testing.T) {
 				w, _ = managedWorker(t, s, key, p)
 			}
 			if mode == "complete" {
-				for n := 0; p.writes < 2 && n < 100; n++ {
+				for n := 0; p.writes < expectedSteps && n < 100; n++ {
 					if err := w.ReconcileManagedRuntimes(t.Context()); err != nil {
 						t.Fatal(err)
 					}
 				}
 				got, err := s.GetRuntimeAllocation(t.Context(), tenant, env.ID)
-				if err != nil || got.Initialization != "complete" || p.writes != 2 || p.gets <= afterFirst {
+				if err != nil || got.Initialization != "complete" || p.writes != expectedSteps || p.gets <= afterFirst {
 					t.Fatal("completion or maintenance", got, err, p.writes)
 				}
 				if _, err := s.GetSessionExecutionBinding(t.Context(), tenant, session.ID); err != nil {
@@ -118,7 +138,7 @@ func TestManagedInitialFilesGateFairnessCompletionAndRestart(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				if p.writes != 2 {
+				if p.writes != expectedSteps {
 					t.Fatal("completed initialization replayed")
 				}
 			} else {

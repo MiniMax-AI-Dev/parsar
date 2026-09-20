@@ -1,9 +1,9 @@
 -- name: CreateEnvironmentTemplate :one
-INSERT INTO environment_templates (id, tenant_id, name, network_access, files, file_contents)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, tenant_id, name, network_access, created_at, updated_at, files;
+INSERT INTO environment_templates (id, tenant_id, name, network_access, files, file_contents, packages, env_contents, setup_contents)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, tenant_id, name, network_access, created_at, updated_at, files, packages;
 
 -- name: GetEnvironmentTemplate :one
-SELECT id, tenant_id, name, network_access, created_at, updated_at, files FROM environment_templates WHERE tenant_id = $1 AND id = $2;
+SELECT id, tenant_id, name, network_access, created_at, updated_at, files, packages FROM environment_templates WHERE tenant_id = $1 AND id = $2;
 
 -- name: UpdateEnvironmentTemplate :one
 UPDATE environment_templates SET
@@ -11,15 +11,18 @@ UPDATE environment_templates SET
     network_access = CASE WHEN sqlc.arg(set_network)::boolean THEN sqlc.arg(network_access)::text ELSE network_access END,
     files = CASE WHEN sqlc.arg(set_files)::boolean THEN sqlc.arg(files)::jsonb ELSE files END,
     file_contents = CASE WHEN sqlc.arg(set_files)::boolean THEN sqlc.narg(file_contents)::bytea ELSE file_contents END,
+    packages = CASE WHEN sqlc.arg(set_packages)::boolean THEN sqlc.arg(packages)::jsonb ELSE packages END,
+    env_contents = CASE WHEN sqlc.arg(set_env)::boolean THEN sqlc.narg(env_contents)::bytea ELSE env_contents END,
+    setup_contents = CASE WHEN sqlc.arg(set_setup)::boolean THEN sqlc.narg(setup_contents)::bytea ELSE setup_contents END,
     updated_at = clock_timestamp()
 WHERE tenant_id = sqlc.arg(tenant_id) AND id = sqlc.arg(id)
-RETURNING id, tenant_id, name, network_access, created_at, updated_at, files;
+RETURNING id, tenant_id, name, network_access, created_at, updated_at, files, packages;
 
 -- name: DeleteEnvironmentTemplate :one
 DELETE FROM environment_templates WHERE tenant_id = $1 AND id = $2 RETURNING id;
 
 -- name: ListEnvironmentTemplates :many
-SELECT id, tenant_id, name, network_access, created_at, updated_at, files FROM environment_templates
+SELECT id, tenant_id, name, network_access, created_at, updated_at, files, packages FROM environment_templates
 WHERE tenant_id = sqlc.arg(tenant_id)
   AND (sqlc.narg(after_created)::timestamptz IS NULL
        OR (NOT sqlc.arg(ascending)::boolean AND (created_at, id) < (sqlc.narg(after_created)::timestamptz, sqlc.arg(after_id)::uuid))

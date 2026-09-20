@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/localworkspace"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
@@ -31,6 +32,15 @@ func prepareSessionPlan(ctx context.Context, req proto.PromptRequestPayload, cfg
 		configureRestrictedShellEnvironment(&plan)
 		// Native login-shell snapshots live outside the managed tool filesystem.
 		plan.ExtraConfig = append(plan.ExtraConfig, [2]string{"features.shell_snapshot", "false"})
+	}
+
+	if req.LocalEnvironment != nil && req.LocalEnvironment.ToolEnvironment {
+		if err := localworkspace.VerifyToolEnvironment(); err != nil {
+			plan.Cleanup()
+			return SessionPlan{}, "", err
+		}
+		plan.Env = append(plan.Env, "PARSAR_RUNTIME_TOOL_ENV=1")
+		plan.ExtraConfig = append(plan.ExtraConfig, [2]string{"features.hooks", "true"})
 	}
 
 	if req.DisableSubagents {

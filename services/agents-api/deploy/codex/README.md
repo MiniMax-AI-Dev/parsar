@@ -12,7 +12,7 @@ User-managed installation and enrollment are outside this qualification batch.
 
 Use Codex 0.153.4 and its matching `codex-resources` directory. Install the immutable
 requirements file at `/etc/codex/requirements.toml`, mount only the authorized
-Environment parent at `/environment`, containing only `workspace` and `staging`
+Environment parent at `/environment`, containing `workspace`, private `staging`, tool `initialization` and `packages`
 directories on one mount for trusted writes. Retain daemon/native state beneath `/home`. Set
 `PARSAR_CODEX_PERMISSION_PROFILE=managed-workspace` on the daemon. This operator
 setting enables adapter selection of the immutable Runtime network profile at
@@ -31,7 +31,8 @@ profile and denies reads of daemon authentication, generated provider configurat
 and native history under the declared daemon state layout. Minimal native reads
 exclude other home contents; native helper aliases under the Session tmp directory
 remain readable so the pinned harness can start its sandbox and apply_patch.
-Only `/environment/workspace` is writable by native tools. Staging and its ancestors
+The workspace and initialized package prefix are writable by native tools;
+initialized tool configuration is read-only. Staging and its ancestors
 are unavailable for native tool writes; staging is also explicitly denied for reads.
 The image includes enabled and disabled native network profiles with the same
 filesystem restrictions. Bootstrap freezes `PARSAR_RUNTIME_NETWORK_ACCESS`;
@@ -182,3 +183,13 @@ connection status; execution separately prepares the native harness. Session
 deletion revokes authority before owned container/volume cleanup. Supported network
 policies are enabled and disabled. Templates, populated startup installations,
 restricted domains and hosted MCP combinations remain explicit gaps.
+
+### Environment initialization
+
+Templates and inline env/setup/npm/Python configuration share the packaged Runtime
+initializer. Enable the existing `nested_sandbox: true` Docker provider setting
+when admitting these configurations: user commands and package hooks require
+bubblewrap user/PID/mount isolation. Runtime execution still uses native Codex
+isolation. The image includes the trusted initializer and managed native Bash
+hook; do not inject user env into the daemon or app-server launcher.
+See [initialization contract and limits](../../../../contracts/agents-api/environment-templates.md).

@@ -17,11 +17,11 @@ try {
  mkdirSync(profile.scratch,{recursive:true});
  await SandboxManager.initialize({
   network:{allowedDomains:[],deniedDomains:profile.network==='disabled'?['*']:[],allowAll:profile.network==='enabled'},
-  filesystem:{denyRead:profile.protectedDirs,allowWrite:[profile.workspace,profile.scratch],denyWrite:[]},
+  filesystem:{denyRead:profile.protectedDirs,allowWrite:[profile.workspace,profile.scratch,...(profile.toolEnvironment ? ['/environment/packages'] : [])],denyWrite:[]},
   seccomp:{applyPath:join(here,'dist/vendor/seccomp/x64/apply-seccomp')},
  },undefined,false);
  const quote=s=>"'"+s.replaceAll("'","'\\''")+"'";
- const command=[process.execPath,join(here,'dist/worker.mjs'),profile.workspace].map(quote).join(' ');
+ const command=[process.execPath,join(here,'dist/worker.mjs'),profile.workspace,...(profile.toolEnvironment ? ['--tool-environment'] : [])].map(quote).join(' ');
  const wrapped=await SandboxManager.wrapWithSandbox(command,'/bin/bash',undefined,undefined,{baseEnv,sandboxTempDir:profile.scratch});
  if (cancelled) throw new Error('Cancelled before workspace tool start');
  child=spawn('/bin/bash',['-c','exec '+wrapped],{cwd:profile.workspace,env:baseEnv,stdio:['pipe','pipe','pipe']});

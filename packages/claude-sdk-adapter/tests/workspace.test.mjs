@@ -202,3 +202,19 @@ test("workspace functions retain native sandbox and exact tool authority", async
   controller.abort();
   assert.equal((await profile.canUseTool("mcp__functions__lookup", input, options)).behavior, "deny");
 });
+
+test("initialized user env is applied inside native Bash, never SDK spawn env", async t => {
+  const { dirs, config } = fixture(t);
+  const profile = new WorkspaceProfile(dirs.workspace, { ...config, tool_environment: true });
+  assert.equal(profile.options.env.PYTHONPATH, undefined);
+  assert.equal(profile.options.env.PATH, dirs.deps);
+  assert.ok(profile.options.sandbox.filesystem.allowWrite.includes("/environment/packages"));
+  const input = { hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "tool",
+    tool_input: { command: "printf '%s' 'quoted value'", timeout: 1000 } };
+  const result = await profile.beforeTool(input, "tool", { signal: new AbortController().signal });
+  assert.equal(result.hookSpecificOutput.updatedInput.timeout, 1000);
+  assert.equal(result.hookSpecificOutput.updatedInput.command,
+    ". /environment/initialization/tool-env.sh && eval -- 'printf '\\''%s'\\'' '\\''quoted value'\\'''" );
+  const denied = await profile.beforeTool({ ...input, tool_input: { command: "id", dangerouslyDisableSandbox: true } }, "tool", { signal: new AbortController().signal });
+  assert.equal(denied.hookSpecificOutput.permissionDecision, "deny");
+});

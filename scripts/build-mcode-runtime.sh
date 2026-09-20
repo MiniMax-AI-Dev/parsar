@@ -28,6 +28,7 @@ for helper in agents-api-codex-directory agents-api-codex-write agents-api-works
   cp "$helpers/$helper" "$context/"
 done
 cp "$repo_root/services/agents-api/deploy/mcode/Dockerfile" "$context/Dockerfile"
+cp "$repo_root/services/agents-api/deploy/runtime/initialize.py" "$context/runtime-initialize.py"
 mkdir -p "$output"
 cp -R "$context/." "$output/"
 printf 'MiniMax Code Runtime image context: %s\n' "$output"

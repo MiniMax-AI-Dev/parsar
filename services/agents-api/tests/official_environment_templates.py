@@ -61,9 +61,9 @@ def verify_environment_templates(client, foreign, http):
         for query in ['limit=0', 'limit=101', 'limit=bad', 'order=wrong', 'limit=1&limit=2', 'unknown=1']:
             assert http.get(base + '?' + query, headers=headers).status_code == 400
         canary = 'template-private-' + uuid.uuid4().hex
-        for body in [{'env': {'TOKEN': canary}}, {'setup_commands': [{'command': canary}]},
+        for body in [{'env': {'PATH': canary}}, {'setup_commands': [{'command': canary, 'cwd': 'relative'}]},
                      {'files': [{'type': 'inline', 'path': '/workspace/a', 'data': canary}]},
-                     {'packages': {'python': [canary]}}, {'skills': [{'type': 'inline', 'data': canary}]},
+                     {'packages': {'system': [canary]}}, {'skills': [{'type': 'inline', 'data': canary}]},
                      {'plugins': [{'type': 'inline', 'data': canary}]},
                      {'capability_directories': ['/workspace']},
                      {'network': {'access': 'restricted', 'allowed_domains': ['example.com']}},

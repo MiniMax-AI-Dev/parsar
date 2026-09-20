@@ -17,7 +17,7 @@ func sessionCreationRequest(input sessionRequest, initial []store.Input) (json.R
 		agentID = *input.AgentID
 	}
 	var environment any = input.Environment
-	if input.templateID != "" || len(input.initialFiles) > 0 {
+	if input.templateID != "" || len(input.initialFiles) > 0 || !input.initialization.Empty() {
 		environment = input.originalEnvironment
 		if len(input.originalEnvironment) == 0 {
 			environment = input.templateEnvironment

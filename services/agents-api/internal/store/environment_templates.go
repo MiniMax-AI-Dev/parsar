@@ -7,6 +7,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	v1 "github.com/MiniMax-AI-Dev/parsar/contracts/agents-api/v1"
+
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/db/sqlc"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -16,25 +18,29 @@ import (
 // EnvironmentTemplate is configuration ownership, independent of provider images.
 
 type EnvironmentTemplate struct {
-	Files         []InitialFileMetadata
-	ID            string
-	Name          *string
-	NetworkAccess string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	Packages       v1.EnvironmentPackages
+	Initialization EnvironmentSetup
+	Files          []InitialFileMetadata
+	ID             string
+	Name           *string
+	NetworkAccess  string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type EnvironmentTemplateInput struct {
-	Files         []InitialFile
-	SetFiles      bool
-	Name          *string
-	SetName       bool
-	NetworkAccess string
-	SetNetwork    bool
+	Initialization                EnvironmentSetup
+	SetEnv, SetSetup, SetPackages bool
+	Files                         []InitialFile
+	SetFiles                      bool
+	Name                          *string
+	SetName                       bool
+	NetworkAccess                 string
+	SetNetwork                    bool
 }
 
 func (in EnvironmentTemplateInput) valid() bool {
-	return (in.Name == nil || (utf8.ValidString(*in.Name) && utf8.RuneCountInString(*in.Name) >= 1 && utf8.RuneCountInString(*in.Name) <= 256)) &&
+	return in.Initialization.Validate() == nil && (in.Name == nil || (utf8.ValidString(*in.Name) && utf8.RuneCountInString(*in.Name) >= 1 && utf8.RuneCountInString(*in.Name) <= 256)) &&
 		(!in.SetNetwork || in.NetworkAccess == "enabled" || in.NetworkAccess == "disabled")
 }
 
@@ -51,7 +57,7 @@ func templateFromRow(row templateMetadataRow, err error) (EnvironmentTemplate, e
 	if row.Name.Valid {
 		result.Name = &row.Name.String
 	}
-	if json.Unmarshal(row.Files, &result.Files) != nil {
+	if json.Unmarshal(row.Files, &result.Files) != nil || json.Unmarshal(row.Packages, &result.Packages) != nil {
 		return EnvironmentTemplate{}, ErrInvalidInput
 	}
 	return result, nil
@@ -78,7 +84,11 @@ func (s *Store) CreateEnvironmentTemplate(ctx context.Context, tenantID string, 
 	if err != nil {
 		return EnvironmentTemplate{}, err
 	}
-	row, err := s.queries.CreateEnvironmentTemplate(ctx, sqlc.CreateEnvironmentTemplateParams{ID: pgtype.UUID{Bytes: id, Valid: true}, TenantID: tenant, Name: name, NetworkAccess: in.NetworkAccess, Files: metadata, FileContents: encrypted})
+	packages, envContents, setupContents, err := s.sealTemplateSetup(uuid.UUID(tenant.Bytes).String(), id.String(), in.Initialization)
+	if err != nil {
+		return EnvironmentTemplate{}, err
+	}
+	row, err := s.queries.CreateEnvironmentTemplate(ctx, sqlc.CreateEnvironmentTemplateParams{ID: pgtype.UUID{Bytes: id, Valid: true}, TenantID: tenant, Name: name, NetworkAccess: in.NetworkAccess, Files: metadata, FileContents: encrypted, Packages: packages, EnvContents: envContents, SetupContents: setupContents})
 	return templateFromRow(templateMetadataRow(row), err)
 }
 
@@ -108,7 +118,7 @@ func (s *Store) UpdateEnvironmentTemplate(ctx context.Context, tenantID, templat
 	if err != nil {
 		return EnvironmentTemplate{}, ErrNotFound
 	}
-	if !in.SetName && !in.SetNetwork && !in.SetFiles {
+	if !in.SetName && !in.SetNetwork && !in.SetFiles && !in.SetEnv && !in.SetSetup && !in.SetPackages {
 		return s.GetEnvironmentTemplate(ctx, tenantID, templateID)
 	}
 	var name pgtype.Text
@@ -119,7 +129,11 @@ func (s *Store) UpdateEnvironmentTemplate(ctx context.Context, tenantID, templat
 	if err != nil {
 		return EnvironmentTemplate{}, err
 	}
-	row, err := s.queries.UpdateEnvironmentTemplate(ctx, sqlc.UpdateEnvironmentTemplateParams{TenantID: tenant, ID: id, Name: name, SetName: in.SetName, NetworkAccess: in.NetworkAccess, SetNetwork: in.SetNetwork, SetFiles: in.SetFiles, Files: metadata, FileContents: encrypted})
+	packages, envContents, setupContents, err := s.sealTemplateSetup(uuid.UUID(tenant.Bytes).String(), uuid.UUID(id.Bytes).String(), in.Initialization)
+	if err != nil {
+		return EnvironmentTemplate{}, err
+	}
+	row, err := s.queries.UpdateEnvironmentTemplate(ctx, sqlc.UpdateEnvironmentTemplateParams{TenantID: tenant, ID: id, Name: name, SetName: in.SetName, NetworkAccess: in.NetworkAccess, SetNetwork: in.SetNetwork, SetFiles: in.SetFiles, Files: metadata, FileContents: encrypted, Packages: packages, EnvContents: envContents, SetupContents: setupContents, SetPackages: in.SetPackages, SetEnv: in.SetEnv, SetSetup: in.SetSetup})
 	return templateFromRow(templateMetadataRow(row), err)
 }
 

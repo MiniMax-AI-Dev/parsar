@@ -35,6 +35,14 @@ func decodeTemplateInput(raw []byte) (store.EnvironmentTemplateInput, error) {
 	delete(fields, "name")
 	_, in.SetNetwork = fields["network"]
 	_, in.SetFiles = fields["files"]
+	_, in.SetEnv = fields["env"]
+	_, in.SetSetup = fields["setup_commands"]
+	_, in.SetPackages = fields["packages"]
+	var setupErr error
+	in.Initialization, setupErr = decodeEnvironmentSetup(fields)
+	if setupErr != nil {
+		return in, setupErr
+	}
 	var fileErr error
 	in.Files, fileErr = decodeInitialFiles(fields["files"])
 	if fileErr != nil {
@@ -54,7 +62,7 @@ func decodeTemplateInput(raw []byte) (store.EnvironmentTemplateInput, error) {
 }
 
 func templateResponse(t store.EnvironmentTemplate) v1.EnvironmentTemplate {
-	return v1.EnvironmentTemplate{ID: t.ID, Object: "agent.environment.template", Name: t.Name, CreatedAt: t.CreatedAt.Unix(), UpdatedAt: t.UpdatedAt.Unix(), CapabilityDirectories: []string{}, Network: v1.EnvironmentNetwork{Access: t.NetworkAccess, AllowedDomains: []string{}}, Packages: v1.EnvironmentPackages{NPM: []string{}, Python: []string{}, System: []string{}}, Files: templateFileResponse(t.Files), Plugins: []json.RawMessage{}, Skills: []json.RawMessage{}}
+	return v1.EnvironmentTemplate{ID: t.ID, Object: "agent.environment.template", Name: t.Name, CreatedAt: t.CreatedAt.Unix(), UpdatedAt: t.UpdatedAt.Unix(), CapabilityDirectories: []string{}, Network: v1.EnvironmentNetwork{Access: t.NetworkAccess, AllowedDomains: []string{}}, Packages: packageMetadata(&t.Packages), Files: templateFileResponse(t.Files), Plugins: []json.RawMessage{}, Skills: []json.RawMessage{}}
 }
 
 func templateNoQuery(w http.ResponseWriter, r *http.Request) bool {
@@ -75,14 +83,14 @@ func readTemplateInput(w http.ResponseWriter, r *http.Request) (store.Environmen
 	}
 	in, err := decodeTemplateInput(raw)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "unsupported_or_invalid_configuration", "Template fields are invalid or require unsupported initialization. Name, enabled/disabled network and initial files are supported.")
+		writeError(w, http.StatusBadRequest, "unsupported_or_invalid_configuration", "Template fields are invalid or require unsupported initialization. Name, enabled/disabled network, initial files, env, npm/Python packages and setup commands are supported.")
 		return in, false
 	}
 	return in, true
 }
 
 // @Summary Create an Environment Template
-// @Description Saves tenant-owned basic hosted configuration. Supports nullable name, enabled/disabled network, initial inline/file_id files and empty remaining installation defaults. Omitted/null network defaults to enabled. Other populated installations and restricted network are rejected before persistence without echoing input. No compute is allocated. Exact hosted error/retry semantics remain unverified.
+// @Description Saves tenant-owned basic hosted configuration. Supports nullable name, enabled/disabled network, initial inline/file_id files, confidential env, ordered setup_commands and npm/Python packages. Omitted/null network defaults to enabled. System packages, other populated installations and restricted network are rejected before persistence without echoing input. No compute is allocated. Exact hosted error/retry semantics remain unverified.
 // @Tags Environment Templates
 // @Accept json
 // @Produce json

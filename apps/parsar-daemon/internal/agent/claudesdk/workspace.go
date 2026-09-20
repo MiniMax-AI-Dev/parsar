@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/localworkspace"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/paths"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
@@ -26,13 +27,14 @@ type WorkspaceConfig struct {
 }
 
 type workspaceProfile struct {
-	Home           string   `json:"home"`
-	State          string   `json:"state"`
-	Scratch        string   `json:"scratch"`
-	ProtectedDirs  []string `json:"protected_dirs"`
-	DependencyPath string   `json:"dependency_path"`
-	EnvNames       []string `json:"env_names"`
-	NetworkAccess  string   `json:"network_access,omitempty"`
+	ToolEnvironment bool     `json:"tool_environment,omitempty"`
+	Home            string   `json:"home"`
+	State           string   `json:"state"`
+	Scratch         string   `json:"scratch"`
+	ProtectedDirs   []string `json:"protected_dirs"`
+	DependencyPath  string   `json:"dependency_path"`
+	EnvNames        []string `json:"env_names"`
+	NetworkAccess   string   `json:"network_access,omitempty"`
 }
 
 func prepareWorkspace(config Config, req proto.PromptRequestPayload) (*workspaceProfile, []string, error) {
@@ -45,7 +47,17 @@ func prepareWorkspace(config Config, req proto.PromptRequestPayload) (*workspace
 	if req.LocalEnvironment != nil && (config.Workspace.NetworkAccess == "" || req.LocalEnvironment.NetworkAccess != config.Workspace.NetworkAccess) {
 		return nil, nil, fmt.Errorf("claudesdk: local Runtime network policy mismatch")
 	}
-	return workspaceEnvironment(config)
+	profile, env, err := workspaceEnvironment(config)
+	if err != nil {
+		return nil, nil, err
+	}
+	if req.LocalEnvironment != nil && req.LocalEnvironment.ToolEnvironment {
+		if err := localworkspace.VerifyToolEnvironment(); err != nil {
+			return nil, nil, err
+		}
+		profile.ToolEnvironment = true
+	}
+	return profile, env, nil
 }
 
 func workspaceCwd(w *WorkspaceConfig) string {

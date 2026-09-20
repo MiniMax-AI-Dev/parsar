@@ -61,6 +61,7 @@ func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- pro
 //  5. turn/completed emits TypeDone + closes out. Cancel can short-cut
 //     this by killing the child early.
 type Session struct {
+	toolEnvironment           bool
 	subagents                 *subagentObservations
 	observeSubagentIdentities bool
 	functions                 *functionCalls
@@ -145,6 +146,7 @@ func (s *Session) registerHandlers() {
 	rpc.OnNotification("item/reasoning/summaryTextDelta", s.onReasoningDelta)
 	rpc.OnNotification("thread/tokenUsage/updated", s.onUsageUpdated)
 	rpc.OnNotification("error", s.onErrorNotif)
+	rpc.OnNotification("hook/completed", s.onToolEnvironmentHook)
 
 	rpc.OnServerRequest("item/commandExecution/requestApproval", s.handleCodexCommandApproval)
 	rpc.OnServerRequest("item/fileChange/requestApproval", s.handleCodexFileApproval)

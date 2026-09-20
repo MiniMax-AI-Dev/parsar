@@ -241,6 +241,11 @@ definitions:
           type: string
         type: array
         x-nullable: true
+      env:
+        additionalProperties:
+          type: string
+        type: object
+        x-nullable: true
       environment_template_id:
         type: string
       files:
@@ -251,6 +256,15 @@ definitions:
       network:
         allOf:
         - $ref: '#/definitions/v1.EnvironmentNetworkInput'
+        x-nullable: true
+      packages:
+        allOf:
+        - $ref: '#/definitions/v1.EnvironmentPackages'
+        x-nullable: true
+      setup_commands:
+        items:
+          type: object
+        type: array
         x-nullable: true
       type:
         enum:
@@ -2041,11 +2055,11 @@ paths:
       consumes:
       - application/json
       description: Saves tenant-owned basic hosted configuration. Supports nullable
-        name, enabled/disabled network, initial inline/file_id files and empty remaining
-        installation defaults. Omitted/null network defaults to enabled. Other populated
-        installations and restricted network are rejected before persistence without
-        echoing input. No compute is allocated. Exact hosted error/retry semantics
-        remain unverified.
+        name, enabled/disabled network, initial inline/file_id files, confidential
+        env, ordered setup_commands and npm/Python packages. Omitted/null network
+        defaults to enabled. System packages, other populated installations and restricted
+        network are rejected before persistence without echoing input. No compute
+        is allocated. Exact hosted error/retry semantics remain unverified.
       parameters:
       - description: agents=v1
         in: header
@@ -2346,15 +2360,17 @@ paths:
         supports non-deferred function tools with text results alongside native workspace
         tools; HTTP MCP remains unsupported. Idle Sessions provision automatically;
         initial provisioning has no caller connection action. Network defaults to
-        enabled; disabled is also supported, while restricted domains and other populated
-        startup installations are rejected. Initial inline and tenant-owned file_id
-        files freeze encrypted bytes before provisioning, then install through the
-        common Core lifecycle before native execution or live Files access. Referenced
-        files overrides are rejected pending semantic verification. Tenant-owned environment_template_id
-        references inherit omitted network and allow only narrowing overrides. Referenced
-        network:null is explicitly unsupported pending semantic verification. Core
-        freezes effective configuration; template updates/deletion do not alter Session
-        snapshots or same-intent creation retries.
+        enabled; disabled is also supported, while restricted domains, system packages
+        and remaining unsupported startup installations are rejected. Confidential
+        env, npm/Python packages and ordered setup commands use the shared initialization
+        lifecycle; requested network applies after setup. Initial inline and tenant-owned
+        file_id files freeze encrypted bytes before provisioning, then install through
+        the common Core lifecycle before native execution or live Files access. Referenced
+        files/env/packages/setup overrides are rejected pending semantic verification.
+        Tenant-owned environment_template_id references inherit omitted network and
+        allow only narrowing overrides. Referenced network:null is explicitly unsupported
+        pending semantic verification. Core freezes effective configuration; template
+        updates/deletion do not alter Session snapshots or same-intent creation retries.
       parameters:
       - description: agents=v1
         in: header

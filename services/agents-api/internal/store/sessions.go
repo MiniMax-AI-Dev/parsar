@@ -49,6 +49,7 @@ type Session struct {
 }
 
 type CreateSessionInput struct {
+	Initialization  EnvironmentSetup
 	InitialFiles    []InitialFile
 	Creator         identity.Subject
 	CreationRequest json.RawMessage
@@ -121,14 +122,19 @@ func (s *Store) createSession(ctx context.Context, tenantID string, input Create
 	if string(configuration) == "{}" {
 		hashConfiguration = nil
 	}
+	var initialization *EnvironmentSetup
+	if !input.Initialization.Empty() {
+		initialization = &input.Initialization
+	}
 	// JSON map keys are sorted by encoding/json, so key order does not affect retries.
 	canonical, err := json.Marshal(struct {
-		Engine        string
-		Metadata      map[string]string
-		Configuration json.RawMessage `json:",omitempty"`
-		InitialInputs json.RawMessage `json:",omitempty"`
-		InitialFiles  []InitialFile   `json:",omitempty"`
-	}{input.Engine, input.Metadata, hashConfiguration, encodedInput, input.InitialFiles})
+		Engine         string
+		Metadata       map[string]string
+		Configuration  json.RawMessage   `json:",omitempty"`
+		InitialInputs  json.RawMessage   `json:",omitempty"`
+		InitialFiles   []InitialFile     `json:",omitempty"`
+		Initialization *EnvironmentSetup `json:",omitempty"`
+	}{input.Engine, input.Metadata, hashConfiguration, encodedInput, input.InitialFiles, initialization})
 	if err != nil {
 		return SessionCreation{}, fmt.Errorf("%w: input: %v", ErrInvalidInput, err)
 	}
@@ -143,7 +149,7 @@ func (s *Store) createSession(ctx context.Context, tenantID string, input Create
 		Configuration: configuration, CreationRequestHash: creationHash,
 		CreatorKind: pgtype.Text{String: input.Creator.Kind, Valid: true}, CreatorID: pgtype.Text{String: input.Creator.ID, Valid: true},
 	}
-	row, environment, err := s.createSessionResources(ctx, tenantID, params, batch, encodedInput, input.InitialFiles)
+	row, environment, err := s.createSessionResources(ctx, tenantID, params, batch, encodedInput, input.InitialFiles, input.Initialization)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SessionCreation{}, ErrIdempotencyConflict
 	}

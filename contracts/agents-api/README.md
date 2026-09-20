@@ -355,7 +355,7 @@ including further deployment qualification; this inventory describes merged beha
   describe native discovery or workspace files created by commands. Unknown
   installation configurations are rejected, not reported as empty. Reads use the
   owning live Session's project partition and do not require execution setup.
-  Other populated installation metadata/configuration, full hosted lifecycle and
+  System packages and remaining unsupported installation configuration, full hosted lifecycle and
   exact hosted error semantics remain gaps.
 
 [Environment Templates](environment-templates.md) provide tenant-owned CRUD/list
@@ -399,7 +399,9 @@ operator setup: [Codex](../../services/agents-api/deploy/codex/README.md),
 [MiniMax Code](../../services/agents-api/deploy/mcode/README.md). The
 [E2B guide](../../services/agents-api/deploy/e2b/README.md) packages those qualified
 images as pinned templates.
-Other populated startup installations, restricted domains and hosted public
+The env/setup/npm/Python initialization batch extends these profiles; see its
+[current evidence boundary](environment-templates.md#current-setup-batch). System
+packages, remaining unsupported startup installations, restricted domains and hosted public
 HTTP MCP remain outside these accepted profiles. MiniMax's private MCP tool bridge
 is internal transport, not public MCP support.
 

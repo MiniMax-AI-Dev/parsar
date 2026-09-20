@@ -14,6 +14,10 @@ func decodeHostedEnvironment(raw json.RawMessage) (*v1.Environment, error) {
 	if json.Unmarshal(raw, &fields) != nil {
 		return nil, store.ErrInvalidInput
 	}
+	setup, err := decodeEnvironmentSetup(fields)
+	if err != nil {
+		return nil, err
+	}
 	env := &v1.Environment{Type: "openai_hosted", Network: &v1.EnvironmentNetworkInput{Access: "enabled"}}
 	for name, value := range fields {
 		switch name {
@@ -33,24 +37,16 @@ func decodeHostedEnvironment(raw json.RawMessage) (*v1.Environment, error) {
 				return nil, err
 			}
 			env.Files = initialFileResponse(files)
-		case "capability_directories", "plugins", "skills", "setup_commands":
+		case "capability_directories", "plugins", "skills":
 			var list []json.RawMessage
 			if json.Unmarshal(value, &list) != nil || len(list) != 0 {
 				return nil, store.ErrInvalidInput
 			}
-		case "env":
-			var entries map[string]string
-			if json.Unmarshal(value, &entries) != nil || len(entries) != 0 {
-				return nil, store.ErrInvalidInput
-			}
+		case "env", "setup_commands":
+			// Confidential values remain in the separate initialization snapshot.
 		case "packages":
-			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-				continue
-			}
-			var packages v1.EnvironmentPackages
-			if decodeInputObject(value, &packages, "npm", "python", "system") != nil || len(packages.NPM)+len(packages.Python)+len(packages.System) != 0 {
-				return nil, store.ErrInvalidInput
-			}
+			packages := setup.PackageMetadata()
+			env.Packages = &packages
 		default:
 			return nil, store.ErrInvalidInput
 		}
@@ -72,7 +68,7 @@ func hostedSessionEnvironment(environment store.Environment) (v1.SessionEnvironm
 	directories := []string{}
 	return v1.SessionEnvironment{ID: environment.ID, Type: cfg.Type, CapabilityDirectories: &directories,
 		Network:  &v1.EnvironmentNetwork{Access: cfg.Network.Access, AllowedDomains: []string{}},
-		Packages: &v1.EnvironmentPackages{NPM: []string{}, Python: []string{}, System: []string{}}, Files: &files, Plugins: &empty, Skills: &empty}, nil
+		Packages: func() *v1.EnvironmentPackages { value := packageMetadata(cfg.Packages); return &value }(), Files: &files, Plugins: &empty, Skills: &empty}, nil
 }
 
 // WithHostedEnvironments enables admission only for an operator-composed,
@@ -93,6 +89,12 @@ func storedEnvironment(raw json.RawMessage) (*v1.Environment, error) {
 	if kind != "openai_hosted" {
 		return decodeSessionEnvironment(raw)
 	}
+	// Confidential fields must never appear in the persisted public snapshot.
+	for _, field := range []string{"env", "setup_commands"} {
+		if _, exists := fields[field]; exists {
+			return nil, store.ErrInvalidInput
+		}
+	}
 	var files []json.RawMessage
 	if value, exists := fields["files"]; exists {
 		if json.Unmarshal(value, &files) != nil || len(files) > 50 {
@@ -107,6 +109,13 @@ func storedEnvironment(raw json.RawMessage) (*v1.Environment, error) {
 				return nil, store.ErrInvalidInput
 			}
 		}
+	}
+	if value, ok := fields["initialization"]; ok {
+		var initialized bool
+		if json.Unmarshal(value, &initialized) != nil || !initialized {
+			return nil, store.ErrInvalidInput
+		}
+		delete(fields, "initialization")
 	}
 	delete(fields, "files")
 	base, err := json.Marshal(fields)

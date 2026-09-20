@@ -17,13 +17,13 @@ func TestTemplateConfigurationRejectsUnqualifiedInputs(t *testing.T) {
 			t.Fatalf("supported input: %s: %v", raw, err)
 		}
 	}
-	for _, raw := range []string{`null`, `[]`, `{"name":""}`, `{"name":42}`, `{"type":"openai_hosted"}`, `{"network":{"access":"restricted","allowed_domains":["example.com"]}}`, `{"env":{"TOKEN":"confidential-canary"}}`, `{"setup_commands":[{"command":"confidential-canary"}]}`, `{"packages":{"python":["requests"]}}`, `{"plugins":[{}]}`, `{"skills":[{}]}`, `{"capability_directories":["/workspace"]}`} {
+	for _, raw := range []string{`null`, `[]`, `{"name":""}`, `{"name":42}`, `{"type":"openai_hosted"}`, `{"network":{"access":"restricted","allowed_domains":["example.com"]}}`, `{"env":{"PATH":"confidential-canary"}}`, `{"setup_commands":[{"command":"confidential-canary","cwd":"relative"}]}`, `{"packages":{"system":["curl"]}}`, `{"plugins":[{}]}`, `{"skills":[{}]}`, `{"capability_directories":["/workspace"]}`} {
 		if _, err := decodeTemplateInput([]byte(raw)); err == nil {
 			t.Fatalf("unsupported input accepted: %s", raw)
 		}
 	}
 	h, _, _ := testHandler(t)
-	req := httptest.NewRequest(http.MethodPost, "/v1/agents/environments/templates", strings.NewReader(`{"env":{"TOKEN":"confidential-canary"}}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/environments/templates", strings.NewReader(`{"env":{"PATH":"confidential-canary"}}`))
 	req.Header.Set("Authorization", "Bearer test-api-key")
 	req.Header.Set("OpenAI-Beta", "agents=v1")
 	response := httptest.NewRecorder()

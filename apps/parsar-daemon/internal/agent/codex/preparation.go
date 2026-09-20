@@ -100,6 +100,7 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	defer harness.releaseWith(rpc)
 
 	s := &Session{
+		toolEnvironment:           req.LocalEnvironment != nil && req.LocalEnvironment.ToolEnvironment,
 		functions:                 functions,
 		observeMessages:           req.ObserveMessages,
 		observeTools:              req.ObserveTools,
@@ -146,6 +147,11 @@ func newPreparation(parent context.Context, req proto.PromptRequestPayload, cfg 
 	}
 	if req.RemoteEnvironment != nil {
 		if err := verifyRemoteEnvironment(cancelCtx, rpc); err != nil {
+			return p.preparationFailed(err)
+		}
+	}
+	if s.toolEnvironment {
+		if err := verifyToolEnvironmentHook(cancelCtx, rpc, plan.Cwd); err != nil {
 			return p.preparationFailed(err)
 		}
 	}

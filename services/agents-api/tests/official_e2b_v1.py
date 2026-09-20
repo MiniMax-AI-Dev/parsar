@@ -28,6 +28,8 @@ from official_session_artifacts import verify_session_artifacts
 config = json.loads(Path(sys.argv[1]).read_text())
 if config.get('verify_initial_files') and not config.get('verify_environment_templates'):
     raise ValueError('Initial-file acceptance requires verify_environment_templates')
+if config.get('verify_environment_setup') and not config.get('verify_initial_files'):
+    raise ValueError('Setup acceptance requires verify_initial_files')
 if config.get('verify_initialization_restart') and not config.get('verify_initial_files'):
     raise ValueError('Initialization restart acceptance requires verify_initial_files')
 root = Path(config['proof_root'])
@@ -241,8 +243,14 @@ try:
         from official_environment_initial_files import initial_files, verify_initial_snapshot, assert_initial_bytes_script
         environment, initial_source, initial_expected = initial_files(client, foreign, http, agent, enabled_template)
         sources.append(initial_source)
+    if config.get('verify_environment_setup'):
+        from official_environment_setup import setup_configuration, attach_setup, verify_setup_metadata, native_setup_script
+        setup, setup_marker = setup_configuration()
+        environment = attach_setup(client, foreign, http, environment, setup, enabled_template, network='enabled')
     session = sessions.create(agent=agent, environment=environment, extra_headers={'Idempotency-Key': 'idle'})
     created.append(session.id)
+    if config.get('verify_environment_setup'):
+        verify_setup_metadata(client, session, setup)
     eid = session.environment.id
     if initial_expected:
         verify_initial_snapshot(client, http, session, initial_expected, initial_source)
@@ -286,6 +294,8 @@ CHECK""", user='runtime')
         assert http.get(base + '/v1' + resource, headers={**headers, 'Authorization': 'Bearer ' + tokens[1]}).status_code == 404
     marker, memory = secrets.token_hex(24), secrets.token_hex(24)
     expected_files = {p: len(body) for p, body in initial_expected.items()}
+    if config.get('verify_environment_setup'):
+        expected_files.update({'/workspace/setup-once': 11, '/workspace/setup-version': 6})
     for name, data in [('input.txt', marker.encode()), ('binary.bin', bytes(range(256))), ('empty', b'')]:
         expected_files['/workspace/' + name] = upload(eid, '/workspace/' + name, data)
     source = client.files.create(file=('source.bin', b'source-bytes\x00\xff'), purpose='user_data')
@@ -298,6 +308,8 @@ CHECK""", user='runtime')
     script = 'from pathlib import Path\np=Path("/workspace/outputs");p.mkdir(exist_ok=True)\n(p/"a.bin").write_bytes(Path("/workspace/binary.bin").read_bytes());(p/"empty").write_bytes(b"")\nprint(Path("/workspace/input.txt").read_text())\n'
     if initial_expected:
         script = 'from pathlib import Path\n' + assert_initial_bytes_script(initial_expected) + script
+    if config.get('verify_environment_setup'):
+        script = native_setup_script(setup_marker) + script
     upload(eid, '/workspace/publish.py', script)
     first = prompt(session.id, 'Run exactly `python3 /workspace/publish.py`. Remember this conversation-only marker: ' + memory, 1)
     identity = native_id(session.id)
@@ -309,6 +321,9 @@ CHECK""", user='runtime')
     if initial_expected:
         check('template_initial_files_exact_native_bytes_and_frozen_source_deletion')
         upload(eid, '/workspace/initial-inline.bin', b'retained-user-change')
+    if config.get('verify_environment_setup'):
+        check('template_real_registry_packages_ordered_setup_and_native_visibility')
+        upload(eid, '/workspace/setup-once', b'preserved-setup-change')
     # The native isolation script is the same actual-tool probe used to qualify all profiles.
     history = config['native_history_root'] + '/e2b-isolation-canary'
     vm.files.write(history, 'synthetic-private-history', user='runtime')
@@ -378,6 +393,11 @@ CHECK""", user='runtime')
         sources.append(inline_source)
         assert read(vm, '/workspace/initial-inline.bin') == b'retained-user-change'
         check('recovery_preserves_user_changes_without_reinstalling_initial_files')
+    if config.get('verify_environment_setup'):
+        assert read(vm, '/workspace/setup-once') == b'preserved-setup-change'
+        inline_setup, inline_setup_marker = setup_configuration()
+        disabled_environment = attach_setup(client, foreign, http, disabled_environment, inline_setup)
+        check('recovery_does_not_repeat_completed_setup')
     disabled = sessions.create(agent=agent, environment=disabled_environment)
     if inline_expected:
         verify_initial_snapshot(client, http, disabled, inline_expected, inline_source)
@@ -394,6 +414,9 @@ CHECK""", user='runtime')
     network_script = 'import urllib.request,urllib.error,json\ntry:\n urllib.request.urlopen("https://api.moonshot.cn/v1/models",timeout=8)\nexcept urllib.error.HTTPError as e:\n assert e.code==403,e.code\nexcept (urllib.error.URLError,PermissionError,TimeoutError):pass\nelse:raise AssertionError("native network was allowed")\nopen("/workspace/network-result.json","w").write(json.dumps({"blocked":True}))\n'
     if inline_expected:
         network_script = 'from pathlib import Path\n' + assert_initial_bytes_script(inline_expected) + network_script
+    if config.get('verify_environment_setup'):
+        verify_setup_metadata(client, disabled, inline_setup)
+        network_script = native_setup_script(inline_setup_marker) + network_script
     upload(disabled.environment.id, '/workspace/network.py', network_script)
     prompt(disabled.id, 'Run exactly `python3 /workspace/network.py`. Do not modify it.', 1)
     assert json.loads(read(restricted, '/workspace/network-result.json')) == {'blocked': True}

@@ -22,7 +22,7 @@ func validateInitialInputs(inputs []Input) ([]Input, json.RawMessage, error) {
 
 // The Session upsert locks retries. Only the new row reserves or admits work, so a
 // retry after completion or later Turns cannot submit the original input again.
-func (s *Store) createSessionResources(ctx context.Context, tenant string, params sqlc.CreateSessionParams, inputs []Input, encodedInput json.RawMessage, files []InitialFile) (sqlc.Session, *Environment, error) {
+func (s *Store) createSessionResources(ctx context.Context, tenant string, params sqlc.CreateSessionParams, inputs []Input, encodedInput json.RawMessage, files []InitialFile, setup EnvironmentSetup) (sqlc.Session, *Environment, error) {
 	var row sqlc.Session
 	var environment *Environment
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -39,6 +39,19 @@ func (s *Store) createSessionResources(ctx context.Context, tenant string, param
 					return err
 				}
 				row, err = q.SetSessionInitialFileMetadata(ctx, sqlc.SetSessionInitialFileMetadataParams{ID: row.ID, Column2: metadata})
+				if err != nil {
+					return err
+				}
+			}
+			if err := s.saveEnvironmentSetup(ctx, q, tenant, row.ID, setup); err != nil {
+				return err
+			}
+			if !setup.Empty() {
+				packages, err := json.Marshal(setup.PackageMetadata())
+				if err != nil {
+					return err
+				}
+				row, err = q.SetSessionSetupMetadata(ctx, sqlc.SetSessionSetupMetadataParams{ID: row.ID, Column2: packages})
 				if err != nil {
 					return err
 				}
