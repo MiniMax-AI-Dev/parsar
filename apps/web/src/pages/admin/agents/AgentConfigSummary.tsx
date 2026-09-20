@@ -14,7 +14,7 @@ export function AgentConfigSummary({ agent }: { agent: AgentDetail; modelLabel: 
       <Property label={t("agents.core.name")}>{agent.name}</Property>
       <Property label={t("agents.core.summary")}>{agent.description || "—"}</Property>
       <Property label={t("agents.core.model")}>{String(agent.config?.model ?? "—")}</Property>
-      <Property label="Harness">{coreHarnessLabel(defaults.harness) || t("core.defaultHarness")}</Property>
+      <Property label="Harness">{coreHarnessLabel(defaults.harness) || t("core.harnessNotSet")}</Property>
       <Property label={t("core.environment")}>{t(`core.environmentTypes.${defaults.environment.type}`)}</Property>
       {defaults.environment.type === "openai_hosted" && <Property label={t("core.template")}>{defaults.environment.environment_template_id || t("core.defaultEnvironment")}</Property>}
       <Property label={t("agents.form.instructions.label")} className="h-auto whitespace-pre-wrap [overflow-wrap:anywhere]">{String(agent.config?.system_prompt ?? "—")}</Property>

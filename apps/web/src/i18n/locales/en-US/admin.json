@@ -2923,7 +2923,8 @@
     "templateSupport": "Name and enabled/disabled network access are connected. Packages, setup commands, environment variables, restricted network rules and capability installation are waiting for Core support.",
     "assetManagementHint": "Manage Parsar capability assets and MCP configuration here. Importing or authorizing an asset does not enable Agent execution. Runtime loading belongs to Core and is not connected yet.",
     "executionDefaults": "Default execution configuration",
-    "defaultHarness": "Core default harness",
+    "selectHarness": "Select a harness",
+    "harnessNotSet": "Not set",
     "harnessHint": "Uses a harness configured in Core. Unavailable harnesses and unsupported model or environment combinations fail explicitly.",
     "executionDefaultsHint": "Saving does not start an environment. The first message creates an independent environment, reused by this chat. Changes apply to new chats only."
   }

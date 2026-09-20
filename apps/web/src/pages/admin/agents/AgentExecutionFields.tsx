@@ -9,7 +9,7 @@ export function AgentExecutionFields({ workspaceID, harness, environment, onHarn
   workspaceID: string | null
   harness: CoreHarness | ""
   environment: CoreEnvironment
-  onHarnessChange: (value: CoreHarness | "") => void
+  onHarnessChange: (value: CoreHarness) => void
   onEnvironmentChange: (value: CoreEnvironment) => void
   disabled: boolean
 }) {
@@ -19,8 +19,8 @@ export function AgentExecutionFields({ workspaceID, harness, environment, onHarn
   return <fieldset className="space-y-3" disabled={disabled}>
     <legend className="mb-2 text-sm font-medium">{t("core.executionDefaults")}</legend>
     <div><Label htmlFor={`${id}-harness`}>Harness</Label>
-      <Select id={`${id}-harness`} value={harness} onValueChange={value => onHarnessChange(value as CoreHarness | "")} disabled={disabled}>
-        <SelectOption value="">{t("core.defaultHarness")}</SelectOption>
+      <Select id={`${id}-harness`} value={harness} onValueChange={value => onHarnessChange(value as CoreHarness)} disabled={disabled} aria-required="true">
+        {!harness && <SelectOption value="" disabled>{t("core.selectHarness")}</SelectOption>}
         <SelectOption value="codex">Codex</SelectOption>
         <SelectOption value="claude_sdk">Claude Code</SelectOption>
         <SelectOption value="mcode">MiniMax Code</SelectOption>

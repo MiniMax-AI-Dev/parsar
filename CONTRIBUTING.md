@@ -2638,7 +2638,10 @@ Transient model options are partitioned by engine and must not expose another
 engine's credentials. Do not infer an engine from a model name or template.
 
 Parsar Agents save default model, harness extension and a typed, non-confidential
-`config.environment` selector. The environment selector is product configuration;
+`config.environment` selector. The Agent form requires an explicit harness before
+saving; existing records without one remain unset in read-only views. The Agent
+list shows the configured environment type and harness in both table and compact
+layouts. The environment selector is product configuration;
 it becomes the official Session `environment`, never part of the protocol Agent.
 Only a template reference or supported environment selector is stored, not live
 container identity or initialization secrets. An explicitly chosen conversation

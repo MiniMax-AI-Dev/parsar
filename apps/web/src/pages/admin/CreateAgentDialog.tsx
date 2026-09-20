@@ -45,7 +45,7 @@ export function CreateAgentDialog(props: CreateAgentDialogProps) {
   const [advanced, setAdvanced] = useState(() => JSON.stringify(Object.fromEntries(Object.entries(props.agent?.config ?? {}).filter(([key]) => ["tools", "service_tier", "multi_agent", "reasoning", "text"].includes(key))), null, 2))
   const [configurationError, setConfigurationError] = useState<string | null>(null)
   const [visibility, setVisibility] = useState<AgentVisibility>(props.agent?.visibility ?? "workspace")
-  const valid = name.trim() !== "" && model.trim() !== "" && props.workspaceID !== null
+  const valid = name.trim() !== "" && model.trim() !== "" && execution.harness !== "" && props.workspaceID !== null
   return <Dialog open={props.open} onOpenChange={props.onOpenChange}>
     <DialogContent ref={scopeRef} className="max-h-[90dvh] overflow-y-auto">
       <form onSubmit={(event) => {
@@ -59,7 +59,7 @@ export function CreateAgentDialog(props: CreateAgentDialogProps) {
         } catch (error) { setConfigurationError(error instanceof Error ? error.message : t("core.failed")); return }
         props.onSubmit({
           agentID: props.mode === "edit" ? props.agent?.id : undefined,
-          body: { name: name.trim(), description: description.trim(), connector_type: "agents_api", system_prompt: instructions, config: { ...extra, model: model.trim(), environment: execution.environment, ...(execution.harness ? { x_agents_core: { harness: execution.harness } } : {}) } as CoreAgentConfig, ...(props.mode === "create" ? { visibility } : {}) },
+          body: { name: name.trim(), description: description.trim(), connector_type: "agents_api", system_prompt: instructions, config: { ...extra, model: model.trim(), environment: execution.environment, x_agents_core: { harness: execution.harness } } as CoreAgentConfig, ...(props.mode === "create" ? { visibility } : {}) },
         })
       }}>
         <DialogHeader>
