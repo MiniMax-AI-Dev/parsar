@@ -33,5 +33,5 @@ export function useAgentResourceDraft(workspaceID: string | null, agentID?: stri
     capability = { ...capability, pinned_version_id: versionID, pinned_version: capability.pinned_version ?? capability.latest_version }
     setSelection(current => current?.some(item => item.capability.id === capability.id) ? current : [...(current ?? []), { capability, capability_version_id: versionID, pinning_mode: "pinned", configuration: {} }])
   }
-  return { selection, setSelection, add, available: [...available.values()], error: installed.error ?? catalog.error ?? marketplace.error, loading: selection === null || catalog.isLoading || marketplace.isLoading, retry: () => { void installed.refetch(); void catalog.refetch(); void marketplace.refetch() } }
+  return { bindings: installed.data?.installed ?? [], selection, setSelection, add, available: [...available.values()], error: installed.error ?? catalog.error ?? marketplace.error, loading: selection === null || catalog.isLoading || marketplace.isLoading, retry: () => { void installed.refetch(); void catalog.refetch(); void marketplace.refetch() } }
 }

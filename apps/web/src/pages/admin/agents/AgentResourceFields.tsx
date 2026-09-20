@@ -7,8 +7,8 @@ import { ImportCapabilityDialog } from "../capabilities/ImportCapabilityDialog"
 import { AgentCredentialField } from "./AgentCredentialField"
 import type { AgentResourceSelection, useAgentResourceDraft } from "./useAgentResourceDraft"
 
-export function AgentResourceFields({ workspaceID, draft, defaults, publicAgent, disabled }: {
-  workspaceID: string | null; draft: ReturnType<typeof useAgentResourceDraft>; defaults?: Record<string, unknown>; publicAgent: boolean; disabled: boolean
+export function AgentResourceFields({ workspaceID, draft, defaults, publicAgent, disabled, hideCredentials = false }: {
+  workspaceID: string | null; draft: ReturnType<typeof useAgentResourceDraft>; defaults?: Record<string, unknown>; publicAgent: boolean; disabled: boolean; hideCredentials?: boolean
 }) {
   const { t } = useTranslation("admin")
   const [adding, setAdding] = useState(false)
@@ -22,14 +22,14 @@ export function AgentResourceFields({ workspaceID, draft, defaults, publicAgent,
       <SelectOption value="">{t("agentResources.select")}</SelectOption>
       {draft.available.filter(item => !draft.selection?.some(selected => selected.capability.id === item.id)).map(item => <SelectOption key={item.id} value={item.id} disabled={item.status !== "active" || !(item.pinned_version_id ?? item.latest_version_id) || !supported.includes(item.type)}>{item.name} · {item.type}{!supported.includes(item.type) ? ` · ${t("agentResources.unsupported")}` : ""}</SelectOption>)}
     </Select>
-    {draft.selection?.map((item, index) => <ResourceRow key={item.capability.id} workspaceID={workspaceID} item={item} defaults={defaults} publicAgent={publicAgent} onChange={value => draft.setSelection(current => current!.map((row, i) => i === index ? value : row))} onRemove={() => draft.setSelection(current => current!.filter((_, i) => i !== index))} />)}
+    {draft.selection?.map((item, index) => <ResourceRow key={item.capability.id} workspaceID={workspaceID} item={item} defaults={defaults} publicAgent={publicAgent} hideCredentials={hideCredentials} onChange={value => draft.setSelection(current => current!.map((row, i) => i === index ? value : row))} onRemove={() => draft.setSelection(current => current!.filter((_, i) => i !== index))} />)}
     <Button type="button" variant="outline" onClick={() => setAdding(true)}>{t("agentResources.add")}</Button>
     <ImportCapabilityDialog workspaceID={workspaceID} open={adding} onOpenChange={setAdding} onCreated={capability => { draft.add(capability); setAdding(false) }} />
   </fieldset>
 }
 
-function ResourceRow({ workspaceID, item, defaults, publicAgent, onChange, onRemove }: {
-  workspaceID: string | null; item: AgentResourceSelection; defaults?: Record<string, unknown>; publicAgent: boolean; onChange: (value: AgentResourceSelection) => void; onRemove: () => void
+function ResourceRow({ workspaceID, item, defaults, publicAgent, hideCredentials, onChange, onRemove }: {
+  workspaceID: string | null; item: AgentResourceSelection; defaults?: Record<string, unknown>; publicAgent: boolean; hideCredentials: boolean; onChange: (value: AgentResourceSelection) => void; onRemove: () => void
 }) {
   const { t } = useTranslation("admin")
   const versions = useAgentResourceVersions(workspaceID, item)
@@ -59,6 +59,6 @@ function ResourceRow({ workspaceID, item, defaults, publicAgent, onChange, onRem
       {versions.versions.map(row => <SelectOption key={row.id} value={row.id}>{row.version}</SelectOption>)}
     </Select>
     {Boolean(versions.error) && <p role="alert">{t("agentResources.loadFailed")}</p>}
-    {required.filter(row => row.required).map(row => <AgentCredentialField key={row.kind} workspaceID={workspaceID} kind={row.kind} configuration={item.configuration ?? {}} defaults={defaults} onChange={configuration => onChange({ ...item, configuration })} publicAgent={publicAgent} catalogID={source?.catalog_id} />)}
+    {!hideCredentials && required.filter(row => row.required).map(row => <AgentCredentialField key={row.kind} workspaceID={workspaceID} kind={row.kind} configuration={item.configuration ?? {}} defaults={defaults} onChange={configuration => onChange({ ...item, configuration })} publicAgent={publicAgent} catalogID={source?.catalog_id} />)}
   </div>
 }
