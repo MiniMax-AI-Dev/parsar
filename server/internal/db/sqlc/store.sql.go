@@ -5185,9 +5185,9 @@ join lateral (
     -- this predicate is always true and behaves like the previous
     -- "unconditionally take the latest".
     and (c.deprecated_at is null or capability_version.created_at <= c.deprecated_at)
-    -- Unpublished knowledge can keep its bound version in another workspace,
-    -- but private revisions must not reach that workspace through latest.
-    and (c.type <> 'knowledge' or c.visibility = 'public'
+    -- Unpublished resources retain their bound version in other workspaces;
+    -- later private revisions must not reach those consumers through latest.
+    and (c.visibility = 'public'
       or c.workspace_id = a.workspace_id or capability_version.id = cv.id)
   order by created_at desc, version desc
   limit 1

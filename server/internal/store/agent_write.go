@@ -173,9 +173,9 @@ func writeAgentResourceBindings(ctx context.Context, queries *sqlc.Queries, agen
 	if err != nil {
 		return nil, err
 	}
-	byCapability := map[string]string{}
+	byCapability := map[string]sqlc.ListAgentCapabilitiesByAgentRow{}
 	for _, binding := range existing {
-		byCapability[binding.CapabilityID] = binding.ID
+		byCapability[binding.CapabilityID] = binding
 	}
 	initialCapabilities := make([]AgentCapabilityRead, 0, len(requestedBindings))
 	seenInitialCapabilities := map[string]bool{}
@@ -202,7 +202,9 @@ func writeAgentResourceBindings(ctx context.Context, queries *sqlc.Queries, agen
 			}
 			return nil, err
 		}
-		if capability.Status != "active" || (capability.WorkspaceID != workspaceID && (capability.Visibility != "public" || capability.DeprecatedAt.Valid || capability.Status != "active")) {
+		current := byCapability[version.CapabilityID]
+		retained := current.Enabled && AgentResourceBindingUnchanged(current.CapabilityVersionID, current.PinningMode, requested)
+		if !retained && (capability.Status != "active" || (capability.WorkspaceID != workspaceID && (capability.Visibility != "public" || capability.DeprecatedAt.Valid))) {
 			return nil, fmt.Errorf("%w: %s", ErrMarketplaceCapabilityUnavailable, version.CapabilityID)
 		}
 		if seenInitialCapabilities[version.CapabilityID] {
@@ -216,7 +218,7 @@ func writeAgentResourceBindings(ctx context.Context, queries *sqlc.Queries, agen
 		if err != nil {
 			return nil, err
 		}
-		if id := byCapability[version.CapabilityID]; id != "" {
+		if id := current.ID; id != "" {
 			row, err := queries.UpdateAgentCapability(ctx, sqlc.UpdateAgentCapabilityParams{ID: mustUUID(id), CapabilityVersionID: versionUUID, Enabled: true, Configuration: configuration, PinningMode: normalizePinningMode(requested.PinningMode), Now: timestamptz(now)})
 			if err != nil {
 				return nil, err
@@ -247,4 +249,10 @@ func writeAgentResourceBindings(ctx context.Context, queries *sqlc.Queries, agen
 		}
 	}
 	return initialCapabilities, nil
+}
+
+// AgentResourceBindingUnchanged permits retained installations without granting
+// access to another revision or changing the version tracking policy.
+func AgentResourceBindingUnchanged(versionID, pinningMode string, requested InitialAgentCapabilityInput) bool {
+	return versionID == requested.CapabilityVersionID && normalizePinningMode(pinningMode) == normalizePinningMode(requested.PinningMode)
 }

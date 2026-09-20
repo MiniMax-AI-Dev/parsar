@@ -2665,6 +2665,9 @@ product execution paths or changes to Core's contract.
   per-resource configuration. Agent changes and the complete binding selection
   commit atomically. Omitting the field preserves bindings; an empty array clears
   them. Updating credentials preserves the selected version and pinning mode.
+  Retaining an existing binding does not reapply new-install eligibility after
+  unpublishing or deprecation; changing its version or tracking mode does. Retained
+  foreign private resources never expose later private revisions.
 - Capability bindings reuse `agent_capabilities` and Build imports. Model
   credentials default to the Provider key; an explicit
   `config.model_credential_binding` chooses a credential `kind` and personal/shared

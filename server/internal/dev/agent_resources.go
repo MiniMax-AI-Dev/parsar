@@ -23,7 +23,7 @@ func requestedAgentResources(ctx context.Context, st RuntimeStore, agentID strin
 	return out, nil
 }
 
-func validateAgentResources(ctx context.Context, st RuntimeStore, workspaceID, visibility string, config map[string]any, bindings []store.InitialAgentCapabilityInput) error {
+func validateAgentResources(ctx context.Context, st RuntimeStore, workspaceID, visibility, agentID string, config map[string]any, bindings []store.InitialAgentCapabilityInput) error {
 	if len(bindings) > 64 {
 		return fmt.Errorf("%w: select at most 64 resources", store.ErrInvalidInput)
 	}
@@ -38,6 +38,16 @@ func validateAgentResources(ctx context.Context, st RuntimeStore, workspaceID, v
 			return invalid(err)
 		}
 	}
+	existing := map[string]store.EnabledCapabilityRead{}
+	if agentID != "" {
+		rows, err := st.GetEnabledMarketplaceCapabilitiesForAgent(ctx, agentID)
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			existing[row.CapabilityID] = row
+		}
+	}
 	for _, binding := range bindings {
 		if !isUUID(binding.CapabilityVersionID) {
 			return fmt.Errorf("%w: invalid capability version", store.ErrInvalidInput)
@@ -50,11 +60,20 @@ func validateAgentResources(ctx context.Context, st RuntimeStore, workspaceID, v
 		if err != nil {
 			return err
 		}
-		if capability.WorkspaceID != workspaceID && capability.Visibility != "public" {
+		current, found := existing[capability.ID]
+		retained := found && store.AgentResourceBindingUnchanged(current.CapabilityVersionID, current.PinningMode, binding)
+		if !retained && capability.WorkspaceID != workspaceID && capability.Visibility != "public" {
 			return store.ErrUnknownCapability
 		}
 		if binding.PinningMode == "latest" && capability.LatestVersionID != "" {
-			version, err = st.GetCapabilityVersion(ctx, capability.LatestVersionID)
+			effectiveVersionID := capability.LatestVersionID
+			if retained {
+				effectiveVersionID = current.LatestVersionID
+				if capability.WorkspaceID != workspaceID && capability.Visibility != "public" {
+					effectiveVersionID = current.CapabilityVersionID
+				}
+			}
+			version, err = st.GetCapabilityVersion(ctx, effectiveVersionID)
 			if err != nil {
 				return err
 			}

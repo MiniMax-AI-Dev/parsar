@@ -116,7 +116,7 @@ func createAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeStoreAgentError(w, err)
 			return
 		}
-		if err := validateAgentResources(r.Context(), runtimeStore, workspaceID, req.Visibility, req.Config, req.ResourceBindings); err != nil {
+		if err := validateAgentResources(r.Context(), runtimeStore, workspaceID, req.Visibility, "", req.Config, req.ResourceBindings); err != nil {
 			writeStoreAgentError(w, err)
 			return
 		}
@@ -188,7 +188,7 @@ func updateAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeStoreAgentError(w, err)
 			return
 		}
-		if err := validateAgentResources(r.Context(), runtimeStore, agent.WorkspaceID, agent.Visibility, config, bindings); err != nil {
+		if err := validateAgentResources(r.Context(), runtimeStore, agent.WorkspaceID, agent.Visibility, agentID, config, bindings); err != nil {
 			writeStoreAgentError(w, err)
 			return
 		}
