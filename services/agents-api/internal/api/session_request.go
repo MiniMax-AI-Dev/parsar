@@ -22,6 +22,8 @@ type decodedSessionRequest struct {
 }
 
 type sessionRequest struct {
+	initialFiles        []store.InitialFile
+	originalEnvironment json.RawMessage
 	v1.CreateSessionRequest
 	Input               json.RawMessage
 	templateID          string
@@ -42,7 +44,16 @@ func (request decodedSessionRequest) validated() (sessionRequest, error) {
 		}
 		input.VaultIDs = append(input.VaultIDs, *id)
 	}
+	input.originalEnvironment = request.Environment
+	var environmentFields map[string]json.RawMessage
+	if json.Unmarshal(request.Environment, &environmentFields) != nil {
+		return input, store.ErrInvalidInput
+	}
 	var err error
+	input.initialFiles, err = decodeInitialFiles(environmentFields["files"])
+	if err != nil {
+		return input, err
+	}
 	input.Environment, input.templateID, input.templateEnvironment, err = decodeTemplateEnvironment(request.Environment)
 	if err != nil {
 		return input, err

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"path"
 
 	"github.com/MiniMax-AI-Dev/parsar/services/agents-api/internal/sandbox"
@@ -13,10 +14,10 @@ import (
 
 // RunCommand is for trusted initialization only. Closing an exec attachment does
 // not kill its process. On any uncertain outcome, the caller must reclaim the
-// allocation with Kill instead of starting the daemon or replaying the command.
+// allocation with Kill instead of admitting native work or replaying the command.
 func (p *Provider) RunCommand(ctx context.Context, r sandbox.Reference, command sandbox.Command) (sandbox.CommandResult, error) {
 	var result sandbox.CommandResult
-	if len(command.Args) == 0 || (command.Directory != "" && !path.IsAbs(command.Directory)) {
+	if len(command.Args) == 0 || len(command.Stdin) > sandbox.MaxCommandInputBytes || (command.Directory != "" && !path.IsAbs(command.Directory)) {
 		return result, sandbox.ErrInvalid
 	}
 	c, e := p.inspect(ctx, r)
@@ -26,7 +27,7 @@ func (p *Provider) RunCommand(ctx context.Context, r sandbox.Reference, command 
 	if _, ok := ctx.Deadline(); !ok {
 		return result, sandbox.ErrInvalid
 	}
-	exec, e := p.client.ExecCreate(ctx, c.Container.ID, client.ExecCreateOptions{User: "1000:1000", Cmd: command.Args, WorkingDir: command.Directory, AttachStdout: true, AttachStderr: true})
+	exec, e := p.client.ExecCreate(ctx, c.Container.ID, client.ExecCreateOptions{User: "1000:1000", Cmd: command.Args, WorkingDir: command.Directory, AttachStdin: command.Stdin != nil, AttachStdout: true, AttachStderr: true})
 	if e != nil {
 		return result, e
 	}
@@ -35,6 +36,18 @@ func (p *Provider) RunCommand(ctx context.Context, r sandbox.Reference, command 
 		return result, errors.Join(sandbox.ErrCommandUnconfirmed, e)
 	}
 	defer attached.Close()
+	written := make(chan error, 1)
+	if command.Stdin != nil {
+		go func() {
+			_, err := io.Copy(attached.Conn, bytes.NewReader(command.Stdin))
+			if err == nil {
+				err = attached.CloseWrite()
+			}
+			written <- err
+		}()
+	} else {
+		written <- nil
+	}
 	stdout, stderr := &boundedBuffer{}, &boundedBuffer{}
 	done := make(chan error, 1)
 	go func() { _, e := stdcopy.StdCopy(stdout, stderr, attached.Reader); done <- e }()
@@ -43,6 +56,18 @@ func (p *Provider) RunCommand(ctx context.Context, r sandbox.Reference, command 
 	case <-ctx.Done():
 		attached.Close()
 		<-done
+		e = ctx.Err()
+	}
+	if e != nil {
+		attached.Close()
+		<-written
+		return result, errors.Join(sandbox.ErrCommandUnconfirmed, e)
+	}
+	select {
+	case e = <-written:
+	case <-ctx.Done():
+		attached.Close()
+		<-written
 		e = ctx.Err()
 	}
 	if e != nil {

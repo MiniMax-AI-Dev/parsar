@@ -115,6 +115,9 @@ func (s *Store) GetSessionDevice(ctx context.Context, tenantID, sessionID string
 	if err != nil {
 		return ExecutionDevice{}, err
 	}
+	if err := s.requireInitializedEnvironment(ctx, params.TenantID, params.ID); err != nil {
+		return ExecutionDevice{}, err
+	}
 	row, err := s.queries.GetSessionDevice(ctx, sqlc.GetSessionDeviceParams(params))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ExecutionDevice{}, ErrNotFound
@@ -128,6 +131,9 @@ func (s *Store) GetSessionDevice(ctx context.Context, tenantID, sessionID string
 func (s *Store) GetSessionExecutionBinding(ctx context.Context, tenantID, sessionID string) (SessionExecutionBinding, error) {
 	params, err := deviceLookup(tenantID, sessionID)
 	if err != nil {
+		return SessionExecutionBinding{}, err
+	}
+	if err := s.requireInitializedEnvironment(ctx, params.TenantID, params.ID); err != nil {
 		return SessionExecutionBinding{}, err
 	}
 	row, err := s.queries.GetSessionExecutionBinding(ctx, sqlc.GetSessionExecutionBindingParams(params))

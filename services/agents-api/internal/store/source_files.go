@@ -164,6 +164,13 @@ func (s *Store) ReadSourceFile(ctx context.Context, tenantID, fileID string, con
 	if err != nil {
 		return err
 	}
+	if err := consumeSourceFile(ctx, tx, row, consume); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func consumeSourceFile(ctx context.Context, tx pgx.Tx, row sqlc.SourceFile, consume func(SourceFile, io.Reader) error) error {
 	objects := tx.LargeObjects()
 	body, err := objects.Open(ctx, row.BodyOid.Uint32, pgx.LargeObjectModeRead)
 	if err != nil {
@@ -172,10 +179,7 @@ func (s *Store) ReadSourceFile(ctx context.Context, tenantID, fileID string, con
 	if err := consume(sourceFileFromRow(row), body); err != nil {
 		return err
 	}
-	if err := body.Close(); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return body.Close()
 }
 
 func (s *Store) DeleteSourceFile(ctx context.Context, tenantID, fileID string) error {

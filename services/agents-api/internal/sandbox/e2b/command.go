@@ -13,7 +13,7 @@ import (
 )
 
 func (p *Provider) RunCommand(ctx context.Context, r sandbox.Reference, c sandbox.Command) (sandbox.CommandResult, error) {
-	if len(c.Args) == 0 || c.Args[0] == "" || (c.Directory != "" && !path.IsAbs(c.Directory)) {
+	if len(c.Args) == 0 || c.Args[0] == "" || len(c.Stdin) > sandbox.MaxCommandInputBytes || (c.Directory != "" && !path.IsAbs(c.Directory)) {
 		return sandbox.CommandResult{}, sandbox.ErrInvalid
 	}
 	a, e := p.inspect(ctx, r)
@@ -30,7 +30,9 @@ func (p *Provider) run(ctx context.Context, a allocation, user string, c sandbox
 	if _, ok := ctx.Deadline(); !ok || a.AccessToken == "" {
 		return result, sandbox.ErrInvalid
 	}
-	request := connect.NewRequest(&process.StartRequest{Process: &process.ProcessConfig{Cmd: c.Args[0], Args: c.Args[1:], Cwd: nil}, Stdin: proto.Bool(false)})
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	request := connect.NewRequest(&process.StartRequest{Process: &process.ProcessConfig{Cmd: c.Args[0], Args: c.Args[1:], Cwd: nil}, Stdin: proto.Bool(c.Stdin != nil)})
 	if c.Directory != "" {
 		request.Msg.Process.Cwd = proto.String(c.Directory)
 	}
@@ -46,8 +48,28 @@ func (p *Provider) run(ctx context.Context, a allocation, user string, c sandbox
 	defer stream.Close()
 	var stdout, stderr bytes.Buffer
 	ended := false
+	var written chan error
+	defer func() {
+		cancel()
+		if written != nil {
+			<-written
+		}
+	}()
 	for stream.Receive() {
 		event := stream.Msg().GetEvent()
+		if start := event.GetStart(); start != nil && c.Stdin != nil {
+			if written != nil || start.GetPid() == 0 {
+				return result, sandbox.ErrCommandUnconfirmed
+			}
+			written = make(chan error, 1)
+			go func() {
+				err := p.sendInput(ctx, request.Header(), start.GetPid(), c.Stdin)
+				written <- err
+				if err != nil {
+					cancel()
+				}
+			}()
+		}
 		if data := event.GetData(); data != nil {
 			if stdout.Len()+stderr.Len()+len(data.GetStdout())+len(data.GetStderr()) > 1024*1024 {
 				return result, sandbox.ErrCommandUnconfirmed
@@ -65,6 +87,16 @@ func (p *Provider) run(ctx context.Context, a allocation, user string, c sandbox
 	}
 	if stream.Err() != nil || !ended {
 		return sandbox.CommandResult{}, errors.Join(sandbox.ErrCommandUnconfirmed, ctx.Err())
+	}
+	if c.Stdin != nil {
+		if written == nil {
+			return result, sandbox.ErrCommandUnconfirmed
+		}
+		err := <-written
+		written = nil
+		if err != nil {
+			return result, sandbox.ErrCommandUnconfirmed
+		}
 	}
 	result.Stdout, result.Stderr = stdout.String(), stderr.String()
 	return result, nil

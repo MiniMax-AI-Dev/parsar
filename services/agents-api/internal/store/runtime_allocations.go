@@ -17,6 +17,7 @@ import (
 // Session deletion until cleanup is confirmed. No bootstrap secret is retained.
 type RuntimeAllocation struct {
 	ID, EnvironmentID, SessionID, TenantID, DeviceID, ProviderKey string
+	Initialization                                                string
 	State                                                         string
 	CreateSettled, SessionDeleted, Replayed, Expired              bool
 	CreatedAt, KeptAt                                             time.Time
@@ -134,7 +135,7 @@ func runtimeAllocationFromRow(row sqlc.RuntimeAllocation, session, tenant pgtype
 		ID: uuid.UUID(row.ID.Bytes).String(), EnvironmentID: uuid.UUID(row.EnvironmentID.Bytes).String(),
 		SessionID: uuid.UUID(session.Bytes).String(), TenantID: uuid.UUID(tenant.Bytes).String(),
 		DeviceID: uuid.UUID(row.DeviceID.Bytes).String(), ProviderKey: uuid.UUID(row.ProviderKey.Bytes).String(),
-		State: row.State, CreateSettled: row.CreateSettled, SessionDeleted: deleted.Valid, Expired: expired,
+		Initialization: row.Initialization, State: row.State, CreateSettled: row.CreateSettled, SessionDeleted: deleted.Valid, Expired: expired,
 		CreatedAt: row.CreatedAt.Time, KeptAt: row.KeptAt.Time,
 	}
 }

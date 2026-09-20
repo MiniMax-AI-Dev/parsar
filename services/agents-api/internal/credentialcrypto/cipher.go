@@ -54,24 +54,32 @@ func New(key []byte) (*Cipher, error) {
 // Seal returns version || nonce || ciphertext || tag. The AEAD generates and
 // prefixes its own nonce; the caller supplies no nonce or mutable output buffer.
 func (c *Cipher) Seal(plaintext []byte, b Binding) ([]byte, error) {
-	if c == nil || c.aead == nil {
-		return nil, errUnavailable
-	}
 	aad, err := additionalData(b)
 	if err != nil {
 		return nil, err
+	}
+	return c.seal(plaintext, aad)
+}
+
+func (c *Cipher) seal(plaintext, aad []byte) ([]byte, error) {
+	if c == nil || c.aead == nil {
+		return nil, errUnavailable
 	}
 	return c.aead.Seal([]byte{formatVersion}, nil, plaintext, aad), nil
 }
 
 // Open returns plaintext only after the ciphertext and complete binding authenticate.
 func (c *Cipher) Open(ciphertext []byte, b Binding) ([]byte, error) {
-	if c == nil || c.aead == nil {
-		return nil, errUnavailable
-	}
 	aad, err := additionalData(b)
 	if err != nil {
 		return nil, err
+	}
+	return c.open(ciphertext, aad)
+}
+
+func (c *Cipher) open(ciphertext, aad []byte) ([]byte, error) {
+	if c == nil || c.aead == nil {
+		return nil, errUnavailable
 	}
 	if len(ciphertext) < 1+c.aead.Overhead() || ciphertext[0] != formatVersion {
 		return nil, errInvalidCiphertext

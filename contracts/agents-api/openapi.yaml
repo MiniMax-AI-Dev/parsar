@@ -243,6 +243,11 @@ definitions:
         x-nullable: true
       environment_template_id:
         type: string
+      files:
+        items:
+          type: object
+        type: array
+        x-nullable: true
       network:
         allOf:
         - $ref: '#/definitions/v1.EnvironmentNetworkInput'
@@ -1779,13 +1784,14 @@ paths:
   /agents/environments/{environment_id}:
     get:
       description: Returns durable connection status and safe installed metadata for
-        supported self_hosted and basic openai_hosted profiles. Empty files/plugins/skills
-        describe the absence of API-managed installations, not the contents or discovered
-        capabilities of the caller's machine. Unsupported installation configurations
-        remain implementation gaps. This read does not prepare execution, start compute
-        or require an enabled execution worker. Session deletion removes the associated
-        Environment from public reads; project-shared read authorization is unchanged.
-        Connection status does not prove native readiness or process quiescence.
+        supported self_hosted and basic openai_hosted profiles. Initial files expose
+        frozen safe metadata without content; empty plugins/skills describe the absence
+        of API-managed installations, not the contents or discovered capabilities
+        of the caller's machine. Unsupported installation configurations remain implementation
+        gaps. This read does not prepare execution, start compute or require an enabled
+        execution worker. Session deletion removes the associated Environment from
+        public reads; project-shared read authorization is unchanged. Connection status
+        does not prove native readiness or process quiescence.
       parameters:
       - description: agents=v1
         in: header
@@ -2035,10 +2041,11 @@ paths:
       consumes:
       - application/json
       description: Saves tenant-owned basic hosted configuration. Supports nullable
-        name, enabled/disabled network and empty installation defaults. Omitted/null
-        network defaults to enabled. Populated confidential inputs, installations
-        and restricted network are rejected before persistence without echoing input.
-        No compute is allocated. Exact hosted error/retry semantics remain unverified.
+        name, enabled/disabled network, initial inline/file_id files and empty remaining
+        installation defaults. Omitted/null network defaults to enabled. Other populated
+        installations and restricted network are rejected before persistence without
+        echoing input. No compute is allocated. Exact hosted error/retry semantics
+        remain unverified.
       parameters:
       - description: agents=v1
         in: header
@@ -2169,8 +2176,10 @@ paths:
       - application/json
       description: Supplied fields replace atomically; omitted fields remain unchanged.
         Null name clears and null network resets to the pinned enabled default. Existing
-        Session snapshots and creation retries remain unchanged. Populated installations
-        are unsupported. Exact hosted no-op timestamp behavior remains unverified.
+        Session snapshots and creation retries remain unchanged. Initial files replace
+        as a list; null/empty clears. File data is encrypted separately and excluded
+        from response metadata. Other populated installations are unsupported. Exact
+        hosted no-op timestamp behavior remains unverified.
       parameters:
       - description: agents=v1
         in: header
@@ -2337,12 +2346,15 @@ paths:
         supports non-deferred function tools with text results alongside native workspace
         tools; HTTP MCP remains unsupported. Idle Sessions provision automatically;
         initial provisioning has no caller connection action. Network defaults to
-        enabled; disabled is also supported, while restricted domains and populated
-        startup installations are rejected. Tenant-owned environment_template_id references
-        inherit omitted network and allow only narrowing overrides. Referenced network:null
-        is explicitly unsupported pending semantic verification. Core freezes effective
-        configuration; template updates/deletion do not alter Session snapshots or
-        same-intent creation retries.
+        enabled; disabled is also supported, while restricted domains and other populated
+        startup installations are rejected. Initial inline and tenant-owned file_id
+        files freeze encrypted bytes before provisioning, then install through the
+        common Core lifecycle before native execution or live Files access. Referenced
+        files overrides are rejected pending semantic verification. Tenant-owned environment_template_id
+        references inherit omitted network and allow only narrowing overrides. Referenced
+        network:null is explicitly unsupported pending semantic verification. Core
+        freezes effective configuration; template updates/deletion do not alter Session
+        snapshots or same-intent creation retries.
       parameters:
       - description: agents=v1
         in: header

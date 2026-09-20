@@ -12,6 +12,7 @@ import (
 )
 
 type EnvironmentTemplateStore interface {
+	ResolveEnvironmentTemplate(context.Context, string, string) (store.EnvironmentTemplate, []store.InitialFile, error)
 	CreateEnvironmentTemplate(context.Context, string, store.EnvironmentTemplateInput) (store.EnvironmentTemplate, error)
 	GetEnvironmentTemplate(context.Context, string, string) (store.EnvironmentTemplate, error)
 	UpdateEnvironmentTemplate(context.Context, string, string, store.EnvironmentTemplateInput) (store.EnvironmentTemplate, error)
@@ -33,6 +34,12 @@ func decodeTemplateInput(raw []byte) (store.EnvironmentTemplateInput, error) {
 	}
 	delete(fields, "name")
 	_, in.SetNetwork = fields["network"]
+	_, in.SetFiles = fields["files"]
+	var fileErr error
+	in.Files, fileErr = decodeInitialFiles(fields["files"])
+	if fileErr != nil {
+		return in, fileErr
+	}
 	fields["type"] = json.RawMessage(`"openai_hosted"`)
 	configuration, err := json.Marshal(fields)
 	if err != nil {
@@ -47,7 +54,7 @@ func decodeTemplateInput(raw []byte) (store.EnvironmentTemplateInput, error) {
 }
 
 func templateResponse(t store.EnvironmentTemplate) v1.EnvironmentTemplate {
-	return v1.EnvironmentTemplate{ID: t.ID, Object: "agent.environment.template", Name: t.Name, CreatedAt: t.CreatedAt.Unix(), UpdatedAt: t.UpdatedAt.Unix(), CapabilityDirectories: []string{}, Network: v1.EnvironmentNetwork{Access: t.NetworkAccess, AllowedDomains: []string{}}, Packages: v1.EnvironmentPackages{NPM: []string{}, Python: []string{}, System: []string{}}, Files: []json.RawMessage{}, Plugins: []json.RawMessage{}, Skills: []json.RawMessage{}}
+	return v1.EnvironmentTemplate{ID: t.ID, Object: "agent.environment.template", Name: t.Name, CreatedAt: t.CreatedAt.Unix(), UpdatedAt: t.UpdatedAt.Unix(), CapabilityDirectories: []string{}, Network: v1.EnvironmentNetwork{Access: t.NetworkAccess, AllowedDomains: []string{}}, Packages: v1.EnvironmentPackages{NPM: []string{}, Python: []string{}, System: []string{}}, Files: templateFileResponse(t.Files), Plugins: []json.RawMessage{}, Skills: []json.RawMessage{}}
 }
 
 func templateNoQuery(w http.ResponseWriter, r *http.Request) bool {
@@ -62,20 +69,20 @@ func readTemplateInput(w http.ResponseWriter, r *http.Request) (store.Environmen
 	if !templateNoQuery(w, r) {
 		return store.EnvironmentTemplateInput{}, false
 	}
-	raw, ok := readJSONBody(w, r)
+	raw, ok := readJSONBodyLimit(w, r, 16*1024*1024, "Request exceeds 16 MiB.")
 	if !ok {
 		return store.EnvironmentTemplateInput{}, false
 	}
 	in, err := decodeTemplateInput(raw)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "unsupported_or_invalid_configuration", "Template fields are invalid or require unsupported initialization. Only name, enabled/disabled network and empty installation defaults are supported.")
+		writeError(w, http.StatusBadRequest, "unsupported_or_invalid_configuration", "Template fields are invalid or require unsupported initialization. Name, enabled/disabled network and initial files are supported.")
 		return in, false
 	}
 	return in, true
 }
 
 // @Summary Create an Environment Template
-// @Description Saves tenant-owned basic hosted configuration. Supports nullable name, enabled/disabled network and empty installation defaults. Omitted/null network defaults to enabled. Populated confidential inputs, installations and restricted network are rejected before persistence without echoing input. No compute is allocated. Exact hosted error/retry semantics remain unverified.
+// @Description Saves tenant-owned basic hosted configuration. Supports nullable name, enabled/disabled network, initial inline/file_id files and empty remaining installation defaults. Omitted/null network defaults to enabled. Other populated installations and restricted network are rejected before persistence without echoing input. No compute is allocated. Exact hosted error/retry semantics remain unverified.
 // @Tags Environment Templates
 // @Accept json
 // @Produce json
@@ -121,7 +128,7 @@ func (h *Handler) getEnvironmentTemplate(w http.ResponseWriter, r *http.Request)
 }
 
 // @Summary Update an Environment Template
-// @Description Supplied fields replace atomically; omitted fields remain unchanged. Null name clears and null network resets to the pinned enabled default. Existing Session snapshots and creation retries remain unchanged. Populated installations are unsupported. Exact hosted no-op timestamp behavior remains unverified.
+// @Description Supplied fields replace atomically; omitted fields remain unchanged. Null name clears and null network resets to the pinned enabled default. Existing Session snapshots and creation retries remain unchanged. Initial files replace as a list; null/empty clears. File data is encrypted separately and excluded from response metadata. Other populated installations are unsupported. Exact hosted no-op timestamp behavior remains unverified.
 // @Tags Environment Templates
 // @Accept json
 // @Produce json

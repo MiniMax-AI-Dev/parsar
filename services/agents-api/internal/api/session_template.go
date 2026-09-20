@@ -29,6 +29,9 @@ func decodeTemplateEnvironment(raw json.RawMessage) (*v1.Environment, string, js
 	if value, exists := fields["network"]; exists && bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
 		return nil, "", nil, store.ErrInvalidInput
 	}
+	if _, supplied := fields["files"]; supplied {
+		return nil, "", nil, store.ErrInvalidInput
+	}
 	delete(fields, "environment_template_id")
 	inline, err := json.Marshal(fields)
 	if err != nil {
@@ -42,7 +45,7 @@ func (h *Handler) resolveTemplateEnvironment(ctx context.Context, tenant string,
 	if input.templateID == "" {
 		return nil
 	}
-	template, err := h.store.GetEnvironmentTemplate(ctx, tenant, input.templateID)
+	template, files, err := h.store.ResolveEnvironmentTemplate(ctx, tenant, input.templateID)
 	if err != nil {
 		return err
 	}
@@ -55,6 +58,8 @@ func (h *Handler) resolveTemplateEnvironment(ctx context.Context, tenant string,
 	} else if template.NetworkAccess == "disabled" && input.Environment.Network.Access != "disabled" {
 		return store.ErrInvalidInput
 	}
+	input.initialFiles = files
+	input.Environment.Files = initialFileResponse(files)
 	// Runtime sees only the effective ordinary hosted configuration.
 	return nil
 }

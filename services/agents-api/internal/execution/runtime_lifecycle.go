@@ -36,6 +36,7 @@ type runtimeLifecycle struct {
 	cursor        string
 	pendingCursor string
 	connections   map[string]*runtimeConnection
+	initializing  *runtimeInitialization
 }
 
 func newRuntimeLifecycle(s *store.Store, registry *gateway.Registry, config *RuntimeProviders) (*runtimeLifecycle, error) {
@@ -165,6 +166,12 @@ func (w *Worker) ReconcileManagedRuntimes(ctx context.Context) error {
 	}
 	if len(rows) == 0 {
 		r.cursor = ""
+		if err := r.advanceInitialization(ctx); err != nil {
+			if ownership := r.store.CheckExecutionOwnership(ctx); ownership != nil {
+				return ownership
+			}
+			log.Ctx(ctx).Warn("managed Runtime file initialization incomplete")
+		}
 		return r.provisionPending(ctx)
 	}
 	for _, owner := range rows {
@@ -185,6 +192,13 @@ func (w *Worker) ReconcileManagedRuntimes(ctx context.Context) error {
 }
 
 func (r *runtimeLifecycle) observe(ctx context.Context, owner store.RuntimeAllocation) error {
+	if owner.Initialization == "running" && (r.initializing == nil || r.initializing.owner.ID != owner.ID) {
+		var err error
+		owner, err = r.store.RequestRuntimeCleanup(ctx, owner)
+		if err != nil {
+			return err
+		}
+	}
 	if owner.SessionDeleted || owner.Expired || owner.State == "cleanup_pending" {
 		var err error
 		owner, err = r.store.RequestRuntimeCleanup(ctx, owner)
@@ -192,6 +206,9 @@ func (r *runtimeLifecycle) observe(ctx context.Context, owner store.RuntimeAlloc
 			return err
 		}
 		delete(r.connections, owner.ID)
+		if r.initializing != nil && r.initializing.owner.ID == owner.ID {
+			r.initializing = nil
+		}
 	} else if err := r.observeConnection(ctx, owner); err != nil {
 		return err
 	}
@@ -241,6 +258,9 @@ func (r *runtimeLifecycle) observe(ctx context.Context, owner store.RuntimeAlloc
 	}
 	owner, err = r.store.ObserveRuntimeRunning(ctx, owner)
 	if err != nil {
+		return err
+	}
+	if err := r.observeInitialization(ctx, owner); err != nil {
 		return err
 	}
 	if peer, err := r.registry.LookupDevice(owner.DeviceID); err != nil || peer.IsClosed() {

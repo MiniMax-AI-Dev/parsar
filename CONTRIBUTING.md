@@ -52,12 +52,14 @@ Direct development on `main` is not allowed. Every session honours this rule.
 
 ## Independent blind review
 
-Each PR should contain one independently verifiable change; a feature may span
-several small PRs. Two or three closely related subtasks may share one functional
-PR; internal wiring steps do not require separate delivery gates. Run focused
-tests during development, then complete the full checks and applicable real
-regression once the batch stabilizes. State the expected behavior, acceptance
-results, stopping conditions and explicit scope exclusions before implementation.
+Each PR should deliver a bounded, independently usable and verifiable capability.
+Combine closely related changes that share initialization and security boundaries;
+Environment Template follow-ups should not split by field or internal wiring step.
+Separate work with independent risk or an unresolved design. Run focused tests
+during development, then complete full checks, real regression and the required
+review once the scope stabilizes, without repeating that gate for every substep.
+State acceptance results, the scope ceiling, exclusions and stopping conditions
+before implementation. Batch size must not weaken security or data consistency.
 Check uncertain design choices early. Reassess any new prerequisite against those
 results before adding it; do not let a functional batch grow without a stopping
 point. Keep unrelated refactors, features,
@@ -260,11 +262,29 @@ creation, freeze the effective ordinary hosted configuration and reuse inline
 initialization. Do not pass template IDs into Provider or Runtime. Omitted network
 inherits; overrides may only narrow policy. Preserve unresolved caller intent for
 creation retries and recover committed results before reading mutable templates.
-Updates and deletion cannot rewrite existing Session snapshots. The initial profile
-admits name and enabled/disabled network, rejecting populated installation and
-confidential fields before persistence. Do not store unsupported inputs for later
-silent omission; expand both inline and template initialization together in separately
-qualified batches. Resource reads need only tenant authorization, not a live Runtime.
+Updates and deletion cannot rewrite existing Session snapshots. Initial files use
+one Core-owned installer for template and inline configurations. Keep confidential
+bytes encrypted under the execution-service key and resource-bound AEAD, separately
+from ordinary configuration and public metadata. Templates retain source references;
+Session creation freezes tenant-authorized source bytes in the same commit, independent
+of later source/template deletion. Public resource reads must not require decryption
+or load encrypted file bodies. Record original creation intent before resolution.
+
+The allocation lifecycle owns pending/running/complete initialization. Authentication
+may connect the daemon during initialization; execution bindings, native preparation,
+live Files and connected publication wait for completion. Keep Provider bootstrap
+settlement distinct. Advance at most one bounded file per full maintenance scan,
+using process-local progress and the existing lifecycle gate. A recovered or uncertain
+running installation fails and uses existing cleanup, without replaying writes.
+Completed environments never reinstall initial files on reconnect or native recovery.
+Provider RunCommand carries bounded stdin, not confidential argv. Only fixed trusted
+initializers may run with Runtime authority; user setup scripts remain unsupported.
+Reuse the packaged atomic file writer and anchored parent creation across all profiles.
+
+Name, enabled/disabled network and initial files are qualified independently of other
+installation fields. Reject unsupported inputs rather than persisting them for silent
+omission; expand inline and template initialization together in separately qualified
+batches. Resource reads need only tenant authorization, not a live Runtime.
 See the [Template coverage and unresolved semantics](contracts/agents-api/environment-templates.md).
 
 SandboxProvider has five operations: Create, GetInfo, Renew, Kill and RunCommand.

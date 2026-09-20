@@ -37,8 +37,9 @@ func parseEnvironmentPlacement(configuration json.RawMessage) (environmentPlacem
 	case "openai_hosted":
 		// Qualified local execution currently supports enabled/disabled network only.
 		var local struct {
-			Type                  string   `json:"type"`
-			CapabilityDirectories []string `json:"capability_directories"`
+			Files                 []store.InitialFileMetadata `json:"files"`
+			Type                  string                      `json:"type"`
+			CapabilityDirectories []string                    `json:"capability_directories"`
 			Network               *struct {
 				Access         string   `json:"access"`
 				AllowedDomains []string `json:"allowed_domains"`

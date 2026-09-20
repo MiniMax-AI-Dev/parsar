@@ -1,6 +1,6 @@
 -- name: CreateRuntimeAllocation :one
-INSERT INTO runtime_allocations (id, environment_id, device_id, provider_key)
-VALUES ($1, $2, $3, $4) RETURNING *;
+INSERT INTO runtime_allocations (id, environment_id, device_id, provider_key, initialization)
+VALUES ($1, $2, $3, $4, CASE WHEN EXISTS (SELECT 1 FROM initial_environment_files f JOIN environments e ON e.session_id = f.session_id WHERE e.id = $2) THEN 'pending' ELSE 'complete' END) RETURNING *;
 
 -- name: GetRuntimeAllocation :one
 SELECT sqlc.embed(a), e.session_id, s.tenant_id, s.deleted_at, (a.kept_at <= clock_timestamp() - interval '1 hour') AS expired
