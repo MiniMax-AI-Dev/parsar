@@ -151,8 +151,10 @@ Server, connector, workspace credential isolation and official-client tests pass
 as did database-backed Store and dev tests for configuration, recovery, deletion,
 retired members, failed runs and rejection of legacy execution. `git diff --check`
 passed. This is an independent re-review by an existing reviewer, not a fresh-context
-blind review. The reviewer did not repeat the live model/browser workflows or
-independently confirm the remote full gate's final result.
+blind review. In the final evidence check, the reviewer independently confirmed
+the remote source snapshot, clean generated files, full gate exit code 0, matching
+local/remote log hashes, cited CI results and explicit prerequisite skip. The
+reviewer did not repeat the live model/browser workflows.
 
 The original macOS output remains in `~/.parsar/product-core-check-pr.log`.
 The successful final Linux gate is recorded separately above; no failed or skipped
