@@ -254,6 +254,19 @@ or an undocumented daemon installation requirement cannot replace `remote_url`.
 Keep harness cwd separate from the executor workspace where that accepted remote
 path still requires it.
 
+Public Environment Templates belong to Core and its execution database, independently
+of provider image/build templates. Resolve a tenant-owned reference once at Session
+creation, freeze the effective ordinary hosted configuration and reuse inline
+initialization. Do not pass template IDs into Provider or Runtime. Omitted network
+inherits; overrides may only narrow policy. Preserve unresolved caller intent for
+creation retries and recover committed results before reading mutable templates.
+Updates and deletion cannot rewrite existing Session snapshots. The initial profile
+admits name and enabled/disabled network, rejecting populated installation and
+confidential fields before persistence. Do not store unsupported inputs for later
+silent omission; expand both inline and template initialization together in separately
+qualified batches. Resource reads need only tenant authorization, not a live Runtime.
+See the [Template coverage and unresolved semantics](contracts/agents-api/environment-templates.md).
+
 SandboxProvider has five operations: Create, GetInfo, Renew, Kill and RunCommand.
 Use maintained provider SDKs and thin adapters, Docker first and E2B after the MVP.
 Provider initialization creates the sandbox and starts its daemon/harness;

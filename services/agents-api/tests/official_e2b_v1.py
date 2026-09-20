@@ -40,6 +40,7 @@ model_key = Path(config['model_key_file']).read_text().strip()
 tokens = [secrets.token_hex(32), secrets.token_hex(32)]
 provider = str(uuid.uuid4())
 created = []
+public_templates = []
 sources = []
 cloud = {}
 handles = []
@@ -218,10 +219,30 @@ try:
         assert http.get(base + '/v1/agents/sessions', headers=h).status_code == 401
     check('independent_deployment_and_authentication')
     agent = {'model': config['model'], 'instructions': 'Run the exact requested native shell commands. Never modify supplied scripts or repeat interrupted commands. Preserve conversation history.'}
-    session = sessions.create(agent=agent, environment={'type': 'openai_hosted'}, extra_headers={'Idempotency-Key': 'idle'})
+    environment = {'type': 'openai_hosted'}
+    if config.get('verify_environment_templates'):
+        from official_environment_templates import verify_environment_templates, verify_template_session_rejections
+        enabled_template, disabled_template = verify_environment_templates(client, foreign, http)
+        public_templates.extend([enabled_template, disabled_template])
+        verify_template_session_rejections(client, foreign, http, agent, enabled_template, disabled_template)
+        environment['environment_template_id'] = enabled_template
+        check('template_sdk_http_crud_pagination_redaction_and_tenant_isolation')
+    session = sessions.create(agent=agent, environment=environment, extra_headers={'Idempotency-Key': 'idle'})
     created.append(session.id)
     eid = session.environment.id
-    assert sessions.create(agent=agent, environment={'type': 'openai_hosted'}, extra_headers={'Idempotency-Key': 'idle'}).id == session.id
+    assert sessions.create(agent=agent, environment=environment, extra_headers={'Idempotency-Key': 'idle'}).id == session.id
+    if public_templates:
+        api = client.beta.agents.environments.templates
+        api.update(enabled_template, network={'access': 'disabled'})
+        assert sessions.retrieve(session.id).environment.network.access == 'enabled'
+        assert sessions.create(agent=agent, environment=environment, extra_headers={'Idempotency-Key': 'idle'}).id == session.id
+        api.delete(enabled_template)
+        public_templates.remove(enabled_template)
+        assert sessions.create(agent=agent, environment=environment, extra_headers={'Idempotency-Key': 'idle'}).id == session.id
+        changed = {**environment, 'network': {'access': 'enabled'}}
+        conflict = http.post(base + '/v1/agents/sessions', headers={**headers, 'Idempotency-Key': 'idle'}, json={'agent': agent, 'environment': changed})
+        assert conflict.status_code == 409
+        check('template_snapshot_and_creation_retry_survive_update_and_delete')
     connected(eid)
     vm = runtime(eid)
     expected_init = Path(__file__).parents[1] / 'deploy/e2b/init.py'
@@ -326,7 +347,16 @@ CHECK""", user='runtime')
     assert memory in ''.join(part.text for part in answers[-1].content if part.type == 'output_text')
     assert native_id(session.id) == identity
     check('same_native_history_continues_after_core_and_runtime_recovery')
-    disabled = sessions.create(agent=agent, environment={'type': 'openai_hosted', 'network': {'access': 'disabled'}})
+    disabled_environment = {'type': 'openai_hosted', 'network': {'access': 'disabled'}}
+    if public_templates:
+        disabled_environment = {'type': 'openai_hosted', 'environment_template_id': disabled_template}
+    disabled = sessions.create(agent=agent, environment=disabled_environment)
+    assert disabled.environment.id != eid
+    assert disabled.environment.network.access == 'disabled'
+    if public_templates:
+        api.delete(disabled_template)
+        public_templates.remove(disabled_template)
+        check('template_inheritance_and_distinct_environment_ownership')
     created.append(disabled.id)
     connected(disabled.environment.id)
     restricted = runtime(disabled.environment.id)
@@ -342,6 +372,11 @@ except BaseException:
 finally:
     cleanup_errors = []
     if process is not None and process.poll() is None:
+        for template_id in public_templates:
+            try:
+                client.beta.agents.environments.templates.delete(template_id)
+            except Exception:
+                cleanup_errors.append('template_delete_failed')
         for source_id in sources:
             try:
                 client.files.delete(source_id)

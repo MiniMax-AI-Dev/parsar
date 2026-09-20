@@ -6,7 +6,8 @@ implementation plan with partial current coverage. Public execution admits
 profile, and operator-configured Docker/E2B hosted profiles for Codex, Claude Code
 and MiniMax Code below.
 Environment retrieval supports safe metadata for these environment profiles;
-populated startup installations and templates remain missing. Live file listing
+[basic reusable templates](environment-templates.md) share inline initialization, while
+populated startup installations remain missing. Live file listing
 and local inline/source writes have [partial coverage and explicit local policies](environment-files.md).
 See [current coverage](README.md#public-semantics).
 
@@ -59,7 +60,7 @@ an existing allocation's Create.
 
 Omitted/null network defaults to enabled; explicit enabled and disabled use the
 same image with adapter-selected immutable native policy. Unsupported restricted
-domains, templates, populated env/packages/setup/files/plugins/skills/capability
+domains and populated env/packages/setup/files/plugins/skills/capability
 paths fail explicitly. Empty/null installation defaults produce safe empty metadata,
 not a live workspace inventory. Hosted MCP combinations remain unimplemented.
 
