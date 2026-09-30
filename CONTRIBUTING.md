@@ -2589,17 +2589,23 @@ or filesystem isolation. Automatic installation remains separate.
   Workspace model Provider credentials belong to the Parsar catalog and are sent
   through the write-only Core Session execution extension. Operator defaults remain
   an independent Core deployment option. An unconfigured product can start; Core operations return an explicit unavailable error.
-- Root Compose deploys the product and its database. It mounts
-  `PARSAR_CORE_CONFIG_DIR` read-only for workspace bindings and caller key files.
-  The installer creates an empty binding list without overwriting existing
-  configuration. The product does not start a runtime container.
-- The installer pulls the server image, prepares the data directory for the
-  image's actual UID/GID, verifies writability, then starts the product. Only the
-  preparation container runs as root. It generates stable database/master keys.
-- The installer is a thin Compose wrapper. Its options cover the installation
-  directory, web bind/port, server image and validation. Native runtime history
-  migration and sandbox image options have been removed; no legacy deployment
-  compatibility or data backfill is provided by this cutover.
+- Root Compose deploys the product and database; Core is a separate deployment.
+  Keep operator installation instructions in [README.md#quick-start](README.md#quick-start).
+- The installer remains a standalone Bash 3.2-compatible Compose wrapper. Preserve
+  existing settings and secrets unless explicitly overridden. Stage and validate
+  configuration and pull images before committing files or preparing mounts.
+  Persist generated secrets only after verifying the actual Docker data mounts are
+  empty; inability to inspect data requires recovery of the original secrets.
+  Once mount preparation begins, retain matching configuration on failure; do not
+  attempt automatic database rollback. Serialize installers per canonical home and
+  clean temporary files and locks on normal exits and handled signals.
+- Prepare data mounts for the image's configured UID/GID using root only for the
+  one-off preparation. Initialize missing Core bindings without replacing existing
+  contents; new bindings must be readable by the server and editable by the operator.
+  Persistent containers must not reference temporary Compose overrides. Wait for
+  database health and the server's `/readyz`; never remove unrelated orphan containers.
+- Native runtime history migration and sandbox image options remain outside this
+  product/Core installation path; do not reintroduce legacy deployment backfills.
 - Services exposed through a deployment platform may gain an ingress network,
   but they must remain explicitly attached to the Compose `default` network
   when they depend on internal service DNS names such as `postgres`.
