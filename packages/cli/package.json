@@ -13,12 +13,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "commander": "^15.0.0",
-    "tsx": "^4.22.4"
+    "commander": "^15.1.0",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.6.6",
     "vitest": "^4.1.9"
   }
 }
